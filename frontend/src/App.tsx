@@ -1,0 +1,13 @@
+import { RouterProvider } from 'react-router-dom';
+import { AppProvider } from '@/app/providers';
+import { router } from '@/app/router';
+import { PwaUpdatePrompt } from '@/app/pwa/PwaUpdatePrompt';
+
+export default function App() {
+  return (
+    <AppProvider>
+      <RouterProvider router={router} />
+      <PwaUpdatePrompt />
+    </AppProvider>
+  );
+}

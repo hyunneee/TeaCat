@@ -1,0 +1,96 @@
+import { useNavigate } from 'react-router-dom';
+import { Bell, KeyRound, ScanFace, ShieldX, Trash2, TriangleAlert } from 'lucide-react';
+import { Header } from '@/shared/components/layout';
+import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
+import { useModal } from '@/app/providers';
+import { ROUTES } from '@/shared/constants';
+import { toast } from '@/shared/stores';
+import { useAuth, useWithdraw } from '@/features/auth';
+import { faceApi } from '@/features/face';
+
+export function SettingsPage() {
+  const navigate = useNavigate();
+  const { open } = useModal();
+  const { user } = useAuth();
+  const withdraw = useWithdraw();
+
+  return (
+    <>
+      <Header title="설정" showBack />
+
+      <div className="space-y-6 p-4">
+        <section>
+          <SectionTitle>계정 설정</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
+            <ListRow
+              icon={<KeyRound size={18} />}
+              title="비밀번호 변경"
+              onClick={() => navigate(ROUTES.SETTINGS_PASSWORD)}
+            />
+            <ListRow
+              icon={<Bell size={18} />}
+              title="알림 설정"
+              description="추첨 결과, 공연 안내"
+              trailing={<span className="text-subtle text-xs">준비 중</span>}
+              hideChevron
+              disabled
+            />
+          </Card>
+        </section>
+
+        {/* 되돌릴 수 없는 동작들은 한 구획으로 몰고 전부 붉게 */}
+        <section>
+          <SectionTitle description="한 번 실행하면 되돌릴 수 없어요">위험 구역</SectionTitle>
+          <Card tone="danger" padded={false} className="divide-danger/20 divide-y overflow-hidden">
+            <ListRow
+              icon={<ScanFace size={18} />}
+              title="등록된 얼굴 삭제"
+              description={user?.faceRegistered ? '등록됨' : '등록된 얼굴이 없습니다'}
+              danger
+              hideChevron
+              disabled={!user?.faceRegistered}
+              onClick={() =>
+                open('common/confirm', {
+                  title: '등록된 얼굴을 삭제할까요?',
+                  message: '삭제하면 보유한 티켓으로 입장할 수 없습니다. 다시 등록해야 합니다.',
+                  confirmText: '삭제',
+                  danger: true,
+                  onConfirm: () => {
+                    void faceApi.remove().then(() => toast.info('삭제했어요.'));
+                  },
+                })
+              }
+            />
+            <ListRow
+              icon={<Trash2 size={18} />}
+              title="회원 탈퇴"
+              description="모든 티켓과 포토카드가 사라집니다"
+              danger
+              hideChevron
+              onClick={() =>
+                open('common/confirm', {
+                  title: '정말 탈퇴하시겠어요?',
+                  message:
+                    '보유한 티켓과 포토카드가 모두 사라지며 복구할 수 없습니다. 예매한 공연이 있다면 먼저 취소해 주세요.',
+                  confirmText: '탈퇴하기',
+                  danger: true,
+                  onConfirm: () => withdraw.mutate(),
+                })
+              }
+            />
+          </Card>
+
+          <p className="text-danger/85 mt-2 flex items-start gap-1.5 px-1 text-xs leading-relaxed">
+            <TriangleAlert size={13} className="mt-0.5 shrink-0" />
+            탈퇴 후에는 예매 내역과 포토카드를 복구할 수 없습니다.
+          </p>
+        </section>
+
+        <p className="text-subtle flex items-start gap-1.5 px-1 text-xs leading-relaxed">
+          <ShieldX size={13} className="mt-0.5 shrink-0" />
+          등록한 얼굴 정보는 입장 시 본인 확인 목적으로만 사용되며, 탈퇴 시 즉시 파기됩니다.
+        </p>
+      </div>
+    </>
+  );
+}

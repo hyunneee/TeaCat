@@ -1,0 +1,139 @@
+import { lazy, type ComponentType, type ReactNode } from 'react';
+import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { ROUTES } from '@/shared/constants';
+import { AppLayout, PlainLayout } from '@/shared/components/layout';
+import { RouteBoundary } from '@/shared/components/common';
+import { RequireAuth, RequireFace, RequireOtp, RequireRole } from './guards';
+
+/* 페이지는 전부 lazy 로 나눕니다.
+   티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
+   NFT 마켓/모니터링 코드까지 첫 로딩에 받게 하지 마세요. */
+const page = <T extends Record<string, unknown>>(loader: () => Promise<T>, name: keyof T) =>
+  lazy(() => loader().then((m) => ({ default: m[name] as ComponentType })));
+
+const HomePage = page(() => import('@/pages/HomePage'), 'HomePage');
+const LoginPage = page(() => import('@/pages/LoginPage'), 'LoginPage');
+const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
+const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
+
+const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
+const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
+
+const BookingOtpPage = page(() => import('@/pages/BookingOtpPage'), 'BookingOtpPage');
+const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
+const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
+const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
+const PaymentPage = page(() => import('@/pages/PaymentPage'), 'PaymentPage');
+const BookingDonePage = page(() => import('@/pages/BookingDonePage'), 'BookingDonePage');
+
+const ResalePage = page(() => import('@/pages/ResalePage'), 'ResalePage');
+const MyResalePage = page(() => import('@/pages/MyResalePage'), 'MyResalePage');
+
+const MyTicketsPage = page(() => import('@/pages/MyTicketsPage'), 'MyTicketsPage');
+const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketDetailPage');
+
+const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
+const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
+const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
+
+const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
+const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
+const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
+
+const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
+const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
+
+/** lazy 페이지를 Suspense + ErrorBoundary 로 감싸는 헬퍼.
+    경로가 바뀌면 에러 상태가 자동으로 풀립니다. */
+const withBoundary = (element: ReactNode) => <RouteBoundary>{element}</RouteBoundary>;
+
+const routes: RouteObject[] = [
+  /* ══ 하단 탭이 보이는 화면 ═══════════════════════════════ */
+  {
+    element: <AppLayout />,
+    children: [
+      { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
+      { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
+      { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
+      { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
+
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: ROUTES.MY, element: withBoundary(<MyPage />) },
+          { path: ROUTES.MY_TICKETS, element: withBoundary(<MyTicketsPage />) },
+        ],
+      },
+    ],
+  },
+
+  /* ══ 전체화면 (하단 탭 없음) ═════════════════════════════ */
+  {
+    element: <PlainLayout />,
+    children: [
+      { path: ROUTES.LOGIN, element: withBoundary(<LoginPage />) },
+      { path: ROUTES.SIGNUP, element: withBoundary(<SignupPage />) },
+      { path: ROUTES.NFT_DETAIL(':nftId'), element: withBoundary(<NftDetailPage />) },
+
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: ROUTES.FACE_REGISTER, element: withBoundary(<FaceRegisterPage />) },
+          { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
+
+          { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
+          { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
+          { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
+          { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
+          { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
+
+          /* ── 예매 플로우 ──────────────────────────────────
+             OTP → 구역 → 좌석 → 확인 → 결제 → 완료
+             얼굴 등록(RequireFace)은 예매 진입 조건,
+             OTP 통과(RequireOtp)는 구역 선택부터의 조건입니다. */
+          {
+            element: <RequireFace />,
+            children: [
+              { path: ROUTES.BOOKING_OTP(':scheduleId'), element: withBoundary(<BookingOtpPage />) },
+              { path: ROUTES.RESALE(':scheduleId'), element: withBoundary(<ResalePage />) },
+              { path: ROUTES.BOOKING_DONE(':orderId'), element: withBoundary(<BookingDonePage />) },
+
+              {
+                element: <RequireOtp />,
+                children: [
+                  {
+                    path: ROUTES.BOOKING_SECTION(':scheduleId'),
+                    element: withBoundary(<SectionSelectPage />),
+                  },
+                  {
+                    path: ROUTES.BOOKING_SEATS(':scheduleId'),
+                    element: withBoundary(<SeatSelectPage />),
+                  },
+                  {
+                    path: ROUTES.BOOKING_REVIEW(':scheduleId'),
+                    element: withBoundary(<BookingReviewPage />),
+                  },
+                  {
+                    path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
+                    element: withBoundary(<PaymentPage />),
+                  },
+                ],
+              },
+            ],
+          },
+
+          /* ── 운영 ── */
+          {
+            element: <RequireRole roles={['ADMIN']} />,
+            children: [{ path: ROUTES.MONITORING, element: withBoundary(<MonitoringPage />) }],
+          },
+        ],
+      },
+
+      { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
+    ],
+  },
+];
+
+export const router = createBrowserRouter(routes);
