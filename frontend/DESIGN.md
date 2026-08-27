@@ -401,6 +401,220 @@ env(safe-area-inset-top) + 헤더 높이 + 배너 위 여백 + 배너 높이 × 
 
 ---
 
+## 11. 배포
+
+```bash
+npm run build      # → dist/
+npm run preview    # 빌드 결과를 로컬에서 그대로 확인 (배포 전 필수)
+```
+
+`npm run dev` 로 잘 돌아도 배포본이 깨질 수 있습니다. **배포 전에 반드시 `npm run preview` 로 확인**하세요.
+
+### 백엔드가 없는 동안 — 배포본도 목업으로 돕니다
+
+`.env.production` 의 `VITE_USE_MOCK=true` 입니다.
+
+이걸 `false` 로 두면 **배포한 사이트에서 로그인·공연 조회가 전부 실패합니다.**
+개발 서버의 `/api` 프록시는 배포 환경에 없어서, `/api/...` 요청이 정적 호스팅으로 가
+`index.html` 이 돌아오기 때문입니다.
+
+백엔드가 붙으면:
+
+1. `.env.production` 의 `VITE_USE_MOCK=false`
+2. `VITE_API_BASE_URL` 을 실제 API 주소로 (같은 도메인이면 `/api` 유지)
+3. `src/mocks/` 폴더 삭제 + `main.tsx` 의 `setupMocks()` 블록 삭제
+
+> 목업이 켜진 배포본은 **데모**입니다. 새로고침하면 데이터가 초기화되고,
+> 브라우저마다 데이터가 따로 갑니다(각자 메모리에서 도니까요).
+
+### ⚠️ SPA 폴백 설정 — 없으면 새로고침이 404
+
+이 앱은 주소를 브라우저가 처리합니다. 서버는 `/login` 이라는 파일을 갖고 있지 않으므로,
+그 주소를 직접 열거나 새로고침하면 **404** 가 납니다. 호스팅마다 폴백을 설정해야 합니다.
+
+| 호스팅 | 설정 | 상태 |
+|---|---|---|
+| Netlify / Cloudflare Pages | `public/_redirects` | ✅ 포함됨 |
+| Vercel | `vercel.json` | ✅ 포함됨 |
+| GitHub Pages | `npm run build:pages` (404.html 생성) | ✅ 스크립트 있음 |
+| nginx / S3+CloudFront | 아래 참고 | ⚠️ 직접 설정 |
+
+**nginx**
+
+```nginx
+server {
+  root /var/www/tikat;
+
+  # 정적 파일이 있으면 그대로, 없으면 index.html (SPA 라우팅)
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  # 서비스워커·매니페스트는 캐시하지 않습니다.
+  # 캐시되면 새 배포가 사용자에게 며칠씩 안 갑니다.
+  location = /sw.js {
+    add_header Cache-Control "no-cache";
+  }
+  location = /manifest.webmanifest {
+    add_header Cache-Control "no-cache";
+  }
+
+  # 해시가 붙은 에셋은 오래 캐시해도 안전합니다.
+  location /assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+  }
+}
+```
+
+**S3 + CloudFront** — CloudFront 오류 페이지에서 403·404 를 `/index.html` (200) 로 응답하도록 설정합니다.
+
+### HTTPS 가 필요한 기능
+
+| 기능 | 이유 |
+|---|---|
+| 얼굴 등록 (카메라) | `getUserMedia` 는 HTTPS 또는 localhost 에서만 동작 |
+| PWA 설치 | 서비스워커가 HTTPS 필요 |
+| 결제창 | 대부분의 PG 가 HTTPS 를 요구 |
+
+`http://` 로 배포하면 이 세 가지가 조용히 실패합니다.
+
+---
+
+## 12. 결제 (토스페이먼츠)
+
+프론트가 하는 일은 **결제창 호출과 인증까지**입니다. 승인은 백엔드가 합니다.
+
+```
+① prepare   POST /payments/prepare        서버가 주문 생성 + 금액·orderId 확정
+        ↓
+② 결제창     payment.requestPayment()      사용자 인증 (카드·간편결제·계좌이체)
+        ↓  성공하면 successUrl 로 페이지 이동
+③ confirm   POST /payments/confirm        백엔드가 토스 승인 API 호출 → 티켓 발급
+```
+
+### ⚠️ 토스는 성공 시 "항상" 리디렉션입니다
+
+`successUrl` 을 주면 인증 성공 후 그 주소로 **페이지가 이동**합니다.
+데스크톱·모바일 구분 없이 성공 결과는 리디렉션으로만 돌아옵니다.
+
+```
+successUrl?paymentKey=...&orderId=...&amount=...
+failUrl?code=...&message=...&orderId=...
+```
+
+그래서 결제 결과 라우트(`BOOKING_PAYMENT_RESULT`)가 **필수**입니다.
+그 라우트는 **로그인 가드만** 통과하면 되도록 두세요. 얼굴 등록·OTP 가드를 걸면
+결제는 끝났는데 승인 요청을 못 보내 **"돈은 빠졌는데 티켓이 없는"** 사고가 납니다.
+
+예매 플로우 스토어(`bookingStore`)를 sessionStorage 에 유지하는 것도 이 때문입니다.
+메모리에만 두면 리디렉션 복귀 때 선점·멱등키가 사라집니다.
+
+### 금액은 서버가 정하고, 서버가 다시 검증합니다
+
+프론트가 계산한 금액을 결제창에 넣고 그대로 믿으면 **1원 결제**를 만들 수 있습니다.
+화면은 금액을 *보여주기만* 하고, 결제창에 넣는 값은 `prepare` 응답을 그대로 전달합니다.
+
+승인 단계에서 프론트가 보내는 `amount` 는 **주소창(successUrl 쿼리)에서 온 값**이라
+사용자가 고칠 수 있습니다. 백엔드는 이 값을 믿지 말고 `prepare` 때 저장한 금액과
+비교한 뒤, **저장된 금액으로** 승인해야 합니다.
+
+```
+POST https://api.tosspayments.com/v1/payments/confirm
+Authorization: Basic base64(SECRET_KEY + ':')
+{ paymentKey, orderId, amount }   ← amount 는 서버가 저장한 값
+```
+
+시크릿 키(`test_sk_...`)는 **절대 프론트에 두지 않습니다.**
+
+### 토스 규격 — 어기면 결제창이 안 열립니다
+
+| 항목 | 규격 |
+|---|---|
+| `orderId` | **6~64자, 영문·숫자·`-`·`_` 만.** 한글·공백 불가 |
+| `orderName` | 100자 이내 |
+| `customerMobilePhone` | 숫자만 (하이픈 불가) |
+| `amount` | 정수 (원 단위) |
+
+서버가 `orderId` 를 만들 때 이 규칙을 지켜야 합니다. (목업은 `tikat-{timestamp}-{rand}`)
+
+### 결제수단
+
+간편결제는 토스에서 별도 수단이 아니라 **카드 통합결제창 안에** 들어 있습니다.
+`method: 'CARD'` + `flowMode: 'DEFAULT'` 면 카드와 토스페이·네이버페이 등이 한 창에 나옵니다.
+
+| 화면 표시 | 토스 `method` |
+|---|---|
+| 신용/체크카드 | `CARD` |
+| 간편결제 | `CARD` (통합결제창) |
+| 계좌이체 | `TRANSFER` |
+| 가상계좌 | `VIRTUAL_ACCOUNT` |
+
+> 가상계좌는 인증 직후 상태가 `WAITING_FOR_DEPOSIT` 입니다.
+> **입금 웹훅을 받아야 최종 완료**입니다 — 아직 미구현이니 시연에서는 카드를 쓰세요.
+
+### 실제 테스트 결제창 켜기
+
+**토스는 문서에 고정된 공개 테스트 키를 주지 않습니다.** 개발자센터에 가입해
+본인 테스트 키를 받아야 합니다.
+
+1. [토스페이먼츠 개발자센터](https://developers.tosspayments.com) 가입
+2. 내 개발정보 → **테스트 클라이언트 키**(`test_ck_...`) 복사
+3. `.env` 에 넣고 다시 실행
+
+```bash
+VITE_TOSS_CLIENT_KEY=test_ck_...
+```
+
+`VITE_PAYMENT_MODE` 는 기본이 `auto` 라서 **키가 채워지면 자동으로 실제 결제창**이,
+비어 있으면 모의 결제가 뜹니다. 키를 깜빡해도 배포본이 깨지지 않습니다.
+
+| 모드 | 동작 |
+|---|---|
+| `auto` (기본) | 키가 있으면 실제 결제창, 없으면 모의 결제 |
+| `toss` | 항상 실제 결제창 (키 없으면 안내 메시지) |
+| `mock` | 항상 모의 결제 (확인 창) |
+
+> 키가 유효하지 않으면 SDK 가 `code: 'UNKNOWN'` / "알 수 없는 에러" 만 줍니다.
+> 개발 모드에서는 이 경우를 잡아 **"클라이언트 키를 확인하세요"** 로 바꿔 보여줍니다.
+>
+> ⚠️ **결제창은 HTTPS 에서만 정상 동작합니다.** (localhost 는 예외)
+
+### 폴더 구조 — PG 의존은 한곳에
+
+```
+features/payment/
+├── api/
+│   ├── paymentGateway.ts   토스 SDK 호출 (auto/mock/toss) ← PG 교체 시 여기만
+│   └── paymentApi.ts       우리 백엔드 (prepare / confirm)
+├── model/
+│   ├── payment.types.ts
+│   └── payment.model.ts    취소인지 실패인지 판별
+└── hooks/
+    ├── usePayment.ts       ①②③ 오케스트레이션
+    └── usePaymentResult.ts 리디렉션 복귀 처리
+```
+
+화면은 `usePayment` 만 압니다. SDK 는 동적 import 라서 모의 결제 모드에서는 로드되지 않습니다.
+
+### 취소는 에러가 아닙니다
+
+사용자가 결제창을 닫은 것을 실패로 처리하면 "결제 실패했습니다" 토스트가 떠서
+문제가 생긴 줄 알고 불안해합니다. `payment.model.ts` 의 `toPaymentFailure` 가
+토스의 취소 코드(`PAY_PROCESS_CANCELED` 등)를 판별하니, 취소면 **조용히 되돌아갑니다.**
+
+### 진행 단계를 보여주세요
+
+결제창이 열린 동안 사용자는 뭘 기다리는지 모릅니다.
+`usePayment` 의 `stage` 를 버튼 문구로 씁니다.
+
+| stage | 버튼 문구 |
+|---|---|
+| `preparing` | 주문 확인 중 |
+| `authenticating` | 결제창에서 진행해 주세요 |
+| `confirming` | 결제 승인 중 |
+
+---
+
 ## 변경 이력
 
 | 날짜 | 변경 | 승인 |
@@ -410,3 +624,5 @@ env(safe-area-inset-top) + 헤더 높이 + 배너 위 여백 + 배너 높이 × 
 | 2026-08-27 | 고양이 로고·마스코트 도입(9장) | 사용자 승인 |
 | 2026-08-27 | 캔버스 밝기 상향(검정→진회색), 스크롤바 전역 숨김, `Badge size`, 홈 배너 슬라이더 | 사용자 승인 |
 | 2026-08-27 | **무채색 라이트 전환** — 다크 폐기, 색 제거(붉은색만 예외), 홈 검정/하양 경계 히어로(10장) | 사용자 승인 |
+| 2026-08-27 | 결제 연동 — **토스페이먼츠 직접 연동**(12장). 포트원 제거 | 사용자 승인 |
+| 2026-08-27 | 배포 가이드(11장). 배포본 목업 활성화, SPA 폴백 설정, 결제 `auto` 모드 | 사용자 승인 |

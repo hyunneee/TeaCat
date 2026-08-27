@@ -4,12 +4,15 @@ export type PayMethod = 'CARD' | 'EASY_PAY' | 'TRANSFER' | 'VIRTUAL_ACCOUNT';
 /**
  * 결제 준비 응답.
  *
- * **금액과 결제 ID 는 서버가 정합니다.** 프론트가 계산한 금액을 그대로 결제하면
+ * **금액과 주문 ID 는 서버가 정합니다.** 프론트가 계산한 금액을 그대로 결제하면
  * 사용자가 요청을 조작해 1원 결제를 만들 수 있습니다.
  * 프론트는 서버가 준 값을 결제창에 그대로 전달만 합니다.
  */
 export interface PaymentPrepareResponse {
-  /** 포트원에 넘길 고객사 주문 고유 ID */
+  /**
+   * 토스에 넘길 주문 고유 ID (`orderId`).
+   * 토스 규격: **6~64자, 영문·숫자·`-`·`_` 만** 허용합니다.
+   */
   paymentId: string;
   orderName: string;
   /** 원 단위 정수 */
@@ -25,9 +28,15 @@ export interface PaymentPrepareResponse {
 
 /** 결제창 인증까지 성공했을 때 받는 값 */
 export interface PaymentAuthResult {
+  /** 우리가 만든 주문 ID (토스의 `orderId`) */
   paymentId: string;
-  /** 결제 시도 ID (포트원이 발급) */
-  txId: string;
+  /** 토스가 발급한 결제 키. 승인 API 에 이 값이 필요합니다. */
+  paymentKey: string;
+  /**
+   * 결제창이 알려준 금액.
+   * ⚠️ 주소창에서 온 값이라 조작될 수 있습니다. 백엔드가 자기 금액과 비교해야 합니다.
+   */
+  amount: number;
 }
 
 /** 백엔드 승인(검증) 결과 */

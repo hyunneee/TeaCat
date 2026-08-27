@@ -6,6 +6,7 @@ import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { formatDuration } from '@/shared/lib';
 import { useOtp } from '@/features/auth';
 import { useSchedule } from '@/features/concert';
+import { useBookingStore } from '@/features/booking';
 
 /**
  * 예매 진입 관문 — 본인 인증 (플로우차트: 공연 상세 → OTP 인증 → 구역).
@@ -16,7 +17,13 @@ export function BookingOtpPage() {
   const { scheduleId = '' } = useParams();
   const { data: schedule } = useSchedule(scheduleId);
 
-  const otp = useOtp(scheduleId, () => navigate(ROUTES.BOOKING_SECTION(scheduleId), { replace: true }));
+  // OTP 통과 = 예매 플로우의 시작. 이전에 끝내지 않은 판이 남아 있으면 여기서 버립니다.
+  const beginFlow = useBookingStore((s) => s.beginFlow);
+
+  const otp = useOtp(scheduleId, () => {
+    beginFlow(scheduleId);
+    navigate(ROUTES.BOOKING_SECTION(scheduleId), { replace: true });
+  });
 
   return (
     <div className="flex min-h-dvh flex-col">

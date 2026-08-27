@@ -62,6 +62,7 @@
 | HTTP | axios (`shared/api/client.ts` 래퍼만 사용) | 컴포넌트에서 `fetch` 직접 호출 |
 | 아이콘 | **lucide-react** | emoji 하드코딩, 다른 아이콘 팩 |
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
+| 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
 
 ---
 
@@ -274,6 +275,31 @@ npm run typecheck && npm run lint
 결제 멱등키는 **플로우 시작 시 한 번 만들어 재시도에도 재사용**합니다.
 매번 새로 만들면 멱등키의 의미가 없습니다.
 
+### 결제 (토스페이먼츠)
+
+프론트가 하는 일은 **결제창 호출과 인증까지**입니다. 승인은 백엔드가 합니다.
+
+1. `POST /payments/prepare` — **서버가** 금액과 `orderId` 를 확정
+2. `payment.requestPayment()` — 결제창에서 사용자 인증
+3. `POST /payments/confirm` — 백엔드가 토스 승인 API 호출 → 티켓 발급
+
+**금액을 프론트에서 계산해 결제창에 넣고 그대로 믿으면 안 됩니다.**
+요청을 조작해 1원 결제를 만들 수 있습니다. 금액의 출처는 항상 서버입니다.
+승인 단계에서 프론트가 보내는 `amount` 도 주소창에서 온 값이라,
+백엔드가 저장된 금액과 비교한 뒤 **저장된 금액으로** 승인해야 합니다.
+
+- PG SDK 의존은 `features/payment` 안에만 둡니다. 화면은 `usePayment` 만 압니다.
+- `VITE_PAYMENT_MODE=auto` (기본) — `VITE_TOSS_CLIENT_KEY` 가 채워져 있으면 실제 결제창,
+  비어 있으면 모의 결제. 키만 넣으면 코드 수정 없이 실제 테스트 결제창이 뜹니다.
+- 클라이언트 키(`test_ck_...`)는 공개 키입니다.
+  **승인에 쓰는 시크릿 키(`test_sk_...`)는 절대 프론트에** 두지 마세요.
+- **토스는 성공 시 항상 `successUrl` 로 페이지를 이동**시킵니다.
+  결과를 받는 라우트(`BOOKING_PAYMENT_RESULT`)는 **얼굴·OTP 가드 밖**에 둬야 합니다.
+  가드에 막히면 "돈은 빠졌는데 티켓이 없는" 사고가 납니다.
+- 예매 플로우 스토어는 sessionStorage 에 유지됩니다. 리디렉션 복귀 때 살아 있어야 하기 때문입니다.
+- 토스 규격을 어기면 결제창이 아예 안 열립니다 — `orderId` 6~64자(영문·숫자·`-`·`_`),
+  `orderName` 100자 이내, 전화번호는 숫자만.
+
 ### 1인 1매
 
 배포 정책은 1인 1매(`VITE_MAX_TICKETS_PER_USER=1`), 개발은 4매입니다.
@@ -283,6 +309,17 @@ npm run typecheck && npm run lint
 
 좌석·대기열은 `staleTime: 0` + 폴링입니다. WebSocket 이 붙으면 훅 내부만 바꾸고
 화면 코드는 건드리지 않습니다.
+
+### 배포
+
+- **`VITE_USE_MOCK` 을 배포에서 끄지 마세요** (백엔드 붙기 전까지). 끄면 배포한 사이트에서
+  로그인부터 전부 실패합니다. 개발 서버의 `/api` 프록시는 배포 환경에 없습니다.
+- SPA 폴백이 없으면 `/login` 직접 진입·새로고침이 404 입니다.
+  `public/_redirects`(Netlify) / `vercel.json`(Vercel) 은 이미 있고,
+  nginx·S3 는 직접 설정해야 합니다. (README 9장)
+- `sw.js` / `manifest.webmanifest` 는 **캐시 금지**. 캐시되면 새 배포가 전달되지 않습니다.
+- 얼굴 등록(카메라)·PWA 설치·결제창은 **HTTPS 에서만** 동작합니다.
+- 배포 전 `npm run preview` 로 운영 빌드를 확인하세요. dev 가 돌아도 배포본은 깨질 수 있습니다.
 
 ### PWA
 
@@ -295,6 +332,10 @@ npm run typecheck && npm run lint
 
 정하지 않고 코드에 가정으로 박아두지 말고, 여기에 적어두고 사용자에게 알리세요.
 
+- [ ] 토스페이먼츠 테스트 클라이언트 키 (`VITE_TOSS_CLIENT_KEY`) — 지금은 비어 있어 모의 결제
+- [ ] 가상계좌 입금 웹훅 (인증 직후엔 `WAITING_FOR_DEPOSIT` 상태)
+- [ ] 예매 수수료 정책 (현재 매당 2,000원 가정)
+- [ ] 결제 취소·환불 API 및 부분 취소 정책
 - [ ] 응답 봉투 형태 — 현재 `{ success, data, message, code }` 가정 (`shared/types/api.ts`)
 - [ ] 에러 코드 문자열 — `shared/api/ApiError.ts` 의 `ERROR_CODE`
 - [ ] 인증 — accessToken(헤더) + refreshToken(httpOnly 쿠키) 가정
@@ -320,3 +361,6 @@ npm run typecheck && npm run lint
 | 2026-08-27 | 서비스명 `티캣` 확정. 발광 축소 · AI 클리셰 제거 · 대비 상향 | 사용자 승인 |
 | 2026-08-27 | 고양이 로고·마스코트, 캔버스 밝기 상향, 스크롤바 전역 숨김, `features/banner` 추가 | 사용자 승인 |
 | 2026-08-27 | 다크 → **무채색 라이트** 전환. 붉은색만 예외, 홈 검정/하양 경계 히어로 | 사용자 승인 |
+| 2026-08-27 | 결제 연동 — `features/payment` 신설 | 사용자 승인 |
+| 2026-08-27 | 배포본 목업 활성화(`VITE_USE_MOCK=true` in prod), SPA 폴백 설정 | 사용자 승인 |
+| 2026-08-27 | 결제 PG 교체 — 포트원 제거, **토스페이먼츠 직접 연동**(`@tosspayments/tosspayments-sdk`) | 사용자 승인 |

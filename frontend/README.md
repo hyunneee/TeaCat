@@ -72,7 +72,8 @@ npm run dev
 | `npm run dev` | 개발 서버 (HMR) |
 | `npm run build` | **운영** 빌드 → `dist/` |
 | `npm run build:dev` | 개발 설정으로 빌드 (스테이징 확인용) |
-| `npm run preview` | 빌드 결과를 로컬에서 서빙 — **PWA 동작 확인은 여기서** |
+| `npm run preview` | 빌드 결과를 로컬에서 서빙 — **배포 전 반드시 여기서 확인** |
+| `npm run build:pages` | GitHub Pages 용 빌드 (404.html 생성) |
 | `npm run lint` / `npm run lint:fix` | ESLint |
 | `npm run typecheck` | 타입 검사 |
 | `npm run format` | Prettier |
@@ -117,8 +118,13 @@ env.maxTicketsPerUser; // dev=4, prod=1
 | 키 | dev | prod | 의미 |
 |---|---|---|---|
 | `VITE_MAX_TICKETS_PER_USER` | 4 | **1** | 1인 최대 구매 매수 |
-| `VITE_USE_MOCK` | true | **false** | 목업 데이터 사용 |
+| `VITE_USE_MOCK` | true | **true** | 목업 — 백엔드 붙기 전까지 배포본도 켜둠 |
 | `VITE_ENABLE_DEVTOOLS` | true | false | React Query Devtools |
+| `VITE_PAYMENT_MODE` | auto | auto | 토스 클라이언트 키가 있으면 실제 결제창, 없으면 모의 |
+
+> ⚠️ `VITE_USE_MOCK` 을 prod 에서 `false` 로 두면 **배포한 사이트가 아무것도 안 됩니다.**
+> 개발 서버의 `/api` 프록시는 배포에 없어서 모든 API 요청이 실패합니다.
+> 백엔드가 붙은 뒤에 끄세요.
 
 스테이징이 필요해지면 `.env.staging` 을 만들고 `vite build --mode staging` 을 추가하면 됩니다. 코드 수정은 필요 없습니다.
 
@@ -167,7 +173,9 @@ src/mocks/
 │   ├── booking.ts  구역/좌석/선점락/결제
 │   ├── ticket.ts   내 티켓/취소
 │   ├── resale.ts   취소표 추첨 대기
-│   └── nft.ts      포토카드 마켓/토큰
+│   ├── nft.ts      포토카드 마켓/토큰
+│   ├── banner.ts   홈 배너
+│   └── payment.ts  결제 준비/승인
 └── index.ts        setupMocks()
 ```
 
@@ -203,6 +211,7 @@ src/
 │   ├── resale/       취소표 NRF 추첨 대기
 │   ├── nft/          포토카드 마켓·토큰
 │   ├── banner/       홈 상단 광고·이벤트 배너
+│   ├── payment/      결제 (토스페이먼츠)
 │   └── organizer/ monitoring/ map/ (골격만)
 │
 ├── pages/        라우트 진입점. "조립"만 하고 로직은 없음
@@ -302,7 +311,48 @@ mock('GET', '/schedules/:scheduleId/sections', (ctx) => {
 
 ---
 
-## 9. 이 프로젝트 특유의 주의사항
+## 9. 배포
+
+```bash
+npm run build
+```
+
+```bash
+npm run preview
+```
+
+**`npm run dev` 가 잘 돌아도 배포본은 깨질 수 있습니다.** 배포 전에 `preview` 로 확인하세요.
+
+### 반드시 해야 하는 두 가지
+
+**1. SPA 폴백** — 이 앱은 주소를 브라우저가 처리합니다. 서버에 `/login` 이라는 파일이
+없으니, 그 주소를 직접 열거나 새로고침하면 **404** 가 납니다.
+
+| 호스팅 | 설정 |
+|---|---|
+| Netlify / Cloudflare Pages | `public/_redirects` ✅ 포함됨 |
+| Vercel | `vercel.json` ✅ 포함됨 |
+| GitHub Pages | `npm run build:pages` ✅ |
+| nginx | `try_files $uri $uri/ /index.html;` ⚠️ 직접 |
+| S3 + CloudFront | 403·404 → `/index.html` (200) ⚠️ 직접 |
+
+**2. HTTPS** — 아래 기능은 `http://` 에서 조용히 실패합니다.
+
+- 얼굴 등록 (카메라 = `getUserMedia`)
+- PWA 설치 (서비스워커)
+- 결제창 (대부분의 PG 가 HTTPS 요구)
+
+### 캐시 주의
+
+`sw.js` 와 `manifest.webmanifest` 는 **캐시하지 마세요**(`no-cache`).
+캐시되면 새 배포가 사용자에게 며칠씩 전달되지 않습니다.
+`/assets/` 는 파일명에 해시가 붙으므로 오래 캐시해도 안전합니다.
+
+nginx 전체 설정과 결제 연동 방법은 [`DESIGN.md`](DESIGN.md) 11·12장에 있습니다.
+
+---
+
+## 10. 이 프로젝트 특유의 주의사항
 
 ### 동시 결제 / 좌석 락
 
@@ -344,7 +394,7 @@ WebSocket 이 붙으면 훅 내부만 소켓 구독으로 바꾸면 되고 **화
 
 ---
 
-## 10. 아직 확정 안 된 것
+## 11. 아직 확정 안 된 것
 
 백엔드/기획과 합의가 필요합니다. 정하지 않고 코드에 가정으로 박아두지 마세요.
 

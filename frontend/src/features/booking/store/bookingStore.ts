@@ -15,6 +15,8 @@ interface BookingState {
   /** 결제 요청에 쓸 멱등키. 플로우 시작 시 1회 생성해 재시도해도 유지합니다. */
   idempotencyKey: string | null;
 
+  /** 플로우를 처음부터 시작합니다 (OTP 통과 시점). 이전 판은 버립니다. */
+  beginFlow: (scheduleId: string) => void;
   startSession: (scheduleId: string) => void;
   selectSection: (sectionId: string) => void;
   toggleSeat: (seatId: string) => void;
@@ -34,6 +36,7 @@ const initial = {
   idempotencyKey: null,
 } satisfies Omit<
   BookingState,
+  | 'beginFlow'
   | 'startSession'
   | 'selectSection'
   | 'toggleSeat'
@@ -60,9 +63,27 @@ const initial = {
 export const useBookingStore = create<BookingState>()(persist((set, get) => ({
   ...initial,
 
+  /**
+   * 예매 플로우의 진짜 시작점 — OTP 인증을 통과한 순간.
+   *
+   * 같은 회차를 다시 예매하는 경우에도 이전 판(선점·수령인·멱등키)을 버려야 합니다.
+   * 남겨두면 이전 선점이 만료되는 순간 만료 처리가 발동해서
+   * **방금 고른 좌석이 풀립니다.** (서버의 이전 선점은 TTL 로 알아서 해제됩니다)
+   */
+  beginFlow: (scheduleId) => set({ ...initial, scheduleId }),
+
   startSession: (scheduleId) => {
-    // 다른 회차로 넘어오면 이전 선택은 전부 버립니다.
-    if (get().scheduleId !== scheduleId) set({ ...initial, scheduleId });
+    const current = get();
+
+    // sessionStorage 에 유지되므로, 결제를 끝내지 않고 나갔던 판이 남아 있을 수 있습니다.
+    // 만료된 선점을 그대로 두면 새 예매를 시작한 직후 만료 처리가 발동해
+    // 방금 고른 좌석이 풀려버립니다.
+    const expired = current.hold
+      ? new Date(current.hold.expiresAt).getTime() <= Date.now()
+      : false;
+
+    // 다른 회차로 넘어왔거나, 남아있던 선점이 이미 만료됐으면 새 판으로 시작합니다.
+    if (current.scheduleId !== scheduleId || expired) set({ ...initial, scheduleId });
   },
 
   selectSection: (sectionId) => {

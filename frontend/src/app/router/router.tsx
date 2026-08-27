@@ -24,6 +24,7 @@ const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'Secti
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
 const PaymentPage = page(() => import('@/pages/PaymentPage'), 'PaymentPage');
+const PaymentResultPage = page(() => import('@/pages/PaymentResultPage'), 'PaymentResultPage');
 const BookingDonePage = page(() => import('@/pages/BookingDonePage'), 'BookingDonePage');
 
 const ResalePage = page(() => import('@/pages/ResalePage'), 'ResalePage');
@@ -87,6 +88,15 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
+
+          /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
+             ⚠️ 일부러 RequireFace / RequireOtp **밖**에 둡니다.
+             결제는 이미 끝난 상태인데 가드에 막히면 승인 요청을 못 보내
+             "돈은 빠졌는데 티켓이 없는" 사고가 납니다. */
+          {
+            path: ROUTES.BOOKING_PAYMENT_RESULT(':scheduleId'),
+            element: withBoundary(<PaymentResultPage />),
+          },
 
           /* ── 예매 플로우 ──────────────────────────────────
              OTP → 구역 → 좌석 → 확인 → 결제 → 완료

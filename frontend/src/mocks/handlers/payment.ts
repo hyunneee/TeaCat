@@ -3,11 +3,11 @@ import { findConcert, findSchedule, findSeat, holds, iso, now, sections, tickets
 import { requireUser } from './auth';
 
 /**
- * 결제 목업.
+ * 결제 목업 (토스페이먼츠).
  *
  * 실제 백엔드가 해야 하는 일을 같은 순서로 흉내냅니다.
- *   prepare — 좌석 선점을 확인하고 **서버가 금액과 paymentId 를 확정**
- *   confirm — (실서버) 포트원 결제 조회 → 금액·상태 검증 → 승인 → 티켓 발급
+ *   prepare — 좌석 선점을 확인하고 **서버가 금액과 orderId 를 확정**
+ *   confirm — (실서버) 토스 승인 API 호출 → 금액 검증 → 티켓 발급
  *
  * 백엔드가 완성되면 이 파일만 지우면 됩니다.
  * 프론트의 `features/payment` 는 손대지 않습니다.
@@ -65,6 +65,8 @@ mock('POST', '/payments/prepare', (ctx) => {
       ? `${concert?.title ?? '공연'} ${section?.name ?? ''} 외 ${hold.seatIds.length - 1}석`
       : `${concert?.title ?? '공연'} ${section?.name ?? ''} ${firstSeat?.row ?? ''}열 ${firstSeat?.number ?? ''}번`;
 
+  /* 토스 orderId 규격: 6~64자, 영문·숫자·`-`·`_` 만 허용.
+     한글이나 다른 특수문자가 들어가면 결제창 요청이 거부됩니다. */
   const paymentId = `tikat-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
   prepared.set(paymentId, {
@@ -100,7 +102,11 @@ mock('POST', '/payments/confirm', (ctx) => {
   const key = ctx.headers['idempotency-key'];
   if (key && confirmedByKey.has(key)) return confirmedByKey.get(key);
 
-  const { paymentId, txId } = ctx.body as { paymentId?: string; txId?: string };
+  const { paymentId, paymentKey, amount } = ctx.body as {
+    paymentId?: string;
+    paymentKey?: string;
+    amount?: number;
+  };
   const order = prepared.get(paymentId ?? '');
 
   if (!order) throw mockError(404, 'PAYMENT_NOT_FOUND', '결제 정보를 찾을 수 없습니다.');
@@ -108,12 +114,22 @@ mock('POST', '/payments/confirm', (ctx) => {
   if (order.status === 'PAID') {
     throw mockError(409, 'ALREADY_PAID', '이미 결제된 주문입니다.');
   }
-  if (!txId) throw mockError(400, 'BAD_REQUEST', '결제 인증 정보가 없습니다.');
+  if (!paymentKey) throw mockError(400, 'BAD_REQUEST', '결제 인증 정보가 없습니다.');
 
-  /* ⚠️ 실제 백엔드는 여기서 포트원 서버 API 를 호출합니다.
-        GET https://api.portone.io/payments/{paymentId}
-        → status 가 PAID 인지, amount.total 이 우리가 계산한 금액과 같은지 확인
-        금액 검증을 빼먹으면 결제창 요청을 조작한 1원 결제가 통과합니다. */
+  /* 💡 금액 검증 — 실서버에서 절대 빼먹으면 안 되는 부분입니다.
+        프론트가 보낸 amount 는 주소창(successUrl 쿼리)에서 온 값이라 조작될 수 있습니다.
+        서버가 prepare 때 저장한 금액과 비교하고, 다르면 승인하지 않습니다. */
+  if (typeof amount === 'number' && amount !== order.amount) {
+    throw mockError(400, 'AMOUNT_MISMATCH', '결제 금액이 일치하지 않습니다.');
+  }
+
+  /* ⚠️ 실제 백엔드는 여기서 토스 승인 API 를 호출합니다.
+        POST https://api.tosspayments.com/v1/payments/confirm
+        Authorization: Basic base64(SECRET_KEY + ':')
+        { paymentKey, orderId, amount }   ← amount 는 **서버가 저장한 값**을 씁니다
+
+        가상계좌는 이 시점에 status 가 WAITING_FOR_DEPOSIT 이라
+        입금 웹훅을 받아야 최종 완료됩니다. (아직 미구현) */
 
   const hold = holds.find((h) => h.holdId === order.holdId);
   if (!hold) {

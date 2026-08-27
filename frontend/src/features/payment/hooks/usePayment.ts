@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, queryClient } from '@/shared/api';
@@ -6,7 +6,7 @@ import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { useBookingStore } from '@/features/booking';
 import { paymentApi } from '../api/paymentApi';
-import { readRedirectResult, requestPayment } from '../api/paymentGateway';
+import { requestPayment } from '../api/paymentGateway';
 import type { PayMethod, PaymentAuthResult } from '../model/payment.types';
 
 /** 사용자에게 보여줄 진행 단계 */
@@ -20,6 +20,38 @@ export type PaymentStage =
   | 'confirming';
 
 /**
+ * 결제 승인(검증) 요청.
+ *
+ * 결제창 인증 결과만 있으면 되므로, 결제 페이지와 리디렉션 복귀 화면이
+ * 같은 훅을 씁니다. 멱등키를 붙여 두 경로에서 중복 승인되지 않게 합니다.
+ */
+export function useConfirmPayment() {
+  const navigate = useNavigate();
+  const ensureIdempotencyKey = useBookingStore((s) => s.ensureIdempotencyKey);
+
+  return useMutation({
+    mutationFn: ({ auth, payMethod }: { auth: PaymentAuthResult; payMethod: PayMethod }) =>
+      paymentApi.confirm(
+        {
+          paymentId: auth.paymentId,
+          paymentKey: auth.paymentKey,
+          // 서버는 이 금액을 믿지 않고 자기가 저장한 값과 비교합니다.
+          amount: auth.amount,
+          payMethod,
+        },
+        ensureIdempotencyKey(),
+      ),
+    onSuccess: (order) => {
+      void queryClient.invalidateQueries({ queryKey: ['booking'] });
+      void queryClient.invalidateQueries({ queryKey: ['ticket'] });
+      // 플로우 상태 정리는 완료 화면에서 합니다. 여기서 비우면 결제 페이지의
+      // "선점 없음" 가드가 먼저 발동해 구역 선택으로 튕깁니다.
+      navigate(ROUTES.BOOKING_DONE(order.orderId), { replace: true });
+    },
+  });
+}
+
+/**
  * 결제 플로우 전체.
  *
  *   ① prepare   서버가 주문 생성 + 금액/paymentId 확정
@@ -30,41 +62,16 @@ export type PaymentStage =
  * 백엔드가 준비되면 `paymentApi.confirm` 의 응답만 맞춰주면
  * 이 훅과 화면은 그대로 씁니다.
  *
- * 모바일에서는 ②가 페이지 이동으로 진행되므로, 돌아왔을 때
- * 쿼리 파라미터를 읽어 ③으로 이어붙입니다.
+ * 토스페이먼츠는 인증에 성공하면 `successUrl` 로 페이지를 이동시킵니다.
+ * 즉 **성공 결과는 항상 리디렉션으로** 돌아오고, `BOOKING_PAYMENT_RESULT`
+ * 라우트에서 ③을 이어붙입니다. (usePaymentResult)
  */
 export function usePayment(scheduleId: string) {
-  const navigate = useNavigate();
   const [stage, setStage] = useState<PaymentStage>('idle');
 
   const hold = useBookingStore((s) => s.hold);
   const recipients = useBookingStore((s) => s.recipients);
-  const ensureIdempotencyKey = useBookingStore((s) => s.ensureIdempotencyKey);
-  const reset = useBookingStore((s) => s.reset);
-
-  /** 승인 단계. 인증 결과만 있으면 되므로 리디렉션 복귀에서도 재사용합니다. */
-  const confirmMutation = useMutation({
-    mutationFn: ({ auth, payMethod }: { auth: PaymentAuthResult; payMethod: PayMethod }) =>
-      paymentApi.confirm(
-        { paymentId: auth.paymentId, txId: auth.txId, payMethod },
-        ensureIdempotencyKey(),
-      ),
-    onSuccess: (order) => {
-      void queryClient.invalidateQueries({ queryKey: ['booking'] });
-      void queryClient.invalidateQueries({ queryKey: ['ticket'] });
-      // reset() 은 완료 화면에서 합니다. 여기서 비우면 결제 페이지의
-      // "선점 없음" 가드가 먼저 발동해 구역 선택으로 튕깁니다.
-      navigate(ROUTES.BOOKING_DONE(order.orderId), { replace: true });
-    },
-    onError: (error) => {
-      setStage('idle');
-      toast.error(
-        ApiError.isApiError(error)
-          ? error.message
-          : '결제 승인에 실패했습니다. 결제 내역을 확인해 주세요.',
-      );
-    },
-  });
+  const confirm = useConfirmPayment();
 
   const pay = useCallback(
     async (payMethod: PayMethod) => {
@@ -81,12 +88,16 @@ export function usePayment(scheduleId: string) {
           recipients: recipients.filter((r) => hold.seatIds.includes(r.seatId)),
         });
 
-        // ② 결제창
+        /* ② 결제창.
+              토스페이먼츠는 성공하면 successUrl 로 **페이지가 이동**합니다.
+              그래서 성공 경로는 여기로 돌아오지 않고 result 라우트에서 이어집니다. */
         setStage('authenticating');
+        const resultUrl = `${window.location.origin}${ROUTES.BOOKING_PAYMENT_RESULT(scheduleId)}`;
         const result = await requestPayment({
           prepared,
           payMethod,
-          redirectUrl: `${window.location.origin}${ROUTES.BOOKING_PAYMENT(scheduleId)}`,
+          successUrl: resultUrl,
+          failUrl: resultUrl,
         });
 
         if (!result.ok) {
@@ -100,50 +111,31 @@ export function usePayment(scheduleId: string) {
 
         // ③ 승인은 백엔드가
         setStage('confirming');
-        confirmMutation.mutate({ auth: result.auth, payMethod });
+        confirm.mutate(
+          { auth: result.auth, payMethod },
+          {
+            onError: (error) => {
+              setStage('idle');
+              toast.error(
+                ApiError.isApiError(error)
+                  ? error.message
+                  : '결제 승인에 실패했습니다. 결제 내역을 확인해 주세요.',
+              );
+            },
+          },
+        );
       } catch (error) {
         setStage('idle');
-        toast.error(
-          ApiError.isApiError(error) ? error.message : '결제를 시작할 수 없습니다.',
-        );
+        toast.error(ApiError.isApiError(error) ? error.message : '결제를 시작할 수 없습니다.');
       }
     },
-    [hold, recipients, scheduleId, confirmMutation],
+    [hold, recipients, scheduleId, confirm],
   );
-
-  /* ── 모바일 리디렉션 복귀 처리 ──────────────────────────────
-     결제창에서 돌아오면 주소에 결과가 붙어 있습니다.
-     한 번만 처리하고 쿼리를 지워, 새로고침 때 중복 승인되지 않게 합니다. */
-  const handledRedirect = useRef(false);
-
-  useEffect(() => {
-    if (handledRedirect.current) return;
-    const result = readRedirectResult(window.location.search);
-    if (!result) return;
-
-    handledRedirect.current = true;
-    window.history.replaceState({}, '', window.location.pathname);
-
-    if (!result.ok) {
-      if (!result.failure.canceledByUser) toast.error(result.failure.message);
-      return;
-    }
-
-    setStage('confirming');
-    // 리디렉션 복귀 시점에는 어떤 수단으로 결제했는지 알 수 없어 CARD 로 둡니다.
-    // (백엔드가 포트원 조회로 실제 수단을 알 수 있으므로 참고값입니다)
-    confirmMutation.mutate({ auth: result.auth, payMethod: 'CARD' });
-    // confirmMutation 은 매 렌더 새로 만들어지므로 의존성에서 제외합니다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const busy = stage !== 'idle';
 
   return {
     pay,
     stage,
     /** 결제 진행 중 — 버튼을 잠가 중복 요청을 막으세요 */
-    isPaying: busy,
-    reset,
+    isPaying: stage !== 'idle',
   };
 }

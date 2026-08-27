@@ -12,8 +12,9 @@ import { usePayment, type PayMethod } from '@/features/payment';
 /**
  * 결제수단 목록.
  *
- * 값은 포트원 payMethod 와 같은 이름을 씁니다. PG 가 지원하는 수단은
- * 채널마다 다르므로(토스페이먼츠 기준) 늘리기 전에 연동 가이드를 확인하세요.
+ * 간편결제는 토스에서 별도 수단이 아니라 **카드 통합결제창 안에** 들어 있습니다.
+ * (카드를 고르면 토스페이·네이버페이 등이 같은 창에 함께 나옵니다)
+ * 수단을 늘리기 전에 계약된 결제수단인지 확인하세요.
  */
 const METHODS: { id: PayMethod; label: string; icon: typeof CreditCard }[] = [
   { id: 'CARD', label: '신용/체크카드', icon: CreditCard },
@@ -129,9 +130,9 @@ export function PaymentPage() {
 
         {env.payment.mode === 'mock' && (
           <p className="surface-2 border-line text-muted rounded-lg border p-3 text-xs leading-relaxed">
-            현재 <b>모의 결제</b> 모드입니다. 실제 카드 결제는 일어나지 않고 확인 창으로 대체됩니다.
-            포트원 연동 정보를 <code>.env</code> 에 넣고{' '}
-            <code>VITE_PAYMENT_MODE=portone</code> 으로 바꾸면 실제 결제창이 뜹니다.
+            현재 <b>모의 결제</b> 모드입니다. 실제 결제는 일어나지 않고 확인 창으로 대체됩니다.
+            <code>.env</code> 의 <code>VITE_TOSS_CLIENT_KEY</code> 에 토스페이먼츠 클라이언트 키를
+            넣으면 실제 테스트 결제창이 뜹니다.
           </p>
         )}
 

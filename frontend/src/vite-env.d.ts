@@ -9,9 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_MAX_TICKETS_PER_USER: string;
   readonly VITE_ENABLE_DEVTOOLS: string;
   readonly VITE_USE_MOCK: string;
-  readonly VITE_PAYMENT_MODE: 'mock' | 'portone';
-  readonly VITE_PORTONE_STORE_ID: string;
-  readonly VITE_PORTONE_CHANNEL_KEY: string;
+  readonly VITE_PAYMENT_MODE: 'auto' | 'mock' | 'toss';
+  readonly VITE_TOSS_CLIENT_KEY: string;
 }
 
 interface ImportMeta {

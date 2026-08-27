@@ -24,6 +24,14 @@ export const ROUTES = {
   BOOKING_SEATS: (scheduleId: string) => `/booking/${scheduleId}/seats`,
   BOOKING_REVIEW: (scheduleId: string) => `/booking/${scheduleId}/review`,
   BOOKING_PAYMENT: (scheduleId: string) => `/booking/${scheduleId}/payment`,
+  /**
+   * 결제창(모바일 리디렉션)에서 돌아오는 곳.
+   *
+   * ⚠️ 이 라우트는 **로그인 가드만** 통과하면 들어올 수 있어야 합니다.
+   * 얼굴 등록·OTP 가드를 걸면, 결제는 끝났는데 가드에 막혀
+   * 승인 요청을 못 보내고 티켓이 발급되지 않는 사고가 납니다.
+   */
+  BOOKING_PAYMENT_RESULT: (scheduleId: string) => `/booking/${scheduleId}/payment/result`,
   BOOKING_DONE: (orderId: string) => `/booking/done/${orderId}`,
 
   /* ── 취소표 추첨 대기 (NRF) ── */

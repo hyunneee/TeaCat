@@ -32,6 +32,28 @@ function optionalNumber(key: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export type PaymentMode = 'mock' | 'toss';
+
+/**
+ * 결제 설정 (토스페이먼츠).
+ *
+ * 기본값 'auto' 는 **클라이언트 키가 채워져 있으면 실제 결제창, 비어 있으면 모의 결제**입니다.
+ * 키만 .env 에 넣으면 코드 수정 없이 실제 테스트 결제창이 뜨고,
+ * 키를 깜빡해도 배포본이 깨지지 않습니다.
+ *
+ * ⚠️ 클라이언트 키(`test_ck_...` / `live_ck_...`)는 브라우저에 노출되는 공개 키입니다.
+ *    결제를 **승인**하는 시크릿 키(`test_sk_...`)는 절대 프론트에 두지 마세요 — 백엔드 전용입니다.
+ */
+function paymentConfig() {
+  const clientKey = (import.meta.env.VITE_TOSS_CLIENT_KEY ?? '').trim();
+  const configured = clientKey.length > 0;
+
+  const requested = (import.meta.env.VITE_PAYMENT_MODE ?? 'auto') as PaymentMode | 'auto';
+  const mode: PaymentMode = requested === 'auto' ? (configured ? 'toss' : 'mock') : requested;
+
+  return { mode, clientKey, configured } as const;
+}
+
 export const env = {
   /** 'development' | 'production' */
   name: (import.meta.env.VITE_APP_ENV ?? import.meta.env.MODE) as AppEnvName,
@@ -48,15 +70,10 @@ export const env = {
   /** 목업 데이터 사용 여부. 백엔드 완성 후 .env 에서 false 로 두고 src/mocks 를 지우면 됩니다. */
   useMock: optionalBool('VITE_USE_MOCK', false),
 
-  /* ── 결제 (포트원 V2) ─────────────────────────────────────
-     storeId / channelKey 는 브라우저에 노출되는 **공개 키**입니다.
-     결제를 실제로 승인하는 V2 API Secret 은 백엔드에만 두세요. */
-  payment: {
-    /** 'mock' 이면 결제창을 띄우지 않고 모의 승인합니다. */
-    mode: (import.meta.env.VITE_PAYMENT_MODE ?? 'mock') as 'mock' | 'portone',
-    storeId: import.meta.env.VITE_PORTONE_STORE_ID ?? '',
-    channelKey: import.meta.env.VITE_PORTONE_CHANNEL_KEY ?? '',
-  },
+  /* ── 결제 (토스페이먼츠) ─────────────────────────────────
+     클라이언트 키는 브라우저에 노출되는 공개 키입니다.
+     승인에 쓰는 시크릿 키는 백엔드에만 두세요. */
+  payment: paymentConfig(),
 
   get isProd() {
     return this.name === 'production';
