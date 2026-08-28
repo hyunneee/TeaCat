@@ -129,6 +129,7 @@ export interface MockNft {
   ownerId: string;
   /** 마켓에 올라와 있으면 가격, 아니면 null */
   listPrice: number | null;
+  description: string | null;
   artSeed: string;
   mintedAt: string;
 }
@@ -151,7 +152,7 @@ export const users: MockUser[] = [
     role: 'USER',
     faceRegistered: false,
     profileImageUrl: null,
-    tokenBalance: 1200,
+    tokenBalance: 8400,
   },
   {
     id: 'u-2',
@@ -251,12 +252,12 @@ export const concerts: MockConcert[] = [
 ];
 
 export const schedules: MockSchedule[] = [
-  { id: 's-1', concertId: 'c-1', startAt: iso(now() + 12 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 4 },
-  { id: 's-2', concertId: 'c-1', startAt: iso(now() + 13 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 4 },
-  { id: 's-3', concertId: 'c-2', startAt: iso(now() + 20 * DAY), openAt: iso(now() - 1 * DAY), maxPerUser: 2 },
-  { id: 's-4', concertId: 'c-3', startAt: iso(now() + 30 * DAY), openAt: iso(now() + 2 * DAY), maxPerUser: 4 },
-  { id: 's-5', concertId: 'c-4', startAt: iso(now() + 40 * DAY), openAt: iso(now() + 5 * DAY), maxPerUser: 2 },
-  { id: 's-6', concertId: 'c-5', startAt: iso(now() + 55 * DAY), openAt: iso(now() + 9 * DAY), maxPerUser: 4 },
+  { id: 's-1', concertId: 'c-1', startAt: iso(now() + 12 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 1 },
+  { id: 's-2', concertId: 'c-1', startAt: iso(now() + 13 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 1 },
+  { id: 's-3', concertId: 'c-2', startAt: iso(now() + 20 * DAY), openAt: iso(now() - 1 * DAY), maxPerUser: 1 },
+  { id: 's-4', concertId: 'c-3', startAt: iso(now() + 30 * DAY), openAt: iso(now() + 2 * DAY), maxPerUser: 1 },
+  { id: 's-5', concertId: 'c-4', startAt: iso(now() + 40 * DAY), openAt: iso(now() + 5 * DAY), maxPerUser: 1 },
+  { id: 's-6', concertId: 'c-5', startAt: iso(now() + 55 * DAY), openAt: iso(now() + 9 * DAY), maxPerUser: 1 },
 ];
 
 /** 구역 템플릿 — 모든 회차가 같은 공연장 배치를 씁니다 (목업이므로) */
@@ -342,21 +343,25 @@ export const resaleEntries: MockResaleEntry[] = [
   },
 ];
 
-const NFT_NAMES = [
-  '보라빛 인사',
-  '무대 위 첫 소절',
-  '앙코르 직전',
-  '엔딩 요정',
-  '백스테이지 컷',
-  '포도알 시크릿',
-  '리허설 스냅',
-  '오프닝 실루엣',
+/* 등급을 해시로 굴리면 우연히 한 등급만 나올 수 있어서, 이름마다 등급을 못박습니다.
+   시연에서 NORMAL·RARE·SPECIAL 이 모두 보여야 등급 구분이 확인됩니다. */
+const NFT_SEED: { name: string; rarity: MockNft['rarity'] }[] = [
+  { name: '보라빛 인사', rarity: 'RARE' },
+  { name: '무대 위 첫 소절', rarity: 'NORMAL' },
+  { name: '앙코르 직전', rarity: 'SPECIAL' },
+  { name: '엔딩 요정', rarity: 'RARE' },
+  { name: '백스테이지 컷', rarity: 'NORMAL' },
+  { name: '포도알 시크릿', rarity: 'SPECIAL' },
+  { name: '리허설 스냅', rarity: 'NORMAL' },
+  { name: '오프닝 실루엣', rarity: 'RARE' },
+  { name: '커튼콜 하이라이트', rarity: 'SPECIAL' },
+  { name: '스탠딩 존 기록', rarity: 'NORMAL' },
+  { name: '조명 아래 한 컷', rarity: 'RARE' },
+  { name: '마지막 인사', rarity: 'NORMAL' },
 ];
 
-export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
-  const roll = hash(`nft-${i}`);
-  const rarity: MockNft['rarity'] = roll > 0.92 ? 'SPECIAL' : roll > 0.6 ? 'RARE' : 'NORMAL';
-  const listed = hash(`list-${i}`) > 0.35;
+export const nfts: MockNft[] = NFT_SEED.map(({ name, rarity }, i) => {
+  const listed = hash(`list-${i}`) > 0.25;
 
   return {
     id: `n-${i + 1}`,
@@ -365,7 +370,12 @@ export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
     seatLabel: `${i % 2 === 0 ? 'VIP석' : 'S석'} ${(i % 6) + 1}열 ${i + 3}번`,
     rarity,
     ownerId: i < 2 ? 'u-1' : 'u-3',
-    listPrice: listed ? 40 + Math.round(hash(`price-${i}`) * 260) : null,
+    // 등급이 높을수록 비싸게 — 목록에서 가격이 등급과 따로 놀지 않게
+      listPrice: listed
+        ? Math.round((rarity === 'SPECIAL' ? 900 : rarity === 'RARE' ? 320 : 90) *
+            (0.8 + hash(`price-${i}`) * 0.6))
+        : null,
+    description: listed ? '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.' : null,
     artSeed: `poca-${i}`,
     mintedAt: iso(now() - (i + 1) * DAY),
   };
@@ -374,8 +384,6 @@ export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
 /* ── 세션 (목업용 아주 단순한 토큰 저장소) ── */
 export const sessions = new Map<string, string>(); // accessToken -> userId
 
-/** OTP: 목업에서는 이 코드만 통과합니다. */
-export const MOCK_OTP_CODE = '123456';
 
 /* ── 조회 헬퍼 ── */
 export const findUser = (id: string) => users.find((u) => u.id === id);

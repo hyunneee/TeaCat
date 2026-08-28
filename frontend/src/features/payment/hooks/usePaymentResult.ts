@@ -21,7 +21,7 @@ export type ResultState =
  * `redirectUrl` 로 쿼리 파라미터(paymentId, txId, code, message)를 붙여 돌려보냅니다.
  * 여기서 그 값을 읽어 백엔드 승인으로 이어붙입니다.
  *
- * ⚠️ 이 화면은 얼굴 등록·OTP 가드 밖에 있어야 합니다.
+ * ⚠️ 이 화면은 얼굴 등록·봇 확인 가드 밖에 있어야 합니다.
  *    가드에 막히면 "결제는 됐는데 티켓이 없는" 최악의 상태가 됩니다.
  *
  * ⚠️ 승인 요청은 한 번만 보냅니다. 사용자가 새로고침해도
@@ -55,9 +55,10 @@ export function usePaymentResult() {
 
     setState({ status: 'confirming' });
     confirm.mutate(
-      // 리디렉션 복귀 시점에는 어떤 수단으로 결제했는지 알 수 없습니다.
-      // 백엔드가 포트원 조회로 실제 수단을 알 수 있으므로 참고값만 보냅니다.
-      { auth: result.auth, payMethod: 'CARD' },
+      /* 리디렉션으로 돌아왔다는 것 자체가 PG 결제창을 거쳤다는 뜻입니다.
+         (포도알 결제는 결제창이 없어 이 경로로 오지 않습니다)
+         실제 수단은 백엔드가 토스 조회로 확인하므로 참고값입니다. */
+      { auth: result.auth, payMethod: 'EASY_PAY' },
       {
         onError: (error) =>
           setState({

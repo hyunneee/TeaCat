@@ -21,6 +21,10 @@ import type {
  *    주소창에서 온 값이라 조작될 수 있습니다.
  *    서버가 prepare 때 저장한 금액과 비교한 뒤, **저장된 금액**으로 승인해야 합니다.
  *    금액이 다르면 승인하지 말고 실패로 처리합니다.
+ *
+ * 포도알(POINT) 결제는 PG 를 거치지 않습니다. confirm 에서 서버가
+ * 잔액을 확인하고 **서버가 계산한 포도알**을 차감한 뒤 티켓을 발급합니다.
+ * 프론트가 보낸 차감량을 믿으면 공짜 티켓이 나옵니다.
  */
 export const paymentApi = {
   /** 선점한 좌석으로 결제할 주문을 준비합니다. */
@@ -32,7 +36,13 @@ export const paymentApi = {
    * 멱등키를 붙여 같은 결제가 두 번 승인되지 않게 합니다.
    */
   confirm: (
-    body: { paymentId: string; paymentKey: string; amount: number; payMethod: PayMethod },
+    body: {
+      paymentId: string;
+      /** 포도알 결제는 PG 를 타지 않아 비어 있습니다. */
+      paymentKey: string;
+      amount: number;
+      payMethod: PayMethod;
+    },
     idempotencyKey: string,
   ) => http.post<PaymentConfirmResponse>('/payments/confirm', body, { idempotencyKey }),
 };

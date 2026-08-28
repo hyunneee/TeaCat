@@ -15,7 +15,13 @@ export interface ModalProps {
   variant?: 'sheet' | 'center';
   /** 결제 진행 중처럼 사용자가 닫으면 안 되는 상황 */
   dismissible?: boolean;
-  /** 위험한 확인창은 상단에 붉은 띠가 생깁니다 */
+  /**
+   * 되돌릴 수 없는 동작임을 알립니다.
+   *
+   * 상단 띠 같은 장식은 두지 않습니다 — 모달마다 다른 선이 생기면
+   * 화면이 어수선해집니다. 위험 신호는 **내용과 버튼**으로 전합니다.
+   * (ConfirmModal 의 붉은 아이콘 + danger 버튼)
+   */
   danger?: boolean;
 }
 
@@ -32,7 +38,6 @@ export function Modal({
   footer,
   variant = 'sheet',
   dismissible = true,
-  danger = false,
 }: ModalProps) {
   const reduced = useReducedMotion();
 
@@ -88,28 +93,19 @@ export function Modal({
             exit="exit"
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'surface border-line shadow-pop pb-safe relative flex max-h-[90dvh] w-full flex-col border',
+              'surface border-line shadow-pop pb-safe relative flex max-h-[90dvh] w-full flex-col overflow-hidden border',
               variant === 'sheet'
                 ? 'rounded-t-2xl sm:max-w-md sm:rounded-2xl'
                 : 'max-w-md rounded-2xl',
             )}
           >
-            {/* 위험한 확인창임을 색으로 먼저 알립니다 */}
-            <span
-              aria-hidden
-              className={cn(
-                'absolute inset-x-0 top-0 h-1 rounded-t-2xl',
-                danger ? 'bg-danger' : 'bg-brand-900',
-              )}
-            />
-
             {/* 바텀시트 손잡이 */}
             {variant === 'sheet' && (
               <span aria-hidden className="bg-line-strong mx-auto mt-3 h-1 w-10 rounded-full" />
             )}
 
             {title && (
-              <header className="shrink-0 px-5 pt-4 pb-2">
+              <header className="shrink-0 px-5 pt-5 pb-2">
                 <h2 className="text-lg font-bold">{title}</h2>
                 {description && (
                   <p className="text-muted mt-1 text-sm leading-relaxed">{description}</p>

@@ -15,7 +15,7 @@ interface BookingState {
   /** 결제 요청에 쓸 멱등키. 플로우 시작 시 1회 생성해 재시도해도 유지합니다. */
   idempotencyKey: string | null;
 
-  /** 플로우를 처음부터 시작합니다 (OTP 통과 시점). 이전 판은 버립니다. */
+  /** 플로우를 처음부터 시작합니다 (봇 확인 통과 시점). 이전 판은 버립니다. */
   beginFlow: (scheduleId: string) => void;
   startSession: (scheduleId: string) => void;
   selectSection: (sectionId: string) => void;
@@ -50,7 +50,7 @@ const initial = {
 /**
  * 예매 플로우 한 판의 상태.
  *
- * OTP → 구역 → 좌석 → 확인 → 결제, 다섯 페이지가 이 스토어를 공유합니다.
+ * 봇 확인 → 구역 → 좌석 → 확인 → 결제, 다섯 페이지가 이 스토어를 공유합니다.
  * (좌석 목록이나 수령인을 URL 파라미터로 넘기면 주소창 조작이 가능해 위험합니다)
  *
  * ⚠️ sessionStorage 에 유지하는 이유
@@ -64,7 +64,7 @@ export const useBookingStore = create<BookingState>()(persist((set, get) => ({
   ...initial,
 
   /**
-   * 예매 플로우의 진짜 시작점 — OTP 인증을 통과한 순간.
+   * 예매 플로우의 진짜 시작점 — 봇 확인을 통과한 순간.
    *
    * 같은 회차를 다시 예매하는 경우에도 이전 판(선점·수령인·멱등키)을 버려야 합니다.
    * 남겨두면 이전 선점이 만료되는 순간 만료 처리가 발동해서

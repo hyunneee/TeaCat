@@ -3,7 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { ROUTES } from '@/shared/constants';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
-import { RequireAuth, RequireFace, RequireOtp, RequireRole } from './guards';
+import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
 
 /* 페이지는 전부 lazy 로 나눕니다.
    티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
@@ -14,12 +14,16 @@ const page = <T extends Record<string, unknown>>(loader: () => Promise<T>, name:
 const HomePage = page(() => import('@/pages/HomePage'), 'HomePage');
 const LoginPage = page(() => import('@/pages/LoginPage'), 'LoginPage');
 const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
+const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 
 const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
 
-const BookingOtpPage = page(() => import('@/pages/BookingOtpPage'), 'BookingOtpPage');
+const BookingVerifyPage = page(
+  () => import('@/pages/BookingVerifyPage'),
+  'BookingVerifyPage',
+);
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
@@ -75,6 +79,7 @@ const routes: RouteObject[] = [
     children: [
       { path: ROUTES.LOGIN, element: withBoundary(<LoginPage />) },
       { path: ROUTES.SIGNUP, element: withBoundary(<SignupPage />) },
+      { path: ROUTES.SIGNUP_DONE, element: withBoundary(<SignupDonePage />) },
       { path: ROUTES.NFT_DETAIL(':nftId'), element: withBoundary(<NftDetailPage />) },
 
       {
@@ -90,7 +95,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
-             ⚠️ 일부러 RequireFace / RequireOtp **밖**에 둡니다.
+             ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.
              결제는 이미 끝난 상태인데 가드에 막히면 승인 요청을 못 보내
              "돈은 빠졌는데 티켓이 없는" 사고가 납니다. */
           {
@@ -98,19 +103,27 @@ const routes: RouteObject[] = [
             element: withBoundary(<PaymentResultPage />),
           },
 
+          /* 예매 완료 화면도 같은 이유로 가드 밖입니다.
+             결제·발권이 끝난 뒤에 보여주는 화면인데 여기서 튕기면
+             티켓은 발급됐는데 사용자는 실패한 줄 압니다.
+             (이 화면은 얼굴 미등록 사용자에게 등록을 안내하는 역할도 합니다) */
+          { path: ROUTES.BOOKING_DONE(':orderId'), element: withBoundary(<BookingDonePage />) },
+
           /* ── 예매 플로우 ──────────────────────────────────
-             OTP → 구역 → 좌석 → 확인 → 결제 → 완료
+             봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료
              얼굴 등록(RequireFace)은 예매 진입 조건,
-             OTP 통과(RequireOtp)는 구역 선택부터의 조건입니다. */
+             봇 확인 통과(RequireCaptcha)는 구역 선택부터의 조건입니다. */
           {
             element: <RequireFace />,
             children: [
-              { path: ROUTES.BOOKING_OTP(':scheduleId'), element: withBoundary(<BookingOtpPage />) },
+              {
+                path: ROUTES.BOOKING_VERIFY(':scheduleId'),
+                element: withBoundary(<BookingVerifyPage />),
+              },
               { path: ROUTES.RESALE(':scheduleId'), element: withBoundary(<ResalePage />) },
-              { path: ROUTES.BOOKING_DONE(':orderId'), element: withBoundary(<BookingDonePage />) },
 
               {
-                element: <RequireOtp />,
+                element: <RequireCaptcha />,
                 children: [
                   {
                     path: ROUTES.BOOKING_SECTION(':scheduleId'),

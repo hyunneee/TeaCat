@@ -1,7 +1,8 @@
+import { motion } from 'motion/react';
 import { Link, useLocation } from 'react-router-dom';
 import { House, Music, Sparkles, Ticket, User, type LucideIcon } from 'lucide-react';
 import { ROUTES } from '@/shared/constants';
-import { cn } from '@/shared/lib';
+import { cn, SPRING } from '@/shared/lib';
 
 /** 탭을 추가하려면 이 배열에 한 줄만 넣으면 됩니다. */
 const TABS: { to: string; label: string; icon: LucideIcon }[] = [
@@ -38,7 +39,7 @@ export function BottomNav() {
 
   return (
     <nav className="surface-glass border-line pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-screen-sm border-t">
-      <ul className="flex h-(--spacing-nav) items-stretch px-1">
+      <ul className="flex h-(--spacing-nav) items-stretch px-1.5">
         {TABS.map(({ to, label, icon: Icon }) => {
           const isActive = activeTab === to;
 
@@ -47,16 +48,39 @@ export function BottomNav() {
               {/* NavLink 를 쓰지 않는 이유: NavLink 는 자체 접두사 매칭으로
                   aria-current 를 붙여버려서 위에서 계산한 활성 탭과 어긋납니다.
                   (`/my/tickets` 에서 `/my` 탭에도 aria-current 가 붙음) */}
+              {/* 활성 탭은 색이 아니라 **채워진 알약**으로 표시합니다.
+                  무채색 시스템이라 회색 농도 차이만으로는 어느 탭인지 잘 안 보입니다.
+                  (DESIGN.md — 위계는 명도·굵기·여백으로) */}
               <Link
                 to={to}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'flex h-full flex-col items-center justify-center gap-1 transition-colors duration-150',
-                  isActive ? 'text-brand-700' : 'text-ink-subtle hover:text-ink-muted',
+                  'flex h-full flex-col items-center justify-center gap-1.5 transition-colors duration-150',
+                  isActive ? 'text-brand-900' : 'text-ink-subtle hover:text-ink-muted',
                 )}
               >
-                <Icon size={22} strokeWidth={isActive ? 2.4 : 1.8} />
-                <span className="text-[0.6875rem] font-semibold">{label}</span>
+                <span className="relative flex h-8 w-14 items-center justify-center">
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-active-pill"
+                      transition={SPRING}
+                      className="bg-brand-900 absolute inset-0 rounded-full"
+                    />
+                  )}
+                  <Icon
+                    size={25}
+                    strokeWidth={isActive ? 2.2 : 1.8}
+                    className={cn('relative', isActive && 'text-white')}
+                  />
+                </span>
+                <span
+                  className={cn(
+                    'text-[0.6875rem] leading-none',
+                    isActive ? 'font-bold' : 'font-medium',
+                  )}
+                >
+                  {label}
+                </span>
               </Link>
             </li>
           );

@@ -5,10 +5,10 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Stepper } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
-import { SectionGrid, useBookingStore, useSections } from '@/features/booking';
+import { SectionGrid, VenueMap, useBookingStore, useSections } from '@/features/booking';
 import { useSchedule } from '@/features/concert';
 
-/** 플로우: OTP 인증 → **구역** → 좌석 선택 */
+/** 플로우: 봇 확인 → **구역** → 좌석 선택 */
 export function SectionSelectPage() {
   const navigate = useNavigate();
   const { scheduleId = '' } = useParams();
@@ -41,9 +41,15 @@ export function SectionSelectPage() {
         <div>
           <h2 className="font-bold">구역을 선택하세요</h2>
           <p className="text-muted mt-0.5 text-xs">
-            구역을 고르면 해당 구역의 좌석만 조회합니다.
+            무대를 기준으로 구역이 어디인지 확인하고 고르세요.
           </p>
         </div>
+
+        <VenueMap
+          sections={sections}
+          selectedId={sectionId}
+          onSelect={(s) => selectSection(s.id)}
+        />
 
         <SectionGrid sections={sections} selectedId={sectionId} onSelect={(s) => selectSection(s.id)} />
 

@@ -1,5 +1,15 @@
-/** 화면에서 고르는 결제수단 */
-export type PayMethod = 'CARD' | 'EASY_PAY' | 'TRANSFER' | 'VIRTUAL_ACCOUNT';
+/**
+ * 화면에서 고르는 결제수단.
+ *
+ *  EASY_PAY — 토스 간편결제. 결제창(PG)을 거칩니다.
+ *  POINT    — 앱 안의 포도알(포인트). PG 를 타지 않고 **서버가 잔액을 차감**합니다.
+ *
+ * 수단을 늘리려면 계약된 결제수단인지 먼저 확인하세요.
+ */
+export type PayMethod = 'EASY_PAY' | 'POINT';
+
+/** PG 결제창을 거치는 수단 (판정은 payment.model.ts 의 usesGateway) */
+export type GatewayPayMethod = Exclude<PayMethod, 'POINT'>;
 
 /**
  * 결제 준비 응답.
@@ -18,6 +28,10 @@ export interface PaymentPrepareResponse {
   /** 원 단위 정수 */
   totalAmount: number;
   currency: 'KRW';
+  /** 포도알로 결제할 때 차감될 개수. 이것도 **서버가 계산**합니다. */
+  pointAmount: number;
+  /** 결제 시점의 포도알 잔액 */
+  pointBalance: number;
   customer: {
     customerId: string;
     fullName: string;
@@ -30,7 +44,10 @@ export interface PaymentPrepareResponse {
 export interface PaymentAuthResult {
   /** 우리가 만든 주문 ID (토스의 `orderId`) */
   paymentId: string;
-  /** 토스가 발급한 결제 키. 승인 API 에 이 값이 필요합니다. */
+  /**
+   * 토스가 발급한 결제 키. 승인 API 에 이 값이 필요합니다.
+   * 포도알 결제는 PG 를 타지 않으므로 비어 있습니다.
+   */
   paymentKey: string;
   /**
    * 결제창이 알려준 금액.
@@ -45,6 +62,8 @@ export interface PaymentConfirmResponse {
   ticketIds: string[];
   totalPrice: number;
   paidAt: string;
+  /** 포도알로 결제했다면 차감 후 잔액 */
+  pointBalance?: number;
 }
 
 /** 결제창에서 돌아온 실패 사유 */

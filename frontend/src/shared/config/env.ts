@@ -42,7 +42,13 @@ export type PaymentMode = 'mock' | 'toss';
  * 키를 깜빡해도 배포본이 깨지지 않습니다.
  *
  * ⚠️ 클라이언트 키(`test_ck_...` / `live_ck_...`)는 브라우저에 노출되는 공개 키입니다.
- *    결제를 **승인**하는 시크릿 키(`test_sk_...`)는 절대 프론트에 두지 마세요 — 백엔드 전용입니다.
+ *    결제를 **승인**하는 시크릿 키(`test_sk_...` / `test_gsk_...`)는 절대 프론트에 두지 마세요.
+ *    `VITE_` 값은 번들에 그대로 박혀 브라우저에서 누구나 읽습니다 — 백엔드 전용입니다.
+ *
+ * 클라이언트 키는 **두 종류**이고 짝이 되는 SDK 가 다릅니다.
+ *   test_ck_...   API 개별 연동 키 → tossPayments.payment()  → **새 창 결제창**
+ *   test_gck_...  결제위젯 연동 키 → tossPayments.widgets()  → 페이지에 삽입
+ * 키 접두사로 자동 판별하므로, 개별 연동 키를 넣으면 코드 수정 없이 새 창으로 바뀝니다.
  */
 function paymentConfig() {
   const clientKey = (import.meta.env.VITE_TOSS_CLIENT_KEY ?? '').trim();
@@ -51,7 +57,10 @@ function paymentConfig() {
   const requested = (import.meta.env.VITE_PAYMENT_MODE ?? 'auto') as PaymentMode | 'auto';
   const mode: PaymentMode = requested === 'auto' ? (configured ? 'toss' : 'mock') : requested;
 
-  return { mode, clientKey, configured } as const;
+  /* 위젯 키인지 개별 연동 키인지. 잘못 짝지으면 SDK 가 연동을 거절합니다. */
+  const widgetKey = /_gck_/.test(clientKey);
+
+  return { mode, clientKey, configured, widgetKey } as const;
 }
 
 export const env = {

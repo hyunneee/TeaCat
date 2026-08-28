@@ -16,6 +16,8 @@ export interface Section {
   origin: { x: number; y: number };
   cols: number;
   rows: number;
+  /** 공연장 도면에서 이 구역이 차지하는 사각형 — 서버가 알려줍니다 */
+  bounds: { x: number; y: number; width: number; height: number };
 }
 
 export interface Seat {

@@ -34,7 +34,7 @@ export async function setupMocks() {
   http.raw.defaults.adapter = createMockAdapter(getAdapter(original));
 
   console.info(
-    '%c[MOCK] 목업 데이터로 동작 중입니다. 로그인: ssafy / ssafy1234, OTP: 123456',
+    '%c[MOCK] 목업 데이터로 동작 중입니다. 로그인: ssafy / ssafy1234',
     'color:#a855f7;font-weight:bold',
   );
 }

@@ -19,7 +19,8 @@ export function useLogin() {
 
       // 얼굴 등록이 안 돼 있으면 바로 등록 화면으로 유도.
       // (티켓이 유효하려면 얼굴 등록이 선행돼야 하므로)
-      navigate(res.user.faceRegistered ? ROUTES.HOME : ROUTES.FACE_REGISTER, { replace: true });
+      // 얼굴 등록은 마이페이지에서 합니다. 로그인 직후 카메라로 끌고 가지 않습니다.
+      navigate(ROUTES.HOME, { replace: true });
     },
     onError: () => toast.error('아이디 또는 비밀번호를 확인해 주세요.'),
   });

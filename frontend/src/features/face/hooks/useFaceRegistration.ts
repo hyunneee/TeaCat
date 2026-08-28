@@ -34,7 +34,7 @@ export function useFaceRegistration() {
       // navigate(-1) 은 리다이렉트로 들어온 경우 엉뚱한 곳(로그인 등)으로 갑니다.
       // 가드가 알려준 원래 목적지로 보내고, 없으면 홈으로.
       const state = location.state as FaceLocationState | null;
-      navigate(state?.from?.pathname ?? ROUTES.HOME, { replace: true });
+      navigate(state?.from?.pathname ?? ROUTES.MY, { replace: true });
     },
     onError: (error) =>
       toast.error(ApiError.isApiError(error) ? error.message : '등록에 실패했어요.'),

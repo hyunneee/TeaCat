@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Coins, Sparkles, Wallet } from 'lucide-react';
+import { Coins, Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Button, Card, Segmented, Skeleton } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { Button, Card, Input, Segmented } from '@/shared/components/ui';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useAuth } from '@/features/auth';
 import { NftCard, useMyNfts, useNftMarket, useTokenBalance } from '@/features/nft';
@@ -21,10 +21,12 @@ type Filter = (typeof FILTERS)[number]['value'];
 export function NftMarketPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [keyword, setKeyword] = useState('');
   const { isLoggedIn } = useAuth();
 
   const { data: nfts, isPending } = useNftMarket(
     filter === 'ALL' ? undefined : (filter as Rarity),
+    keyword.trim() || undefined,
   );
   const { data: token } = useTokenBalance();
   // 내 포카 개수를 버튼에 띄우기 위해 목록을 미리 받아둡니다 (로그인 상태에서만).
@@ -32,22 +34,8 @@ export function NftMarketPage() {
 
   return (
     <>
-      <Header
-        title="포토카드 마켓"
-        right={
-          isLoggedIn ? (
-            <Button
-              size="sm"
-              variant="soft"
-              className="mr-2"
-              leftIcon={<Wallet size={14} />}
-              onClick={() => navigate(ROUTES.MY_NFTS)}
-            >
-              내 포카
-            </Button>
-          ) : undefined
-        }
-      />
+      {/* 우상단 버튼은 두지 않습니다. 아래 잔액 카드의 "내 포카" 로 들어갑니다. */}
+      <Header title="포토카드 마켓" />
 
       <div className="space-y-4 p-4">
         {/* 보유 포도알 + 내 포카 바로가기 */}
@@ -76,22 +64,24 @@ export function NftMarketPage() {
           </Card>
         )}
 
+        <Input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="포카 이름, 공연명으로 검색"
+          leftIcon={<Search size={17} />}
+          type="search"
+          tone="contrast"
+        />
+
         <Segmented options={FILTERS} value={filter} onChange={setFilter} />
 
         {isPending ? (
-          <ul className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <li key={i} className="space-y-2">
-                <Skeleton className="aspect-[2/3] w-full rounded-lg" />
-                <Skeleton className="h-3.5 w-2/3" />
-              </li>
-            ))}
-          </ul>
+          <Loading label="포토카드를 불러오는 중" />
         ) : !nfts || nfts.length === 0 ? (
           <EmptyState
-            icon={Sparkles}
-            title="판매 중인 포토카드가 없어요"
-            description="다른 등급을 확인해 보세요."
+            icon={keyword ? Search : Sparkles}
+            title={keyword ? '검색 결과가 없어요' : '판매 중인 포토카드가 없어요'}
+            description={keyword ? '다른 키워드로 찾아보세요.' : '다른 등급을 확인해 보세요.'}
           />
         ) : (
           <ul className="grid grid-cols-2 gap-3">

@@ -1,6 +1,5 @@
 import { env } from '@/shared/config';
 import type {
-  PayMethod,
   PaymentAuthResult,
   PaymentFailure,
   PaymentPrepareResponse,
@@ -8,22 +7,34 @@ import type {
 import { toPaymentFailure } from '../model/payment.model';
 
 /**
- * 결제 게이트웨이 어댑터 — **토스페이먼츠 결제창** 직접 연동.
+ * 결제 게이트웨이 어댑터 — **토스페이먼츠 결제위젯** 연동.
  *
  * ── 이 파일이 존재하는 이유 ────────────────────────────────
  * PG SDK 호출을 여기 한 곳에 격리합니다. 그래야
  *   - PG 를 바꿔도 이 파일만 고치면 되고
  *   - 실제 결제 없이도 전체 플로우를 돌릴 수 있고 (mock 모드)
- *   - 훅·화면은 "결제창 띄우고 결과 받기" 라는 개념만 알면 됩니다
+ *   - 훅·화면은 "결제 요청하고 결과 받기" 라는 개념만 알면 됩니다
  *
- * ── 토스페이먼츠는 성공 시 "항상" 리디렉션입니다 ───────────
- * `successUrl` 을 주면 인증 성공 후 그 주소로 페이지가 이동합니다.
- * 즉 데스크톱·모바일 구분 없이 결과는 리디렉션으로만 돌아옵니다.
- * (`successUrl` 을 생략하면 Promise 로 결과를 받는 방식도 있지만,
- *  그 경우 창을 닫는 등의 이탈 처리가 브라우저마다 달라 리디렉션을 씁니다)
+ * ── 결제창과 결제위젯, 둘 다 지원합니다 ────────────────────
+ * 토스의 클라이언트 키는 두 종류이고 **서로 호환되지 않습니다.**
  *
- *   requestPayment() → [토스 결제창] → successUrl?paymentKey=..&orderId=..&amount=..
- *                                    → failUrl?code=..&message=..&orderId=..
+ *   test_ck_...   API 개별 연동 키  → `tossPayments.payment()`  → **새 창 결제창**
+ *   test_gck_...  결제위젯 연동 키  → `tossPayments.widgets()`  → 페이지에 삽입
+ *
+ * 잘못 짝지으면 SDK 가 이렇게 거절합니다:
+ *   "API 개별 연동 키의 클라이언트 키로 SDK를 연동해주세요.
+ *    결제위젯 연동 키는 지원하지 않습니다."
+ *
+ * 그래서 **키 접두사로 자동 판별**합니다(`env.payment.widgetKey`).
+ * 개별 연동 키를 발급받아 `.env` 에 넣으면 코드 수정 없이 새 창 결제창으로 바뀝니다.
+ *
+ * 토스가 가입 없이 공개한 문서용 테스트 키는 **위젯 키뿐**이라 기본은 위젯입니다.
+ * 위젯은 페이지 안에 삽입되는 UI 라, 화면이 먼저 `mountWidget()` 으로
+ * 자리를 잡아야 결제를 요청할 수 있습니다. (`TossPaymentSheet` 이 시트 안에 띄웁니다)
+ *
+ *   mountWidget()  → [결제수단 · 약관 UI 삽입]
+ *   requestPayment() → successUrl?paymentKey=..&orderId=..&amount=..
+ *                    → failUrl?code=..&message=..&orderId=..
  *
  * ── 승인은 프론트가 하지 않습니다 ──────────────────────────
  * 여기서 얻는 건 **인증(authentication)** 까지입니다.
@@ -33,8 +44,8 @@ import { toPaymentFailure } from '../model/payment.model';
  * 시크릿 키는 절대 프론트에 두지 않습니다. (paymentApi.confirm 참고)
  *
  * ── 모드 (VITE_PAYMENT_MODE) ───────────────────────────────
- *   auto (기본) — 클라이언트 키가 있으면 실제 결제창, 없으면 모의 결제
- *   toss        — 항상 실제 결제창
+ *   auto (기본) — 클라이언트 키가 있으면 실제 위젯, 없으면 모의 결제
+ *   toss        — 항상 실제 위젯
  *   mock        — 항상 모의 결제
  */
 
@@ -43,57 +54,158 @@ export type GatewayResult =
   | { ok: false; failure: PaymentFailure };
 
 /**
- * 화면의 결제수단 → 토스 `method`.
+ * 위젯 인스턴스 중 **우리가 쓰는 것만** 적은 최소 형태.
  *
- * 간편결제는 토스에서 별도 method 가 아니라 **카드 통합결제창 안에** 들어 있습니다.
- * (`flowMode: 'DEFAULT'` 면 카드/간편결제가 한 창에 같이 나옵니다)
+ * SDK 타입을 그대로 들고 오면 이 파일 밖까지 SDK 타입이 새어 나갑니다.
+ * PG 를 갈아끼울 때 고쳐야 할 범위를 이 파일 안에 가둡니다.
  */
-const TOSS_METHOD: Record<PayMethod, 'CARD' | 'TRANSFER' | 'VIRTUAL_ACCOUNT'> = {
-  CARD: 'CARD',
-  EASY_PAY: 'CARD',
-  TRANSFER: 'TRANSFER',
-  VIRTUAL_ACCOUNT: 'VIRTUAL_ACCOUNT',
-};
+interface Widgets {
+  setAmount(amount: { currency: 'KRW'; value: number }): Promise<void>;
+  renderPaymentMethods(options: { selector: string }): Promise<unknown>;
+  renderAgreement(options: { selector: string }): Promise<unknown>;
+  requestPayment(options: {
+    orderId: string;
+    orderName: string;
+    successUrl: string;
+    failUrl: string;
+    customerName?: string;
+    customerEmail?: string;
+    customerMobilePhone?: string;
+  }): Promise<unknown>;
+}
+
+/**
+ * 지금 화면에 떠 있는 위젯 하나.
+ *
+ * 결제 페이지는 앱에 한 번에 하나뿐이라 모듈에 하나만 둡니다.
+ * (훅이 들고 다니면 `usePayment` 까지 위젯 존재를 알아야 해서 화면이 PG 를 알게 됩니다)
+ */
+let mounted: Widgets | null = null;
+
+export interface MountWidgetParams {
+  /** 위젯이 처음 보여줄 금액. 결제 직전에 서버 금액으로 다시 맞춥니다. */
+  amount: number;
+  /** 결제수단 UI 를 넣을 자리 (CSS 선택자) */
+  methodsSelector: string;
+  /** 약관 UI 를 넣을 자리 (CSS 선택자) */
+  agreementSelector: string;
+}
+
+/**
+ * 결제위젯을 화면에 그립니다. 성공하면 null, 실패하면 사유를 돌려줍니다.
+ * mock 모드에서는 아무것도 하지 않습니다(SDK 자체를 내려받지 않습니다).
+ */
+export async function mountWidget(params: MountWidgetParams): Promise<PaymentFailure | null> {
+  // 새 창 결제창을 쓰는 키라면 삽입할 UI 자체가 없습니다.
+  if (env.payment.mode !== 'toss' || !env.payment.widgetKey) return null;
+
+  if (!env.payment.configured) {
+    return {
+      code: 'CONFIG_MISSING',
+      message: '결제 설정이 없습니다. .env 의 VITE_TOSS_CLIENT_KEY 를 채워주세요.',
+      canceledByUser: false,
+    };
+  }
+
+  try {
+    // SDK 는 실제로 쓸 때만 내려받습니다.
+    const { loadTossPayments, ANONYMOUS } = await import('@tosspayments/tosspayments-sdk');
+    const tossPayments = await loadTossPayments(env.payment.clientKey);
+
+    // customerKey 는 자동결제(빌링)용 회원 식별자입니다. 일반결제만 쓰므로 비회원.
+    const widgets = tossPayments.widgets({ customerKey: ANONYMOUS });
+
+    // 금액을 먼저 정해야 결제수단 UI 를 그릴 수 있습니다.
+    await widgets.setAmount({ currency: 'KRW', value: params.amount });
+    await Promise.all([
+      widgets.renderPaymentMethods({ selector: params.methodsSelector }),
+      widgets.renderAgreement({ selector: params.agreementSelector }),
+    ]);
+
+    mounted = widgets as unknown as Widgets;
+    return null;
+  } catch (error) {
+    const { code, message } = error as { code?: string; message?: string };
+    return toPaymentFailure(code, message);
+  }
+}
+
+/** 화면을 떠날 때 정리합니다. */
+export function unmountWidget(): void {
+  mounted = null;
+}
 
 export interface RequestPaymentParams {
   prepared: PaymentPrepareResponse;
-  payMethod: PayMethod;
   /** 인증 성공 시 돌아올 주소 */
   successUrl: string;
   /** 실패·취소 시 돌아올 주소 */
   failUrl: string;
 }
 
-/** 실제 토스페이먼츠 결제창 호출 */
-async function requestViaToss({
+/**
+ * 새 창 결제창 (API 개별 연동 키 전용).
+ *
+ * `payment.requestPayment()` 는 토스가 띄우는 **별도 결제창**에서 인증을 받습니다.
+ * 페이지에 아무것도 삽입하지 않으므로 화면이 미리 준비할 게 없습니다.
+ */
+async function requestViaPaymentWindow({
   prepared,
-  payMethod,
   successUrl,
   failUrl,
 }: RequestPaymentParams): Promise<GatewayResult> {
-  if (!env.payment.configured) {
+  try {
+    const { loadTossPayments, ANONYMOUS } = await import('@tosspayments/tosspayments-sdk');
+    const tossPayments = await loadTossPayments(env.payment.clientKey);
+    const payment = tossPayments.payment({ customerKey: ANONYMOUS });
+
+    await payment.requestPayment({
+      // 통합결제창 — 카드와 토스페이·네이버페이가 한 창에 나옵니다.
+      method: 'CARD',
+      amount: { currency: 'KRW', value: prepared.totalAmount },
+      orderId: prepared.paymentId,
+      orderName: prepared.orderName.slice(0, 90),
+      successUrl,
+      failUrl,
+      customerName: prepared.customer.fullName,
+      customerEmail: prepared.customer.email,
+      customerMobilePhone: prepared.customer.phoneNumber.replace(/[^0-9]/g, ''),
+      card: { flowMode: 'DEFAULT', useEscrow: false, useCardPoint: false, useAppCardOnly: false },
+    });
+
+    return {
+      ok: false,
+      failure: { code: 'REDIRECTED', message: '결제를 진행합니다.', canceledByUser: false },
+    };
+  } catch (error) {
+    const { code, message } = error as { code?: string; message?: string };
+    return { ok: false, failure: toPaymentFailure(code, message) };
+  }
+}
+
+/** 결제위젯으로 결제 요청 (위젯 키 전용) */
+async function requestViaToss({
+  prepared,
+  successUrl,
+  failUrl,
+}: RequestPaymentParams): Promise<GatewayResult> {
+  if (!mounted) {
     return {
       ok: false,
       failure: {
-        code: 'CONFIG_MISSING',
-        message: '결제 설정이 없습니다. .env 의 VITE_TOSS_CLIENT_KEY 를 채워주세요.',
+        code: 'WIDGET_NOT_READY',
+        message: '결제 수단을 불러오는 중입니다. 잠시 후 다시 눌러주세요.',
         canceledByUser: false,
       },
     };
   }
 
-  // SDK 는 실제로 쓸 때만 내려받습니다. mock 모드에서는 로드되지 않습니다.
-  const { loadTossPayments, ANONYMOUS } = await import('@tosspayments/tosspayments-sdk');
-
   try {
-    const tossPayments = await loadTossPayments(env.payment.clientKey);
+    /* 💡 금액은 서버가 확정한 값으로 다시 맞춥니다.
+          화면에서 계산한 금액을 그대로 결제하면 요청을 조작해 1원 결제를 만들 수 있습니다. */
+    await mounted.setAmount({ currency: 'KRW', value: prepared.totalAmount });
 
-    // customerKey 는 자동결제(빌링)용 회원 식별자입니다.
-    // 일반결제만 쓰므로 비회원(ANONYMOUS)으로 둡니다.
-    const payment = tossPayments.payment({ customerKey: ANONYMOUS });
-
-    const common = {
-      amount: { currency: 'KRW', value: prepared.totalAmount },
+    await mounted.requestPayment({
       // 토스 규격: 6~64자, 영문·숫자·`-`·`_` 만 허용. 서버가 이 규칙으로 만들어야 합니다.
       orderId: prepared.paymentId,
       // 100자 제한. 넘치면 요청이 거부됩니다.
@@ -104,50 +216,16 @@ async function requestViaToss({
       customerEmail: prepared.customer.email,
       // 하이픈이 있으면 거부되므로 숫자만 남깁니다.
       customerMobilePhone: prepared.customer.phoneNumber.replace(/[^0-9]/g, ''),
-    } as const;
-
-    /* requestPayment 는 결제수단별 오버로드입니다.
-       method 를 유니온으로 넘기면 타입이 맞지 않으니 분기해서 호출합니다. */
-    const method = TOSS_METHOD[payMethod];
-
-    if (method === 'TRANSFER') {
-      await payment.requestPayment({ method: 'TRANSFER', ...common });
-    } else if (method === 'VIRTUAL_ACCOUNT') {
-      await payment.requestPayment({ method: 'VIRTUAL_ACCOUNT', ...common });
-    } else {
-      // 카드/간편결제 통합결제창. flowMode DEFAULT 면 카드와 간편결제가 한 창에 나옵니다.
-      await payment.requestPayment({
-        method: 'CARD',
-        ...common,
-        card: { flowMode: 'DEFAULT', useEscrow: false, useCardPoint: false, useAppCardOnly: false },
-      });
-    }
+    });
 
     // 여기까지 오면 리디렉션이 시작된 것입니다. 결과는 successUrl 에서 받습니다.
     return {
       ok: false,
-      failure: { code: 'REDIRECTED', message: '결제창으로 이동합니다.', canceledByUser: false },
+      failure: { code: 'REDIRECTED', message: '결제를 진행합니다.', canceledByUser: false },
     };
   } catch (error) {
-    // 사용자가 창을 닫거나 결제창 자체가 실패하면 여기로 옵니다.
+    // 사용자가 취소하거나 요청 자체가 거부되면 여기로 옵니다.
     const { code, message } = error as { code?: string; message?: string };
-
-    /* 클라이언트 키가 실제 상점과 연결되지 않으면 SDK 가 code 'UNKNOWN' 에
-       "알 수 없는 에러" 만 주고 끝납니다. 그대로 보여주면 원인을 못 찾으니
-       진단 가능한 문구로 바꿔줍니다. (개발 모드에서만) */
-    if (code === 'UNKNOWN' && env.isDev) {
-      return {
-        ok: false,
-        failure: {
-          code: 'CLIENT_KEY_REJECTED',
-          message:
-            '결제창을 열 수 없습니다. VITE_TOSS_CLIENT_KEY 가 유효한 상점 키인지 확인하세요. ' +
-            '(토스페이먼츠 개발자센터 > 내 개발정보 의 테스트 클라이언트 키)',
-          canceledByUser: false,
-        },
-      };
-    }
-
     return { ok: false, failure: toPaymentFailure(code, message) };
   }
 }
@@ -187,9 +265,10 @@ async function requestViaMock({ prepared }: RequestPaymentParams): Promise<Gatew
   };
 }
 
-/** 결제창을 띄웁니다. 실제 결제는 리디렉션으로 결과가 돌아옵니다. */
+/** 결제를 요청합니다. 실제 결제는 리디렉션으로 결과가 돌아옵니다. */
 export function requestPayment(params: RequestPaymentParams): Promise<GatewayResult> {
-  return env.payment.mode === 'toss' ? requestViaToss(params) : requestViaMock(params);
+  if (env.payment.mode !== 'toss') return requestViaMock(params);
+  return env.payment.widgetKey ? requestViaToss(params) : requestViaPaymentWindow(params);
 }
 
 /**

@@ -9,6 +9,7 @@ export const ROUTES = {
   /* ── 인증 ── */
   LOGIN: '/login',
   SIGNUP: '/signup',
+  SIGNUP_DONE: '/signup/done',
 
   /* ── 얼굴 등록 (티켓 사용 자격) ── */
   FACE_REGISTER: '/face',
@@ -18,8 +19,8 @@ export const ROUTES = {
   CONCERT_DETAIL: (concertId: string) => `/concerts/${concertId}`,
 
   /* ── 예매 플로우 ──
-     공연상세 → OTP → 구역 → 좌석 → 확인 → 결제 → 완료 */
-  BOOKING_OTP: (scheduleId: string) => `/booking/${scheduleId}/otp`,
+     공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */
+  BOOKING_VERIFY: (scheduleId: string) => `/booking/${scheduleId}/verify`,
   BOOKING_SECTION: (scheduleId: string) => `/booking/${scheduleId}/section`,
   BOOKING_SEATS: (scheduleId: string) => `/booking/${scheduleId}/seats`,
   BOOKING_REVIEW: (scheduleId: string) => `/booking/${scheduleId}/review`,
@@ -28,7 +29,7 @@ export const ROUTES = {
    * 결제창(모바일 리디렉션)에서 돌아오는 곳.
    *
    * ⚠️ 이 라우트는 **로그인 가드만** 통과하면 들어올 수 있어야 합니다.
-   * 얼굴 등록·OTP 가드를 걸면, 결제는 끝났는데 가드에 막혀
+   * 얼굴 등록·봇 확인 가드를 걸면, 결제는 끝났는데 가드에 막혀
    * 승인 요청을 못 보내고 티켓이 발급되지 않는 사고가 납니다.
    */
   BOOKING_PAYMENT_RESULT: (scheduleId: string) => `/booking/${scheduleId}/payment/result`,
@@ -62,4 +63,4 @@ export const ROUTES = {
 } as const;
 
 /** 예매 플로우 단계 라벨 — Stepper 에 그대로 넘깁니다. */
-export const BOOKING_STEPS = ['본인인증', '구역', '좌석', '확인', '결제'] as const;
+export const BOOKING_STEPS = ['봇 확인', '구역', '좌석', '확인', '결제'] as const;

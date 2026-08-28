@@ -10,8 +10,10 @@ export interface Nft {
   imageUrl?: string | null;
   /** 어느 좌석에서 나온 포카인지 */
   seatLabel: string;
-  /** 마켓에 올라와 있으면 가격(토큰), 아니면 null */
+  /** 마켓에 올라와 있으면 가격(포도알), 아니면 null */
   listPrice: number | null;
+  /** 판매자가 붙인 설명. 판매를 내리면 사라집니다. */
+  description: string | null;
   mintedAt: string;
 
   concertId: string;

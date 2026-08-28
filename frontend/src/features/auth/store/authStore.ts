@@ -6,14 +6,14 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   /**
-   * OTP 인증을 통과한 회차 id.
-   * 예매 플로우(구역/좌석/결제)의 진입 조건입니다. 회차가 바뀌면 다시 인증해야 합니다.
+   * 자동입력 방지(캡차)를 통과한 회차 id.
+   * 예매 플로우(구역/좌석/결제)의 진입 조건입니다. 회차가 바뀌면 다시 확인합니다.
    */
-  otpVerifiedFor: string | null;
+  captchaVerifiedFor: string | null;
 
   setSession: (user: User, accessToken: string) => void;
   setAccessToken: (accessToken: string | null) => void;
-  setOtpVerified: (scheduleId: string | null) => void;
+  setCaptchaVerified: (scheduleId: string | null) => void;
   patchUser: (patch: Partial<User>) => void;
   clear: () => void;
 
@@ -21,7 +21,7 @@ interface AuthState {
 }
 
 /**
- * 클라이언트 상태만 담습니다. (로그인 여부, 토큰, OTP 통과 여부)
+ * 클라이언트 상태만 담습니다. (로그인 여부, 토큰, 캡차 통과 여부)
  * "서버에 있는 최신 내 정보"는 TanStack Query 가 관리합니다 — 역할을 섞지 마세요.
  *
  * 보안 주의: accessToken 을 localStorage 에 두면 XSS 에 노출됩니다.
@@ -33,13 +33,13 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       accessToken: null,
-      otpVerifiedFor: null,
+      captchaVerifiedFor: null,
 
-      setSession: (user, accessToken) => set({ user, accessToken, otpVerifiedFor: null }),
+      setSession: (user, accessToken) => set({ user, accessToken, captchaVerifiedFor: null }),
       setAccessToken: (accessToken) => set({ accessToken }),
-      setOtpVerified: (scheduleId) => set({ otpVerifiedFor: scheduleId }),
+      setCaptchaVerified: (scheduleId) => set({ captchaVerifiedFor: scheduleId }),
       patchUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
-      clear: () => set({ user: null, accessToken: null, otpVerifiedFor: null }),
+      clear: () => set({ user: null, accessToken: null, captchaVerifiedFor: null }),
 
       isLoggedIn: () => !!get().accessToken,
     }),
@@ -47,11 +47,11 @@ export const useAuthStore = create<AuthState>()(
       name: 'ticket.auth',
       storage: createJSONStorage(() => localStorage),
       // 새로고침해도 유지할 값만 고릅니다.
-      // (예매 중 새로고침해도 OTP 를 다시 받지 않도록 otpVerifiedFor 도 포함)
+      // (예매 중 새로고침해도 다시 풀지 않도록 captchaVerifiedFor 도 포함)
       partialize: (s) => ({
         user: s.user,
         accessToken: s.accessToken,
-        otpVerifiedFor: s.otpVerifiedFor,
+        captchaVerifiedFor: s.captchaVerifiedFor,
       }),
     },
   ),

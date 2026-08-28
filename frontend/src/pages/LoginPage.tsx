@@ -5,7 +5,7 @@ import { Header } from '@/shared/components/layout';
 import { Button, Input, Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { env } from '@/shared/config';
-import { useLogin } from '@/features/auth';
+import { SsafyLoginButton, useLogin } from '@/features/auth';
 
 export function LoginPage() {
   const [loginId, setLoginId] = useState('');
@@ -57,6 +57,15 @@ export function LoginPage() {
         >
           로그인
         </Button>
+
+        {/* 구분선 — 어느 쪽이 주된 방법인지 흐트러지지 않게 아래에 둡니다 */}
+        <div className="my-1 flex items-center gap-3">
+          <span className="bg-line h-px flex-1" />
+          <span className="text-subtle text-xs">또는</span>
+          <span className="bg-line h-px flex-1" />
+        </div>
+
+        <SsafyLoginButton />
 
         <p className="text-muted text-center text-sm">
           아직 계정이 없으신가요?{' '}

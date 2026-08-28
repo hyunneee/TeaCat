@@ -3,8 +3,7 @@ import type {
   ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
-  OtpChannel,
-  OtpSendResponse,
+  CaptchaChallenge,
   SignupRequest,
   User,
 } from '../model/auth.types';
@@ -31,15 +30,16 @@ export const authApi = {
 
   withdraw: () => http.delete<void>('/users/me'),
 
-  /* OTP */
-  sendOtp: (channel: OtpChannel) => http.post<OtpSendResponse>('/auth/otp/send', { channel }),
+  /* 자동입력 방지 (캡차) */
+  issueCaptcha: () => http.get<CaptchaChallenge>('/auth/captcha'),
 
-  verifyOtp: (body: { code: string; scheduleId: string }) =>
-    http.post<{ verified: boolean }>('/auth/otp/verify', body),
+  verifyCaptcha: (body: { challengeId: string; answer: string; scheduleId: string }) =>
+    http.post<{ verified: boolean }>('/auth/captcha/verify', body),
 };
 
 /** 쿼리 키를 문자열로 흩뿌리면 무효화(invalidate)할 때 반드시 사고가 납니다. */
 export const authKeys = {
   all: ['auth'] as const,
   me: () => [...authKeys.all, 'me'] as const,
+  captcha: (scheduleId: string) => [...authKeys.all, 'captcha', scheduleId] as const,
 };

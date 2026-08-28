@@ -52,7 +52,8 @@ npm run dev
 |---|---|
 | 아이디 / 비밀번호 | `ssafy` / `ssafy1234` |
 | 관리자 계정 | `admin` / `admin1234` |
-| 예매 OTP 인증번호 | `123456` |
+| 예매 진입 확인 | **캡차** — 화면에 뜬 그림의 글자를 입력 (정답은 서버만 압니다) |
+| 얼굴 등록 | 마이페이지 → 얼굴 등록 관리 (한 번만, 예매 시 자동 매칭) |
 
 > 이 정보는 앱 실행 시 브라우저 콘솔에도 출력됩니다.
 > 목업 데이터는 **새로고침하면 초기화**됩니다 (항상 같은 상태에서 시작하기 위함).
@@ -60,7 +61,8 @@ npm run dev
 ### 한번 따라가 볼 만한 흐름
 
 ```
-로그인 → 얼굴 등록 → 공연 → 회차 예매 → OTP(123456) → 구역 → 좌석 → 확인 → 결제 → 완료
+가입 → 로그인 → **마이페이지에서 얼굴 등록** → 공연 → 회차 예매 → 봇 확인(캡차)
+→ 구역 → 좌석 → 확인 → 결제 → 완료
 ```
 
 ---
@@ -117,10 +119,16 @@ env.maxTicketsPerUser; // dev=4, prod=1
 
 | 키 | dev | prod | 의미 |
 |---|---|---|---|
-| `VITE_MAX_TICKETS_PER_USER` | 4 | **1** | 1인 최대 구매 매수 |
+| `VITE_MAX_TICKETS_PER_USER` | 1 | 1 | 1인 최대 구매 매수 |
 | `VITE_USE_MOCK` | true | **true** | 목업 — 백엔드 붙기 전까지 배포본도 켜둠 |
 | `VITE_ENABLE_DEVTOOLS` | true | false | React Query Devtools |
-| `VITE_PAYMENT_MODE` | auto | auto | 토스 클라이언트 키가 있으면 실제 결제창, 없으면 모의 |
+| `VITE_PAYMENT_MODE` | auto | auto | 토스 클라이언트 키가 있으면 실제 결제위젯, 없으면 모의 |
+
+> 💳 **토스 결제는 바로 됩니다.** `.env` 에 토스가 공개한 문서용 테스트 클라이언트 키
+> (`test_gck_docs_...`)가 들어 있어 가입 없이 실제 결제 UI 가 뜹니다.
+>
+> 🔴 문서에 같이 적힌 **시크릿 키(`test_gsk_...`)는 프론트에 넣지 마세요.** 승인 API 전용이고,
+> `VITE_` 값은 번들에 박혀 브라우저에서 그대로 읽힙니다. 백엔드 환경변수에만 둡니다.
 
 > ⚠️ `VITE_USE_MOCK` 을 prod 에서 `false` 로 두면 **배포한 사이트가 아무것도 안 됩니다.**
 > 개발 서버의 `/api` 프록시는 배포에 없어서 모든 API 요청이 실패합니다.
@@ -168,7 +176,7 @@ src/mocks/
 ├── router.ts       경로 매칭 + axios 어댑터
 ├── db.ts           인메모리 시드 데이터 (공연/좌석/티켓/NFT…)
 ├── handlers/       도메인별 핸들러 — 백엔드 완성 순서대로 지우면 됨
-│   ├── auth.ts     로그인/가입/OTP/얼굴
+│   ├── auth.ts     로그인/가입/캡차/얼굴
 │   ├── concert.ts  공연 목록·상세
 │   ├── booking.ts  구역/좌석/선점락/결제
 │   ├── ticket.ts   내 티켓/취소
@@ -203,7 +211,7 @@ src/
 │   └── types/        ApiEnvelope 등 공통 타입
 │
 ├── features/     도메인별 수직 분할 — 여기가 실제 작업 공간
-│   ├── auth/         로그인·가입·OTP·권한
+│   ├── auth/         로그인·가입·캡차·권한
 │   ├── face/         얼굴 등록 (카메라/업로드)
 │   ├── concert/      공연 목록·상세·회차
 │   ├── booking/      구역·좌석·선점락·결제   ← 참고 구현
@@ -340,7 +348,7 @@ npm run preview
 
 - 얼굴 등록 (카메라 = `getUserMedia`)
 - PWA 설치 (서비스워커)
-- 결제창 (대부분의 PG 가 HTTPS 요구)
+- 결제 인증 (대부분의 PG 가 HTTPS 요구)
 
 ### 캐시 주의
 
@@ -401,7 +409,7 @@ WebSocket 이 붙으면 훅 내부만 소켓 구독으로 바꾸면 되고 **화
 - [ ] 응답 봉투 형태 — 현재 `{ success, data, message, code }` 가정 ([`shared/types/api.ts`](src/shared/types/api.ts))
 - [ ] 에러 코드 문자열 — [`shared/api/ApiError.ts`](src/shared/api/ApiError.ts) 의 `ERROR_CODE`
 - [ ] 인증 — accessToken(헤더) + refreshToken(httpOnly 쿠키) 가정
-- [ ] OTP 발송 채널(문자/메일)과 유효시간
+- [ ] 캡차 난이도·유효시간 (현재 5글자 / 3분)
 - [ ] 얼굴 인식 라이브러리 및 전송 포맷
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)

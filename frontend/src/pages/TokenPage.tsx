@@ -15,7 +15,7 @@ export function TokenPage() {
 
   return (
     <>
-      <Header title="토큰 채굴" showBack />
+      <Header title="포도알 채굴" showBack />
 
       <div className="space-y-4 p-4">
         <Card className="flex flex-col items-center gap-2 py-8">

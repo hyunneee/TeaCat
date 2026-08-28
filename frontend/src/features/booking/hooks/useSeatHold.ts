@@ -69,9 +69,9 @@ export function useSeatHold(scheduleId: string) {
         return;
       }
 
-      if (error.code === 'OTP_REQUIRED') {
+      if (error.code === 'CAPTCHA_REQUIRED') {
         toast.error('본인 인증이 필요해요.');
-        navigate(ROUTES.BOOKING_OTP(scheduleId), { replace: true });
+        navigate(ROUTES.BOOKING_VERIFY(scheduleId), { replace: true });
         return;
       }
 

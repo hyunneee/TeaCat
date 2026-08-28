@@ -4,12 +4,35 @@ import { Header } from '@/shared/components/layout';
 import { Card, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
+import { useModal } from '@/app/providers';
+import { useAuth } from '@/features/auth';
 import { ScheduleList, useConcertDetail } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
+  const { open } = useModal();
   const { concertId = '' } = useParams();
+  const { user, isLoggedIn } = useAuth();
   const { data: concert, isPending, isError } = useConcertDetail(concertId);
+
+  /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
+  const needsFace = isLoggedIn && !user?.faceRegistered;
+
+  /* 덮개를 지우고 눌러도 여기서 다시 막습니다.
+     화면 표시(덮개) → 버튼 disabled → 이 핸들러 → 라우트 가드, 네 겹입니다. */
+  const startBooking = (scheduleId: string) => {
+    if (needsFace) {
+      open('common/confirm', {
+        title: '얼굴 등록이 필요해요',
+        message:
+          '예매하려면 마이페이지에서 얼굴을 한 번 등록해야 합니다. 등록해 두면 예매한 티켓에 자동으로 매칭돼요.',
+        confirmText: '등록하러 가기',
+        onConfirm: () => navigate(ROUTES.FACE_REGISTER),
+      });
+      return;
+    }
+    navigate(ROUTES.BOOKING_VERIFY(scheduleId));
+  };
 
   if (isPending) {
     return (
@@ -74,8 +97,19 @@ export function ConcertDetailPage() {
           <SectionTitle>회차 선택</SectionTitle>
           <ScheduleList
             schedules={concert.schedules}
-            onBook={(scheduleId) => navigate(ROUTES.BOOKING_OTP(scheduleId))}
+            onBook={(scheduleId) => startBooking(scheduleId)}
             onWaitlist={(scheduleId) => navigate(ROUTES.RESALE(scheduleId))}
+            blocked={
+              needsFace
+                ? {
+                    title: '얼굴 등록이 필요합니다',
+                    description:
+                      '마이페이지에서 얼굴을 한 번 등록하면 예매할 수 있어요. 등록한 얼굴은 예매한 티켓에 자동으로 매칭됩니다.',
+                    actionLabel: '등록하러 가기',
+                    onAction: () => navigate(ROUTES.FACE_REGISTER),
+                  }
+                : undefined
+            }
           />
         </section>
 

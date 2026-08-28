@@ -6,10 +6,10 @@ import { authKeys, useAuthStore } from '@/features/auth';
 import { nftApi, nftKeys } from '../api/nftApi';
 import type { Rarity } from '../model/nft.types';
 
-export function useNftMarket(rarity?: Rarity) {
+export function useNftMarket(rarity?: Rarity, q?: string) {
   return useQuery({
-    queryKey: nftKeys.market(rarity),
-    queryFn: () => nftApi.market({ rarity }),
+    queryKey: nftKeys.market(rarity, q),
+    queryFn: () => nftApi.market({ rarity, q }),
     staleTime: STALE_TIME.SHORT,
     select: (page) => page.items,
   });
@@ -71,8 +71,8 @@ export function usePurchaseNft() {
 
 export function useListNft() {
   return useMutation({
-    mutationFn: ({ nftId, price }: { nftId: string; price: number }) =>
-      nftApi.list(nftId, price),
+    mutationFn: ({ nftId, price, description }: { nftId: string; price: number; description?: string }) =>
+      nftApi.list(nftId, { price, description }),
     onSuccess: () => {
       invalidateTrade();
       toast.success('판매 등록이 완료됐어요.');

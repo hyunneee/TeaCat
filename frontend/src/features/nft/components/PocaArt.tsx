@@ -1,4 +1,5 @@
 import { cn } from '@/shared/lib';
+import { RARITY_STYLE } from '../model/nft.model';
 import type { Rarity } from '../model/nft.types';
 
 function hashOf(seed: string): number {
@@ -17,12 +18,9 @@ interface Props {
 
 /* 등급이 높을수록 테두리가 뚜렷해집니다 — 목록에서 바로 구분됩니다.
    빛나는 애니메이션 대신 정지된 테두리로 구분합니다. 목록에 12장이 깔렸을 때
-   전부 반짝이면 무엇이 특별한지 알 수 없습니다. */
-const RING: Record<Rarity, string> = {
-  NORMAL: 'ring-1 ring-white/10',
-  RARE: 'ring-2 ring-rarity-rare/60',
-  SPECIAL: 'ring-2 ring-rarity-special',
-};
+   전부 반짝이면 무엇이 특별한지 알 수 없습니다.
+
+   테두리 색은 model 의 RARITY_STYLE 한 곳에서 관리합니다. */
 
 /**
  * 포토카드 아트.
@@ -38,7 +36,7 @@ export function PocaArt({ seed, rarity, imageUrl, alt, className }: Props) {
         src={imageUrl}
         alt={alt}
         loading="lazy"
-        className={cn('aspect-[2/3] w-full rounded-lg object-cover', RING[rarity], className)}
+        className={cn('aspect-[2/3] w-full rounded-lg object-cover', RARITY_STYLE[rarity].ring, className)}
       />
     );
   }
@@ -58,7 +56,7 @@ export function PocaArt({ seed, rarity, imageUrl, alt, className }: Props) {
       aria-label={alt}
       className={cn(
         'relative aspect-[2/3] w-full overflow-hidden rounded-lg',
-        RING[rarity],
+        RARITY_STYLE[rarity].ring,
         className,
       )}
     >

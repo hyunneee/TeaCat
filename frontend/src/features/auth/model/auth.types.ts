@@ -25,8 +25,9 @@ export interface SignupRequest {
   loginId: string;
   password: string;
   name: string;
-  phone: string;
   email: string;
+  /** 선택 항목 — 없으면 보내지 않습니다 */
+  phone?: string;
 }
 
 export interface AuthTokens {
@@ -40,15 +41,21 @@ export interface LoginResponse extends AuthTokens {
   user: User;
 }
 
-/* ── OTP (예매 진입 관문) ── */
+/* ── 자동입력 방지 (예매 진입 관문) ── */
 
-export type OtpChannel = 'SMS' | 'EMAIL';
-
-export interface OtpSendResponse {
-  channel: OtpChannel;
+/**
+ * 캡차 문제.
+ *
+ * ⚠️ 정답은 절대 내려오지 않습니다. 프론트가 정답을 알면 캡차가 아닙니다.
+ *    서버가 그린 그림(`imageDataUrl`)과 글자 수만 옵니다.
+ */
+export interface CaptchaChallenge {
+  challengeId: string;
+  /** 문제 이미지 (data URL 또는 이미지 주소) */
+  imageDataUrl: string;
+  /** 입력해야 할 글자 수 */
+  length: number;
   expiresInSeconds: number;
-  /** 목업 전용 힌트. 실서버에서는 내려오지 않습니다. */
-  hint?: string;
 }
 
 export interface ChangePasswordRequest {

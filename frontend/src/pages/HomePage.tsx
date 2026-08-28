@@ -1,8 +1,8 @@
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronRight, Coins, Music, Pickaxe, ScanFace, Sparkles, User } from 'lucide-react';
+import { ChevronRight, Music, Pickaxe, ScanFace, Search, Sparkles, User } from 'lucide-react';
 import {
-  AnimatedNumber,
   Badge,
   Button,
   Card,
@@ -11,21 +11,19 @@ import {
   PosterImage,
   SectionTitle,
   Skeleton,
-  SkeletonList,
 } from '@/shared/components/ui';
-import { Stagger } from '@/shared/components/common';
+import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { useConcerts } from '@/features/concert';
-import { useTokenBalance } from '@/features/nft';
 
 /** 카테고리 바로가기. 새 진입점이 생기면 여기에 한 줄 추가하세요. */
 const SHORTCUTS = [
   { to: ROUTES.CONCERTS, label: '공연', icon: Music },
   { to: ROUTES.NFT_MARKET, label: '포토카드', icon: Sparkles },
-  { to: ROUTES.TOKEN, label: '토큰 채굴', icon: Pickaxe },
+  { to: ROUTES.TOKEN, label: '포도알 채굴', icon: Pickaxe },
   { to: ROUTES.MY, label: '마이페이지', icon: User },
 ] as const;
 
@@ -53,9 +51,17 @@ export function HomePage() {
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
-  const { data: token } = useTokenBalance();
+  const [keyword, setKeyword] = useState('');
 
   const open = concerts?.filter((c) => !c.upcoming).slice(0, 3) ?? [];
+
+  /* 검색 결과는 공연 목록 화면이 이미 잘 보여줍니다.
+     홈에 결과 화면을 하나 더 만들지 않고 키워드만 넘깁니다. */
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const q = keyword.trim();
+    navigate(q ? `${ROUTES.CONCERTS}?q=${encodeURIComponent(q)}` : ROUTES.CONCERTS);
+  };
 
   /** 배너를 눌렀을 때 어디로 갈지는 배너 데이터가 알려줍니다 (linkType). */
   const openBanner = (banner: Banner) => {
@@ -82,21 +88,29 @@ export function HomePage() {
 
       {/* ── 최상단 줄 (검정 위) ── */}
       <header className="pt-safe relative">
-        <div className="flex h-(--spacing-header) items-center gap-2 px-4">
-          <div className="min-w-0 flex-1 text-white">
-            <Logo size={28} invert />
-          </div>
+        <div className="flex h-(--spacing-header) items-center gap-3 px-4">
+          <span className="shrink-0 text-white">
+            <Logo size={26} invert />
+          </span>
 
-          {isLoggedIn && (
-            <button
-              type="button"
-              onClick={() => navigate(ROUTES.TOKEN)}
-              className="flex items-center gap-1.5 rounded-lg border border-white/25 px-2.5 py-1.5 text-white transition-colors hover:bg-white/10"
-            >
-              <Coins size={14} />
-              <AnimatedNumber value={token?.balance ?? 0} className="text-xs font-bold" />
-            </button>
-          )}
+          {/* 검은 배경 위라 흰 테두리 입력창을 씁니다 (공용 Input 은 밝은 배경 전용) */}
+          <form onSubmit={submitSearch} role="search" className="min-w-0 flex-1">
+            <label htmlFor="home-search" className="sr-only">
+              공연 검색
+            </label>
+            <div className="flex items-center gap-2 rounded-full border border-white/25 px-3 py-2 transition-colors focus-within:border-white/70">
+              <Search size={15} className="shrink-0 text-white/70" />
+              <input
+                id="home-search"
+                type="search"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="공연, 아티스트 검색"
+                enterKeyHint="search"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/45"
+              />
+            </div>
+          </form>
         </div>
       </header>
 
@@ -187,7 +201,7 @@ export function HomePage() {
           </SectionTitle>
 
           {isPending ? (
-            <SkeletonList count={2} />
+            <Loading label="공연을 불러오는 중" className="py-8" />
           ) : (
             <Stagger as="ul" className="space-y-2">
               {open.map((concert) => (

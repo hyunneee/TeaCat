@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Ticket } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Segmented, SkeletonList } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { Segmented } from '@/shared/components/ui';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { TicketCard, isPast, useMyTickets } from '@/features/ticket';
 
@@ -33,7 +33,7 @@ export function MyTicketsPage() {
         <Segmented options={TABS} value={tab} onChange={setTab} />
 
         {isPending ? (
-          <SkeletonList count={2} />
+          <Loading label="티켓을 불러오는 중" />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={Ticket}

@@ -1,5 +1,6 @@
 import { mock, mockError } from '../router';
 import { findConcert, findSchedule, findSeat, holds, iso, now, sections, tickets, users } from '../db';
+import { POINT_UNIT_KRW } from '@/shared/constants';
 import { requireUser } from './auth';
 
 /**
@@ -8,6 +9,8 @@ import { requireUser } from './auth';
  * 실제 백엔드가 해야 하는 일을 같은 순서로 흉내냅니다.
  *   prepare — 좌석 선점을 확인하고 **서버가 금액과 orderId 를 확정**
  *   confirm — (실서버) 토스 승인 API 호출 → 금액 검증 → 티켓 발급
+ *
+ * 포도알(POINT) 결제는 PG 를 거치지 않고 confirm 에서 잔액을 차감합니다.
  *
  * 백엔드가 완성되면 이 파일만 지우면 됩니다.
  * 프론트의 `features/payment` 는 손대지 않습니다.
@@ -18,15 +21,47 @@ interface PreparedPayment {
   paymentId: string;
   holdId: string;
   userId: string;
+  scheduleId: string;
+  /** 주문이 잡고 있는 좌석. 선점(hold) 이 사라져도 이 값으로 발권합니다. */
+  seatIds: string[];
   amount: number;
+  /** 포도알로 결제할 경우 차감량 — 서버가 계산해 둡니다 */
+  pointAmount: number;
   recipients: { seatId: string; loginId: string }[];
   status: 'PREPARED' | 'PAID';
 }
 
-const prepared = new Map<string, PreparedPayment>();
+/* ── 주문은 새로고침을 견뎌야 합니다 ────────────────────────
+   토스 결제창은 성공 시 successUrl 로 **페이지를 이동**시킵니다.
+   목업 DB 는 브라우저 메모리에 있어서 그 순간 전부 초기화되는데,
+   주문까지 사라지면 돌아와서 승인할 게 없어 "돈은 빠졌는데 티켓이 없는" 상황이 됩니다.
+   실서버라면 DB 에 있을 값이므로 sessionStorage 로 흉내 냅니다. */
+const ORDER_KEY = 'tikat.mock.orders';
+
+function loadOrders(): Map<string, PreparedPayment> {
+  try {
+    const raw = sessionStorage.getItem(ORDER_KEY);
+    return new Map(raw ? (JSON.parse(raw) as [string, PreparedPayment][]) : []);
+  } catch {
+    return new Map();
+  }
+}
+
+const prepared = loadOrders();
+
+function saveOrders(): void {
+  try {
+    sessionStorage.setItem(ORDER_KEY, JSON.stringify([...prepared]));
+  } catch {
+    /* 무시 — 목업 편의 기능일 뿐입니다 */
+  }
+}
 
 /** 예매 수수료 (매당) — 실제 정책은 백엔드와 합의 필요 */
 const FEE_PER_TICKET = 2000;
+
+/** 원 → 포도알. 프론트가 보낸 값이 아니라 **서버가** 환산합니다. */
+const toPoints = (krw: number) => Math.ceil(krw / POINT_UNIT_KRW);
 
 mock('POST', '/payments/prepare', (ctx) => {
   const user = requireUser(ctx.headers);
@@ -73,16 +108,22 @@ mock('POST', '/payments/prepare', (ctx) => {
     paymentId,
     holdId: hold.holdId,
     userId: user.id,
+    scheduleId: hold.scheduleId,
+    seatIds: [...hold.seatIds],
     amount,
+    pointAmount: toPoints(amount),
     recipients: recipients ?? [],
     status: 'PREPARED',
   });
+  saveOrders();
 
   return {
     paymentId,
     orderName,
     totalAmount: amount,
     currency: 'KRW',
+    pointAmount: toPoints(amount),
+    pointBalance: user.tokenBalance,
     customer: {
       customerId: user.id,
       fullName: user.name,
@@ -102,10 +143,11 @@ mock('POST', '/payments/confirm', (ctx) => {
   const key = ctx.headers['idempotency-key'];
   if (key && confirmedByKey.has(key)) return confirmedByKey.get(key);
 
-  const { paymentId, paymentKey, amount } = ctx.body as {
+  const { paymentId, paymentKey, amount, payMethod } = ctx.body as {
     paymentId?: string;
     paymentKey?: string;
     amount?: number;
+    payMethod?: string;
   };
   const order = prepared.get(paymentId ?? '');
 
@@ -114,12 +156,27 @@ mock('POST', '/payments/confirm', (ctx) => {
   if (order.status === 'PAID') {
     throw mockError(409, 'ALREADY_PAID', '이미 결제된 주문입니다.');
   }
-  if (!paymentKey) throw mockError(400, 'BAD_REQUEST', '결제 인증 정보가 없습니다.');
+  const byPoint = payMethod === 'POINT';
+
+  /* 포도알 결제는 결제창을 거치지 않으므로 paymentKey 가 없습니다.
+     대신 서버가 잔액을 확인하고 **서버가 계산해 둔 차감량**을 씁니다.
+     프론트가 보낸 숫자를 쓰면 공짜 티켓이 나옵니다. */
+  if (byPoint) {
+    if (user.tokenBalance < order.pointAmount) {
+      throw mockError(
+        400,
+        'INSUFFICIENT_POINT',
+        `포도알이 부족합니다. ${order.pointAmount.toLocaleString()}개가 필요해요.`,
+      );
+    }
+  } else if (!paymentKey) {
+    throw mockError(400, 'BAD_REQUEST', '결제 인증 정보가 없습니다.');
+  }
 
   /* 💡 금액 검증 — 실서버에서 절대 빼먹으면 안 되는 부분입니다.
         프론트가 보낸 amount 는 주소창(successUrl 쿼리)에서 온 값이라 조작될 수 있습니다.
         서버가 prepare 때 저장한 금액과 비교하고, 다르면 승인하지 않습니다. */
-  if (typeof amount === 'number' && amount !== order.amount) {
+  if (!byPoint && typeof amount === 'number' && amount !== order.amount) {
     throw mockError(400, 'AMOUNT_MISMATCH', '결제 금액이 일치하지 않습니다.');
   }
 
@@ -131,15 +188,15 @@ mock('POST', '/payments/confirm', (ctx) => {
         가상계좌는 이 시점에 status 가 WAITING_FOR_DEPOSIT 이라
         입금 웹훅을 받아야 최종 완료됩니다. (아직 미구현) */
 
+  /* 결제창에서 돌아오면 페이지가 새로 로드돼 선점 목록이 비어 있습니다.
+     주문이 이미 좌석을 확정해 뒀으므로 선점이 없어도 발권합니다.
+     (실서버도 주문 테이블이 진실의 원천입니다) */
   const hold = holds.find((h) => h.holdId === order.holdId);
-  if (!hold) {
-    throw mockError(410, 'SEAT_HOLD_EXPIRED', '좌석 선점이 만료되었습니다. 환불 후 재시도해 주세요.');
-  }
 
   const orderId = `o-${Date.now()}`;
   const recipientMap = new Map(order.recipients.map((r) => [r.seatId, r.loginId]));
 
-  const issued = hold.seatIds.map((seatId, i) => {
+  const issued = order.seatIds.map((seatId, i) => {
     const seat = findSeat(seatId);
     const recipient = users.find((u) => u.loginId === recipientMap.get(seatId));
 
@@ -152,7 +209,7 @@ mock('POST', '/payments/confirm', (ctx) => {
       id: `t-${Date.now()}-${i}`,
       orderId,
       userId: recipient?.id ?? user.id,
-      scheduleId: hold.scheduleId,
+      scheduleId: order.scheduleId,
       seatId,
       ownerName: recipient?.name ?? user.name,
       status: 'VALID' as const,
@@ -163,14 +220,19 @@ mock('POST', '/payments/confirm', (ctx) => {
     return ticket;
   });
 
-  holds.splice(holds.indexOf(hold), 1);
+  if (hold) holds.splice(holds.indexOf(hold), 1);
   order.status = 'PAID';
+  saveOrders();
+
+  // 잔액 차감은 티켓 발급이 확정된 뒤에 (실서버라면 한 트랜잭션 안에서)
+  if (byPoint) user.tokenBalance -= order.pointAmount;
 
   const result = {
     orderId,
     ticketIds: issued.map((t) => t.id),
     totalPrice: order.amount,
     paidAt: iso(now()),
+    ...(byPoint ? { pointBalance: user.tokenBalance } : {}),
   };
 
   if (key) confirmedByKey.set(key, result);

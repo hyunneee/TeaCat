@@ -1,74 +1,87 @@
 import { useState, type FormEvent } from 'react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input } from '@/shared/components/ui';
-import { useSignup } from '@/features/auth';
+import {
+  EMPTY_SIGNUP,
+  SIGNUP_FIELDS,
+  SsafyLoginButton,
+  isSignupValid,
+  useSignup,
+  validateSignup,
+  type SignupErrors,
+  type SignupForm,
+} from '@/features/auth';
 
-const EMPTY = { loginId: '', password: '', passwordConfirm: '', name: '', phone: '', email: '' };
-
+/**
+ * 회원가입.
+ *
+ * 입력 항목·검증 규칙은 전부 `signup.model.ts` 의 테이블에 있습니다.
+ * 이 화면은 그걸 그리기만 하므로, 항목을 추가하려면 모델에 한 줄만 넣으면 됩니다.
+ *
+ * 에러는 **한 번 건드린 항목부터** 보여줍니다. 타이핑 첫 글자에 빨간 글씨가 뜨면
+ * 아직 다 쓰지도 않았는데 혼나는 느낌이 듭니다.
+ */
 export function SignupPage() {
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState<SignupForm>(EMPTY_SIGNUP);
+  const [touched, setTouched] = useState<Partial<Record<keyof SignupForm, boolean>>>({});
+  const [submitted, setSubmitted] = useState(false);
   const signup = useSignup();
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  const errors: SignupErrors = validateSignup(form);
+  const valid = isSignupValid(form);
 
-  const mismatch = form.passwordConfirm.length > 0 && form.password !== form.passwordConfirm;
-  const valid =
-    form.loginId && form.password && form.name && form.phone && form.email && !mismatch;
+  const visibleError = (name: keyof SignupForm) =>
+    submitted || touched[name] ? (errors[name] ?? null) : null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setSubmitted(true);
     if (!valid) return;
+
     const { passwordConfirm: _ignored, ...body } = form;
-    signup.mutate(body);
+    // 선택 항목은 비어 있으면 아예 보내지 않습니다 (빈 문자열을 저장하지 않도록).
+    signup.mutate({ ...body, phone: body.phone || undefined });
   };
 
   return (
     <>
       <Header title="회원가입" showBack />
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4 pt-6">
-        <Input
-          label="아이디"
-          value={form.loginId}
-          onChange={set('loginId')}
-          placeholder="영문/숫자 4자 이상"
-          autoComplete="username"
-          hint="티켓을 주고받을 때 쓰는 식별자입니다."
-        />
-        <Input
-          label="비밀번호"
-          type="password"
-          value={form.password}
-          onChange={set('password')}
-          autoComplete="new-password"
-        />
-        <Input
-          label="비밀번호 확인"
-          type="password"
-          value={form.passwordConfirm}
-          onChange={set('passwordConfirm')}
-          autoComplete="new-password"
-          error={mismatch ? '비밀번호가 일치하지 않아요.' : null}
-        />
-        <Input label="이름" value={form.name} onChange={set('name')} autoComplete="name" />
-        <Input
-          label="휴대폰 번호"
-          value={form.phone}
-          onChange={set('phone')}
-          placeholder="010-0000-0000"
-          inputMode="tel"
-          autoComplete="tel"
-          hint="예매 시 본인 확인(OTP)에 사용됩니다."
-        />
-        <Input
-          label="이메일"
-          type="email"
-          value={form.email}
-          onChange={set('email')}
-          autoComplete="email"
-          hint="취소표 추첨 당첨 안내를 받습니다."
-        />
+      <div className="space-y-3 p-4 pt-6">
+        <SsafyLoginButton />
+        <div className="flex items-center gap-3">
+          <span className="bg-line h-px flex-1" />
+          <span className="text-subtle text-xs">또는 직접 입력</span>
+          <span className="bg-line h-px flex-1" />
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 p-4 pt-0">
+        <p className="text-subtle text-xs">
+          <span className="text-danger">*</span> 표시는 필수 항목입니다.
+        </p>
+
+        {SIGNUP_FIELDS.map((field) => (
+          <Input
+            key={field.name}
+            label={field.label}
+            showRequirement
+            required={field.required}
+            type={field.type}
+            value={form[field.name]}
+            placeholder={field.placeholder}
+            hint={field.hint}
+            autoComplete={field.autoComplete}
+            inputMode={field.inputMode}
+            maxLength={field.maxLength}
+            error={visibleError(field.name)}
+            onChange={(e) => {
+              const next = field.format ? field.format(e.target.value) : e.target.value;
+              setForm((prev) => ({ ...prev, [field.name]: next }));
+            }}
+            onBlur={() => setTouched((prev) => ({ ...prev, [field.name]: true }))}
+          />
+        ))}
 
         <Button
           type="submit"

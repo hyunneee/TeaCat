@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { House, ScanFace, Ticket } from 'lucide-react';
 import { Button, Card, CatMascot } from '@/shared/components/ui';
+import { Confetti } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useAuth, can } from '@/features/auth';
 import { useBookingStore } from '@/features/booking';
@@ -21,7 +22,10 @@ export function BookingDonePage() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
-      {/* 체크 표시 하나로 충분합니다. 축포·파티클은 한 번 보고 나면 방해만 됩니다. */}
+      {/* 예매가 끝나는 지점 — 여기 한 곳에서만 터뜨립니다. 다 떨어지면 스스로 정리합니다. */}
+      <Confetti />
+
+
       <motion.div
         initial={{ scale: 0.7, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}

@@ -9,7 +9,17 @@
 export { useAuth } from './hooks/useAuth';
 export { useLogin, useLogout } from './hooks/useLogin';
 export { useSignup } from './hooks/useSignup';
-export { useOtp } from './hooks/useOtp';
+export { useCaptcha } from './hooks/useCaptcha';
+export { SsafyLoginButton } from './components/SsafyLoginButton';
+export {
+  SIGNUP_FIELDS,
+  EMPTY_SIGNUP,
+  validateSignup,
+  isSignupValid,
+  type SignupForm,
+  type SignupErrors,
+  type SignupFieldSpec,
+} from './model/signup.model';
 export { useChangePassword, useWithdraw } from './hooks/useAccount';
 
 // Model
@@ -22,6 +32,6 @@ export type {
   LoginRequest,
   SignupRequest,
   LoginResponse,
-  OtpChannel,
+  CaptchaChallenge,
   ChangePasswordRequest,
 } from './model/auth.types';

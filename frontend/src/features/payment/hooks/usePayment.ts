@@ -8,6 +8,7 @@ import { useBookingStore } from '@/features/booking';
 import { paymentApi } from '../api/paymentApi';
 import { requestPayment } from '../api/paymentGateway';
 import type { PayMethod, PaymentAuthResult } from '../model/payment.types';
+import { usesGateway } from '../model/payment.model';
 
 /** 사용자에게 보여줄 진행 단계 */
 export type PaymentStage =
@@ -44,6 +45,8 @@ export function useConfirmPayment() {
     onSuccess: (order) => {
       void queryClient.invalidateQueries({ queryKey: ['booking'] });
       void queryClient.invalidateQueries({ queryKey: ['ticket'] });
+      // 포도알로 결제했다면 잔액이 줄었습니다.
+      void queryClient.invalidateQueries({ queryKey: ['token'] });
       // 플로우 상태 정리는 완료 화면에서 합니다. 여기서 비우면 결제 페이지의
       // "선점 없음" 가드가 먼저 발동해 구역 선택으로 튕깁니다.
       navigate(ROUTES.BOOKING_DONE(order.orderId), { replace: true });
@@ -55,8 +58,11 @@ export function useConfirmPayment() {
  * 결제 플로우 전체.
  *
  *   ① prepare   서버가 주문 생성 + 금액/paymentId 확정
- *   ② 결제창     포트원 결제창에서 사용자 인증 (카드 입력·간편결제 등)
- *   ③ confirm   백엔드가 포트원 조회 → 금액 검증 → 승인 → 티켓 발급
+ *   ② 결제창     토스 결제창에서 사용자 인증 (간편결제)
+ *   ③ confirm   백엔드가 토스 승인 API 호출 → 금액 검증 → 티켓 발급
+ *
+ * **포도알(POINT) 결제는 ②가 없습니다.** PG 를 거치지 않고 바로 ③으로 가서
+ * 서버가 잔액을 차감합니다. 그래서 리디렉션도 일어나지 않습니다.
  *
  * ②까지가 프론트 몫이고 ③은 백엔드가 실제로 일합니다.
  * 백엔드가 준비되면 `paymentApi.confirm` 의 응답만 맞춰주면
@@ -88,6 +94,27 @@ export function usePayment(scheduleId: string) {
           recipients: recipients.filter((r) => hold.seatIds.includes(r.seatId)),
         });
 
+        /* 포도알 결제는 결제창을 거치지 않습니다.
+           차감은 서버가 하고, 프론트는 승인만 요청합니다. */
+        if (!usesGateway(payMethod)) {
+          setStage('confirming');
+          confirm.mutate(
+            {
+              auth: { paymentId: prepared.paymentId, paymentKey: '', amount: prepared.totalAmount },
+              payMethod,
+            },
+            {
+              onError: (error) => {
+                setStage('idle');
+                toast.error(
+                  ApiError.isApiError(error) ? error.message : '포도알 결제에 실패했습니다.',
+                );
+              },
+            },
+          );
+          return;
+        }
+
         /* ② 결제창.
               토스페이먼츠는 성공하면 successUrl 로 **페이지가 이동**합니다.
               그래서 성공 경로는 여기로 돌아오지 않고 result 라우트에서 이어집니다. */
@@ -95,7 +122,6 @@ export function usePayment(scheduleId: string) {
         const resultUrl = `${window.location.origin}${ROUTES.BOOKING_PAYMENT_RESULT(scheduleId)}`;
         const result = await requestPayment({
           prepared,
-          payMethod,
           successUrl: resultUrl,
           failUrl: resultUrl,
         });

@@ -10,7 +10,7 @@ import {
   tickets,
   type MockHold,
 } from '../db';
-import { requireOtp, requireUser } from './auth';
+import { requireCaptcha, requireUser } from './auth';
 
 /** 좌석을 잡아두는 시간. shared/constants 의 SEAT_HOLD_SECONDS 와 같아야 합니다. */
 const HOLD_SECONDS = 420;
@@ -34,7 +34,7 @@ function sweepExpiredHolds() {
   }
 }
 
-/* ── 구역 목록 (플로우: OTP → 구역) ── */
+/* ── 구역 목록 (플로우: 봇 확인 → 구역) ── */
 mock('GET', '/schedules/:scheduleId/sections', (ctx) => {
   sweepExpiredHolds();
   const scheduleId = ctx.params.scheduleId ?? '';
@@ -43,7 +43,20 @@ mock('GET', '/schedules/:scheduleId/sections', (ctx) => {
     .filter((s) => s.scheduleId === scheduleId)
     .map((section) => {
       const mine = seats.filter((seat) => seat.sectionId === section.id);
+
+      /* 구역이 공연장 어디에 있는지 — 좌석 좌표에서 바로 계산합니다.
+         프론트가 cols×간격 으로 되짚으면 간격 상수를 양쪽에서 관리하게 됩니다. */
+      const xs = mine.map((s) => s.x);
+      const ys = mine.map((s) => s.y);
+      const bounds = {
+        x: Math.min(...xs) - 10,
+        y: Math.min(...ys) - 10,
+        width: Math.max(...xs) - Math.min(...xs) + 20,
+        height: Math.max(...ys) - Math.min(...ys) + 20,
+      };
+
       return {
+        bounds,
         id: section.id,
         name: section.name,
         grade: section.grade,
@@ -98,7 +111,7 @@ mock('POST', '/schedules/:scheduleId/holds', (ctx) => {
   const schedule = findSchedule(scheduleId);
   if (!schedule) throw mockError(404, 'NOT_FOUND', '회차를 찾을 수 없습니다.');
 
-  requireOtp(user.id, scheduleId);
+  requireCaptcha(user.id, scheduleId);
 
   const { seatIds } = ctx.body as { seatIds?: string[] };
   const targets = seatIds ?? [];

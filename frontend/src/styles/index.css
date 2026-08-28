@@ -52,21 +52,22 @@
   --color-info: oklch(0.38 0 0);
   --color-info-soft: oklch(0.955 0 0);
 
-  /* ── 좌석 상태 ──────────────────────────────────────────
-     색이 없으니 **명도 차이**로 구분합니다.
-     선택 가능한 좌석이 가장 진하고, 팔린 좌석은 배경에 가깝게. */
-  --color-seat-available: oklch(0.55 0 0);
-  --color-seat-selected: oklch(0.16 0 0);
-  --color-seat-held: oklch(0.78 0 0);
-  --color-seat-sold: oklch(0.9 0 0);
-  --color-seat-blocked: oklch(0.94 0 0);
+  /* ── 좌석 상태 (무채색 규칙의 예외 — CLAUDE.md 0번 승인) ──────────
+     좌석 가용성은 색이 가장 빠른 신호라 여기만 색을 씁니다.
+     **색을 바꾸려면 이 다섯 줄만 고치면 됩니다.** 화면 코드는 건드리지 마세요.
+     (좌석맵·범례·선택바가 전부 이 토큰을 봅니다) */
+  --color-seat-available: oklch(0.63 0.16 152); /* 초록 — 고를 수 있음 */
+  --color-seat-selected: oklch(0.16 0 0); /* 검정 — 내가 고른 자리 */
+  --color-seat-held: oklch(0.76 0.15 78); /* 노랑 — 다른 사람이 결제 중 */
+  --color-seat-sold: oklch(0.84 0 0); /* 회색 — 판매 완료 */
+  --color-seat-blocked: oklch(0.91 0 0); /* 옅은 회색 — 추첨 대기 */
 
-  /* ── 포토카드 등급 ──────────────────────────────────────
-     포카·포스터 아트는 서로 구분되어야 해서 색을 남겨둡니다.
-     (목업 이미지 대체물이므로 실제 이미지가 오면 사라집니다) */
-  --color-rarity-normal: oklch(0.6 0 0);
-  --color-rarity-rare: oklch(0.6 0.16 250);
-  --color-rarity-special: oklch(0.72 0.16 70);
+  /* ── 포토카드 등급 ────────────────────────────────────────────
+     포카 아트는 서로 구분돼야 해서 색을 유지합니다 (DESIGN.md 1장 예외).
+     **등급 색을 바꾸려면 이 세 줄만** 고치면 테두리·뱃지·글자색이 함께 바뀝니다. */
+  --color-rarity-normal: oklch(0.6 0.15 152); /* 초록 */
+  --color-rarity-rare: oklch(0.6 0.16 250); /* 파랑 */
+  --color-rarity-special: oklch(0.58 0.21 18); /* 붉은계열 */
 
   /* ── 표면 (라이트, 4단계) ───────────────────────────────
      캔버스는 아주 연한 회색, 카드는 순백. 그래야 카드가 떠 보입니다. */
@@ -91,7 +92,7 @@
   /* ── 레이아웃 상수 ────────────────────────────────────────
      nav-gap 은 하단 탭 위에 두는 여유입니다. 폰에서 화면 맨 아래는
      엄지가 닿기 어렵고, 브라우저 UI 에 가려지기도 합니다. */
-  --spacing-nav: 4rem;
+  --spacing-nav: 4.75rem;
   --spacing-nav-gap: 1.75rem;
   --spacing-header: 3.5rem;
 
@@ -254,6 +255,9 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+  /* ⚠️ padding-bottom 을 **덮어씁니다.** `pb-8 pb-safe` 처럼 같이 쓰면 pb-8 이 무시돼
+     버튼이 화면 맨 아래에 붙습니다. 여백이 필요하면 pb-safe 대신
+     `pb-[calc(2rem+env(safe-area-inset-bottom))]` 처럼 직접 더하세요. */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }

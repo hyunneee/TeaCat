@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Skeleton } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { NftCard, useMyNfts } from '@/features/nft';
 
@@ -16,13 +15,7 @@ export function MyNftsPage() {
 
       <div className="p-4">
         {isPending ? (
-          <ul className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <li key={i}>
-                <Skeleton className="aspect-[2/3] w-full rounded-xl" />
-              </li>
-            ))}
-          </ul>
+          <Loading label="포토카드를 불러오는 중" />
         ) : !nfts || nfts.length === 0 ? (
           <EmptyState
             icon={Sparkles}

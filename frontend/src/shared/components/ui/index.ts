@@ -1,6 +1,7 @@
 export { Button, IconButton, type ButtonProps, type IconButtonProps } from './Button';
 export { CatMascot, Logo, type CatMascotProps, type CatMood } from './CatMascot';
 export { Input, type InputProps } from './Input';
+export { Textarea, type TextareaProps } from './Textarea';
 export { Card, CardHeader, ListRow, type CardProps, type ListRowProps } from './Card';
 export { Badge, LiveDot, type BadgeProps } from './Badge';
 export { Segmented, type SegmentedOption, type SegmentedProps } from './Segmented';
@@ -8,7 +9,6 @@ export { Stepper, type StepperProps } from './Stepper';
 export { SectionTitle, type SectionTitleProps } from './SectionTitle';
 export { AnimatedNumber, type AnimatedNumberProps } from './AnimatedNumber';
 export { PosterImage, type PosterImageProps } from './PosterImage';
-export { OtpInput, type OtpInputProps } from './OtpInput';
 export { Modal, type ModalProps } from './Modal';
 export { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';
 export { Spinner } from './Spinner';

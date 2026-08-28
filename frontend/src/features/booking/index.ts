@@ -11,6 +11,7 @@ export { useSeatHold } from './hooks/useSeatHold';
 export { useRecipients } from './hooks/useRecipients';
 
 // View
+export { VenueMap } from './components/VenueMap';
 export { SectionGrid } from './components/SectionGrid';
 export { SeatMap } from './components/SeatMap';
 export { SeatLegend } from './components/SeatLegend';
