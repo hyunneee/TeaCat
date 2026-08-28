@@ -10,13 +10,16 @@ interface Props {
   imageUrl?: string | null;
   alt: string;
   className?: string;
+  /** 카드를 눌렀을 때 — 보통 전체화면 보기를 엽니다 */
+  onOpen?: () => void;
 }
 
 /**
  * 상세 화면의 포토카드 한 장 — **빛 반사** 연출.
  *
- * 새 카드 표면에 사선(`/`)으로 빛이 한 번 스쳐 지나갑니다.
- * 들어왔을 때 한 번, 그리고 카드를 누를 때마다 다시 훑습니다.
+ * 새 카드 표면에 사선(`/`)으로 빛이 한 번 스쳐 지나갑니다. **들어왔을 때 한 번만.**
+ * 누르는 동작은 반짝임이 아니라 **전체화면 보기**에 씁니다 —
+ * 카드를 누르는 사람은 다시 반짝이길 원하는 게 아니라 크게 보고 싶은 겁니다.
  *
  * ── 목록에는 쓰지 않습니다 ─────────────────────────────────
  * 카드 12장이 전부 반짝이면 아무것도 특별해 보이지 않고, 무한 루프 반짝임은
@@ -28,7 +31,7 @@ interface Props {
 const BAND_ANGLE = 24;
 const SWEEP_SECONDS = 1.05;
 
-export function PocaShowcase({ seed, rarity, imageUrl, alt, className }: Props) {
+export function PocaShowcase({ seed, rarity, imageUrl, alt, className, onOpen }: Props) {
   const reduced = useReducedMotion() ?? false;
 
   /** 빛의 가로 위치 (0 = 왼쪽 밖, 1 = 오른쪽 밖) */
@@ -57,8 +60,8 @@ export function PocaShowcase({ seed, rarity, imageUrl, alt, className }: Props) 
   return (
     <button
       type="button"
-      onClick={sweep}
-      aria-label={`${alt} — 눌러서 다시 보기`}
+      onClick={onOpen}
+      aria-label={`${alt} — 눌러서 크게 보기`}
       className={cn('relative block rounded-lg', className)}
     >
       <PocaArt seed={seed} rarity={rarity} imageUrl={imageUrl} alt={alt} />

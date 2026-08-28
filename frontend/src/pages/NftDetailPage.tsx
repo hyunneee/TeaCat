@@ -8,6 +8,7 @@ import { useModal } from '@/app/providers';
 import { formatDateTime } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
+  PocaFullscreen,
   PocaShowcase,
   RarityBadge,
   useListNft,
@@ -30,6 +31,7 @@ export function NftDetailPage() {
 
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [zoomed, setZoomed] = useState(false);
 
   if (isPending) return <PageLoader />;
   if (isError || !nft) {
@@ -50,13 +52,14 @@ export function NftDetailPage() {
       <Header title={nft.name} showBack />
 
       <div className="flex-1 space-y-4 p-4">
-        {/* 카드 표면에 사선으로 빛이 스칩니다. 문지르면 빛이 따라옵니다. */}
+        {/* 들어올 때 사선으로 빛이 한 번 스치고, 누르면 전체화면으로 봅니다. */}
         <PocaShowcase
           className="mx-auto w-52"
           seed={nft.artSeed}
           rarity={nft.rarity}
           imageUrl={nft.imageUrl}
           alt={`${nft.name} 포토카드`}
+          onOpen={() => setZoomed(true)}
         />
 
         <div className="space-y-2 text-center">
@@ -182,6 +185,16 @@ export function NftDetailPage() {
           <p className="text-subtle text-center text-sm">판매 중이 아닙니다.</p>
         )}
       </BottomBar>
+
+      <PocaFullscreen
+        open={zoomed}
+        onClose={() => setZoomed(false)}
+        seed={nft.artSeed}
+        rarity={nft.rarity}
+        imageUrl={nft.imageUrl}
+        name={nft.name}
+        concertTitle={nft.concertTitle}
+      />
     </div>
   );
 }

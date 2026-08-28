@@ -330,6 +330,8 @@ export const tickets: MockTicket[] = [
   },
 ];
 
+/* 대기 중과 당첨, 두 상태를 다 넣어둡니다.
+   당첨 카드(예매하기 / 포기하기)는 시연에서 확인할 방법이 없으면 검증이 안 됩니다. */
 export const resaleEntries: MockResaleEntry[] = [
   {
     id: 're-1',
@@ -340,6 +342,17 @@ export const resaleEntries: MockResaleEntry[] = [
     status: 'WAITING',
     deadlineAt: null,
     createdAt: iso(now() - 6 * 3600_000),
+  },
+  {
+    id: 're-2',
+    scheduleId: 's-2',
+    sectionId: 's-2-sec-2',
+    userId: 'u-1',
+    quantity: 1,
+    status: 'WON',
+    // 당첨 후 12시간 안에 결제 (RESALE_PAYMENT_HOURS)
+    deadlineAt: iso(now() + 9 * 3600_000),
+    createdAt: iso(now() - 20 * 3600_000),
   },
 ];
 

@@ -1,22 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import { Dices } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { SkeletonList } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { EmptyState, Loading } from '@/shared/components/common';
+import { useModal } from '@/app/providers';
 import { ROUTES } from '@/shared/constants';
-import { env } from '@/shared/config';
-import {
-  ResaleEntryCard,
-  useCancelResale,
-  useDrawResale,
-  useMyResaleEntries,
-} from '@/features/resale';
+import { ResaleEntryCard, useCancelResale, useMyResaleEntries } from '@/features/resale';
 
+/**
+ * 내 취소표 대기 내역.
+ *
+ * 추첨은 서버가 돌립니다 — 화면에는 신청을 취소하거나,
+ * 당첨된 건을 예매하거나 포기하는 것만 있습니다.
+ */
 export function MyResalePage() {
   const navigate = useNavigate();
+  const { open } = useModal();
   const { data: entries, isPending } = useMyResaleEntries();
   const cancel = useCancelResale();
-  const draw = useDrawResale();
 
   return (
     <>
@@ -24,7 +24,7 @@ export function MyResalePage() {
 
       <div className="p-4">
         {isPending ? (
-          <SkeletonList count={2} />
+          <Loading label="대기 내역을 불러오는 중" />
         ) : !entries || entries.length === 0 ? (
           <EmptyState
             icon={Dices}
@@ -37,11 +37,26 @@ export function MyResalePage() {
               <li key={entry.id}>
                 <ResaleEntryCard
                   entry={entry}
-                  onCancel={(id) => cancel.mutate(id)}
+                  onCancel={(id) =>
+                    open('common/confirm', {
+                      title: '대기 신청을 취소할까요?',
+                      message: '다시 신청하면 대기 순서가 처음으로 돌아갑니다.',
+                      confirmText: '신청 취소',
+                      danger: true,
+                      onConfirm: () => cancel.mutate(id),
+                    })
+                  }
                   onPay={(e) => navigate(ROUTES.BOOKING_SECTION(e.scheduleId))}
-                  // 데모용 즉시 추첨 — 실제로는 서버가 취소표 발생 시 돌립니다.
-                  onDraw={env.useMock ? (id) => draw.mutate(id) : undefined}
-                  drawing={draw.isPending}
+                  onForfeit={(e) =>
+                    open('common/confirm', {
+                      title: '당첨을 포기할까요?',
+                      message:
+                        '포기하면 이 좌석은 다음 대기자에게 넘어갑니다. 되돌릴 수 없습니다.',
+                      confirmText: '포기하기',
+                      danger: true,
+                      onConfirm: () => cancel.mutate(e.id),
+                    })
+                  }
                 />
               </li>
             ))}

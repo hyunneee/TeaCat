@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Clock, MapPin, ShieldAlert, Users } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
@@ -10,6 +10,7 @@ import { ScheduleList, useConcertDetail } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { open } = useModal();
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
@@ -17,6 +18,10 @@ export function ConcertDetailPage() {
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
+
+  /* 등록을 마치면 **이 공연으로 되돌아오게** 현재 위치를 함께 넘깁니다.
+     안 넘기면 useFaceRegistration 의 기본값(마이페이지)으로 가버립니다. */
+  const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
 
   /* 덮개를 지우고 눌러도 여기서 다시 막습니다.
      화면 표시(덮개) → 버튼 disabled → 이 핸들러 → 라우트 가드, 네 겹입니다. */
@@ -27,7 +32,7 @@ export function ConcertDetailPage() {
         message:
           '예매하려면 마이페이지에서 얼굴을 한 번 등록해야 합니다. 등록해 두면 예매한 티켓에 자동으로 매칭돼요.',
         confirmText: '등록하러 가기',
-        onConfirm: () => navigate(ROUTES.FACE_REGISTER),
+        onConfirm: goFaceRegister,
       });
       return;
     }
@@ -106,7 +111,7 @@ export function ConcertDetailPage() {
                     description:
                       '마이페이지에서 얼굴을 한 번 등록하면 예매할 수 있어요. 등록한 얼굴은 예매한 티켓에 자동으로 매칭됩니다.',
                     actionLabel: '등록하러 가기',
-                    onAction: () => navigate(ROUTES.FACE_REGISTER),
+                    onAction: goFaceRegister,
                   }
                 : undefined
             }

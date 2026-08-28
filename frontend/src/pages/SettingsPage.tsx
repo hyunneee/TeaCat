@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, KeyRound, ScanFace, ShieldX, Trash2, TriangleAlert } from 'lucide-react';
+import { Bell, Info, KeyRound, ScanFace, ShieldX, Trash2, TriangleAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
@@ -7,12 +7,16 @@ import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { useAuth, useWithdraw } from '@/features/auth';
 import { faceApi } from '@/features/face';
+import { PERMISSION_LABEL, useNotificationPermission } from '@/features/notification';
+import { useAppVersion } from '@/features/appInfo';
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const { open } = useModal();
   const { user } = useAuth();
   const withdraw = useWithdraw();
+  const notify = useNotificationPermission();
+  const version = useAppVersion();
 
   return (
     <>
@@ -27,13 +31,32 @@ export function SettingsPage() {
               title="비밀번호 변경"
               onClick={() => navigate(ROUTES.SETTINGS_PASSWORD)}
             />
+            {/* 권한 요청은 사용자가 직접 누른 직후에만 할 수 있습니다.
+                한 번 차단되면 앱에서 되돌릴 수 없어 브라우저 설정으로 안내합니다. */}
             <ListRow
               icon={<Bell size={18} />}
-              title="알림 설정"
-              description="추첨 결과, 공연 안내"
-              trailing={<span className="text-subtle text-xs">준비 중</span>}
+              title="추첨 당첨 알림"
+              description={PERMISSION_LABEL[notify.state]}
+              trailing={
+                <span className="text-subtle text-xs">
+                  {notify.granted ? '켜짐' : notify.state === 'denied' ? '차단' : '꺼짐'}
+                </span>
+              }
               hideChevron
-              disabled
+              disabled={!notify.supported || notify.granted || notify.state === 'denied'}
+              onClick={() => void notify.request()}
+            />
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>정보</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
+            <ListRow
+              icon={<Info size={18} />}
+              title="앱 정보"
+              description={`버전 ${version.current}`}
+              onClick={() => navigate(ROUTES.SETTINGS_ABOUT)}
             />
           </Card>
         </section>

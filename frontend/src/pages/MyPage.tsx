@@ -107,7 +107,7 @@ export function MyPage() {
             />
             <ListRow
               icon={<Sparkles size={18} />}
-              title="NFT 포카 내역"
+              title="포카 거래 내역"
               onClick={() => navigate(ROUTES.MY_NFTS)}
             />
           </Card>

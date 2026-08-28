@@ -44,7 +44,11 @@ const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
-const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
+const PasswordChangePage = page(
+  () => import('@/pages/PasswordChangePage'),
+  'PasswordChangePage',
+);
+const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
@@ -93,6 +97,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
+          { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.

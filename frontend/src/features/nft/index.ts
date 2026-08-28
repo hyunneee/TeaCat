@@ -10,6 +10,7 @@ export {
 export { NftCard } from './components/NftCard';
 export { PocaArt } from './components/PocaArt';
 export { RarityBadge } from './components/RarityBadge';
+export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
 export { nftApi, nftKeys } from './api/nftApi';
 export {

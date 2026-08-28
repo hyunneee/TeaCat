@@ -26,6 +26,11 @@ function optionalBool(key: string, fallback: boolean): boolean {
   return value === 'true' || value === '1';
 }
 
+function optionalString(key: string, fallback: string): string {
+  const value = import.meta.env[key as keyof ImportMetaEnv] as string | undefined;
+  return value === undefined || value === '' ? fallback : value;
+}
+
 function optionalNumber(key: string, fallback: number): number {
   const value = import.meta.env[key as keyof ImportMetaEnv] as string | undefined;
   const parsed = Number(value);
@@ -67,6 +72,8 @@ export const env = {
   /** 'development' | 'production' */
   name: (import.meta.env.VITE_APP_ENV ?? import.meta.env.MODE) as AppEnvName,
   appName: required('VITE_APP_NAME'),
+  /** 지금 실행 중인 앱 버전 (설정 > 앱 정보) */
+  appVersion: optionalString('VITE_APP_VERSION', '0.0.0'),
 
   apiBaseUrl: required('VITE_API_BASE_URL'),
   wsBaseUrl: required('VITE_WS_BASE_URL'),

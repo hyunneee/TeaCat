@@ -26,6 +26,24 @@ export function formatDuration(totalSeconds: number): string {
   return `${m}:${s}`;
 }
 
+/**
+ * 남은 시간을 사람이 읽는 단위로. '8시간 59분' / '12분 30초' / '45초'
+ *
+ * `formatDuration` 은 좌석 선점(7분)처럼 **분:초** 카운트다운 전용입니다.
+ * 12시간짜리 마감에 쓰면 "539:45" 가 되어 아무 의미가 없습니다.
+ * 한 시간을 넘는 기한에는 반드시 이걸 쓰세요.
+ */
+export function formatRemaining(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+
+  if (hours > 0) return `${hours}시간 ${minutes}분`;
+  if (minutes > 0) return `${minutes}분 ${seconds}초`;
+  return `${seconds}초`;
+}
+
 /** '홍길동' → '홍*동' (다른 사람에게 보이는 예매자명 마스킹) */
 export function maskName(name: string): string {
   if (name.length <= 1) return name;

@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Camera, ImageUp, ScanFace, ShieldCheck } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Card, Segmented } from '@/shared/components/ui';
+import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
+import { useAuth } from '@/features/auth';
 import { useFaceCamera, useFaceRegistration } from '@/features/face';
 import type { FaceCaptureMode } from '@/features/face';
 
@@ -16,6 +19,8 @@ const MODES = [
  * 티켓이 유효하려면(입장하려면) 얼굴 등록이 선행돼야 합니다. 한 번만 하면 됩니다.
  */
 export function FaceRegisterPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [mode, setMode] = useState<FaceCaptureMode>('CAMERA');
   const [preview, setPreview] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -40,7 +45,25 @@ export function FaceRegisterPage() {
 
   return (
     <>
-      <Header title="얼굴 등록" showBack />
+      {/* 아직 등록하지 않은 사람에게만 건너뛰기를 줍니다.
+          가입 직후에 카메라를 강요하면 그 자리에서 이탈합니다 —
+          대신 예매할 때 다시 안내받습니다. (이미 등록한 사람에겐 의미 없는 버튼) */}
+      <Header
+        title="얼굴 등록"
+        showBack
+        right={
+          user?.faceRegistered ? undefined : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mr-1"
+              onClick={() => navigate(ROUTES.HOME, { replace: true })}
+            >
+              건너뛰기
+            </Button>
+          )
+        }
+      />
 
       <div className="space-y-4 p-4">
         <Card className="flex gap-3">

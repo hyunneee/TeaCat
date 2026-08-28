@@ -119,6 +119,7 @@ env.maxTicketsPerUser; // dev=4, prod=1
 
 | 키 | dev | prod | 의미 |
 |---|---|---|---|
+| `VITE_APP_VERSION` | 0.1.0 | 0.1.0 | 설정 > 앱 정보에 표시. `package.json` 과 함께 올리세요 |
 | `VITE_MAX_TICKETS_PER_USER` | 1 | 1 | 1인 최대 구매 매수 |
 | `VITE_USE_MOCK` | true | **true** | 목업 — 백엔드 붙기 전까지 배포본도 켜둠 |
 | `VITE_ENABLE_DEVTOOLS` | true | false | React Query Devtools |
@@ -220,6 +221,8 @@ src/
 │   ├── nft/          포토카드 마켓·토큰
 │   ├── banner/       홈 상단 광고·이벤트 배너
 │   ├── payment/      결제 (토스페이먼츠)
+│   ├── notification/ 웹 알림 (추첨 당첨)
+│   ├── appInfo/      앱 버전 · 업데이트 안내
 │   └── organizer/ monitoring/ map/ (골격만)
 │
 ├── pages/        라우트 진입점. "조립"만 하고 로직은 없음

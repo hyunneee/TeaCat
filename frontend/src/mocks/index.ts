@@ -27,6 +27,7 @@ export async function setupMocks() {
     import('./handlers/nft'),
     import('./handlers/banner'),
     import('./handlers/payment'),
+    import('./handlers/appInfo'),
   ]);
 
   // 등록 안 된 경로는 원래 어댑터(실제 네트워크)로 폴백시킵니다.

@@ -1,5 +1,11 @@
 export { cn } from './cn';
-export { formatPrice, formatDateTime, formatDuration, maskName } from './format';
+export {
+  formatPrice,
+  formatDateTime,
+  formatDuration,
+  formatRemaining,
+  maskName,
+} from './format';
 export { local, session, STORAGE_KEY } from './storage';
 export {
   DURATION,
