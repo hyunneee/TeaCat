@@ -6,12 +6,14 @@ type Tone = 'default' | 'brand' | 'warning' | 'danger' | 'success';
 
 /* 카드 톤 — 안내/경고/위험을 배경색만으로 구분되게 합니다.
    (DESIGN.md 의미 색상 규칙) */
+/* 안내 카드는 **밝게** 둡니다. 회색 면을 깔면 "비활성" 처럼 읽혀서
+   정작 읽어야 할 안내가 지나가 버립니다. 구분은 테두리와 아이콘이 합니다. */
 const TONE: Record<Tone, string> = {
   default: 'surface border-line',
-  brand: 'bg-brand-50 border-line-strong',
-  warning: 'bg-surface-2 border-line-strong',
+  brand: 'surface border-line-strong',
+  warning: 'surface border-line-strong',
   danger: 'bg-danger-soft border-danger/25',
-  success: 'bg-surface-2 border-line-strong',
+  success: 'surface border-line-strong',
 };
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
@@ -21,6 +23,14 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   tone?: Tone;
   /** 위쪽 테두리에 빛을 넣어 떠 있는 느낌을 줍니다 */
   raised?: boolean;
+  /**
+   * 테두리 없이 **흰 면 + 얕은 그림자**로만 띄웁니다.
+   *
+   * 한 화면에 카드가 여러 장 놓이는 곳(예매 플로우, 목록)에서는 테두리가
+   * 줄줄이 겹쳐 화면이 선으로 가득 찹니다. 그럴 때 이걸 쓰세요.
+   * 테두리 자체가 의미를 갖는 단독 안내 카드는 기본(tone)을 그대로 두세요.
+   */
+  flat?: boolean;
 }
 
 export function Card({
@@ -28,6 +38,7 @@ export function Card({
   padded = true,
   tone = 'default',
   raised = true,
+  flat = false,
   className,
   onClick,
   ...rest
@@ -51,12 +62,13 @@ export function Card({
           : undefined
       }
       className={cn(
-        'rounded-xl border transition-all duration-200',
-        TONE[tone],
-        raised && 'edge-light',
+        'rounded-2xl border transition-all duration-200',
+        /* 테두리는 투명하게 남겨둡니다 — 없애면 flat 여부에 따라 1px 씩 밀립니다 */
+        flat ? 'surface shadow-card border-transparent' : TONE[tone],
+        raised && !flat && 'edge-light',
         padded && 'p-4',
         interactive &&
-          'cursor-pointer hover:border-line-strong active:scale-[0.99]',
+          (flat ? 'hover:bg-surface-2 cursor-pointer active:scale-[0.99]' : 'cursor-pointer hover:border-line-strong active:scale-[0.99]'),
         className,
       )}
       {...rest}

@@ -46,6 +46,7 @@ export function TossPaymentSheet({
       dismissible={!paying}
       footer={
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           loading={paying}

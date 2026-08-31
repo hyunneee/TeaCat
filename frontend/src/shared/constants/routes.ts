@@ -14,6 +14,9 @@ export const ROUTES = {
   /* ── 얼굴 등록 (티켓 사용 자격) ── */
   FACE_REGISTER: '/face',
 
+  /* ── 검색 (공연 + 포토카드 한 화면) ── */
+  SEARCH: '/search',
+
   /* ── 공연 ── */
   CONCERTS: '/concerts',
   CONCERT_DETAIL: (concertId: string) => `/concerts/${concertId}`,
@@ -47,6 +50,7 @@ export const ROUTES = {
   NFT_MARKET: '/nft',
   NFT_DETAIL: (nftId: string) => `/nft/${nftId}`,
   MY_NFTS: '/my/nfts',
+  MY_NFT_TRADES: '/my/nfts/trades',
 
   /* ── 토큰 채굴 (컨텐츠 미정) ── */
   TOKEN: '/token',

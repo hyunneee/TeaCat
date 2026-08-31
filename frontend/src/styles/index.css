@@ -11,83 +11,107 @@
       (CLAUDE.md 3-5 / DESIGN.md)
    ═══════════════════════════════════════════════════════════ */
 @theme {
-  /* ── 브랜드: 무채색 ─────────────────────────────────────
-     색을 쓰지 않으므로 "브랜드"는 검정~회색 명도 계단입니다.
-     Tailwind 관례대로 **번호가 크면 어둡습니다.**
-       50~300   배경·칩 (밝음)
-       500      보조 아이콘
-       600~950  버튼·강조 텍스트 (어두움)  */
-  --color-brand-50: oklch(0.975 0 0);
-  --color-brand-100: oklch(0.945 0 0);
+  /* ══════════════════════════════════════════════════════════
+     70 : 25 : 5
+
+       70  바탕      오프화이트  --color-canvas / --color-surface-*
+       25  구조·글자 짙은 중성   --color-ink-* / --color-brand-*
+        5  강조      짙은 초록   --color-accent-*  (#3D5335)
+
+     비율은 자로 재는 게 아니라 **눈에 보이는 면적**입니다.
+     초록이 화면의 5% 를 넘어가면 강조가 강조가 아니게 됩니다.
+     "이걸 초록으로 칠할까?" 싶으면 대개 답은 아니오입니다. (DESIGN.md 1장)
+     ══════════════════════════════════════════════════════════ */
+
+  /* ── 5% · 강조 — 짙은 초록 ────────────────────────────────
+     기준색 #3D5335 = accent-700. 여기서만 색이 나옵니다.
+     채도를 낮게(0.05 근처) 유지하세요 — 쨍한 초록은 이 앱의 인상과 맞지 않고
+     흰 글자 대비도 나빠집니다. */
+  --color-accent-50: oklch(0.968 0.012 138);
+  --color-accent-100: oklch(0.938 0.022 138);
+  --color-accent-200: oklch(0.888 0.032 138);
+  --color-accent-300: oklch(0.8 0.042 138);
+  --color-accent-400: oklch(0.67 0.05 138);
+  --color-accent-500: oklch(0.55 0.056 138);
+  --color-accent-600: oklch(0.475 0.057 138);
+  --color-accent-700: oklch(0.415 0.055 138); /* #3D5335 — 기준색 */
+  --color-accent-800: oklch(0.35 0.048 138);
+  --color-accent-900: oklch(0.285 0.038 138);
+  --color-accent-950: oklch(0.21 0.028 138);
+
+  /* ── 25% · 구조 — 짙은 중성 ───────────────────────────────
+     **완전한 무채색입니다 (채도 0).** 바탕과 글자에 색기가 돌면 화면 전체가
+     은은하게 물들어 보이고, 정작 강조색이 눈에 덜 띕니다.
+     색은 강조(accent)와 몇 안 되는 예외에만 씁니다.
+     Tailwind 관례대로 **번호가 크면 어둡습니다.** */
+  --color-brand-50: oklch(0.972 0 0);
+  --color-brand-100: oklch(0.942 0 0);
   --color-brand-200: oklch(0.9 0 0);
   --color-brand-300: oklch(0.82 0 0);
   --color-brand-400: oklch(0.68 0 0);
-  --color-brand-500: oklch(0.5 0 0);
-  --color-brand-600: oklch(0.34 0 0);
-  --color-brand-700: oklch(0.26 0 0);
-  --color-brand-800: oklch(0.2 0 0);
-  --color-brand-900: oklch(0.16 0 0);
-  --color-brand-950: oklch(0.11 0 0);
-
-  /* ── 보조 강조 ──────────────────────────────────────────
-     예전 청록(accent)을 무채색으로 유지합니다. 지금은 brand 와 값이 겹치지만,
-     나중에 포인트 컬러를 넣기로 하면 이 계단만 바꾸면 됩니다. */
-  --color-accent-300: oklch(0.9 0 0);
-  --color-accent-400: oklch(0.5 0 0);
-  --color-accent-500: oklch(0.4 0 0);
-  --color-accent-600: oklch(0.34 0 0);
-  --color-accent-900: oklch(0.965 0 0);
+  --color-brand-500: oklch(0.52 0 0);
+  --color-brand-600: oklch(0.38 0 0);
+  --color-brand-700: oklch(0.3 0 0);
+  --color-brand-800: oklch(0.245 0 0);
+  --color-brand-900: oklch(0.2 0 0);
+  --color-brand-950: oklch(0.145 0 0);
 
   /* ── 시맨틱 ──────────────────────────────────────────────
-     🔴 붉은색만 예외입니다. 되돌릴 수 없는 동작(로그아웃/탈퇴/취소)은
-        무채색 화면에서 유일한 색이라 오히려 더 강하게 읽힙니다.
-        나머지(성공/경고/정보)는 무채색으로 두고 아이콘·문구로 구분합니다. */
-  --color-danger: oklch(0.53 0.19 26);
-  --color-danger-soft: oklch(0.955 0.022 26);
+     🔴 붉은색은 **되돌릴 수 없는 동작 전용**입니다.
+        강조 초록과 역할이 다릅니다 — 초록은 "여기를 누르세요", 붉은색은 "조심하세요".
+        성공/경고/정보는 색을 쓰지 않고 아이콘·문구로 구분합니다. */
+  --color-danger: oklch(0.52 0.19 26);
+  --color-danger-soft: oklch(0.956 0.018 26);
 
-  --color-success: oklch(0.38 0 0);
-  --color-success-soft: oklch(0.955 0 0);
-  --color-warning: oklch(0.38 0 0);
-  --color-warning-soft: oklch(0.955 0 0);
-  --color-info: oklch(0.38 0 0);
-  --color-info-soft: oklch(0.955 0 0);
+  --color-success: oklch(0.42 0 0);
+  --color-success-soft: oklch(0.958 0 0);
+  --color-warning: oklch(0.42 0 0);
+  --color-warning-soft: oklch(0.958 0 0);
+  --color-info: oklch(0.42 0 0);
+  --color-info-soft: oklch(0.958 0 0);
 
-  /* ── 좌석 상태 (무채색 규칙의 예외 — CLAUDE.md 0번 승인) ──────────
-     좌석 가용성은 색이 가장 빠른 신호라 여기만 색을 씁니다.
-     **색을 바꾸려면 이 다섯 줄만 고치면 됩니다.** 화면 코드는 건드리지 마세요.
-     (좌석맵·범례·선택바가 전부 이 토큰을 봅니다) */
-  --color-seat-available: oklch(0.63 0.16 152); /* 초록 — 고를 수 있음 */
-  --color-seat-selected: oklch(0.16 0 0); /* 검정 — 내가 고른 자리 */
-  --color-seat-held: oklch(0.76 0.15 78); /* 노랑 — 다른 사람이 결제 중 */
+  /* ── 좌석 상태 (강조 규칙의 예외 — CLAUDE.md 0번 승인) ──────
+     좌석 가용성은 색이 가장 빠른 신호라 여기만 색을 더 씁니다.
+     **색을 바꾸려면 이 다섯 줄만.** 좌석맵·범례·선택바가 전부 이 토큰을 봅니다.
+     선택한 자리는 강조색(accent-700)과 같은 계열이라 앱 전체와 이어집니다. */
+  --color-seat-available: oklch(0.66 0.12 145); /* 초록 — 고를 수 있음 */
+  --color-seat-selected: oklch(0.415 0.055 138); /* 강조색 — 내가 고른 자리 */
+  --color-seat-held: oklch(0.78 0.13 80); /* 노랑 — 다른 사람이 결제 중 */
   --color-seat-sold: oklch(0.84 0 0); /* 회색 — 판매 완료 */
   --color-seat-blocked: oklch(0.91 0 0); /* 옅은 회색 — 추첨 대기 */
 
-  /* ── 포토카드 등급 ────────────────────────────────────────────
-     포카 아트는 서로 구분돼야 해서 색을 유지합니다 (DESIGN.md 1장 예외).
-     **등급 색을 바꾸려면 이 세 줄만** 고치면 테두리·뱃지·글자색이 함께 바뀝니다. */
-  --color-rarity-normal: oklch(0.6 0.15 152); /* 초록 */
-  --color-rarity-rare: oklch(0.6 0.16 250); /* 파랑 */
-  --color-rarity-special: oklch(0.58 0.21 18); /* 붉은계열 */
 
-  /* ── 표면 (라이트, 4단계) ───────────────────────────────
-     캔버스는 아주 연한 회색, 카드는 순백. 그래야 카드가 떠 보입니다. */
-  --color-canvas: oklch(0.975 0 0);
+  /* ── 70% · 바탕 ───────────────────────────────────────────
+     순백(#fff)을 쓰지 않습니다. 큰 면적의 순백은 밝은 곳에서 눈이 부시고
+     어두운 곳에서 번져 보입니다. **색기 없는** 오프화이트를 씁니다.
+     캔버스보다 카드가 **밝아야** 카드가 떠 보입니다. */
+  --color-canvas: oklch(0.985 0 0); /* 거의 흰색. 구분은 여백·그림자가 맡습니다 */
   --color-surface-1: oklch(1 0 0);
-  --color-surface-2: oklch(0.965 0 0);
-  --color-surface-3: oklch(0.93 0 0);
+  --color-surface-2: oklch(0.962 0 0);
+  --color-surface-3: oklch(0.925 0 0);
 
-  --color-line: oklch(0.9 0 0);
-  --color-line-strong: oklch(0.8 0 0);
+  --color-line: oklch(0.855 0 0);
+  --color-line-strong: oklch(0.775 0 0);
 
-  /* ── 글자 ──────────────────────────────────────────────── */
-  --color-ink: oklch(0.19 0 0);
-  --color-ink-muted: oklch(0.45 0 0);
-  --color-ink-subtle: oklch(0.58 0 0);
+  /* ── 글자 ────────────────────────────────────────────────
+     순검정(#000)도 쓰지 않습니다. 대비가 너무 세서 오래 읽으면 눈이 아픕니다. */
+  --color-ink: oklch(0.24 0 0);
+  --color-ink-muted: oklch(0.47 0 0);
+  /* 4.5:1 (WCAG AA) 을 넘기는 가장 옅은 값입니다. 더 밝히지 마세요 — 작은 글자가 안 읽힙니다. */
+  --color-ink-subtle: oklch(0.53 0 0);
 
-  /* ── 타이포 ──────────────────────────────────────────────── */
-  --font-sans:
-    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
-    'Malgun Gothic', sans-serif;
+  /* ── 타이포 ──────────────────────────────────────────────
+     본문 글꼴은 **Pretendard** 입니다. (index.html 에서 CDN 으로 불러옵니다)
+
+     ⚠️ 글꼴을 바꿀 때 화면 코드는 건드리지 마세요. **두 곳만** 고치면 됩니다.
+       1. index.html 의 <link> 를 교체하고
+       2. 아래 --font-sans 맨 앞의 이름을 바꿉니다
+     글꼴을 아예 빼려면 --font-sans 를 var(--font-system) 으로만 두면 됩니다.
+     (기본 스택은 --font-system 에 있으니 지우지 마세요 — 폰트가 못 오면 여기로 폴백됩니다) */
+  --font-system:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Apple SD Gothic Neo',
+    'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  --font-sans: 'Pretendard Variable', Pretendard, var(--font-system);
 
   /* ── 레이아웃 상수 ────────────────────────────────────────
      nav-gap 은 하단 탭 위에 두는 여유입니다. 폰에서 화면 맨 아래는
@@ -107,6 +131,8 @@
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-shake: shake 0.3s ease-in-out;
   --animate-ring: ring 2s ease-out infinite;
+  /* 점이 커졌다 작아지며 숨 쉬는 효과 — 살아 있는 상태 표시에 씁니다 */
+  --animate-breathe: breathe 1.8s ease-in-out infinite;
 
   @keyframes fade-in {
     from {
@@ -154,6 +180,20 @@
     }
     100% {
       transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+
+  /* 숨 쉬듯 커졌다 작아집니다. 퍼져 나가는 ring 보다 조용해서
+     목록에 여러 개 놓여도 시끄럽지 않습니다. */
+  @keyframes breathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.35;
+    }
+    50% {
+      transform: scale(1.9);
       opacity: 0;
     }
   }
@@ -285,7 +325,7 @@
    */
   .surface-ink {
     background-color: var(--color-brand-950);
-    color: oklch(0.985 0 0);
+    color: oklch(0.98 0 0);
   }
 
   .text-muted {
@@ -293,6 +333,17 @@
   }
   .text-subtle {
     color: var(--color-ink-subtle);
+  }
+
+  /**
+   * 헤더 바로 아래에 붙여 고정하는 요소 (검색 바, 정렬 줄).
+   *
+   * `top-(--spacing-header)` 만 쓰면 노치 기기에서 헤더가 `pt-safe` 만큼
+   * 더 커져 있어서 그만큼 헤더에 가려집니다. 노치 값을 함께 더해야 합니다.
+   * `position: sticky` 는 별도로 지정하세요 (이 클래스는 top 만 정합니다).
+   */
+  .under-header {
+    top: calc(env(safe-area-inset-top) + var(--spacing-header));
   }
 
   /* 좌석맵 드래그 시 텍스트 선택 방지 */
@@ -347,6 +398,10 @@
 }
 
 /* 카드 기본 — 아주 얕은 그림자로 면을 띄웁니다 */
+/* 카드가 바탕 위에 놓인 종이처럼 보이게 — 붙는 그림자 + 퍼지는 그림자 두 겹.
+   한 겹만 쓰면 경계가 흐릿해서 "테두리는 있는데 안 떠 보이는" 상태가 됩니다. */
 @utility edge-light {
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.06);
+  box-shadow:
+    0 1px 2px oklch(0.2 0 0 / 0.08),
+    0 4px 12px -3px oklch(0.2 0 0 / 0.07);
 }

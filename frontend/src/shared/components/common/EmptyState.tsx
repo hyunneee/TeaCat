@@ -13,14 +13,19 @@ interface Props {
   action?: ReactNode;
 }
 
-/** "예매 내역이 없어요" 같은 빈 목록 표시. 화면마다 새로 만들지 마세요. */
+/**
+ * "예매 내역이 없어요" 같은 빈 목록 표시. 화면마다 새로 만들지 마세요.
+ *
+ * 화면 세로 가운데에 놓입니다. 목록 자리 맨 위에 붙어 있으면
+ * "여기까지만 불러온 건가?" 로 읽혀서 사용자가 스크롤을 계속합니다.
+ */
 export function EmptyState({ icon: Icon, mood = 'sad', title, description, action }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28 }}
-      className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center"
+      className="flex min-h-[48dvh] flex-col items-center justify-center gap-4 px-6 py-10 text-center"
     >
       {Icon ? (
         <span className="surface-2 border-line text-ink-subtle flex size-16 items-center justify-center rounded-xl border">

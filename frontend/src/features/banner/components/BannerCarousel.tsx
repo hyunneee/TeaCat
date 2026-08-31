@@ -34,7 +34,7 @@ const SWIPE_THRESHOLD = 40;
  *  - 점·순번은 배너 안에 겹쳐 둡니다. 배너 밖에 두면 홈의 흑백 경계를
  *    배너 높이만으로 계산할 수 없어 복잡해집니다.
  */
-export function BannerCarousel({ banners, onSelect, intervalMs = 4500 }: Props) {
+export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const reduced = useReducedMotion();
@@ -139,7 +139,7 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 4500 }: Props) 
       {count > 1 && (
         <>
           {/* 순번 */}
-          <span className="absolute top-3 right-3 rounded bg-black/45 px-1.5 py-0.5 text-[0.625rem] font-semibold text-white/90 tabular-nums">
+          <span className="absolute top-3 right-3 rounded bg-black/45 px-1.5 py-0.5 text-[1rem] font-semibold text-white/90 tabular-nums">
             {index + 1} / {count}
           </span>
 

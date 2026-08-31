@@ -4,12 +4,12 @@ import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { authKeys, useAuthStore } from '@/features/auth';
 import { nftApi, nftKeys } from '../api/nftApi';
-import type { Rarity } from '../model/nft.types';
+import type { NftSort } from '../model/nft.model';
 
-export function useNftMarket(rarity?: Rarity, q?: string) {
+export function useNftMarket(q?: string, sort?: NftSort) {
   return useQuery({
-    queryKey: nftKeys.market(rarity, q),
-    queryFn: () => nftApi.market({ rarity, q }),
+    queryKey: nftKeys.market(q, sort),
+    queryFn: () => nftApi.market({ q, sort }),
     staleTime: STALE_TIME.SHORT,
     select: (page) => page.items,
   });
@@ -32,6 +32,22 @@ export function useMyNfts() {
   return useQuery({
     queryKey: nftKeys.mine(),
     queryFn: () => nftApi.mine(),
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+  });
+}
+
+/**
+ * 포카 거래 내역.
+ *
+ * 개인 데이터라 로그인 상태에서만 조회합니다.
+ */
+export function useNftTrades() {
+  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
+
+  return useQuery({
+    queryKey: nftKeys.trades(),
+    queryFn: () => nftApi.trades(),
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn,
   });

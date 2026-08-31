@@ -65,8 +65,10 @@ export function ConcertDetailPage() {
     <>
       <Header title={concert.title} showBack />
 
-      <div className="space-y-5 p-4">
-        {/* 헤드 */}
+      <div className="space-y-6 p-4">
+        {/* 헤드 — 제목은 포스터 위쪽에, 장소·시간·연령은 **포스터 아래쪽에** 맞춥니다.
+            제목 바로 밑에 붙이면 셋이 한 덩어리로 뭉쳐 제목이 묻히고,
+            포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다. */}
         <section className="flex gap-4">
           <PosterImage
             src={concert.posterUrl}
@@ -74,13 +76,13 @@ export function ConcertDetailPage() {
             alt={`${concert.title} 포스터`}
             className="w-28 shrink-0"
           />
-          <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <div>
               <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
               <p className="text-muted mt-0.5 text-sm">{concert.artist}</p>
             </div>
 
-            <ul className="text-subtle space-y-1 text-xs">
+            <ul className="text-muted space-y-1 text-[0.8125rem]">
               <li className="flex items-center gap-1.5">
                 <MapPin size={13} className="shrink-0" />
                 <span className="truncate">{concert.venue?.name}</span>
@@ -95,6 +97,16 @@ export function ConcertDetailPage() {
               </li>
             </ul>
           </div>
+        </section>
+
+        {/* 소개 — 회차보다 **먼저** 옵니다.
+            "이게 무슨 공연인지" 를 판단하기 전에 날짜를 고르라고 하면
+            위아래로 오가며 다시 읽게 됩니다. 읽고 나서 고르는 순서입니다. */}
+        <section>
+          <SectionTitle>공연 소개</SectionTitle>
+          <p className="text-muted text-sm leading-relaxed whitespace-pre-line">
+            {concert.description}
+          </p>
         </section>
 
         {/* 회차 */}
@@ -131,14 +143,6 @@ export function ConcertDetailPage() {
             </ul>
           </div>
         </Card>
-
-        {/* 소개 */}
-        <section>
-          <SectionTitle>공연 소개</SectionTitle>
-          <p className="text-muted text-sm leading-relaxed whitespace-pre-line">
-            {concert.description}
-          </p>
-        </section>
       </div>
     </>
   );

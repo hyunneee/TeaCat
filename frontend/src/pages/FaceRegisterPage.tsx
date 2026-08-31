@@ -126,6 +126,7 @@ export function FaceRegisterPage() {
           {preview ? (
             <>
               <Button
+                variant="dark"
                 size="lg"
                 fullWidth
                 loading={registration.isPending}
@@ -146,11 +147,11 @@ export function FaceRegisterPage() {
             </>
           ) : mode === 'CAMERA' ? (
             camera.active ? (
-              <Button size="lg" fullWidth leftIcon={<Camera size={18} />} onClick={handleCapture}>
+              <Button variant="dark" size="lg" fullWidth leftIcon={<Camera size={18} />} onClick={handleCapture}>
                 촬영하기
               </Button>
             ) : (
-              <Button size="lg" fullWidth onClick={() => void camera.start()}>
+              <Button variant="dark" size="lg" fullWidth onClick={() => void camera.start()}>
                 카메라 켜기
               </Button>
             )

@@ -57,13 +57,13 @@ export function SectionSelectPage() {
         <button
           type="button"
           onClick={() => navigate(ROUTES.RESALE(scheduleId))}
-          className="surface flex w-full items-center gap-3 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-line-strong"
+          className="surface shadow-card hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-colors"
         >
-          <Dices size={20} className="text-brand-500 shrink-0" />
+          <Dices size={20} className="text-ink-muted shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-bold">원하는 자리가 없나요?</span>
             <span className="text-muted block text-xs">
-              취소표 추첨 대기를 신청하면 블록체인 난수로 공정하게 배정됩니다.
+              취소표가 나오면 대기자 중에서 무작위로 뽑아 드려요.
             </span>
           </span>
         </button>
@@ -73,6 +73,7 @@ export function SectionSelectPage() {
 
       <BottomBar>
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           disabled={!sectionId}

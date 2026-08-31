@@ -132,19 +132,26 @@ export function CatMascot({
  */
 export function Logo({
   size = 40,
+  markSize,
   invert = false,
   className,
 }: {
+  /** 워드마크("티캣") 기준 크기 — 글자는 이 값의 0.7배입니다 */
   size?: number;
+  /**
+   * 마스코트만 따로 키울 때. 기본은 `size` 와 같습니다.
+   * 헤더처럼 글자는 그대로 두고 그림만 키워야 하는 자리에 씁니다.
+   */
+  markSize?: number;
   invert?: boolean;
   className?: string;
 }) {
   return (
-    <span className={cn('inline-flex items-center gap-2', className)}>
-      <CatMascot size={size} invert={invert} label="티캣" />
+    <span className={cn('inline-flex items-center gap-1', className)}>
+      <CatMascot size={markSize ?? size} invert={invert} label="티캣" />
       <span
         className="font-extrabold tracking-tight"
-        style={{ fontSize: size * 0.62, lineHeight: 1 }}
+        style={{ fontSize: size * 0.7, lineHeight: 1 }}
       >
         티캣
       </span>

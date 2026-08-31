@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/shared/lib';
 import { Spinner } from './Spinner';
 
-type Variant = 'primary' | 'secondary' | 'soft' | 'ghost' | 'danger' | 'danger-ghost';
+type Variant = 'primary' | 'dark' | 'secondary' | 'soft' | 'ghost' | 'danger' | 'danger-ghost';
 type Size = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,15 +21,25 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    ⚠️ 되돌릴 수 없는 동작(로그아웃/탈퇴/예매취소/판매내리기)은 반드시
       danger 또는 danger-ghost 를 쓰세요. (DESIGN.md 의미 색상 규칙)
 
-   primary 는 흰 글자 대비를 위해 brand-600 을 씁니다. 500 은 밝아서
-   흰 글자가 눈에 부담을 줍니다. */
+   ── 언제 무엇을 쓰나 ─────────────────────────────────────
+   primary(초록)  **돈이나 좌석이 오가는 확정 버튼**에만.
+                  결제·구매·판매 등록·좌석 확정·당첨 예매.
+   dark(검정)     그 화면의 주 행동이지만 거래는 아닌 것.
+                  로그인·가입·얼굴 등록·티켓 보기.
+   secondary      보조 행동. ghost 는 그보다 더 약한 것.
+
+   초록이 화면마다 나오면 그건 더 이상 강조가 아닙니다.
+   한 화면에 primary 는 하나입니다 — 둘이면 둘 다 안 눌립니다. */
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-500 active:bg-brand-700',
-  secondary: 'surface-2 text-ink border border-line-strong hover:bg-surface-3',
-  soft: 'bg-brand-50 text-brand-800 border border-line-strong hover:bg-brand-100',
+  primary: 'bg-accent-700 text-white hover:bg-accent-600 active:bg-accent-800',
+  dark: 'bg-brand-900 text-white hover:bg-brand-800 active:bg-brand-950',
+  /* 테두리를 두지 않습니다 — 버튼이 둘 이상 나란히 놓이면 선이 겹쳐 지저분해집니다.
+     구분은 **면의 밝기**가 합니다. */
+  secondary: 'surface text-ink shadow-card hover:bg-surface-2',
+  soft: 'surface-2 text-ink hover:bg-surface-3',
   ghost: 'text-ink-muted hover:bg-surface-2 hover:text-ink',
   danger: 'bg-danger text-white hover:brightness-110 active:brightness-95',
-  'danger-ghost': 'text-danger border border-danger/40 bg-danger-soft/40 hover:bg-danger-soft',
+  'danger-ghost': 'text-danger bg-danger-soft hover:brightness-97',
 };
 
 const SIZE: Record<Size, string> = {

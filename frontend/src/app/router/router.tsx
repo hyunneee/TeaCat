@@ -17,6 +17,8 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 
+const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
+
 const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
 
@@ -40,6 +42,7 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
 const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
+const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
@@ -86,6 +89,9 @@ const routes: RouteObject[] = [
       { path: ROUTES.SIGNUP_DONE, element: withBoundary(<SignupDonePage />) },
       { path: ROUTES.NFT_DETAIL(':nftId'), element: withBoundary(<NftDetailPage />) },
 
+      /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
+      { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
+
       {
         element: <RequireAuth />,
         children: [
@@ -94,6 +100,7 @@ const routes: RouteObject[] = [
 
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
+          { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },

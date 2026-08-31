@@ -68,11 +68,11 @@ export function PaymentPage() {
       <Header title="결제" showBack right={<HoldTimer remainSeconds={remainSeconds} />} />
       <Stepper steps={BOOKING_STEPS} current={4} />
 
-      <div className="flex-1 space-y-5 p-4 pt-1">
+      <div className="flex-1 space-y-4 p-4 pt-1">
         {/* 주문 내역 */}
         <section>
           <SectionTitle>예매 내역</SectionTitle>
-          <Card className="space-y-2">
+          <Card flat className="space-y-2">
             {seats.map((seat) => (
               <div key={seat.id} className="flex items-center justify-between text-sm">
                 <span className="text-muted truncate">{seatLabel(seat, section?.name ?? '')}</span>
@@ -94,11 +94,13 @@ export function PaymentPage() {
                   onClick={() => setPayMethod(id)}
                   aria-pressed={payMethod === id}
                   className={cn(
-                    'surface flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-all',
+                    'surface shadow-card flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-all',
                     'disabled:opacity-50',
+                    /* 고른 수단은 **테두리 색**으로만 표시합니다. 두께를 항상 2px 로 두면
+                       고를 때마다 칸 크기가 흔들리지 않습니다. */
                     payMethod === id
-                      ? 'border-brand-900 ring-brand-900/15 ring-2'
-                      : 'border-line hover:border-line-strong',
+                      ? 'border-brand-900'
+                      : 'border-transparent hover:border-line',
                   )}
                 >
                   <Icon size={19} className="text-muted mt-0.5 shrink-0" />
@@ -125,7 +127,7 @@ export function PaymentPage() {
         {/* 금액 */}
         <section>
           <SectionTitle>결제 금액</SectionTitle>
-          <Card className="space-y-2 text-sm">
+          <Card flat className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">티켓 금액</span>
               <span>{formatPrice(total)}</span>
@@ -141,19 +143,19 @@ export function PaymentPage() {
           </Card>
           <p className="text-subtle mt-1.5 px-1 text-xs">
             {payMethod === 'POINT'
-              ? `포도알 ${pointsNeeded.toLocaleString()}개가 차감됩니다. 최종 차감량은 서버가 확정합니다.`
-              : '최종 결제 금액은 서버가 다시 계산해 확정합니다.'}
+              ? `포도알 ${pointsNeeded.toLocaleString()}개가 차감됩니다.`
+              : '결제 직전에 금액을 한 번 더 확인해 드려요.'}
           </p>
         </section>
 
         <p className="text-subtle flex items-start gap-1.5 text-xs leading-relaxed">
           <ShieldCheck size={14} className="mt-0.5 shrink-0" />
-          결제 요청은 멱등키로 보호되어 중복 결제가 발생하지 않습니다. 결제창이 열린 뒤에는
-          새로고침하지 말고 창 안에서 진행해 주세요.
+          같은 결제가 두 번 처리되지 않도록 보호됩니다. 결제가 시작된 뒤에는 새로고침하지 말고
+          화면 안에서 진행해 주세요.
         </p>
 
         {env.payment.mode === 'mock' && payMethod !== 'POINT' && (
-          <p className="surface-2 border-line text-muted rounded-lg border p-3 text-xs leading-relaxed">
+          <p className="surface-2 text-muted rounded-xl p-3 text-xs leading-relaxed">
             현재 <b>모의 결제</b> 모드입니다. 실제 결제는 일어나지 않고 확인 창으로 대체됩니다.
             <code>.env</code> 의 <code>VITE_TOSS_CLIENT_KEY</code> 에 토스페이먼츠 클라이언트 키를
             넣으면 실제 테스트 결제창이 뜹니다.
@@ -165,6 +167,7 @@ export function PaymentPage() {
 
       <BottomBar>
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           // 중복 결제 방어: 요청 중에는 버튼이 잠깁니다.

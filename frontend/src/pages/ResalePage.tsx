@@ -12,7 +12,7 @@ import { useSchedule } from '@/features/concert';
 /**
  * 취소표 추첨 대기 신청.
  *
- * 플로우차트: 구역 → 취소표 예약대기 → NRF 랜덤 추첨 → 당첨 시 메일 → 12시간 내 결제
+ * 플로우: 구역 → 취소표 대기 신청 → (서버가 추첨) → 당첨 알림 → 12시간 내 예매
  * 선착순이 아니라 추첨이라 새로고침 경쟁이 의미가 없습니다. 그게 이 기능의 목적입니다.
  */
 export function ResalePage() {
@@ -42,10 +42,10 @@ export function ResalePage() {
         <Card className="flex gap-3">
           <Dices size={20} className="text-brand-500 shrink-0" />
           <div className="space-y-1 text-xs">
-            <p className="text-[0.8125rem] font-bold">추첨은 블록체인 난수로 진행됩니다</p>
+            <p className="text-[0.8125rem] font-bold">먼저 신청해도 유리하지 않아요</p>
             <p className="text-muted leading-relaxed">
-              취소표가 나오면 대기자 중에서 검증 가능한 난수(NRF)로 당첨자를 뽑습니다. 먼저 신청한
-              순서는 영향을 주지 않으니 새로고침하지 않으셔도 됩니다.
+              취소표가 나오면 대기자 중에서 무작위로 뽑습니다. 새로고침하거나 여러 번 신청할
+              필요가 없어요. 당첨되면 알려드립니다.
             </p>
           </div>
         </Card>
@@ -75,6 +75,7 @@ export function ResalePage() {
 
       <BottomBar className="space-y-2">
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           disabled={!sectionId}

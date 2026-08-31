@@ -38,12 +38,14 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
               onClick={() => onSelect(section)}
               aria-pressed={selected}
               className={cn(
-                'surface relative w-full overflow-hidden rounded-xl border p-3.5 text-left',
+                'surface shadow-card relative w-full overflow-hidden rounded-2xl border-2 p-3.5 text-left',
                 'transition-all duration-200',
                 'disabled:cursor-not-allowed disabled:opacity-40',
+                /* 고른 구역은 **테두리 색**으로 표시합니다. 두께를 항상 2px 로 두면
+                   고를 때마다 격자가 흔들리지 않습니다. */
                 selected
-                  ? 'border-brand-800 bg-brand-50'
-                  : 'border-line enabled:hover:border-brand-700 enabled:active:scale-[0.98]',
+                  ? 'border-brand-900'
+                  : 'border-transparent enabled:hover:border-line enabled:active:scale-[0.98]',
               )}
             >
               {/* 선택 표시 — 어느 구역을 골랐는지 한눈에 */}
@@ -61,7 +63,7 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
                 <span className="truncate font-bold">{section.name}</span>
               </div>
 
-              <p className="text-brand-700 mt-1 text-sm font-bold">{formatPrice(section.price)}</p>
+              <p className="text-ink mt-1 text-sm font-bold">{formatPrice(section.price)}</p>
 
               <div className="mt-2 flex items-center justify-between gap-1">
                 <span className="text-subtle text-xs">
@@ -71,7 +73,7 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
               </div>
 
               {/* 잔여율 게이지 */}
-              <div className="surface-sunken mt-2 h-1.5 overflow-hidden rounded-full">
+              <div className="surface-2 mt-2 h-1.5 overflow-hidden rounded-full">
                 <motion.div
                   initial={{ scaleX: 0 }}
                   animate={{ scaleX: ratio }}

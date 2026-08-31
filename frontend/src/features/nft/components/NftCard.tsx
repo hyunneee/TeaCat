@@ -1,7 +1,5 @@
 import { motion } from 'motion/react';
-import { Coins } from 'lucide-react';
 import { PocaArt } from './PocaArt';
-import { RarityBadge } from './RarityBadge';
 import type { Nft } from '../model/nft.types';
 
 interface Props {
@@ -11,6 +9,16 @@ interface Props {
   showOwner?: boolean;
 }
 
+/**
+ * 마켓·컬렉션의 포카 한 장.
+ *
+ * ── 테두리를 두르지 않습니다 ───────────────────────────────
+ * 카드가 격자로 여러 장 깔리면 테두리끼리 선이 겹쳐 화면이 지저분해집니다.
+ * **연회색 면**만 깔고, 그 위에 카드를 여백을 두고 올립니다.
+ * 면과 면 사이의 흰 여백이 곧 구분선 역할을 합니다.
+ *
+ * 글자는 셋뿐입니다 — 이름 · 공연 · 가격. 가격이 가장 큽니다.
+ */
 export function NftCard({ nft, onClick, showOwner = true }: Props) {
   return (
     <motion.button
@@ -19,34 +27,28 @@ export function NftCard({ nft, onClick, showOwner = true }: Props) {
       whileTap={{ scale: 0.97 }}
       className="w-full text-left"
     >
-      <div className="relative">
+      <div className="surface-2 flex items-center justify-center rounded-2xl px-6 py-5">
         <PocaArt
           seed={nft.artSeed}
-          rarity={nft.rarity}
           imageUrl={nft.imageUrl}
           alt={`${nft.name} 포토카드`}
+          className="shadow-card"
         />
-        <span className="absolute top-2 left-2">
-          <RarityBadge rarity={nft.rarity} />
-        </span>
       </div>
 
-      <div className="mt-2 space-y-1">
-        <p className="truncate text-sm font-bold">{nft.name}</p>
-        <p className="text-subtle truncate text-xs">{nft.concertTitle}</p>
+      <p className="mt-3 line-clamp-2 text-[0.9375rem] leading-snug font-semibold">{nft.name}</p>
+      <p className="text-subtle mt-1 truncate text-[0.8125rem]">{nft.concertTitle}</p>
 
-        {/* 가격은 이 화면에서 가장 자주 비교하는 값입니다.
-            이름과 같은 크기·굵기면 눈에 안 들어와서 한 단계 키우고 배경을 깝니다. */}
-        {nft.listPrice !== null ? (
-          <p className="surface-2 border-line text-ink flex items-center gap-1 rounded-lg border px-2 py-1 text-[0.9375rem] leading-none font-extrabold tabular-nums">
-            <Coins size={14} className="text-ink-muted shrink-0" />
-            {nft.listPrice.toLocaleString()}
-            <span className="text-subtle text-[0.625rem] font-semibold">포도알</span>
-          </p>
-        ) : (
-          <p className="text-subtle text-xs">{showOwner ? nft.ownerName : '판매 안 함'}</p>
-        )}
-      </div>
+      {nft.listPrice !== null ? (
+        <p className="mt-1.5 text-[1.0625rem] leading-none font-extrabold tabular-nums">
+          {nft.listPrice.toLocaleString()}
+          <span className="text-ink-muted ml-1 text-xs font-semibold">포도알</span>
+        </p>
+      ) : (
+        <p className="text-subtle mt-1.5 text-[0.8125rem]">
+          {showOwner ? nft.ownerName : '보관 중'}
+        </p>
+      )}
     </motion.button>
   );
 }

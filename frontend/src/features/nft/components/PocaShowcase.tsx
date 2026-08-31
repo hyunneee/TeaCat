@@ -2,11 +2,9 @@ import { useCallback, useEffect } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { cn, EASE } from '@/shared/lib';
 import { PocaArt } from './PocaArt';
-import type { Rarity } from '../model/nft.types';
 
 interface Props {
   seed: string;
-  rarity: Rarity;
   imageUrl?: string | null;
   alt: string;
   className?: string;
@@ -31,7 +29,7 @@ interface Props {
 const BAND_ANGLE = 24;
 const SWEEP_SECONDS = 1.05;
 
-export function PocaShowcase({ seed, rarity, imageUrl, alt, className, onOpen }: Props) {
+export function PocaShowcase({ seed, imageUrl, alt, className, onOpen }: Props) {
   const reduced = useReducedMotion() ?? false;
 
   /** 빛의 가로 위치 (0 = 왼쪽 밖, 1 = 오른쪽 밖) */
@@ -64,7 +62,7 @@ export function PocaShowcase({ seed, rarity, imageUrl, alt, className, onOpen }:
       aria-label={`${alt} — 눌러서 크게 보기`}
       className={cn('relative block rounded-lg', className)}
     >
-      <PocaArt seed={seed} rarity={rarity} imageUrl={imageUrl} alt={alt} />
+      <PocaArt seed={seed} imageUrl={imageUrl} alt={alt} />
 
       {/* 빛 띠 — 카드 밖으로 새지 않게 잘라냅니다 */}
       <motion.span

@@ -40,7 +40,7 @@ export function BookingVerifyPage() {
           </p>
         </div>
 
-        <div className="surface flex flex-col items-center gap-4 rounded-xl border p-5">
+        <div className="surface shadow-card flex flex-col items-center gap-4 rounded-2xl p-5">
           {captcha.isError ? (
             <div className="flex flex-col items-center gap-3 py-6">
               <ShieldCheck size={40} strokeWidth={1.3} className="text-ink-subtle" />
@@ -52,7 +52,7 @@ export function BookingVerifyPage() {
           ) : (
             <>
               {/* 서버가 그려준 이미지입니다. 정답은 프론트에 내려오지 않습니다. */}
-              <div className="surface-sunken flex h-24 w-full items-center justify-center overflow-hidden rounded-lg">
+              <div className="surface-2 flex h-24 w-full items-center justify-center overflow-hidden rounded-xl">
                 {captcha.imageUrl ? (
                   <img
                     src={captcha.imageUrl}
@@ -94,6 +94,7 @@ export function BookingVerifyPage() {
           />
 
           <Button
+            variant="dark"
             size="lg"
             fullWidth
             loading={captcha.isVerifying}

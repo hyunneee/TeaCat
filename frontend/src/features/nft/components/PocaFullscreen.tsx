@@ -5,14 +5,11 @@ import { X } from 'lucide-react';
 import { useReducedMotion } from '@/shared/hooks';
 import { DURATION, EASE } from '@/shared/lib';
 import { PocaArt } from './PocaArt';
-import { RarityBadge } from './RarityBadge';
-import type { Rarity } from '../model/nft.types';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   seed: string;
-  rarity: Rarity;
   imageUrl?: string | null;
   name: string;
   concertTitle: string;
@@ -40,7 +37,6 @@ export function PocaFullscreen({
   open,
   onClose,
   seed,
-  rarity,
   imageUrl,
   name,
   concertTitle,
@@ -96,11 +92,10 @@ export function PocaFullscreen({
         className="w-full max-w-[min(80vw,22rem)]"
         style={{ maxHeight: '70dvh' }}
       >
-        <PocaArt seed={seed} rarity={rarity} imageUrl={imageUrl} alt={`${name} 포토카드`} />
+        <PocaArt seed={seed} imageUrl={imageUrl} alt={`${name} 포토카드`} />
       </motion.div>
 
       <div className="space-y-1.5 text-center">
-        <RarityBadge rarity={rarity} />
         <p className="text-base font-bold text-white">{name}</p>
         <p className="text-sm text-white/60">{concertTitle}</p>
       </div>

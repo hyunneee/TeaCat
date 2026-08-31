@@ -33,7 +33,7 @@ export function SelectedSeatBar({ seats, sectionName, maxPerUser, onRemove }: Pr
                     type="button"
                     onClick={() => onRemove(seat)}
                     aria-label={`${sectionName} ${seat.row}열 ${seat.number}번 선택 해제`}
-                    className="bg-brand-50 text-brand-800 border-line-strong hover:border-danger hover:text-danger flex shrink-0 items-center gap-1 rounded-full border py-1 pr-1.5 pl-2.5 text-xs font-semibold transition-colors"
+                    className="surface-2 text-ink hover:bg-danger-soft hover:text-danger flex shrink-0 items-center gap-1 rounded-full py-1 pr-1.5 pl-2.5 text-xs font-semibold transition-colors"
                   >
                     {sectionName} {seat.row}열 {seat.number}번
                     <X size={13} />
@@ -47,7 +47,7 @@ export function SelectedSeatBar({ seats, sectionName, maxPerUser, onRemove }: Pr
 
       <div className="flex items-center justify-between">
         <span className="text-muted text-sm">
-          <b className="text-brand-700">{seats.length}</b> / {maxPerUser}매 선택
+          <b className="text-ink">{seats.length}</b> / {maxPerUser}매 선택
         </span>
         <AnimatedNumber value={total} format="price" className="text-base font-bold" />
       </div>

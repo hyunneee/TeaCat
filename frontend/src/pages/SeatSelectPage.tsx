@@ -84,6 +84,7 @@ export function SeatSelectPage() {
           onRemove={select}
         />
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           // 중복 요청 1차 방어: 요청 중에는 아예 못 누릅니다.

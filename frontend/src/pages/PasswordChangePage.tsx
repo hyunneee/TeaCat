@@ -50,6 +50,7 @@ export function PasswordChangePage() {
         />
 
         <Button
+          variant="dark"
           type="submit"
           size="lg"
           fullWidth

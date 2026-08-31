@@ -55,20 +55,26 @@ export function BookingDonePage() {
       )}
 
       <div className="flex w-full max-w-sm flex-col gap-2">
-        {needsFace && (
-          <Button size="lg" fullWidth onClick={() => navigate(ROUTES.FACE_REGISTER)}>
-            얼굴 등록하러 가기
-          </Button>
-        )}
+        {/* 이 화면의 주 행동은 티켓 확인입니다. 얼굴 등록은 안내이지 이 화면의 목적이 아닙니다. */}
         <Button
+          variant="dark"
           size="lg"
-          variant={needsFace ? 'secondary' : 'primary'}
           fullWidth
           leftIcon={<Ticket size={18} />}
           onClick={() => navigate(ROUTES.MY_TICKETS, { replace: true })}
         >
           내 티켓 보기
         </Button>
+        {needsFace && (
+          <Button
+            size="lg"
+            variant="secondary"
+            fullWidth
+            onClick={() => navigate(ROUTES.FACE_REGISTER)}
+          >
+            얼굴 등록하러 가기
+          </Button>
+        )}
         <Button
           variant="ghost"
           fullWidth

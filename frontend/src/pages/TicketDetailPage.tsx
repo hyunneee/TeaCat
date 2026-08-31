@@ -59,7 +59,7 @@ export function TicketDetailPage() {
           </div>
 
           {!faceReady && (
-            <Button variant="soft" fullWidth onClick={() => navigate(ROUTES.FACE_REGISTER)}>
+            <Button variant="secondary" fullWidth onClick={() => navigate(ROUTES.FACE_REGISTER)}>
               얼굴 등록하러 가기
             </Button>
           )}

@@ -23,11 +23,11 @@ export function ResaleSectionList({ sections, selectedId, onSelect }: Props) {
               onClick={() => onSelect(section)}
               aria-pressed={selected}
               className={cn(
-                'surface flex w-full items-center gap-3 rounded-xl border p-4 text-left',
+                'surface shadow-card flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left',
                 'transition-all duration-200',
                 selected
-                  ? 'border-brand-800 bg-brand-50'
-                  : 'border-line hover:border-brand-700 active:scale-[0.99]',
+                  ? 'border-brand-900'
+                  : 'border-transparent hover:border-line active:scale-[0.99]',
               )}
             >
               <span
@@ -45,7 +45,7 @@ export function ResaleSectionList({ sections, selectedId, onSelect }: Props) {
 
               <div className="min-w-0 flex-1">
                 <p className="font-bold">{section.name}</p>
-                <p className="text-brand-700 mt-0.5 text-sm font-semibold">
+                <p className="text-ink mt-0.5 text-sm font-semibold">
                   {formatPrice(section.price)}
                 </p>
               </div>

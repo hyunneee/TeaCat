@@ -49,6 +49,7 @@ export function LoginPage() {
         {/* type="submit" 을 명시해야 폼 전송이 됩니다 (Button 기본값은 button) */}
         <Button
           type="submit"
+          variant="dark"
           size="lg"
           fullWidth
           className="mt-2"
@@ -69,7 +70,7 @@ export function LoginPage() {
 
         <p className="text-muted text-center text-sm">
           아직 계정이 없으신가요?{' '}
-          <Link to={ROUTES.SIGNUP} className="text-brand-600 font-semibold underline">
+          <Link to={ROUTES.SIGNUP} className="text-ink font-semibold underline">
             회원가입
           </Link>
         </p>
@@ -78,7 +79,7 @@ export function LoginPage() {
             계정 정보를 여기 적으면 운영 번들 문자열로 남으므로,
             테스트 계정은 콘솔(setupMocks)과 README 에만 둡니다. */}
         {env.useMock && (
-          <p className="surface-sunken text-muted mt-4 rounded-xl p-3 text-center text-xs">
+          <p className="surface-sunken text-muted mt-4 rounded-2xl p-3 text-center text-xs">
             목업 데이터로 실행 중입니다. 테스트 계정은 개발자 콘솔을 확인하세요.
           </p>
         )}

@@ -31,14 +31,14 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
       {blocked && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-3">
           {/* 목록이 흐릿하게 비쳐서 "가려져 있다"는 게 읽히게 합니다 */}
-          <div aria-hidden className="surface/80 absolute inset-0 rounded-xl backdrop-blur-[3px]" />
-          <div className="border-line surface shadow-card relative w-full rounded-xl border p-4 text-center">
+          <div aria-hidden className="surface/80 absolute inset-0 rounded-2xl backdrop-blur-[3px]" />
+          <div className="border-line surface shadow-card relative w-full rounded-2xl border p-4 text-center">
             <span className="surface-2 border-line text-ink-muted mx-auto mb-2.5 flex size-10 items-center justify-center rounded-full border">
               <ScanFace size={19} />
             </span>
             <p className="text-sm font-bold">{blocked.title}</p>
             <p className="text-muted mt-1 text-xs leading-relaxed">{blocked.description}</p>
-            <Button size="sm" className="mt-3" onClick={blocked.onAction}>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={blocked.onAction}>
               {blocked.actionLabel}
             </Button>
           </div>
@@ -51,7 +51,7 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
 
         return (
           <Stagger.Item as="li" key={schedule.id}>
-            <div className="surface edge-light border-line flex items-center gap-3 rounded-xl border p-3.5">
+            <div className="surface-2 flex items-center gap-3 rounded-2xl p-3.5">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{formatDateTime(schedule.startAt)}</p>
                 <p className="text-subtle mt-0.5 text-xs">
@@ -66,6 +66,9 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
               {bookable ? (
                 <Button
                   size="sm"
+                  /* 덮개가 떠 있을 땐 강조색을 덮개의 버튼 하나에만 둡니다.
+                     초록이 여러 개면 어디를 눌러야 할지 알 수 없습니다. (DESIGN.md 1장) */
+                  variant={blocked ? 'secondary' : 'primary'}
                   leftIcon={<Ticket size={14} />}
                   disabled={!!blocked}
                   onClick={() => onBook(schedule.id)}

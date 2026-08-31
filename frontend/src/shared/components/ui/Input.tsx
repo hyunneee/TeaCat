@@ -79,7 +79,7 @@ export function Input({
           TONE[tone],
           error
             ? 'border-danger focus-within:border-danger'
-            : 'focus-within:border-brand-400',
+            : 'focus-within:border-brand-900',
         )}
       >
         {leftIcon && <span className="text-subtle shrink-0">{leftIcon}</span>}

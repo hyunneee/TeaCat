@@ -44,7 +44,7 @@ export function PaymentResultPage() {
           </p>
         </Card>
         <div className="flex w-full max-w-sm flex-col gap-2">
-          <Button size="lg" fullWidth onClick={() => navigate(ROUTES.MY_TICKETS, { replace: true })}>
+          <Button variant="dark" size="lg" fullWidth onClick={() => navigate(ROUTES.MY_TICKETS, { replace: true })}>
             내 티켓 확인
           </Button>
           <Button variant="ghost" fullWidth onClick={() => navigate(ROUTES.HOME, { replace: true })}>
@@ -70,6 +70,7 @@ export function PaymentResultPage() {
       </div>
       <div className="flex w-full max-w-sm flex-col gap-2">
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           onClick={() => navigate(ROUTES.BOOKING_PAYMENT(scheduleId), { replace: true })}

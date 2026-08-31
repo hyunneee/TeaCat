@@ -18,9 +18,11 @@ export function ConcertListPage() {
     <>
       <Header title="공연" />
 
-      {/* 검색 바 — 목록과 붙어 있으면 묻히므로 흰 배경 + 아래 경계로 띄웁니다.
+      {/* 검색 바 — 헤더에 **붙여** 둡니다. 사이가 벌어지면 헤더가 두 겹으로 보입니다.
+          바깥 면은 목록과 같은 바탕색이라 흰 입력창만 떠 보입니다.
+          (헤더와 같은 흰색으로 두면 헤더가 그만큼 두꺼워진 것처럼 읽힙니다)
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
-      <div className="surface border-line sticky top-(--spacing-header) z-10 border-b p-4">
+      <div className="bg-canvas under-header sticky z-10 px-4 pb-3">
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -41,8 +43,8 @@ export function ConcertListPage() {
           description="다른 키워드로 찾아보세요."
         />
       ) : (
-        // 항목 사이에 선을 넣어 어디서 끊기는지 바로 보이게 합니다.
-        <ul className="divide-line divide-y pb-4">
+        // 카드마다 테두리가 있으므로 구분선 대신 간격으로 나눕니다.
+        <ul className="space-y-2 p-4 pt-3">
           {concerts.map((concert) => (
             <li key={concert.id}>
               <ConcertCard

@@ -2,6 +2,7 @@ export { cn } from './cn';
 export {
   formatPrice,
   formatDateTime,
+  formatDate,
   formatDuration,
   formatRemaining,
   maskName,

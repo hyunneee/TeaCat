@@ -85,6 +85,7 @@ export function SignupPage() {
 
         <Button
           type="submit"
+          variant="dark"
           size="lg"
           fullWidth
           className="mt-2"

@@ -47,18 +47,18 @@ export function BookingReviewPage() {
       <Stepper steps={BOOKING_STEPS} current={3} />
 
       <div className="flex-1 space-y-4 p-4 pt-1">
-        <Card className="flex gap-3">
-          <Info size={19} className="text-brand-500 shrink-0" />
+        <Card flat className="flex gap-3">
+          <Info size={19} className="text-ink-muted shrink-0" />
           <p className="text-muted text-xs leading-relaxed">
             티켓은 <b className="text-ink">여기서 지정한 아이디의 사용자</b>에게 발급되며,
             발급 후에는 양도할 수 없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
           </p>
         </Card>
 
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {seats.map((seat) => (
             <li key={seat.id}>
-              <Card className="space-y-3">
+              <Card flat className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold">{seatLabel(seat, section?.name ?? '')}</p>
                   <p className="text-muted text-sm">{formatPrice(seat.price)}</p>
@@ -90,6 +90,7 @@ export function BookingReviewPage() {
           <span className="text-lg font-extrabold">{formatPrice(total)}</span>
         </div>
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           disabled={!recipients.filled}

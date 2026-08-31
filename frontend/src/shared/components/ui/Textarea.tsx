@@ -65,7 +65,7 @@ export function Textarea({
           'transition-[border-color,box-shadow] duration-200',
           error
             ? 'border-danger focus-within:border-danger'
-            : 'border-line-strong focus-within:border-brand-400',
+            : 'border-line-strong focus-within:border-brand-900',
         )}
       >
         <textarea

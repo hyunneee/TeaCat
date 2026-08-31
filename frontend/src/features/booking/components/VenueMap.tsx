@@ -37,7 +37,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
   const stageWidth = (right - left) * 0.46;
 
   return (
-    <div className={cn('surface-2 border-line overflow-hidden rounded-xl border p-2', className)}>
+    <div className={cn('surface-2 overflow-hidden rounded-2xl p-2', className)}>
       <svg viewBox={viewBox} className="h-auto w-full" role="group" aria-label="공연장 구역 도면">
         {/* 무대 — 모든 방향 감각의 기준점입니다 */}
         <rect
@@ -46,7 +46,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
           width={stageWidth}
           height={30}
           rx={6}
-          className="fill-brand-900"
+          className="fill-brand-800"
         />
         <text
           x={left + (right - left) / 2}
@@ -87,7 +87,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
                 width={width}
                 height={height}
                 rx={10}
-                className={cn(selected ? 'fill-brand-900' : 'fill-brand-200 stroke-brand-400')}
+                className={cn(selected ? 'fill-brand-900' : 'fill-brand-100 stroke-brand-300')}
                 strokeWidth={selected ? 0 : 2}
                 opacity={selected || soldOut ? 1 : 0.35 + remain * 0.65}
               />
@@ -95,7 +95,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
                 x={x + width / 2}
                 y={y + height / 2 + 2}
                 textAnchor="middle"
-                className={cn('text-[17px] font-bold', selected ? 'fill-white' : 'fill-brand-900')}
+                className={cn('text-[17px] font-bold', selected ? 'fill-white' : 'fill-brand-800')}
               >
                 {section.name}
               </text>
@@ -103,7 +103,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
                 x={x + width / 2}
                 y={y + height / 2 + 22}
                 textAnchor="middle"
-                className={cn('text-[14px]', selected ? 'fill-white/80' : 'fill-brand-700')}
+                className={cn('text-[14px]', selected ? 'fill-white/80' : 'fill-brand-600')}
               >
                 {soldOut ? '매진' : `${section.availableSeats}석`}
               </text>

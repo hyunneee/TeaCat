@@ -110,7 +110,7 @@ export function Stepper({ steps, current, className }: StepperProps) {
           }}
         >
           <motion.span
-            className="bg-brand-800 block h-full w-full origin-left"
+            className="bg-brand-900 block h-full w-full origin-left"
             style={{ scaleX: fill }}
           />
         </div>
@@ -132,8 +132,8 @@ export function Stepper({ steps, current, className }: StepperProps) {
               className={cn(
                 'relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full',
                 'text-[0.6875rem] font-bold transition-colors duration-300',
-                done && 'bg-brand-800 text-white',
-                activeNow && 'bg-brand-900 text-white',
+                done && 'bg-brand-900 text-white',
+                activeNow && 'bg-brand-950 text-white',
                 !done && !activeNow && 'surface-2 text-ink-subtle border-line border',
               )}
             >
@@ -144,7 +144,7 @@ export function Stepper({ steps, current, className }: StepperProps) {
               className={cn(
                 'w-full text-center text-[0.6875rem] leading-tight transition-colors duration-300',
                 activeNow
-                  ? 'text-brand-900 font-semibold'
+                  ? 'text-ink font-bold'
                   : done
                     ? 'text-ink-muted font-medium'
                     : 'text-ink-subtle font-medium',

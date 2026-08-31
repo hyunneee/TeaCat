@@ -41,7 +41,7 @@ export function MyTicketsPage() {
             description={tab === 'UPCOMING' ? '공연을 둘러보고 예매해 보세요.' : undefined}
           />
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-2">
             {filtered.map((ticket) => (
               <li key={ticket.id}>
                 <TicketCard

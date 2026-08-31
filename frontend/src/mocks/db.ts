@@ -125,7 +125,6 @@ export interface MockNft {
   concertId: string;
   /** 어느 좌석에서 나온 포카인지 */
   seatLabel: string;
-  rarity: 'NORMAL' | 'RARE' | 'SPECIAL';
   ownerId: string;
   /** 마켓에 올라와 있으면 가격, 아니면 null */
   listPrice: number | null;
@@ -223,7 +222,7 @@ export const concerts: MockConcert[] = [
     ageLimit: '전체 관람가',
     description:
       '고척돔에서 포도알 찾기. 전 좌석에 시크릿 포토카드가 숨겨져 있습니다.\n단 한 장뿐인 스페셜 포카의 주인공은 누구일까요?',
-    openAt: iso(now() + 2 * DAY),
+    openAt: iso(now() - 3 * DAY),
   },
   {
     id: 'c-4',
@@ -252,12 +251,48 @@ export const concerts: MockConcert[] = [
 ];
 
 export const schedules: MockSchedule[] = [
-  { id: 's-1', concertId: 'c-1', startAt: iso(now() + 12 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 1 },
-  { id: 's-2', concertId: 'c-1', startAt: iso(now() + 13 * DAY), openAt: iso(now() - 2 * DAY), maxPerUser: 1 },
-  { id: 's-3', concertId: 'c-2', startAt: iso(now() + 20 * DAY), openAt: iso(now() - 1 * DAY), maxPerUser: 1 },
-  { id: 's-4', concertId: 'c-3', startAt: iso(now() + 30 * DAY), openAt: iso(now() + 2 * DAY), maxPerUser: 1 },
-  { id: 's-5', concertId: 'c-4', startAt: iso(now() + 40 * DAY), openAt: iso(now() + 5 * DAY), maxPerUser: 1 },
-  { id: 's-6', concertId: 'c-5', startAt: iso(now() + 55 * DAY), openAt: iso(now() + 9 * DAY), maxPerUser: 1 },
+  {
+    id: 's-1',
+    concertId: 'c-1',
+    startAt: iso(now() + 12 * DAY),
+    openAt: iso(now() - 2 * DAY),
+    maxPerUser: 1,
+  },
+  {
+    id: 's-2',
+    concertId: 'c-1',
+    startAt: iso(now() + 13 * DAY),
+    openAt: iso(now() - 2 * DAY),
+    maxPerUser: 1,
+  },
+  {
+    id: 's-3',
+    concertId: 'c-2',
+    startAt: iso(now() + 20 * DAY),
+    openAt: iso(now() - 1 * DAY),
+    maxPerUser: 1,
+  },
+  {
+    id: 's-4',
+    concertId: 'c-3',
+    startAt: iso(now() + 30 * DAY),
+    openAt: iso(now() - 3 * DAY),
+    maxPerUser: 1,
+  },
+  {
+    id: 's-5',
+    concertId: 'c-4',
+    startAt: iso(now() + 40 * DAY),
+    openAt: iso(now() + 5 * DAY),
+    maxPerUser: 1,
+  },
+  {
+    id: 's-6',
+    concertId: 'c-5',
+    startAt: iso(now() + 55 * DAY),
+    openAt: iso(now() + 9 * DAY),
+    maxPerUser: 1,
+  },
 ];
 
 /** 구역 템플릿 — 모든 회차가 같은 공연장 배치를 씁니다 (목업이므로) */
@@ -356,24 +391,22 @@ export const resaleEntries: MockResaleEntry[] = [
   },
 ];
 
-/* 등급을 해시로 굴리면 우연히 한 등급만 나올 수 있어서, 이름마다 등급을 못박습니다.
-   시연에서 NORMAL·RARE·SPECIAL 이 모두 보여야 등급 구분이 확인됩니다. */
-const NFT_SEED: { name: string; rarity: MockNft['rarity'] }[] = [
-  { name: '보라빛 인사', rarity: 'RARE' },
-  { name: '무대 위 첫 소절', rarity: 'NORMAL' },
-  { name: '앙코르 직전', rarity: 'SPECIAL' },
-  { name: '엔딩 요정', rarity: 'RARE' },
-  { name: '백스테이지 컷', rarity: 'NORMAL' },
-  { name: '포도알 시크릿', rarity: 'SPECIAL' },
-  { name: '리허설 스냅', rarity: 'NORMAL' },
-  { name: '오프닝 실루엣', rarity: 'RARE' },
-  { name: '커튼콜 하이라이트', rarity: 'SPECIAL' },
-  { name: '스탠딩 존 기록', rarity: 'NORMAL' },
-  { name: '조명 아래 한 컷', rarity: 'RARE' },
-  { name: '마지막 인사', rarity: 'NORMAL' },
+const NFT_NAMES = [
+  '보라빛 인사',
+  '무대 위 첫 소절',
+  '앙코르 직전',
+  '엔딩 요정',
+  '백스테이지 컷',
+  '포도알 시크릿',
+  '리허설 스냅',
+  '오프닝 실루엣',
+  '커튼콜 하이라이트',
+  '스탠딩 존 기록',
+  '조명 아래 한 컷',
+  '마지막 인사',
 ];
 
-export const nfts: MockNft[] = NFT_SEED.map(({ name, rarity }, i) => {
+export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
   const listed = hash(`list-${i}`) > 0.25;
 
   return {
@@ -381,22 +414,35 @@ export const nfts: MockNft[] = NFT_SEED.map(({ name, rarity }, i) => {
     name,
     concertId: i % 2 === 0 ? 'c-1' : 'c-3',
     seatLabel: `${i % 2 === 0 ? 'VIP석' : 'S석'} ${(i % 6) + 1}열 ${i + 3}번`,
-    rarity,
     ownerId: i < 2 ? 'u-1' : 'u-3',
-    // 등급이 높을수록 비싸게 — 목록에서 가격이 등급과 따로 놀지 않게
-      listPrice: listed
-        ? Math.round((rarity === 'SPECIAL' ? 900 : rarity === 'RARE' ? 320 : 90) *
-            (0.8 + hash(`price-${i}`) * 0.6))
-        : null,
+    // 해시는 값이 한쪽에 몰려서 가격이 다 비슷해집니다. 정렬이 눈에 보이도록 고르게 퍼뜨립니다.
+    listPrice: listed ? 80 + ((i * 173) % 920) : null,
     description: listed ? '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.' : null,
     artSeed: `poca-${i}`,
     mintedAt: iso(now() - (i + 1) * DAY),
   };
 });
 
+/** 포카 거래 한 건. 실서버에서는 거래 테이블입니다. */
+export interface MockNftTrade {
+  id: string;
+  nftId: string;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  tradedAt: string;
+}
+
+/* 지난 거래 몇 건을 심어둡니다 — 빈 화면만 보면 이 화면이 뭘 하는지 알 수 없습니다. */
+export const nftTrades: MockNftTrade[] = [
+  { id: 'tr-1', nftId: 'n-3', buyerId: 'u-1', sellerId: 'u-3', price: 640, tradedAt: iso(now() - 3 * DAY) },
+  { id: 'tr-2', nftId: 'n-5', buyerId: 'u-3', sellerId: 'u-1', price: 320, tradedAt: iso(now() - 9 * DAY) },
+  { id: 'tr-3', nftId: 'n-8', buyerId: 'u-1', sellerId: 'u-3', price: 180, tradedAt: iso(now() - 14 * DAY) },
+  { id: 'tr-4', nftId: 'n-11', buyerId: 'u-1', sellerId: 'u-3', price: 910, tradedAt: iso(now() - 21 * DAY) },
+];
+
 /* ── 세션 (목업용 아주 단순한 토큰 저장소) ── */
 export const sessions = new Map<string, string>(); // accessToken -> userId
-
 
 /* ── 조회 헬퍼 ── */
 export const findUser = (id: string) => users.find((u) => u.id === id);

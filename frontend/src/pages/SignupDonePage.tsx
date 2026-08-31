@@ -38,6 +38,7 @@ export function SignupDonePage() {
 
       <div className="flex w-full max-w-sm flex-col gap-2">
         <Button
+          variant="dark"
           size="lg"
           fullWidth
           leftIcon={<LogIn size={18} />}

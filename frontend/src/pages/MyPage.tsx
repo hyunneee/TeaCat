@@ -5,6 +5,7 @@ import {
   Coins,
   Dices,
   LogOut,
+  Receipt,
   ScanFace,
   Settings,
   Sparkles,
@@ -39,41 +40,68 @@ export function MyPage() {
 
   return (
     <>
-      <Header title="MY" />
+      {/* ── 프로필 ──
+          검정 바탕이 **카드 중앙에서** 흰 바탕으로 넘어갑니다.
+          카드가 두 바탕에 걸쳐 있으면 화면에서 한 겹 떠 보이고,
+          그 위에 얹은 얼굴 아이콘이 이 화면의 주인이 누구인지 먼저 말해 줍니다.
 
-      <div className="space-y-6 p-4">
-        {/* 프로필 */}
-        <Card className="flex items-center gap-3.5">
-          <span className="bg-brand-950 border-brand-800 text-brand-700 flex size-14 shrink-0 items-center justify-center rounded-xl border">
-            <UserRound size={26} />
-          </span>
+          ⚠️ 헤더는 **투명 + 고정 해제**입니다. 배경 없는 헤더가 화면에 붙어 있으면
+             아래 목록이 그 밑으로 지나가면서 글자가 겹칩니다. (Header sticky prop)
+          ⚠️ 경계는 아래 컨테이너 높이의 50%(`bottom-1/2`)로 잡습니다.
+             컨테이너가 카드 하나만 감싸고 있어야 그 50% 가 카드 중앙이 됩니다 —
+             여백(pt-3)을 이 안에 넣으면 경계가 그만큼 위로 밀립니다. */}
+      <Header title="MY" transparent sticky={false} className="relative z-10 text-white" />
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-bold">{user?.name}</p>
-            <p className="text-subtle truncate text-xs">@{user?.loginId}</p>
-            <div className="mt-1.5">
+      <div className="pt-3">
+        <div className="relative px-4">
+          <div
+            aria-hidden
+            className="surface-ink absolute inset-x-0 bottom-1/2"
+            style={{
+              /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다 */
+              top: 'calc(-1 * (env(safe-area-inset-top) + var(--spacing-header) + 0.75rem))',
+            }}
+          />
+
+          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center">
+            {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7) */}
+            <span className="bg-brand-900 border-surface-1 absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full border-4 text-white">
+              <UserRound size={26} />
+            </span>
+
+            <p className="truncate text-lg font-extrabold">{user?.name}</p>
+            <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.loginId}</p>
+
+            <div className="mt-2.5 flex justify-center">
               {user?.faceRegistered ? (
-                <Badge tone="success" icon={<ScanFace size={11} />}>
+                <Badge tone="success" size="md" icon={<ScanFace size={12} />}>
                   얼굴 등록 완료
                 </Badge>
               ) : (
-                <Badge tone="warning" icon={<ScanFace size={11} />}>
+                <Badge tone="warning" size="md" icon={<ScanFace size={12} />}>
                   얼굴 미등록
                 </Badge>
               )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => navigate(ROUTES.TOKEN)}
+              className="surface-2 hover:bg-surface-3 mt-4 flex w-full items-center gap-2 rounded-xl px-4 py-3 transition-colors"
+            >
+              <Coins size={17} className="text-ink-muted shrink-0" />
+              <span className="text-ink-muted text-sm font-medium">포도알</span>
+              <AnimatedNumber
+                value={token?.balance ?? 0}
+                className="ml-auto text-[0.9375rem] font-extrabold"
+              />
+              <ChevronRight size={17} className="text-subtle shrink-0" />
+            </button>
           </div>
+        </div>
+      </div>
 
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.TOKEN)}
-            className="surface-2 border-line hover:border-accent-600 flex shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2 transition-colors"
-          >
-            <Coins size={15} className="text-accent-400" />
-            <AnimatedNumber value={token?.balance ?? 0} className="text-xs font-bold" />
-          </button>
-        </Card>
-
+      <div className="space-y-6 p-4">
         {!user?.faceRegistered && (
           <Card
             tone="warning"
@@ -107,8 +135,13 @@ export function MyPage() {
             />
             <ListRow
               icon={<Sparkles size={18} />}
-              title="포카 거래 내역"
+              title="내 포토카드"
               onClick={() => navigate(ROUTES.MY_NFTS)}
+            />
+            <ListRow
+              icon={<Receipt size={18} />}
+              title="포카 거래 내역"
+              onClick={() => navigate(ROUTES.MY_NFT_TRADES)}
             />
           </Card>
         </section>

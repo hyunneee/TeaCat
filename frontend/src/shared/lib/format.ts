@@ -18,6 +18,15 @@ export function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** ISO 문자열 → '2026. 3. 14.' (시각이 필요 없는 목록용) */
+export function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).format(new Date(iso));
+}
+
 /** 남은 초 → 'MM:SS' (좌석 점유 타이머, 대기열 표시용) */
 export function formatDuration(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));

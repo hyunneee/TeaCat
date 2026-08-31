@@ -1,51 +1,21 @@
-import type { Nft, Rarity } from './nft.types';
-
-export const RARITY_LABEL: Record<Rarity, string> = {
-  NORMAL: 'NORMAL',
-  RARE: 'RARE',
-  SPECIAL: 'SPECIAL',
-};
+import type { Nft } from './nft.types';
 
 /**
- * 등급별 표시 규칙 — **여기 한 줄만 고치면** 목록·상세·뱃지가 함께 바뀝니다.
+ * 마켓 정렬.
  *
- * 실제 색은 `styles/index.css` 의 `--color-rarity-*` 에 있습니다.
- * 등급이 늘어나면 `Rarity` 에 값을 추가하고 이 테이블에 한 줄을 더하면
- * 나머지는 타입 에러가 잡아줍니다.
+ * 정렬은 **서버가** 합니다. 받아온 목록만 프론트에서 정렬하면
+ * 페이지네이션이 붙는 순간 "이 페이지 안에서만" 정렬됩니다.
+ * 옵션을 늘리려면 이 테이블에 한 줄, 서버 핸들러에 한 줄입니다.
  */
-export interface RarityStyle {
-  /** 글자색 */
-  text: string;
-  /** 아트 테두리 (PocaArt) */
-  ring: string;
-  /** 뱃지 배경·글자 */
-  badge: string;
-}
+export const NFT_SORTS = [
+  { value: 'RECENT', label: '최신순' },
+  { value: 'PRICE_ASC', label: '낮은 가격순' },
+  { value: 'PRICE_DESC', label: '높은 가격순' },
+] as const;
 
-export const RARITY_STYLE: Record<Rarity, RarityStyle> = {
-  NORMAL: {
-    text: 'text-rarity-normal',
-    ring: 'ring-2 ring-rarity-normal/70',
-    badge: 'bg-rarity-normal/12 text-rarity-normal border-rarity-normal/35',
-  },
-  RARE: {
-    text: 'text-rarity-rare',
-    ring: 'ring-2 ring-rarity-rare/75',
-    badge: 'bg-rarity-rare/12 text-rarity-rare border-rarity-rare/35',
-  },
-  SPECIAL: {
-    text: 'text-rarity-special',
-    ring: 'ring-[3px] ring-rarity-special',
-    badge: 'bg-rarity-special/12 text-rarity-special border-rarity-special/40',
-  },
-};
+export type NftSort = (typeof NFT_SORTS)[number]['value'];
 
-/** 이전 이름 — 새 코드는 RARITY_STYLE 을 쓰세요. */
-export const RARITY_CLASS: Record<Rarity, string> = {
-  NORMAL: RARITY_STYLE.NORMAL.text,
-  RARE: RARITY_STYLE.RARE.text,
-  SPECIAL: RARITY_STYLE.SPECIAL.text,
-};
+export const DEFAULT_SORT: NftSort = 'RECENT';
 
 export function isListed(nft: Nft): boolean {
   return nft.listPrice !== null;

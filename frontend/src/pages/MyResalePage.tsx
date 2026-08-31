@@ -32,7 +32,7 @@ export function MyResalePage() {
             description="원하는 좌석이 없을 때 추첨 대기를 신청해 보세요."
           />
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-2">
             {entries.map((entry) => (
               <li key={entry.id}>
                 <ResaleEntryCard

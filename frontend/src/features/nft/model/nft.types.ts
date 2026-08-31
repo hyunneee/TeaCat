@@ -1,10 +1,6 @@
-/** 포토카드 등급 */
-export type Rarity = 'NORMAL' | 'RARE' | 'SPECIAL';
-
 export interface Nft {
   id: string;
   name: string;
-  rarity: Rarity;
   /** 아트를 생성하는 시드 (실제 이미지가 생기면 imageUrl 로 대체) */
   artSeed: string;
   imageUrl?: string | null;
@@ -27,4 +23,21 @@ export interface Nft {
 export interface TokenBalance {
   balance: number;
   symbol: string;
+}
+
+/** 포카 거래 한 건 (구매 또는 판매) */
+export interface NftTrade {
+  id: string;
+  nftId: string;
+  nftName: string;
+  concertTitle: string;
+  artSeed: string;
+  imageUrl?: string | null;
+  /** 내가 산 건지 판 건지 */
+  type: 'BUY' | 'SELL';
+  /** 오간 포도알 */
+  price: number;
+  tradedAt: string;
+  /** 거래 상대 */
+  counterpartyName: string;
 }
