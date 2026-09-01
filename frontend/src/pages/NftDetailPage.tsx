@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Armchair, BadgeCheck, Grape, TriangleAlert } from 'lucide-react';
+import { Armchair, BadgeCheck, Coins, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Card, Input, Textarea } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
@@ -62,11 +62,7 @@ export function NftDetailPage() {
       <div className="flex-1">
         {/* 카드 무대 — 회색 바닥 위에 카드 하나 */}
         <div className="surface-2 border-line border-b px-6 py-8">
-          <p className="text-subtle mb-6 text-center text-[0.8125rem] leading-relaxed">
-            카드 이미지는 실물 확인을 돕기 위한 것입니다.
-            <br />
-            화면과 실제 카드는 색이 조금 다를 수 있어요.
-          </p>
+          
 
           {/* 들어올 때 사선으로 빛이 한 번 스칩니다.
               **내 카드만** 눌러서 전체화면으로 볼 수 있습니다 — 사러 온 화면에서는
@@ -94,15 +90,15 @@ export function NftDetailPage() {
                 <span className="text-2xl font-extrabold tabular-nums">
                   {nft.listPrice.toLocaleString()}
                 </span>
-                <span className="text-ink-muted text-base font-bold">포도알</span>
+                <span className="text-ink-muted text-base font-bold">캣머니</span>
               </p>
             ) : (
               <p className="text-ink-muted mt-1 text-base font-medium">판매 중이 아닙니다</p>
             )}
 
             <p className="text-subtle mt-2 flex items-center gap-1.5 text-sm">
-              <Grape size={15} className="shrink-0" />
-              보유 {balance.toLocaleString()}포도알
+              <Coins size={15} className="shrink-0" />
+              보유 {balance.toLocaleString()}캣머니
             </p>
           </div>
 
@@ -152,10 +148,10 @@ export function NftDetailPage() {
                 required
                 value={price}
                 onChange={(e) => setPrice(e.target.value.replace(/\D/g, '').slice(0, 7))}
-                placeholder="포도알 개수"
+                placeholder="캣머니 개수"
                 inputMode="numeric"
-                leftIcon={<Grape size={16} />}
-                hint={`보유 포도알 ${balance.toLocaleString()}개`}
+                leftIcon={<Coins size={16} />}
+                hint={`보유 캣머니 ${balance.toLocaleString()}개`}
               />
               {/* 설명은 선택입니다. 없으면 카드 상태를 물어보는 문의가 늘 뿐입니다. */}
               <Textarea
@@ -207,7 +203,7 @@ export function NftDetailPage() {
                 })
               }
             >
-              판매 내리기 ({nft.listPrice.toLocaleString()} 포도알)
+              판매 내리기 ({nft.listPrice.toLocaleString()} 캣머니)
             </Button>
           ) : (
             <p className="text-subtle text-center text-sm">내가 보유한 포토카드입니다.</p>
@@ -218,19 +214,19 @@ export function NftDetailPage() {
             fullWidth
             disabled={!affordable}
             loading={purchase.isPending}
-            leftIcon={<Grape size={18} />}
+            leftIcon={<Coins size={18} />}
             onClick={() =>
               open('common/confirm', {
                 title: '이 포토카드를 구매할까요?',
-                message: `${nft.listPrice?.toLocaleString()} 포도알이 차감됩니다.`,
+                message: `${nft.listPrice?.toLocaleString()} 캣머니가 차감됩니다.`,
                 confirmText: '구매',
                 onConfirm: () => purchase.mutate(nft.id),
               })
             }
           >
             {affordable
-              ? `${nft.listPrice.toLocaleString()} 포도알로 바로 구매`
-              : '포도알이 부족해요'}
+              ? `${nft.listPrice.toLocaleString()} 캣머니로 바로 구매`
+              : '캣머니가 부족해요'}
           </Button>
         ) : (
           <p className="text-subtle text-center text-sm">판매 중이 아닙니다.</p>

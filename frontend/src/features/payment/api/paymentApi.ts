@@ -22,8 +22,8 @@ import type {
  *    서버가 prepare 때 저장한 금액과 비교한 뒤, **저장된 금액**으로 승인해야 합니다.
  *    금액이 다르면 승인하지 말고 실패로 처리합니다.
  *
- * 포도알(POINT) 결제는 PG 를 거치지 않습니다. confirm 에서 서버가
- * 잔액을 확인하고 **서버가 계산한 포도알**을 차감한 뒤 티켓을 발급합니다.
+ * 캣머니(POINT) 결제는 PG 를 거치지 않습니다. confirm 에서 서버가
+ * 잔액을 확인하고 **서버가 계산한 캣머니**을 차감한 뒤 티켓을 발급합니다.
  * 프론트가 보낸 차감량을 믿으면 공짜 티켓이 나옵니다.
  */
 export const paymentApi = {
@@ -38,7 +38,7 @@ export const paymentApi = {
   confirm: (
     body: {
       paymentId: string;
-      /** 포도알 결제는 PG 를 타지 않아 비어 있습니다. */
+      /** 캣머니 결제는 PG 를 타지 않아 비어 있습니다. */
       paymentKey: string;
       amount: number;
       payMethod: PayMethod;

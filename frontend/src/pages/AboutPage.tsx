@@ -84,13 +84,10 @@ export function AboutPage() {
         <section>
           <SectionTitle>서비스</SectionTitle>
           <Card className="space-y-2.5 text-sm">
+            {/* 실행 환경(development/production)은 개발자용 값이라 띄우지 않습니다 */}
             <div className="flex items-center justify-between">
               <span className="text-muted">서비스명</span>
               <span className="font-medium">{env.appName}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted">환경</span>
-              <span className="font-medium">{env.name}</span>
             </div>
           </Card>
         </section>

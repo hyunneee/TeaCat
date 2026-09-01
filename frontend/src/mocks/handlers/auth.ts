@@ -102,18 +102,6 @@ mock('DELETE', '/users/me', (ctx) => {
    실제로는 이미지를 업로드하고 서버가 임베딩을 저장합니다.
    목업은 "등록됨" 플래그만 세웁니다. */
 
-mock('POST', '/users/me/face', (ctx) => {
-  const user = requireUser(ctx.headers);
-  user.faceRegistered = true;
-  return { faceRegistered: true };
-});
-
-mock('DELETE', '/users/me/face', (ctx) => {
-  const user = requireUser(ctx.headers);
-  user.faceRegistered = false;
-  return { faceRegistered: false };
-});
-
 /* ── 자동입력 방지 (예매 진입 관문) ──
    플로우차트: 공연 상세 → 봇 확인 → 구역 선택
 

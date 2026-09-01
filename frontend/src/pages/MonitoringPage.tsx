@@ -13,7 +13,7 @@ export function MonitoringPage() {
       <EmptyState
         icon={Activity}
         title="모니터링 대시보드"
-        description="트래픽/대기열 지표는 백엔드 메트릭 연동 후 구현합니다."
+        description="트래픽과 대기열 현황을 여기에서 볼 수 있게 준비하고 있어요."
       />
     </>
   );

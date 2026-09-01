@@ -20,6 +20,19 @@ import { ROUTES } from '@/shared/constants';
 import { useAuth, useLogout } from '@/features/auth';
 import { useTokenBalance } from '@/features/token';
 
+/**
+ * 헤더와 프로필 카드 사이 여백.
+ *
+ * 아바타 원(size-14)은 카드 위쪽으로 **28px(-top-7) 튀어나옵니다.**
+ * 이 값이 28px 보다 작으면 원이 헤더 영역까지 올라가 제목('마이페이지')과 겹칩니다 —
+ * 헤더가 투명하고 제목이 가운데 정렬이라 정확히 원 뒤로 숨습니다.
+ * 40px 이면 원이 헤더 아래로 12px 내려와 안전합니다.
+ *
+ * ⚠️ 이 값을 바꾸면 아래 짙은 면의 top 계산이 **자동으로** 따라옵니다.
+ *    둘을 따로 적으면 경계가 카드 중앙에서 어긋납니다.
+ */
+const HEADER_GAP = '2.5rem';
+
 export function MyPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,17 +62,18 @@ export function MyPage() {
              아래 목록이 그 밑으로 지나가면서 글자가 겹칩니다. (Header sticky prop)
           ⚠️ 경계는 아래 컨테이너 높이의 50%(`bottom-1/2`)로 잡습니다.
              컨테이너가 카드 하나만 감싸고 있어야 그 50% 가 카드 중앙이 됩니다 —
-             여백(pt-3)을 이 안에 넣으면 경계가 그만큼 위로 밀립니다. */}
-      <Header title="MY" transparent sticky={false} className="relative z-10 text-white" />
+             여백(HEADER_GAP)을 이 안에 넣으면 경계가 그만큼 위로 밀립니다. */}
+      <Header title="마이페이지" transparent sticky={false} className="relative z-10 text-white" />
 
-      <div className="pt-3">
+      <div style={{ paddingTop: HEADER_GAP }}>
         <div className="relative px-4">
           <div
             aria-hidden
             className="surface-ink absolute inset-x-0 bottom-1/2"
             style={{
-              /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다 */
-              top: 'calc(-1 * (env(safe-area-inset-top) + var(--spacing-header) + 0.75rem))',
+              /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다.
+                 위 여백과 **같은 값**이어야 경계가 카드 중앙에 옵니다 (HEADER_GAP) */
+              top: `calc(-1 * (env(safe-area-inset-top) + var(--spacing-header) + ${HEADER_GAP}))`,
             }}
           />
 
@@ -92,7 +106,7 @@ export function MyPage() {
               className="surface-2 hover:bg-surface-3 mt-4 flex w-full items-center gap-2 rounded-xl px-4 py-3 transition-colors"
             >
               <Coins size={17} className="text-ink-muted shrink-0" />
-              <span className="text-ink-muted text-sm font-medium">포도알</span>
+              <span className="text-ink-muted text-sm font-medium">캣머니</span>
               <AnimatedNumber
                 value={token?.balance ?? 0}
                 className="ml-auto text-[0.9375rem] font-extrabold"
@@ -115,7 +129,7 @@ export function MyPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">얼굴을 등록해야 예매할 수 있어요</p>
               <p className="text-muted mt-0.5 text-xs leading-relaxed">
-                한 번만 등록하면 됩니다. 예매한 티켓에 자동으로 매칭돼요.
+                한 번만 등록하면 예매한 티켓에 자동으로 매칭돼요.
               </p>
             </div>
             <ChevronRight size={17} className="text-subtle shrink-0" />

@@ -10,6 +10,15 @@
 
 type AppEnvName = 'development' | 'production';
 
+/**
+ * **빌드 시점 상수.** Vite 가 `import.meta.env.DEV` 를 리터럴로 치환하므로,
+ * 이 값으로 감싼 블록은 운영 번들에서 **코드째 사라집니다.**
+ *
+ * `env.isDev` 와 다릅니다 — 그건 런타임 값이라 감싸도 코드가 번들에 남습니다.
+ * 개발 전용 화면처럼 **운영에 아예 안 나가야 하는 것**에만 이걸 쓰세요.
+ */
+export const IS_DEV_BUILD = import.meta.env.DEV;
+
 function required(key: string): string {
   const value = import.meta.env[key as keyof ImportMetaEnv] as string | undefined;
   if (value === undefined || value === '') {
@@ -90,6 +99,16 @@ export const env = {
      클라이언트 키는 브라우저에 노출되는 공개 키입니다.
      승인에 쓰는 시크릿 키는 백엔드에만 두세요. */
   payment: paymentConfig(),
+
+  /* ── 얼굴 등록 ───────────────────────────────────────────
+     🔴 모델 파일은 **브라우저에서만** 씁니다. 서버로 얼굴 이미지를 보내는 설정은
+        여기에도, 어디에도 없습니다. (CLAUDE.md 7장)
+     modelVersion 은 게이트 검표와 **같아야** 대조가 됩니다. 모델을 바꾸면 반드시 올리세요. */
+  face: {
+    detectorUrl: optionalString('VITE_FACE_DETECTOR_URL', '/models/face_detection_yunet_2023mar.onnx'),
+    embedderUrl: optionalString('VITE_FACE_EMBEDDER_URL', '/models/face_recognition_sface_2021dec_int8.onnx'),
+    modelVersion: optionalString('VITE_FACE_MODEL_VERSION', 'yunet2023mar+sface2021dec-int8@1'),
+  },
 
   get isProd() {
     return this.name === 'production';

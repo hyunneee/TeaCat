@@ -113,6 +113,18 @@
     'Malgun Gothic', 'Noto Sans KR', sans-serif;
   --font-sans: 'Pretendard Variable', Pretendard, var(--font-system);
 
+  /* ── 앱 폭 ────────────────────────────────────────────────
+     이 앱은 **폰 화면 하나**를 위한 레이아웃입니다. 데스크톱에서 폭이 늘어나면
+     포스터·배너·카드가 같이 커져서 "확대해 놓은 모바일" 처럼 보입니다.
+     그래서 화면이 넉넉해지면 **폰 폭으로 고정**하고 가운데 세웁니다.
+
+     ⚠️ 이 값은 **넓은 화면에서만** 걸리는 상한입니다. 폰에서는 화면을 꽉 씁니다 —
+        상한을 무조건 걸면 큰 폰(430px)에서 좌우에 빈 띠가 생깁니다.
+        캡이 걸리는 지점과 방식은 아래 `app-width` 유틸리티 한 곳에 있습니다.
+     ⚠️ 폭을 바꾸면 모달·토스트가 프레임을 넘지 않는지 함께 보세요
+        (둘 다 `app-width` 를 쓰므로 자동으로 따라옵니다). */
+  --container-app: 21rem;
+
   /* ── 레이아웃 상수 ────────────────────────────────────────
      nav-gap 은 하단 탭 위에 두는 여유입니다. 폰에서 화면 맨 아래는
      엄지가 닿기 어렵고, 브라우저 UI 에 가려지기도 합니다. */
@@ -212,10 +224,18 @@
     color-scheme: light;
 
     /* 배너 크기 — 홈의 검정/하양 경계를 이 값으로 계산합니다.
-       레이아웃 최대 폭(max-w-screen-sm = 40rem)에서 좌우 여백(px-4 = 2rem)을 뺀 뒤
-       4:3 비율로 높이를 구합니다. JS 계산 없이 CSS 로만 맞춥니다. */
-    --banner-width: calc(min(100vw, 40rem) - 2rem);
+       화면 폭에서 좌우 여백(px-4 = 2rem)을 뺀 뒤 4:3 비율로 높이를 구합니다.
+       JS 계산 없이 CSS 로만 맞춥니다. */
+    --banner-width: calc(100vw - 2rem);
     --banner-height: calc(var(--banner-width) * 3 / 4);
+  }
+
+  /* 앱 폭 캡이 걸리는 지점부터는 배너도 **앱 폭** 기준입니다.
+     (`app-width` 와 같은 지점이어야 배너가 기둥보다 넓어지지 않습니다) */
+  @media (width >= 30rem) {
+    :root {
+      --banner-width: calc(var(--container-app) - 2rem);
+    }
   }
 
   * {
@@ -249,6 +269,15 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* 앱 폭 캡이 걸리는 지점(30rem)부터 바탕을 한 단계 어둡게 합니다.
+     그래야 가운데 폰 폭 기둥이 '앱 화면'으로 읽힙니다 —
+     바탕까지 같은 오프화이트면 가운데만 글자가 있는 텅 빈 웹페이지로 보입니다. */
+  @media (width >= 30rem) {
+    body {
+      background-color: var(--color-surface-3);
+    }
+  }
+
   input,
   textarea,
   select,
@@ -267,6 +296,18 @@
   input[type='number']::-webkit-inner-spin-button {
     appearance: none;
     margin: 0;
+  }
+
+  /* 검색 입력칸의 **브라우저 기본 지우기 버튼**을 없앱니다.
+     type="search" 를 주면 웹킷이 오른쪽에 X 를 자기 마음대로 그려서,
+     우리가 붙인 지우기 버튼(Input 의 onClear)과 **X 가 두 개**로 보입니다.
+     둘의 크기·색·위치도 서로 다릅니다. 기본 것을 지우고 우리 것만 씁니다. */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration,
+  input[type='search']::-webkit-search-results-button,
+  input[type='search']::-webkit-search-results-decoration {
+    appearance: none;
+    display: none;
   }
 
   :focus-visible {
@@ -360,6 +401,40 @@
     top: calc(env(safe-area-inset-top) + var(--spacing-header));
   }
 
+  /**
+   * 앱 기둥 — 레이아웃(AppLayout / PlainLayout)의 최상위 div.
+   *
+   * 폭 고정은 `max-w-app` 이 하고, 이 클래스는 **바탕과 경계**를 맡습니다.
+   * 넓은 화면에서만 좌우 선이 생겨 폰 화면처럼 보이고,
+   * 폰에서는 선이 없어 화면을 꽉 씁니다.
+   */
+  .app-frame {
+    background-color: var(--color-canvas);
+  }
+  @media (width >= 30rem) {
+    .app-frame {
+      border-inline: 1px solid var(--color-line);
+    }
+  }
+
+  /**
+   * 앱 기둥의 **폭** — 레이아웃과 화면에 고정되는 요소(하단 탭·하단 버튼·모달·토스트)가
+   * 전부 이걸 씁니다. 하나라도 빠지면 데스크톱에서 그것만 화면 폭을 꽉 채웁니다.
+   *
+   * 폰에서는 캡이 **없습니다.** 큰 폰(430px)에 21rem 상한을 걸면
+   * 좌우에 빈 띠가 생겨 "화면이 안 맞는 앱" 이 됩니다.
+   * 화면이 앱 폭보다 확실히 넉넉해지는 30rem(480px)부터 상한을 걸어
+   * 그때부터는 어느 창 크기에서든 같은 폰 폭으로 보입니다.
+   */
+  .app-width {
+    width: 100%;
+  }
+  @media (width >= 30rem) {
+    .app-width {
+      max-width: var(--container-app);
+    }
+  }
+
   /* 좌석맵 드래그 시 텍스트 선택 방지 */
   .no-select {
     user-select: none;
@@ -403,6 +478,16 @@
    ═══════════════════════════════════════════════════════════ */
 @utility shadow-card {
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.06);
+}
+
+/* 목록 항목(공연·티켓) 전용 — `shadow-card`(1겹 6%) 보다 한 단계 위입니다.
+   거의 흰 바탕(canvas 0.985) 위에 흰 카드가 놓이므로 1겹만으로는 카드의 경계가
+   사라져서 목록이 **한 덩어리의 흰 면**처럼 읽힙니다.
+   붙는 그림자(1px)로 경계를, 퍼지는 그림자(10px)로 높이를 만듭니다. */
+@utility shadow-list {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.07),
+    0 6px 16px -8px oklch(0 0 0 / 0.16);
 }
 
 @utility shadow-pop {

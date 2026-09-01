@@ -13,7 +13,7 @@ import { PocaArt, useNftTrades } from '@/features/nft';
  * "내가 이 카드를 얼마에 샀더라" 를 확인하러 오는 화면이라,
  * 구매·판매 탭으로 나누면 오히려 두 번 찾게 됩니다. 구분은 금액 부호로 합니다.
  *
- * 한 줄에 담는 것: 날짜 · 카드 · 카드 이름 · 공연 · 오간 포도알.
+ * 한 줄에 담는 것: 날짜 · 카드 · 카드 이름 · 공연 · 오간 캣머니.
  * 그 이상은 카드 상세로 넘깁니다.
  */
 export function NftTradesPage() {
@@ -42,7 +42,7 @@ export function NftTradesPage() {
                 <button
                   type="button"
                   onClick={() => navigate(ROUTES.NFT_DETAIL(trade.nftId))}
-                  className="surface shadow-card hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors"
+                  className="surface shadow-list hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors"
                 >
                   <div className="w-12 shrink-0">
                     <PocaArt
@@ -68,7 +68,7 @@ export function NftTradesPage() {
                         )}
                       >
                         {bought ? '−' : '+'}
-                        {trade.price.toLocaleString()} 포도알
+                        {trade.price.toLocaleString()} 캣머니
                       </span>
                     </p>
                   </div>

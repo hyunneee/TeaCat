@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
-import { Grape, ShieldCheck, Smartphone } from 'lucide-react';
+import { Coins, ShieldCheck, Smartphone } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES, toPoints } from '@/shared/constants';
@@ -14,13 +14,13 @@ import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment
  * 결제수단 — 지금은 둘뿐입니다.
  *
  *   간편결제 — 토스 통합결제창. 카드·토스페이·네이버페이가 한 창에 나옵니다.
- *   포도알   — 앱 안의 포인트. 결제창 없이 서버가 잔액을 차감합니다.
+ *   캣머니   — 앱 안의 포인트. 결제창 없이 서버가 잔액을 차감합니다.
  *
  * 수단을 늘리기 전에 계약된 결제수단인지 확인하세요.
  */
-const METHODS: { id: PayMethod; label: string; hint: string; icon: typeof Grape }[] = [
+const METHODS: { id: PayMethod; label: string; hint: string; icon: typeof Coins }[] = [
   { id: 'EASY_PAY', label: '간편결제 (토스)', hint: '카드 · 토스페이 · 네이버페이', icon: Smartphone },
-  { id: 'POINT', label: '포도알로 결제', hint: '결제창 없이 바로 차감', icon: Grape },
+  { id: 'POINT', label: '캣머니로 결제', hint: '결제창 없이 바로 차감', icon: Coins },
 ];
 
 /** 진행 단계별 버튼 문구 — 결제창이 뜬 동안 사용자가 뭘 기다리는지 알려줍니다. */
@@ -49,7 +49,7 @@ export function PaymentPage() {
   const total = seats.reduce((sum, s) => sum + s.price, 0);
   const fee = 2000 * seats.length;
 
-  /* 포도알 표시용 어림값입니다. 실제 차감량은 서버가 다시 계산합니다.
+  /* 캣머니 표시용 어림값입니다. 실제 차감량은 서버가 다시 계산합니다.
      (프론트가 계산한 숫자를 그대로 결제에 쓰면 공짜 티켓이 나옵니다) */
   const pointsNeeded = toPoints(total + fee);
   const pointBalance = token?.balance ?? 0;
@@ -57,7 +57,7 @@ export function PaymentPage() {
   const shortOfPoints = payingWithPoints && pointBalance < pointsNeeded;
 
   /* 수수료 줄은 **총액에서 빼서** 구합니다. 각 줄을 따로 올림하면
-     두 줄의 합이 총액과 1 포도알씩 어긋날 수 있습니다. */
+     두 줄의 합이 총액과 1 캣머니씩 어긋날 수 있습니다. */
   const ticketPoints = toPoints(total);
   const feePoints = pointsNeeded - ticketPoints;
 
@@ -133,8 +133,8 @@ export function PaymentPage() {
         {/* 금액 */}
         <section>
           <SectionTitle>결제 금액</SectionTitle>
-          {/* 포도알로 낼 거면 **줄마다 포도알**로 보여줍니다.
-              위는 원, 맨 아래만 포도알이면 "그래서 얼마가 나가는 건데?" 를 암산하게 됩니다.
+          {/* 캣머니로 낼 거면 **줄마다 캣머니**로 보여줍니다.
+              위는 원, 맨 아래만 캣머니면 "그래서 얼마가 나가는 건데?" 를 암산하게 됩니다.
               (환산은 표시용 어림값입니다 — 차감량은 서버가 확정합니다) */}
           <Card flat className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -150,7 +150,7 @@ export function PaymentPage() {
               {payingWithPoints ? (
                 <span className="text-base">
                   <AnimatedNumber value={pointsNeeded} className="tabular-nums" />
-                  <span className="ml-1">포도알</span>
+                  <span className="ml-1">캣머니</span>
                 </span>
               ) : (
                 <AnimatedNumber value={total + fee} format="price" className="text-base" />
@@ -159,7 +159,7 @@ export function PaymentPage() {
           </Card>
           <p className="text-subtle mt-1.5 px-1 text-xs">
             {payingWithPoints
-              ? `보유 ${pointBalance.toLocaleString()}포도알에서 차감됩니다.`
+              ? `보유 ${pointBalance.toLocaleString()}캣머니에서 차감됩니다.`
               : '결제 직전에 금액을 한 번 더 확인해 드려요.'}
           </p>
         </section>
@@ -169,14 +169,6 @@ export function PaymentPage() {
           같은 결제가 두 번 처리되지 않도록 보호됩니다. 결제가 시작된 뒤에는 새로고침하지 말고
           화면 안에서 진행해 주세요.
         </p>
-
-        {env.payment.mode === 'mock' && !payingWithPoints && (
-          <p className="surface-2 text-muted rounded-xl p-3 text-xs leading-relaxed">
-            현재 <b>모의 결제</b> 모드입니다. 실제 결제는 일어나지 않고 확인 창으로 대체됩니다.
-            <code>.env</code> 의 <code>VITE_TOSS_CLIENT_KEY</code> 에 토스페이먼츠 클라이언트 키를
-            넣으면 실제 테스트 결제창이 뜹니다.
-          </p>
-        )}
 
         <BottomBar.Spacer />
       </div>
@@ -194,7 +186,7 @@ export function PaymentPage() {
           {isPaying
             ? STAGE_LABEL[stage]
             : shortOfPoints
-              ? '포도알이 부족해요'
+              ? '캣머니가 부족해요'
               : payingWithPoints
                 ? `${formatPoints(pointsNeeded)}로 결제`
                 : `${formatPrice(total + fee)} 결제하기`}

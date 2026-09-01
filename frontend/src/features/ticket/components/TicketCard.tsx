@@ -20,8 +20,9 @@ export function TicketCard({ ticket, onClick }: Props) {
       onClick={onClick}
       whileTap={{ scale: 0.985 }}
       className={cn(
-        /* 목록 항목이라 테두리를 두지 않습니다 — 흰 면과 얕은 그림자로 바탕에서 띄웁니다. */
-        'surface shadow-card hover:bg-surface-2 flex w-full gap-3.5 rounded-2xl p-3 text-left',
+        /* 목록 항목이라 테두리를 두지 않습니다 — 흰 면과 그림자로 바탕에서 띄웁니다.
+           공연 카드와 **같은 `shadow-list`** 입니다 (styles/index.css). */
+        'surface shadow-list hover:bg-surface-2 flex w-full gap-3.5 rounded-2xl p-3 text-left',
         'transition-colors duration-200',
         dimmed && 'opacity-65',
       )}

@@ -33,7 +33,7 @@ export function ResaleEntryCard({ entry, onCancel, onPay, onForfeit }: Props) {
      상태를 **머리띠**로 얹어 카드마다 시작점을 만듭니다.
      당첨만 짙은 띠 — 이 화면에서 유일하게 "지금 뭔가 해야 하는" 상태입니다. */
   return (
-    <div className={cn('surface shadow-card overflow-hidden rounded-2xl', lost && 'opacity-70')}>
+    <div className={cn('surface shadow-list overflow-hidden rounded-2xl', lost && 'opacity-70')}>
       <div
         className={cn(
           'flex items-center gap-1.5 px-4 py-2 text-[0.8125rem] font-bold',

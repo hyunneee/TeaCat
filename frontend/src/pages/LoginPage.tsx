@@ -4,7 +4,6 @@ import { KeyRound, User } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input, Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
-import { env } from '@/shared/config';
 import { SsafyLoginButton, useLogin } from '@/features/auth';
 
 export function LoginPage() {
@@ -25,6 +24,13 @@ export function LoginPage() {
         <div className="mb-2 flex flex-col items-center gap-3 py-4">
           <Logo size={52} />
           <p className="text-subtle text-sm">암표 없는 티켓팅</p>
+
+          {/* SAFE·TYCAT·CH — 한 단어 안에 서비스 이름(TYCAT)이 들어 있습니다.
+              그 부분만 강조색으로 칠해 "안전하게 잡는다"와 이름을 한 번에 읽힙니다.
+              강조색이 글자에 쓰이는 **유일한 자리**입니다 (로고 취급). */}
+          <p className="text-lg font-extrabold tracking-[0.14em]">
+            SAFE<span className="text-accent-700">TYCAT</span>CH
+          </p>
         </div>
 
         <Input
@@ -74,15 +80,6 @@ export function LoginPage() {
             회원가입
           </Link>
         </p>
-
-        {/* env.useMock 은 런타임 값이라 번들에서 사라지지 않습니다.
-            계정 정보를 여기 적으면 운영 번들 문자열로 남으므로,
-            테스트 계정은 콘솔(setupMocks)과 README 에만 둡니다. */}
-        {env.useMock && (
-          <p className="surface-sunken text-muted mt-4 rounded-2xl p-3 text-center text-xs">
-            목업 데이터로 실행 중입니다. 테스트 계정은 개발자 콘솔을 확인하세요.
-          </p>
-        )}
       </form>
     </>
   );

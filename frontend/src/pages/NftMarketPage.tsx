@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Grape, Images, Search, Sparkles } from 'lucide-react';
+import { Coins, Images, Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, Segmented, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
@@ -76,12 +76,14 @@ export function NftMarketPage() {
           구매/판매·검색·정렬은 **스크롤을 따라옵니다.** 카드를 한참 내려간 뒤에
           방향이나 정렬을 바꾸려고 맨 위까지 되올라가야 하면 아무도 안 바꿉니다.
           면이 불투명해야 카드가 뒤로 지나가는 게 보이지 않습니다. */}
-      <div className="bg-canvas under-header sticky z-10 space-y-3 px-4 pt-3 pb-3">
+      <div className="bg-canvas under-header sticky z-10 space-y-3 px-4 pt-4 pb-3">
         <Segmented options={SIDES} value={side} onChange={setSide} />
 
+        {/* 검색·공연 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고) */}
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
+          onClear={() => setKeyword('')}
           placeholder={buying ? '포카 이름, 공연명으로 검색' : '내 포카 검색'}
           leftIcon={<Search size={17} />}
           type="search"
@@ -97,7 +99,7 @@ export function NftMarketPage() {
               onClick={() => navigate(ROUTES.TOKEN)}
               className="hover:text-ink flex min-w-0 items-center gap-1.5 text-sm font-semibold transition-colors"
             >
-              <Grape size={16} className="text-ink-muted shrink-0" />
+              <Coins size={16} className="text-ink-muted shrink-0" />
               <span className="tabular-nums">{(token?.balance ?? 0).toLocaleString()}</span>
             </button>
           ) : (

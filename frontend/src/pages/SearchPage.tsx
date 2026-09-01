@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, SectionTitle } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
@@ -50,27 +50,18 @@ export function SearchPage() {
           다른 탭의 검색 바와 같은 자리·같은 규칙(`under-header`)이라
           탭을 옮겨 다녀도 검색창이 같은 높이에 있습니다. */}
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
+        {/* 세 화면(검색·공연·포카)의 검색창은 **props 까지 같습니다.**
+            크기·톤·지우기 버튼이 화면마다 다르면 같은 기능이 다른 것처럼 보입니다.
+            글자 크기는 Input 이 정하니 여기서 덧붙이지 마세요. */}
         <Input
           autoFocus
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
+          onClear={() => setKeyword('')}
           placeholder="공연, 아티스트, 포토카드 검색"
           leftIcon={<Search size={17} />}
           type="search"
-          tone="plain"
-          className="text-[0.9375rem]"
-          rightSlot={
-            keyword ? (
-              <button
-                type="button"
-                aria-label="검색어 지우기"
-                onClick={() => setKeyword('')}
-                className="text-subtle hover:text-ink -mr-1 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors"
-              >
-                <X size={16} />
-              </button>
-            ) : undefined
-          }
+          tone="contrast"
         />
       </div>
 

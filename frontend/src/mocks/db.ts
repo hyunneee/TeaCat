@@ -213,7 +213,7 @@ export const concerts: MockConcert[] = [
   },
   {
     id: 'c-3',
-    title: '고척 포도알 페스티벌',
+    title: '고척 캣머니 페스티벌',
     artist: 'V.A.',
     venueId: 'v-1',
     posterSeed: 'grape',
@@ -221,7 +221,7 @@ export const concerts: MockConcert[] = [
     runningMinutes: 300,
     ageLimit: '전체 관람가',
     description:
-      '고척돔에서 포도알 찾기. 전 좌석에 시크릿 포토카드가 숨겨져 있습니다.\n단 한 장뿐인 스페셜 포카의 주인공은 누구일까요?',
+      '고척돔에서 캣머니 찾기. 전 좌석에 시크릿 포토카드가 숨겨져 있습니다.\n단 한 장뿐인 스페셜 포카의 주인공은 누구일까요?',
     openAt: iso(now() - 3 * DAY),
   },
   {
@@ -397,7 +397,7 @@ const NFT_NAMES = [
   '앙코르 직전',
   '엔딩 요정',
   '백스테이지 컷',
-  '포도알 시크릿',
+  '캣머니 시크릿',
   '리허설 스냅',
   '오프닝 실루엣',
   '커튼콜 하이라이트',

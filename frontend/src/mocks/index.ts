@@ -26,6 +26,7 @@ export async function setupMocks() {
     import('./handlers/resale'),
     import('./handlers/nft'),
     import('./handlers/token'),
+    import('./handlers/face'),
     import('./handlers/banner'),
     import('./handlers/payment'),
     import('./handlers/appInfo'),

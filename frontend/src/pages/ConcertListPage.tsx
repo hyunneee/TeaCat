@@ -23,14 +23,15 @@ export function ConcertListPage() {
           (헤더와 같은 흰색으로 두면 헤더가 그만큼 두꺼워진 것처럼 읽힙니다)
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
+        {/* 검색·포카 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고) */}
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
+          onClear={() => setKeyword('')}
           placeholder="공연명, 아티스트로 검색"
           leftIcon={<Search size={17} />}
           type="search"
           tone="contrast"
-          className="text-[0.9375rem]"
         />
       </div>
 
