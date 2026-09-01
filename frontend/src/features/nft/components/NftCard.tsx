@@ -27,7 +27,9 @@ export function NftCard({ nft, onClick, showOwner = true }: Props) {
       whileTap={{ scale: 0.97 }}
       className="w-full text-left"
     >
-      <div className="surface-2 flex items-center justify-center rounded-2xl px-6 py-5">
+      {/* 카드가 놓인 회색 면도 목록 항목입니다 — 공연·티켓과 같은 `shadow-list`.
+          바탕과 면의 밝기 차가 작아서 그림자가 없으면 격자가 흐릿하게 번져 보입니다. */}
+      <div className="surface-2 shadow-list flex items-center justify-center rounded-2xl px-6 py-5">
         <PocaArt
           seed={nft.artSeed}
           imageUrl={nft.imageUrl}
@@ -42,7 +44,7 @@ export function NftCard({ nft, onClick, showOwner = true }: Props) {
       {nft.listPrice !== null ? (
         <p className="mt-1.5 text-[1.0625rem] leading-none font-extrabold tabular-nums">
           {nft.listPrice.toLocaleString()}
-          <span className="text-ink-muted ml-1 text-xs font-semibold">포도알</span>
+          <span className="text-ink-muted ml-1 text-xs font-semibold">캣머니</span>
         </p>
       ) : (
         <p className="text-subtle mt-1.5 text-[0.8125rem]">

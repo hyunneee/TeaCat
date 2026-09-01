@@ -34,7 +34,7 @@ export function toPaymentFailure(
 /**
  * PG 결제창을 거치는 수단인가.
  *
- * 포도알은 우리 서버 안의 잔액이라 결제창도, 리디렉션도 없습니다.
+ * 캣머니는 우리 서버 안의 잔액이라 결제창도, 리디렉션도 없습니다.
  * 타입 술어라서 이 함수를 통과하면 게이트웨이 호출부의 타입이 좁혀집니다.
  */
 export function usesGateway(method: PayMethod): method is GatewayPayMethod {
@@ -44,5 +44,5 @@ export function usesGateway(method: PayMethod): method is GatewayPayMethod {
 /** 화면 표시용 이름. PG 코드를 화면에 그대로 쓰지 않기 위해 여기서 변환합니다. */
 export const PAY_METHOD_LABEL: Record<PayMethod, string> = {
   EASY_PAY: '간편결제 (토스)',
-  POINT: '포도알 결제',
+  POINT: '캣머니 결제',
 };

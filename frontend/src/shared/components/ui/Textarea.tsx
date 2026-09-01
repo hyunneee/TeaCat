@@ -61,11 +61,12 @@ export function Textarea({
 
       <div
         className={cn(
+          /* Input 과 같은 규칙 — 테두리 없이 연회색 면. (Input.tsx 의 TONE 참고) */
           'surface-2 rounded-xl border px-3.5 py-2.5',
           'transition-[border-color,box-shadow] duration-200',
           error
             ? 'border-danger focus-within:border-danger'
-            : 'border-line-strong focus-within:border-brand-900',
+            : 'border-transparent focus-within:border-brand-900',
         )}
       >
         <textarea
@@ -76,8 +77,10 @@ export function Textarea({
           maxLength={maxLength}
           aria-invalid={!!error}
           aria-describedby={describedBy}
+          /* 글자 크기는 Input 과 같은 규칙입니다 (text-base = 16px).
+             입력칸끼리 글자 크기가 다르면 같은 폼 안에서 서로 다른 컴포넌트처럼 보입니다. */
           className={cn(
-            'w-full min-w-0 resize-none bg-transparent outline-none disabled:opacity-50',
+            'w-full min-w-0 resize-none bg-transparent text-base outline-none disabled:opacity-50',
             className,
           )}
           {...rest}

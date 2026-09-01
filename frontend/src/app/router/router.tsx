@@ -1,6 +1,7 @@
-import { lazy, type ComponentType, type ReactNode } from 'react';
+import { createElement, lazy, type ComponentType, type ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { ROUTES } from '@/shared/constants';
+import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
@@ -16,6 +17,7 @@ const LoginPage = page(() => import('@/pages/LoginPage'), 'LoginPage');
 const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
+const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -60,6 +62,22 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
     경로가 바뀌면 에러 상태가 자동으로 풀립니다. */
 const withBoundary = (element: ReactNode) => <RouteBoundary>{element}</RouteBoundary>;
 
+/**
+ * 🛠 개발 전용 라우트.
+ *
+ * `import()` 를 **조건 안에** 둬야 합니다. 밖에 두면 라우트를 등록하지 않아도
+ * Vite 가 청크를 만들어 운영 번들에 실어 보냅니다(닿지 않는 죽은 코드).
+ * `IS_DEV_BUILD` 는 빌드 시점 리터럴이라 운영에서는 이 블록이 통째로 사라집니다.
+ */
+const devRoutes: RouteObject[] = IS_DEV_BUILD
+  ? [
+      {
+        path: ROUTES.DEV_FACE,
+        element: withBoundary(createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage'))),
+      },
+    ]
+  : [];
+
 const routes: RouteObject[] = [
   /* ══ 하단 탭이 보이는 화면 ═══════════════════════════════ */
   {
@@ -96,6 +114,7 @@ const routes: RouteObject[] = [
         element: <RequireAuth />,
         children: [
           { path: ROUTES.FACE_REGISTER, element: withBoundary(<FaceRegisterPage />) },
+          { path: ROUTES.FACE_DONE, element: withBoundary(<FaceDonePage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
 
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
@@ -165,6 +184,8 @@ const routes: RouteObject[] = [
           },
         ],
       },
+
+      ...devRoutes,
 
       { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
     ],

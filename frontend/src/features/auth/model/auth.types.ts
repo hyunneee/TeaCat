@@ -12,7 +12,7 @@ export interface User {
   /** 얼굴 등록 완료 여부 — 티켓 사용(입장)의 전제 조건 */
   faceRegistered: boolean;
   profileImageUrl: string | null;
-  /** 포도알 토큰 잔액 */
+  /** 캣머니 토큰 잔액 */
   tokenBalance: number;
 }
 

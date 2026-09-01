@@ -10,7 +10,7 @@ import { requireUser } from './auth';
  *   prepare — 좌석 선점을 확인하고 **서버가 금액과 orderId 를 확정**
  *   confirm — (실서버) 토스 승인 API 호출 → 금액 검증 → 티켓 발급
  *
- * 포도알(POINT) 결제는 PG 를 거치지 않고 confirm 에서 잔액을 차감합니다.
+ * 캣머니(POINT) 결제는 PG 를 거치지 않고 confirm 에서 잔액을 차감합니다.
  *
  * 백엔드가 완성되면 이 파일만 지우면 됩니다.
  * 프론트의 `features/payment` 는 손대지 않습니다.
@@ -25,7 +25,7 @@ interface PreparedPayment {
   /** 주문이 잡고 있는 좌석. 선점(hold) 이 사라져도 이 값으로 발권합니다. */
   seatIds: string[];
   amount: number;
-  /** 포도알로 결제할 경우 차감량 — 서버가 계산해 둡니다 */
+  /** 캣머니로 결제할 경우 차감량 — 서버가 계산해 둡니다 */
   pointAmount: number;
   recipients: { seatId: string; loginId: string }[];
   status: 'PREPARED' | 'PAID';
@@ -60,7 +60,7 @@ function saveOrders(): void {
 /** 예매 수수료 (매당) — 실제 정책은 백엔드와 합의 필요 */
 const FEE_PER_TICKET = 2000;
 
-/** 원 → 포도알. 프론트가 보낸 값이 아니라 **서버가** 환산합니다. */
+/** 원 → 캣머니. 프론트가 보낸 값이 아니라 **서버가** 환산합니다. */
 const toPoints = (krw: number) => Math.ceil(krw / POINT_UNIT_KRW);
 
 mock('POST', '/payments/prepare', (ctx) => {
@@ -158,7 +158,7 @@ mock('POST', '/payments/confirm', (ctx) => {
   }
   const byPoint = payMethod === 'POINT';
 
-  /* 포도알 결제는 결제창을 거치지 않으므로 paymentKey 가 없습니다.
+  /* 캣머니 결제는 결제창을 거치지 않으므로 paymentKey 가 없습니다.
      대신 서버가 잔액을 확인하고 **서버가 계산해 둔 차감량**을 씁니다.
      프론트가 보낸 숫자를 쓰면 공짜 티켓이 나옵니다. */
   if (byPoint) {
@@ -166,7 +166,7 @@ mock('POST', '/payments/confirm', (ctx) => {
       throw mockError(
         400,
         'INSUFFICIENT_POINT',
-        `포도알이 부족합니다. ${order.pointAmount.toLocaleString()}개가 필요해요.`,
+        `캣머니가 부족합니다. ${order.pointAmount.toLocaleString()}개가 필요해요.`,
       );
     }
   } else if (!paymentKey) {

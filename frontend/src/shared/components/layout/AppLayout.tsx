@@ -10,7 +10,7 @@ import { BottomNav } from './BottomNav';
  */
 export function AppLayout() {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-screen-sm flex-col">
+    <div className="app-frame mx-auto flex min-h-dvh w-full app-width flex-col">
       <main className="pb-nav flex-1">
         <PageTransition />
       </main>

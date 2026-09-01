@@ -14,7 +14,8 @@ interface Props {
  *
  * ── 테두리를 두르지 않습니다 ───────────────────────────────
  * 목록에 카드가 여러 장 깔리면 테두리가 줄줄이 겹쳐 화면이 선으로 가득 찹니다.
- * 대신 **흰 면 + 얕은 그림자**로 바탕에서 띄웁니다.
+ * 대신 **흰 면 + 그림자**로 바탕에서 띄웁니다 — 목록 항목은 `shadow-list` 입니다
+ * (한 겹짜리 `shadow-card` 로는 거의 흰 바탕 위에서 카드 경계가 사라집니다).
  * 항목 사이는 여백으로 나누고, 누를 수 있다는 건 눌렀을 때의 반응으로 알립니다.
  *
  * ── 상태는 제목 위, 첫 줄에 ────────────────────────────────
@@ -30,7 +31,7 @@ export function ConcertCard({ concert, onClick }: Props) {
       type="button"
       onClick={onClick}
       whileTap={{ scale: 0.985 }}
-      className="surface shadow-card hover:bg-surface-2 flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
+      className="surface shadow-list hover:bg-surface-2 flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
     >
       <PosterImage
         src={concert.posterUrl}

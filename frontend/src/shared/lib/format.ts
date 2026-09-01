@@ -6,11 +6,11 @@ export function formatPrice(value: number): string {
 }
 
 /**
- * 포도알 개수 표시. 화면 문구는 항상 "포도알" 입니다 —
+ * 캣머니 개수 표시. 화면 문구는 항상 "캣머니" 입니다 —
  * "토큰"·"포인트" 로 적지 마세요 (내부 식별자만 token 을 씁니다).
  */
 export function formatPoints(value: number): string {
-  return `${KRW.format(value)}포도알`;
+  return `${KRW.format(value)}캣머니`;
 }
 
 /** ISO 문자열 → '2026. 3. 14. (토) 19:00' */

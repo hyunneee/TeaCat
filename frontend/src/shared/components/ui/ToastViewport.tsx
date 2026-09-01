@@ -19,7 +19,7 @@ export function ToastViewport() {
   const toasts = useToastStore((s) => s.toasts);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+    <div className="app-width pointer-events-none fixed inset-x-0 top-0 z-[60] mx-auto flex flex-col items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
       <AnimatePresence initial={false}>
         {toasts.map((toast) => {
           const Icon = ICON[toast.variant];

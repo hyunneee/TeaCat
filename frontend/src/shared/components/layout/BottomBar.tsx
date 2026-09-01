@@ -15,7 +15,7 @@ export function BottomBar({ children, className }: { children: ReactNode; classN
   return (
     <div
       className={cn(
-        'surface border-line fixed inset-x-0 bottom-0 z-20 mx-auto max-w-screen-sm border-t',
+        'surface border-line fixed inset-x-0 bottom-0 z-20 mx-auto app-width border-t',
         // pb-safe 는 padding-bottom 을 덮어쓰므로 여백과 노치를 한 번에 계산합니다.
         'px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))]',
         className,

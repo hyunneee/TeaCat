@@ -56,7 +56,7 @@ export function usePaymentResult() {
     setState({ status: 'confirming' });
     confirm.mutate(
       /* 리디렉션으로 돌아왔다는 것 자체가 PG 결제창을 거쳤다는 뜻입니다.
-         (포도알 결제는 결제창이 없어 이 경로로 오지 않습니다)
+         (캣머니 결제는 결제창이 없어 이 경로로 오지 않습니다)
          실제 수단은 백엔드가 토스 조회로 확인하므로 참고값입니다. */
       { auth: result.auth, payMethod: 'EASY_PAY' },
       {

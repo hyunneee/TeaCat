@@ -20,7 +20,7 @@ export function PwaUpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[70] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+    <div className="mx-auto fixed inset-x-0 bottom-0 z-[70] app-width px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="surface mx-auto flex max-w-sm items-center gap-3 rounded-2xl border p-4 shadow-xl">
         <p className="flex-1 text-sm">새 버전이 준비됐어요.</p>
         <Button size="sm" variant="ghost" onClick={() => setNeedRefresh(false)}>

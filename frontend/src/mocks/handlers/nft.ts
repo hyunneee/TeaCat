@@ -73,7 +73,7 @@ mock('POST', '/nfts/:nftId/purchase', (ctx) => {
   if (nft.listPrice === null) throw mockError(400, 'NOT_FOR_SALE', '판매 중인 포토카드가 아닙니다.');
   if (nft.ownerId === user.id) throw mockError(400, 'BAD_REQUEST', '내 포토카드입니다.');
   if (user.tokenBalance < nft.listPrice) {
-    throw mockError(400, 'INSUFFICIENT_TOKEN', '포도알이 부족합니다.');
+    throw mockError(400, 'INSUFFICIENT_TOKEN', '캣머니가 부족합니다.');
   }
 
   const seller = findUser(nft.ownerId);

@@ -2,7 +2,7 @@
 export type BannerLinkType =
   | 'CONCERT' // 공연 상세
   | 'NFT' // 포토카드 마켓
-  | 'TOKEN' // 토큰 채굴
+  | 'TOKEN' // 토큰 벌기
   | 'NONE'; // 안내만 (이동 없음)
 
 export interface Banner {

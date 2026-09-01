@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { useReducedMotion } from '@/shared/hooks';
+import { useReducedMotion, useScrollTop } from '@/shared/hooks';
 import { DURATION, EASE } from '@/shared/lib';
 
 /**
@@ -20,10 +20,16 @@ import { DURATION, EASE } from '@/shared/lib';
  *    그래서 이동 없이 **페이드만** 남겼습니다.
  *
  * 0.24s 로 짧게 유지합니다. 길면 티켓팅에서 방해가 됩니다.
+ *
+ * 스크롤 위치도 여기서 함께 정리합니다 — 화면 전환이 시작되는 곳이 한 군데라
+ * 레이아웃(AppLayout / PlainLayout)마다 따로 챙기지 않아도 됩니다.
  */
 export function PageTransition() {
   const location = useLocation();
   const reduced = useReducedMotion();
+
+  /* 탭을 옮기면 맨 위에서 시작합니다 (뒤로가기는 제외 — useScrollTop 주석 참고) */
+  useScrollTop();
 
   return (
     <motion.div

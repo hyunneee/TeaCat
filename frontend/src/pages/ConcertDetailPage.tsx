@@ -121,7 +121,7 @@ export function ConcertDetailPage() {
                 ? {
                     title: '얼굴 등록이 필요합니다',
                     description:
-                      '마이페이지에서 얼굴을 한 번 등록하면 예매할 수 있어요. 등록한 얼굴은 예매한 티켓에 자동으로 매칭됩니다.',
+                      '',
                     actionLabel: '등록하러 가기',
                     onAction: goFaceRegister,
                   }

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useMotionValue, useTransform } from 'motion/react';
+import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { X } from 'lucide-react';
 import { useReducedMotion } from '@/shared/hooks';
 import { DURATION, EASE } from '@/shared/lib';
@@ -23,6 +23,8 @@ const SHINE_INTERVAL_MS = 5000;
 const MAX_TILT = 16;
 /** 이 거리(px)를 끌면 최대 기울기 */
 const TILT_RANGE = 130;
+/** 손을 떼면 제자리로 */
+const SETTLE = { type: 'spring', stiffness: 320, damping: 28 } as const;
 
 /**
  * 포토카드 전체화면 보기.
@@ -48,12 +50,49 @@ export function PocaFullscreen({ open, onClose, seed, imageUrl, name, concertTit
   /* 열려 있는 동안에만 반짝입니다 — 닫힌 오버레이에서 타이머가 돌 이유가 없습니다. */
   const { glare, intensity } = useGlareSweep({ repeatMs: SHINE_INTERVAL_MS, enabled: open });
 
-  /* 끌면 기울어집니다. 놓으면 제자리로 돌아옵니다(dragConstraints 0 + 스프링).
-     가로로 끌면 좌우로, 세로로 끌면 앞뒤로 — 실물 카드를 쥔 방향과 같습니다. */
-  const dragX = useMotionValue(0);
-  const dragY = useMotionValue(0);
-  const rotateY = useTransform(dragX, [-TILT_RANGE, TILT_RANGE], [-MAX_TILT, MAX_TILT]);
-  const rotateX = useTransform(dragY, [-TILT_RANGE, TILT_RANGE], [MAX_TILT, -MAX_TILT]);
+  /* 끌면 **기울기만** 바뀝니다. 카드는 화면 한가운데에 그대로 있습니다.
+     가로로 끌면 좌우로, 세로로 끌면 앞뒤로 — 실물 카드를 쥔 방향과 같습니다.
+
+     ⚠️ motion 의 `drag` 를 쓰지 않는 이유: drag 는 카드를 실제로 **옮깁니다.**
+        dragConstraints 를 0 으로 묶어도 elastic 만큼 딸려 나가서
+        "크게 보려고 눌렀는데 카드가 도망가는" 느낌이 납니다.
+        포인터 이동량을 직접 받아 회전 값에만 흘려보냅니다. */
+  const offsetX = useMotionValue(0);
+  const offsetY = useMotionValue(0);
+  // useTransform 은 범위를 벗어나면 잘라냅니다 — 아무리 끌어도 MAX_TILT 를 넘지 않습니다.
+  const rotateY = useTransform(offsetX, [-TILT_RANGE, TILT_RANGE], [-MAX_TILT, MAX_TILT]);
+  const rotateX = useTransform(offsetY, [-TILT_RANGE, TILT_RANGE], [MAX_TILT, -MAX_TILT]);
+
+  /** 누른 지점. null 이면 지금 끌고 있지 않다는 뜻입니다. */
+  const grabbedAt = useRef<{ x: number; y: number } | null>(null);
+
+  const startTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (reduced) return;
+    grabbedAt.current = { x: event.clientX, y: event.clientY };
+    try {
+      // 손가락이 카드 밖으로 나가도 계속 따라오게 (안 잡으면 중간에 뚝 끊깁니다)
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* 이미 놓인 포인터면 브라우저가 던집니다. 캡처는 편의일 뿐이라 무시합니다. */
+    }
+  };
+
+  const moveTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const from = grabbedAt.current;
+    if (!from) return;
+    offsetX.set(event.clientX - from.x);
+    offsetY.set(event.clientY - from.y);
+  };
+
+  const endTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!grabbedAt.current) return;
+    grabbedAt.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    animate(offsetX, 0, SETTLE);
+    animate(offsetY, 0, SETTLE);
+  };
 
   // 배경 스크롤 잠금
   useEffect(() => {
@@ -92,18 +131,12 @@ export function PocaFullscreen({ open, onClose, seed, imageUrl, name, concertTit
         transition={{ duration: DURATION.slow, ease: EASE.out }}
         // 카드 자체를 눌러도 닫히지 않게 (자세히 보려고 누르는 경우)
         onClick={(event) => event.stopPropagation()}
-        drag={!reduced}
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0.4}
-        dragMomentum={false}
-        dragTransition={{ bounceStiffness: 320, bounceDamping: 28 }}
-        style={{
-          x: dragX,
-          y: dragY,
-          rotateX,
-          rotateY,
-          transformPerspective: 900,
-        }}
+        onPointerDown={startTilt}
+        onPointerMove={moveTilt}
+        onPointerUp={endTilt}
+        onPointerCancel={endTilt}
+        // 위치(x·y)는 건드리지 않습니다 — 카드는 늘 화면 한가운데입니다.
+        style={{ rotateX, rotateY, transformPerspective: 900 }}
         className="relative w-full max-w-[min(80vw,22rem)] cursor-grab touch-none active:cursor-grabbing"
       >
         <PocaArt seed={seed} imageUrl={imageUrl} alt={`${name} 포토카드`} />

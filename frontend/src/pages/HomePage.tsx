@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronRight, Hourglass, Grape, Images, ScanFace, Search, Ticket, UserRound } from 'lucide-react';
+import { ChevronRight, Hourglass, Coins, Images, ScanFace, Search, Ticket, UserRound } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -31,7 +31,7 @@ import { NftCard, useNftMarket } from '@/features/nft';
 const SHORTCUTS = [
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
   { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
-  { to: ROUTES.TOKEN, label: '포도알', icon: Grape },
+  { to: ROUTES.TOKEN, label: '캣머니', icon: Coins },
   { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
 ] as const;

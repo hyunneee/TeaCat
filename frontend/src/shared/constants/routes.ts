@@ -13,6 +13,8 @@ export const ROUTES = {
 
   /* ── 얼굴 등록 (티켓 사용 자격) ── */
   FACE_REGISTER: '/face',
+  /** 등록 성공 화면. 상단 알림 한 줄로는 "된 건가?" 가 남습니다. */
+  FACE_DONE: '/face/done',
 
   /* ── 검색 (공연 + 포토카드 한 화면) ── */
   SEARCH: '/search',
@@ -52,7 +54,7 @@ export const ROUTES = {
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
-  /* ── 토큰 채굴 (컨텐츠 미정) ── */
+  /* ── 토큰 벌기 (컨텐츠 미정) ── */
   TOKEN: '/token',
 
   /* ── 마이페이지 ── */
@@ -63,6 +65,13 @@ export const ROUTES = {
 
   /* ── 운영 ── */
   MONITORING: '/admin/monitoring',
+
+  /**
+   * 개발용 얼굴 인식 검증 화면.
+   * 사진 세 장을 넣어 코사인 유사도를 눈으로 확인합니다.
+   * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
+   */
+  DEV_FACE: '/dev/face',
 
   NOT_FOUND: '*',
 } as const;

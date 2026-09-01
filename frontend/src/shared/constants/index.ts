@@ -17,15 +17,15 @@ export const SEAT_HOLD_SECONDS = 420; // 7분
 export const RESALE_PAYMENT_HOURS = 12;
 
 /**
- * 포도알(포인트) 1개의 원화 가치.
+ * 캣머니(포인트) 1개의 원화 가치.
  *
- * 화면에 "몇 포도알이 빠지는지" 미리 보여주기 위한 값입니다.
+ * 화면에 "몇 캣머니가 빠지는지" 미리 보여주기 위한 값입니다.
  * ⚠️ **실제 차감량은 서버가 다시 계산합니다.** 이 값으로 계산한 숫자를
  *    결제 요청에 실어 보내지 마세요. (금액의 출처는 언제나 서버 — CLAUDE.md 7장)
  */
 export const POINT_UNIT_KRW = 100;
 
-/** 원 → 포도알 (표시용 어림값) */
+/** 원 → 캣머니 (표시용 어림값) */
 export function toPoints(krw: number): number {
   return Math.ceil(krw / POINT_UNIT_KRW);
 }

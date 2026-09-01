@@ -1,1 +1,1 @@
-export { env } from './env';
+export { env, IS_DEV_BUILD } from './env';

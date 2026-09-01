@@ -8,7 +8,7 @@ mock('GET', '/banners', () => [
   {
     id: 'b-1',
     label: 'EVENT',
-    title: '고척돔에서 포도알 찾기',
+    title: '고척돔에서 캣머니 찾기',
     subtitle: '전 좌석에 시크릿 포토카드가 숨어 있어요',
     artSeed: 'grape-event',
     imageUrl: null,
@@ -29,7 +29,7 @@ mock('GET', '/banners', () => [
     id: 'b-3',
     label: 'NEW',
     title: '포토카드 마켓 오픈',
-    subtitle: '모은 포도알로 원하는 포카를 교환하세요',
+    subtitle: '모은 캣머니로 원하는 포카를 교환하세요',
     artSeed: 'poca-market',
     imageUrl: null,
     linkType: 'NFT',

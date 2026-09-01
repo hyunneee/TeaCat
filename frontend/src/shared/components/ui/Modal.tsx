@@ -78,8 +78,10 @@ export function Modal({
           onClick={() => dismissible && onClose()}
           className={cn(
             'fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm',
+            /* 가로 가운데 정렬은 **항상** 필요합니다. 시트가 앱 폭으로 좁아지는
+               구간(30rem~)에서 justify 가 없으면 시트가 화면 왼쪽에 붙습니다. */
             variant === 'sheet'
-              ? 'items-end sm:items-center sm:justify-center'
+              ? 'items-end justify-center sm:items-center'
               : 'items-center justify-center p-4',
           )}
         >
@@ -94,9 +96,11 @@ export function Modal({
             onClick={(e) => e.stopPropagation()}
             className={cn(
               'surface border-line shadow-pop pb-safe relative flex max-h-[90dvh] w-full flex-col overflow-hidden border',
+              /* 폭은 앱 기둥과 같습니다 — 데스크톱에서 모달만 넓으면
+                 프레임 밖으로 삐져나와 화면이 두 겹으로 보입니다. */
               variant === 'sheet'
-                ? 'rounded-t-2xl sm:max-w-md sm:rounded-2xl'
-                : 'max-w-md rounded-2xl',
+                ? 'app-width rounded-t-2xl sm:rounded-2xl'
+                : 'app-width rounded-2xl',
             )}
           >
             {/* 바텀시트 손잡이 */}
