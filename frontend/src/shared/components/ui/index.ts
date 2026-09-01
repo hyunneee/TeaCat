@@ -5,6 +5,7 @@ export { Textarea, type TextareaProps } from './Textarea';
 export { Card, CardHeader, ListRow, type CardProps, type ListRowProps } from './Card';
 export { Badge, LiveDot, type BadgeProps } from './Badge';
 export { Segmented, type SegmentedOption, type SegmentedProps } from './Segmented';
+export { Select, type SelectOption, type SelectProps } from './Select';
 export { Stepper, type StepperProps } from './Stepper';
 export { SectionTitle, type SectionTitleProps } from './SectionTitle';
 export { AnimatedNumber, type AnimatedNumberProps } from './AnimatedNumber';

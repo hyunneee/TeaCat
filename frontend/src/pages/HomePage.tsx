@@ -1,19 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import {
-  ChevronRight,
-  Dices,
-  Grape,
-  Images,
-  Mic2,
-  Music,
-  PartyPopper,
-  ScanFace,
-  Search,
-  Sparkles,
-  Ticket,
-  UserRound,
-} from 'lucide-react';
+import { ChevronRight, Hourglass, Grape, Images, ScanFace, Search, Ticket, UserRound } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -35,23 +22,17 @@ import { useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
- * 바로가기 — 5칸 × 2줄.
+ * 바로가기 — **5칸 한 줄.**
  *
- * 윗줄은 **무엇을 볼까**(탐색), 아랫줄은 **내 것**입니다.
- * 순서가 곧 의미이므로 중간에 아무 데나 끼워 넣지 마세요.
+ * 전부 "내 것" 으로 가는 길입니다. 공연·포카 **탐색**은 하단 탭에 이미 있어서
+ * 여기에 또 두면 같은 목적지가 화면에 두 번 나옵니다.
  * 라벨은 4글자 이하로 — 한 칸이 62px 라 넘치면 두 줄로 접힙니다.
  */
 const SHORTCUTS = [
-  { to: ROUTES.CONCERTS, label: '공연', icon: Music },
-  { to: `${ROUTES.CONCERTS}?q=콘서트`, label: '콘서트', icon: Mic2 },
-  { to: `${ROUTES.CONCERTS}?q=페스티벌`, label: '페스티벌', icon: PartyPopper },
-  { to: ROUTES.MY_RESALE, label: '취소표', icon: Dices },
-  { to: ROUTES.NFT_MARKET, label: '포토카드', icon: Sparkles },
-
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
-  { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
+  { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
   { to: ROUTES.TOKEN, label: '포도알', icon: Grape },
-  { to: ROUTES.FACE_REGISTER, label: '얼굴등록', icon: ScanFace },
+  { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
 ] as const;
 
@@ -62,10 +43,10 @@ const RAIL_LIMIT = 8;
  * 홈.
  *
  * ── 화면 순서 ─────────────────────────────────────────────
- *   헤더(서비스명 · 검색) → 캐러셀 → 바로가기 10칸 → 진행 중인 티켓팅(가로 레일)
+ *   헤더(서비스명 · 검색) → 캐러셀 → 바로가기 5칸 → 진행 중인 티켓팅(가로 레일)
  *
- * ── 흑백 경계 구조 ────────────────────────────────────────
- * 상단바와 배너 위쪽 90% 는 검정, 배너 아래 10% 부터는 흰 배경입니다.
+ * ── 검정/하양 경계 구조 ────────────────────────────────────
+ * 상단바와 배너 위쪽 90% 는 짙은 회검정, 배너 아래 10% 부터는 흰 배경입니다.
  * 배너가 검정에서 흰 영역으로 걸쳐 내려오면서 떠 있는 느낌을 만듭니다.
  *
  *   ┌───────────────┐
@@ -91,17 +72,21 @@ export function HomePage() {
 
   const open = concerts?.filter((c) => !c.upcoming).slice(0, RAIL_LIMIT) ?? [];
 
-  /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다. */
-  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: open.length > 1 });
-  const pocaRail = useAutoScroll<HTMLDivElement>({ enabled: (newPocas?.length ?? 0) > 1 });
+  /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
+     두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
+     같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
+  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: open.length > 1, speed: 15 });
+  const pocaRail = useAutoScroll<HTMLDivElement>({
+    enabled: (newPocas?.length ?? 0) > 1,
+    speed: 9,
+  });
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
    * 안 넘기면 등록을 마친 뒤 useFaceRegistration 의 기본값(마이페이지)으로 가버려서,
    * 홈에서 눌렀는데 엉뚱한 화면에 놓이게 됩니다.
    */
-  const go = (to: string) =>
-    navigate(to, to === ROUTES.FACE_REGISTER ? { state: { from: location } } : undefined);
+  const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
 
   /** 배너를 눌렀을 때 어디로 갈지는 배너 데이터가 알려줍니다 (linkType). */
   const openBanner = (banner: Banner) => {
@@ -116,7 +101,7 @@ export function HomePage() {
 
   return (
     <div className="relative">
-      {/* 검정 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다 */}
+      {/* 짙은 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다 */}
       <div
         aria-hidden
         className="surface-ink absolute inset-x-0 top-0"
@@ -143,7 +128,7 @@ export function HomePage() {
             onClick={() => navigate(ROUTES.SEARCH)}
             className="-mr-2 flex size-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/12 active:bg-white/20"
           >
-            <Search size={22} />
+            <Search size={26} strokeWidth={2.2} />
           </button>
         </div>
       </header>
@@ -160,12 +145,12 @@ export function HomePage() {
       {/* ── 흰 배경 영역 ── */}
       <div className="relative space-y-6 px-4 pt-6">
         {/* 바로가기 — 아이콘 타일 + 아래 라벨 */}
-        <Stagger as="ul" className="grid grid-cols-5 gap-x-1.5 gap-y-4">
+        <Stagger as="ul" className="grid grid-cols-5 gap-x-1.5">
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
               <motion.button
                 type="button"
-                onClick={() => go(to)}
+                onClick={() => navigate(to)}
                 whileTap={{ scale: 0.93 }}
                 className="flex w-full flex-col items-center gap-1.5"
               >
@@ -185,7 +170,7 @@ export function HomePage() {
           <Card
             tone="warning"
             interactive
-            onClick={() => go(ROUTES.FACE_REGISTER)}
+            onClick={goFaceRegister}
             className="flex items-center gap-3"
           >
             <span className="bg-brand-900 flex size-11 shrink-0 items-center justify-center rounded-xl text-white">

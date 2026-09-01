@@ -66,17 +66,15 @@ export function BookingDonePage() {
           내 티켓 보기
         </Button>
         {needsFace && (
-          <Button
-            size="lg"
-            variant="secondary"
-            fullWidth
-            onClick={() => navigate(ROUTES.FACE_REGISTER)}
-          >
+          /* 흰 화면에 흰 버튼(secondary)을 두면 눌러야 할 게 있는 줄 모릅니다.
+             회색 면으로 세우되, 주 행동(내 티켓 보기)보다는 약하게. */
+          <Button size="lg" variant="soft" fullWidth onClick={() => navigate(ROUTES.FACE_REGISTER)}>
             얼굴 등록하러 가기
           </Button>
         )}
         <Button
-          variant="ghost"
+          variant="soft"
+          size="lg"
           fullWidth
           leftIcon={<House size={16} />}
           onClick={() => navigate(ROUTES.HOME, { replace: true })}

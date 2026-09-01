@@ -6,7 +6,7 @@
  */
 
 // Controller
-export { useAuth } from './hooks/useAuth';
+export { useAuth, useIsLoggedIn } from './hooks/useAuth';
 export { useLogin, useLogout } from './hooks/useLogin';
 export { useSignup } from './hooks/useSignup';
 export { useCaptcha } from './hooks/useCaptcha';

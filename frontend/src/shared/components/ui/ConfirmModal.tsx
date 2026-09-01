@@ -29,13 +29,16 @@ export function ConfirmModal({
       title={title}
       danger={danger}
       onClose={onClose}
+      /* 두 버튼이 **서로 다른 무게**로 보여야 합니다.
+         흰 모달 위에 흰 버튼(secondary) 둘을 나란히 두면 어느 쪽이 진행인지
+         한눈에 안 들어옵니다. 취소는 회색 면, 확인은 채운 면입니다. */
       footer={
         <div className="flex gap-2">
-          <Button variant="secondary" fullWidth onClick={onClose}>
+          <Button variant="soft" fullWidth onClick={onClose}>
             {cancelText}
           </Button>
           <Button
-            variant={danger ? 'danger' : 'primary'}
+            variant={danger ? 'danger' : 'dark'}
             fullWidth
             onClick={() => {
               onConfirm();

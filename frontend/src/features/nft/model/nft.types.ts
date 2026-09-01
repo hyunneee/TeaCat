@@ -20,11 +20,6 @@ export interface Nft {
   ownerName: string;
 }
 
-export interface TokenBalance {
-  balance: number;
-  symbol: string;
-}
-
 /** 포카 거래 한 건 (구매 또는 판매) */
 export interface NftTrade {
   id: string;

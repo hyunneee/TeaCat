@@ -13,9 +13,9 @@ import {
   useListNft,
   useNftDetail,
   usePurchaseNft,
-  useTokenBalance,
   useUnlistNft,
 } from '@/features/nft';
+import { useTokenBalance } from '@/features/token';
 
 /**
  * 포토카드 상세.
@@ -68,13 +68,15 @@ export function NftDetailPage() {
             화면과 실제 카드는 색이 조금 다를 수 있어요.
           </p>
 
-          {/* 들어올 때 사선으로 빛이 한 번 스치고, 누르면 전체화면으로 봅니다. */}
+          {/* 들어올 때 사선으로 빛이 한 번 스칩니다.
+              **내 카드만** 눌러서 전체화면으로 볼 수 있습니다 — 사러 온 화면에서는
+              누를 것이 "구매" 하나여야 하고, 확대는 그 결정을 미루게 만듭니다. */}
           <PocaShowcase
             className="mx-auto w-48"
             seed={nft.artSeed}
             imageUrl={nft.imageUrl}
             alt={`${nft.name} 포토카드`}
-            onOpen={() => setZoomed(true)}
+            onOpen={mine ? () => setZoomed(true) : undefined}
           />
         </div>
 

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
   Coins,
-  Dices,
+  Hourglass,
   LogOut,
   Receipt,
   ScanFace,
@@ -18,7 +18,7 @@ import { useModal } from '@/app/providers';
 import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
 import { useAuth, useLogout } from '@/features/auth';
-import { useTokenBalance } from '@/features/nft';
+import { useTokenBalance } from '@/features/token';
 
 export function MyPage() {
   const navigate = useNavigate();
@@ -64,8 +64,10 @@ export function MyPage() {
           />
 
           <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center">
-            {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7) */}
-            <span className="bg-brand-900 border-surface-1 absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full border-4 text-white">
+            {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7).
+                위 절반이 짙은 배경 위에 놓이므로 **밝은 원**이어야 보입니다 —
+                배경과 같은 어두운 원이면 흰 테두리만 동동 뜬 것처럼 보입니다. */}
+            <span className="surface-2 border-surface-1 text-ink-muted absolute -top-7 left-1/2 flex size-14 -translate-x-1/2 items-center justify-center rounded-full border-4">
               <UserRound size={26} />
             </span>
 
@@ -129,7 +131,7 @@ export function MyPage() {
               onClick={() => navigate(ROUTES.MY_TICKETS)}
             />
             <ListRow
-              icon={<Dices size={18} />}
+              icon={<Hourglass size={18} />}
               title="취소표 대기 내역"
               onClick={() => navigate(ROUTES.MY_RESALE)}
             />

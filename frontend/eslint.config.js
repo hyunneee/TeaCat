@@ -79,13 +79,29 @@ export default tseslint.config(
               message:
                 'shared 는 특정 도메인에 의존할 수 없습니다. 도메인 지식이 필요하면 그 코드는 features 로 옮기세요.',
             },
+            /* ⚠️ 위 블록의 패턴은 여기서 덮어써집니다 — 필요한 건 다시 적어야 합니다 */
+            {
+              group: ['@/mocks', '@/mocks/**'],
+              message:
+                '목업은 main.tsx 의 부트스트랩에서만 로드합니다. shared 가 목업을 알면 나중에 폴더를 지울 수 없습니다.',
+            },
           ],
         },
       ],
     },
   },
 
-  // feature 는 자기 자신 내부는 상대경로로 자유롭게 접근 가능
+  /**
+   * feature 안에서의 규칙.
+   *
+   * ⚠️ flat config 는 **같은 규칙이면 뒤에 온 설정이 앞을 통째로 덮어씁니다.**
+   *    여기서 `@/pages` 만 적으면 위에서 건 딥임포트·목업 금지가 이 폴더에서만
+   *    조용히 풀립니다. 그래서 **필요한 패턴을 전부 다시 적습니다.**
+   *    (한 줄 추가할 때 위 블록도 같이 보세요)
+   *
+   * 자기 자신 내부는 상대경로(`../model/...`)로 접근하므로
+   * 딥임포트 패턴을 통째로 막아도 걸리지 않습니다.
+   */
   {
     files: ['src/features/*/**/*.{ts,tsx}'],
     rules: {
@@ -94,8 +110,19 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@/pages/**'],
-              message: 'feature 가 page 를 알면 안 됩니다. 의존 방향은 pages → features 입니다.',
+              group: ['@/features/*/*'],
+              message:
+                '다른 feature 의 내부를 직접 import 하지 마세요. `@/features/<이름>` 배럴에서 가져오세요. 자기 feature 안에서는 상대경로를 쓰세요.',
+            },
+            {
+              group: ['@/pages/**', '@/app/**'],
+              message:
+                'feature 가 page/app 을 알면 안 됩니다. 의존 방향은 app·pages → features → shared 입니다.',
+            },
+            {
+              group: ['@/mocks', '@/mocks/**'],
+              message:
+                '목업은 main.tsx 의 부트스트랩에서만 로드합니다. feature 가 목업을 알면 나중에 폴더를 지울 수 없습니다.',
             },
           ],
         },

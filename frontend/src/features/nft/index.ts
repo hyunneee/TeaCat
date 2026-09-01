@@ -3,7 +3,6 @@ export {
   useNftDetail,
   useMyNfts,
   useNftTrades,
-  useTokenBalance,
   usePurchaseNft,
   useListNft,
   useUnlistNft,
@@ -20,4 +19,4 @@ export {
   canPurchase,
   type NftSort,
 } from './model/nft.model';
-export type { Nft, NftTrade, TokenBalance } from './model/nft.types';
+export type { Nft, NftTrade } from './model/nft.types';

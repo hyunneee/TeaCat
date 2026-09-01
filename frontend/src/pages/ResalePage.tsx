@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Dices, Info } from 'lucide-react';
+import { Hourglass, Info } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Card, Segmented } from '@/shared/components/ui';
 import { PageLoader } from '@/shared/components/common';
@@ -40,7 +40,7 @@ export function ResalePage() {
 
       <div className="flex-1 space-y-4 p-4">
         <Card className="flex gap-3">
-          <Dices size={20} className="text-brand-500 shrink-0" />
+          <Hourglass size={20} className="text-brand-500 shrink-0" />
           <div className="space-y-1 text-xs">
             <p className="text-[0.8125rem] font-bold">먼저 신청해도 유리하지 않아요</p>
             <p className="text-muted leading-relaxed">

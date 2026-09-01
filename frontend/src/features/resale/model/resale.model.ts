@@ -7,12 +7,6 @@ export const RESALE_STATUS_LABEL: Record<ResaleStatus, string> = {
   EXPIRED: '기한 만료',
 };
 
-export function resaleTone(status: ResaleStatus) {
-  if (status === 'WON') return 'success' as const;
-  if (status === 'LOST' || status === 'EXPIRED') return 'neutral' as const;
-  return 'brand' as const;
-}
-
 /** 당첨 후 결제 기한이 남아 있는가 */
 export function isPayable(entry: ResaleEntry): boolean {
   if (entry.status !== 'WON' || !entry.deadlineAt) return false;

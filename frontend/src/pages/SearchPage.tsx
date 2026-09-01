@@ -40,47 +40,53 @@ export function SearchPage() {
   const empty = enabled && !loading && concertHits.length === 0 && pocaHits.length === 0;
 
   return (
-    <>
-      {/* 검색 화면의 주인공은 입력창입니다. 제목("검색")을 따로 두면
-          정작 쳐야 할 곳이 한 줄 아래로 밀립니다. */}
-      <Header
-        showBack
-        left={
-          <Input
-            autoFocus
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="공연, 아티스트, 포토카드 검색"
-            leftIcon={<Search size={17} />}
-            type="search"
-            tone="contrast"
-            className="text-[0.9375rem]"
-            rightSlot={
-              keyword ? (
-                <button
-                  type="button"
-                  aria-label="검색어 지우기"
-                  onClick={() => setKeyword('')}
-                  className="text-subtle hover:text-ink -mr-1 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              ) : undefined
-            }
-          />
-        }
-      />
+    /* 결과가 없을 때 안내를 **화면 한가운데**에 놓기 위해 세로 flex 로 짭니다.
+       (본문이 flex-1 이어야 남은 높이 전체가 중앙 정렬의 기준이 됩니다) */
+    <div className="flex min-h-dvh flex-col">
+      <Header title="검색" showBack />
 
+      {/* 입력창은 **헤더 아래 한 줄을 통째로** 씁니다.
+          헤더 안에 넣으면 뒤로가기 버튼만큼 좁아지고, 제목 자리도 사라집니다.
+          다른 탭의 검색 바와 같은 자리·같은 규칙(`under-header`)이라
+          탭을 옮겨 다녀도 검색창이 같은 높이에 있습니다. */}
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
+        <Input
+          autoFocus
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="공연, 아티스트, 포토카드 검색"
+          leftIcon={<Search size={17} />}
+          type="search"
+          tone="plain"
+          className="text-[0.9375rem]"
+          rightSlot={
+            keyword ? (
+              <button
+                type="button"
+                aria-label="검색어 지우기"
+                onClick={() => setKeyword('')}
+                className="text-subtle hover:text-ink -mr-1 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors"
+              >
+                <X size={16} />
+              </button>
+            ) : undefined
+          }
+        />
+      </div>
+
+      <div className="flex flex-1 flex-col">
       {!enabled ? (
         <EmptyState
+          className="flex-1"
           icon={Search}
           title="무엇을 찾으세요?"
           description="공연 이름이나 아티스트, 포토카드 이름으로 찾을 수 있어요."
         />
       ) : loading ? (
-        <Loading label="검색 중" />
+        <Loading label="검색 중" className="flex-1" />
       ) : empty ? (
         <EmptyState
+          className="flex-1"
           icon={Search}
           title="검색 결과가 없어요"
           description={`'${query}' 와 맞는 공연이나 포토카드를 찾지 못했어요.`}
@@ -145,6 +151,7 @@ export function SearchPage() {
           )}
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 }

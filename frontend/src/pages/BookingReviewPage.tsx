@@ -1,7 +1,7 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Info, UserRound } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
-import { Button, Card, Input, Stepper } from '@/shared/components/ui';
+import { Badge, Button, Card, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { formatPrice } from '@/shared/lib';
 import {
@@ -50,8 +50,8 @@ export function BookingReviewPage() {
         <Card flat className="flex gap-3">
           <Info size={19} className="text-ink-muted shrink-0" />
           <p className="text-muted text-xs leading-relaxed">
-            티켓은 <b className="text-ink">여기서 지정한 아이디의 사용자</b>에게 발급되며,
-            발급 후에는 양도할 수 없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
+            티켓은 <b className="text-ink">예매한 본인에게만</b> 발급되며, 발급 후에는 양도할 수
+            없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
           </p>
         </Card>
 
@@ -64,18 +64,20 @@ export function BookingReviewPage() {
                   <p className="text-muted text-sm">{formatPrice(seat.price)}</p>
                 </div>
 
-                <Input
-                  label="티켓 받을 사람 (아이디)"
-                  value={recipients.valueOf(seat.id)}
-                  onChange={(e) => recipients.setRecipient(seat.id, e.target.value)}
-                  leftIcon={<UserRound size={16} />}
-                  placeholder="아이디를 입력하세요"
-                  hint={
-                    recipients.valueOf(seat.id) === recipients.myLoginId
-                      ? '내가 사용할 티켓입니다.'
-                      : '지정한 사용자에게 발급됩니다.'
-                  }
-                />
+                {/* 수령인은 **고칠 수 없습니다.** 입력창으로 열어 두면
+                    남의 아이디를 넣어 넘기는 길이 생기고, 그게 곧 암표입니다.
+                    입력창처럼 보이면 사람들이 고치려 들다가 막혀서 더 답답해합니다 —
+                    아예 읽는 줄로 보여줍니다. */}
+                <div className="space-y-1.5">
+                  <p className="text-ink-muted text-sm font-medium">티켓 받을 사람</p>
+                  <div className="surface-2 flex h-12 items-center gap-2.5 rounded-xl px-3.5">
+                    <UserRound size={16} className="text-subtle shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold">
+                      {recipients.valueOf(seat.id)}
+                    </span>
+                    <Badge tone="neutral">본인</Badge>
+                  </div>
+                </div>
               </Card>
             </li>
           ))}

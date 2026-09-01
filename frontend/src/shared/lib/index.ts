@@ -1,6 +1,7 @@
 export { cn } from './cn';
 export {
   formatPrice,
+  formatPoints,
   formatDateTime,
   formatDate,
   formatDuration,

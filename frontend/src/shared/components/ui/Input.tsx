@@ -19,15 +19,18 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
    * 배경 톤. 변형이 필요하면 아래 TONE 테이블에 한 줄만 추가하세요.
    *   default  — 연회색 (폼 안에서 카드와 구분)
    *   contrast — 흰 배경 + 진한 테두리 (검색 바처럼 목록 위에서 도드라져야 할 때)
+   *   plain    — 연회색 면만, 테두리 없음 (화면 전체를 차지하는 검색창)
    */
   tone?: InputTone;
 }
 
-export type InputTone = 'default' | 'contrast';
+export type InputTone = 'default' | 'contrast' | 'plain';
 
 const TONE: Record<InputTone, string> = {
   default: 'surface-2 border-line-strong',
   contrast: 'surface border-line-strong shadow-card',
+  /* 테두리는 투명하게 남겨둡니다 — 없애면 tone 을 바꿀 때 높이가 2px 씩 달라집니다 */
+  plain: 'surface-2 border-transparent',
 };
 
 /**

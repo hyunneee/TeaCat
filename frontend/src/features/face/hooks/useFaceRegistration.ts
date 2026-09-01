@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, queryClient } from '@/shared/api';
 import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
-import { authKeys, useAuthStore, type User } from '@/features/auth';
+import { authKeys, type User } from '@/features/auth';
 import { faceApi } from '../api/faceApi';
 
 /** RequireFace 가드가 넘겨준 "원래 가려던 곳" */
@@ -14,13 +14,12 @@ interface FaceLocationState {
 export function useFaceRegistration() {
   const navigate = useNavigate();
   const location = useLocation();
-  const patchUser = useAuthStore((s) => s.patchUser);
-
   return useMutation({
     mutationFn: (image: Blob) => faceApi.register(image),
     onSuccess: () => {
-      patchUser({ faceRegistered: true });
-
+      // 내 정보의 원본은 **쿼리 캐시 하나**입니다. 스토어를 따로 고치지 마세요 —
+      // 스냅샷은 useAuth 가 여기서 베껴 갑니다. (features/auth/hooks/useAuth.ts)
+      //
       // invalidate 만 하면 재조회가 끝나기 전에 화면이 이동해서
       // RequireFace 가드가 옛 캐시(faceRegistered: false)를 보고 되튕깁니다.
       // 캐시를 즉시 갱신한 뒤, 재검증은 백그라운드로 돌립니다.

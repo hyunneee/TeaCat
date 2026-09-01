@@ -2,7 +2,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
-import { authKeys, useAuthStore } from '@/features/auth';
+import { useIsLoggedIn } from '@/features/auth';
+import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
 import type { NftSort } from '../model/nft.model';
 
@@ -27,7 +28,7 @@ export function useNftDetail(nftId: string) {
 export function useMyNfts() {
   // 개인 데이터입니다. 마켓(공개 화면)에서도 개수를 쓰기 때문에
   // 비로그인 상태에서 호출되면 401 이 나므로 반드시 막아둡니다.
-  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
+  const isLoggedIn = useIsLoggedIn();
 
   return useQuery({
     queryKey: nftKeys.mine(),
@@ -43,7 +44,7 @@ export function useMyNfts() {
  * 개인 데이터라 로그인 상태에서만 조회합니다.
  */
 export function useNftTrades() {
-  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
+  const isLoggedIn = useIsLoggedIn();
 
   return useQuery({
     queryKey: nftKeys.trades(),
@@ -53,24 +54,14 @@ export function useNftTrades() {
   });
 }
 
-export function useTokenBalance() {
-  // 개인 데이터라 로그인 상태에서만 조회합니다.
-  // 비로그인 상태에서 부르면 401 -> 세션만료 처리로 로그인 화면에 튕깁니다.
-  const isLoggedIn = useAuthStore((s) => !!s.accessToken);
-
-  return useQuery({
-    queryKey: nftKeys.token(),
-    queryFn: () => nftApi.tokenBalance(),
-    staleTime: STALE_TIME.SHORT,
-    enabled: isLoggedIn,
-  });
-}
-
-/** 거래는 잔액과 소유자가 함께 바뀌므로 auth/nft/token 캐시를 모두 무효화합니다. */
+/**
+ * 거래가 끝나면 **카드 소유자와 포도알 잔액**이 함께 바뀝니다.
+ * 잔액은 별도 feature(`@/features/token`)가 들고 있으므로 그 키도 함께 무효화합니다.
+ * (내 정보는 거래로 바뀌지 않으므로 건드리지 않습니다)
+ */
 function invalidateTrade() {
   void queryClient.invalidateQueries({ queryKey: nftKeys.all });
-  void queryClient.invalidateQueries({ queryKey: nftKeys.token() });
-  void queryClient.invalidateQueries({ queryKey: authKeys.me() });
+  void queryClient.invalidateQueries({ queryKey: tokenKeys.balance() });
 }
 
 export function usePurchaseNft() {

@@ -57,7 +57,9 @@ export function BottomNav() {
                 className={cn(
                   'flex h-full flex-col items-center justify-center gap-1.5',
                   'transition-colors duration-150',
-                  isActive ? 'text-ink' : 'text-ink-subtle hover:text-ink-muted',
+                  /* 활성 탭만 강조색입니다. 지금 어디에 있는지가 이 바의 전부라
+                     색이 붙어도 다른 강조와 경쟁하지 않습니다. */
+                  isActive ? 'text-accent-700' : 'text-ink-subtle hover:text-ink-muted',
                 )}
               >
                 {/* 활성은 **채워진 아이콘**, 비활성은 선 아이콘입니다.

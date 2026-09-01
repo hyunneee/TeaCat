@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Dices } from 'lucide-react';
+import { Hourglass } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
@@ -27,7 +27,7 @@ export function MyResalePage() {
           <Loading label="대기 내역을 불러오는 중" />
         ) : !entries || entries.length === 0 ? (
           <EmptyState
-            icon={Dices}
+            icon={Hourglass}
             title="신청한 대기가 없어요"
             description="원하는 좌석이 없을 때 추첨 대기를 신청해 보세요."
           />

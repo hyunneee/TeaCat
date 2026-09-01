@@ -1,7 +1,7 @@
 import { http } from '@/shared/api';
 import type { CursorPage } from '@/shared/types';
 import type { NftSort } from '../model/nft.model';
-import type { Nft, NftTrade, TokenBalance } from '../model/nft.types';
+import type { Nft, NftTrade } from '../model/nft.types';
 
 export const nftApi = {
   /**
@@ -24,8 +24,6 @@ export const nftApi = {
     http.post<Nft>(`/nfts/${nftId}/listing`, body),
 
   unlist: (nftId: string) => http.delete<Nft>(`/nfts/${nftId}/listing`),
-
-  tokenBalance: () => http.get<TokenBalance>('/me/token'),
 };
 
 export const nftKeys = {
@@ -34,5 +32,4 @@ export const nftKeys = {
   detail: (nftId: string) => [...nftKeys.all, 'detail', nftId] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
   trades: () => [...nftKeys.all, 'trades'] as const,
-  token: () => ['token', 'balance'] as const,
 };

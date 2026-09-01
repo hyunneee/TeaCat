@@ -22,7 +22,7 @@ export function ConcertListPage() {
           바깥 면은 목록과 같은 바탕색이라 흰 입력창만 떠 보입니다.
           (헤더와 같은 흰색으로 두면 헤더가 그만큼 두꺼워진 것처럼 읽힙니다)
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
-      <div className="bg-canvas under-header sticky z-10 px-4 pb-3">
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}

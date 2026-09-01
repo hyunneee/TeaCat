@@ -1,4 +1,4 @@
-import { Dices, ScanFace, Ticket } from 'lucide-react';
+import { Hourglass, ScanFace, Ticket } from 'lucide-react';
 import { Badge, Button } from '@/shared/components/ui';
 import { Stagger } from '@/shared/components/common';
 import { cn, formatDateTime } from '@/shared/lib';
@@ -79,7 +79,7 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
                 <Button
                   size="sm"
                   variant="soft"
-                  leftIcon={<Dices size={14} />}
+                  leftIcon={<Hourglass size={14} />}
                   disabled={!!blocked}
                   onClick={() => onWaitlist(schedule.id)}
                 >

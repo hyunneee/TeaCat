@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Dices, TriangleAlert } from 'lucide-react';
+import { Hourglass, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Stepper } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
@@ -59,7 +59,7 @@ export function SectionSelectPage() {
           onClick={() => navigate(ROUTES.RESALE(scheduleId))}
           className="surface shadow-card hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-colors"
         >
-          <Dices size={20} className="text-ink-muted shrink-0" />
+          <Hourglass size={20} className="text-ink-muted shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-bold">원하는 자리가 없나요?</span>
             <span className="text-muted block text-xs">

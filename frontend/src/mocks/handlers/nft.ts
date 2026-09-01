@@ -159,9 +159,3 @@ mock('GET', '/me/nft-trades', (ctx) => {
     });
 });
 
-/* ── 토큰 잔액 ──
-   토큰 채굴 컨텐츠는 아직 미정이라 잔액 조회만 열어둡니다. */
-mock('GET', '/me/token', (ctx) => {
-  const user = requireUser(ctx.headers);
-  return { balance: user.tokenBalance, symbol: 'GRAPE' };
-});

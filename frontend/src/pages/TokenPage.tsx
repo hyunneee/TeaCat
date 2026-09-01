@@ -1,14 +1,14 @@
 import { Coins, Construction } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card } from '@/shared/components/ui';
-import { useTokenBalance } from '@/features/nft';
+import { useTokenBalance } from '@/features/token';
 
 /**
  * 토큰 채굴.
  *
  * ⚠️ 컨텐츠가 아직 정해지지 않았습니다 (순발력 미니게임? 출석 채굴?).
  * 잔액 조회와 화면 자리만 잡아두었습니다.
- * 기획이 확정되면 `features/token` 을 만들고 이 페이지는 조립만 하세요.
+ * 기획이 확정되면 `features/token` 에 훅을 더하고 이 페이지는 조립만 하세요.
  */
 export function TokenPage() {
   const { data: token } = useTokenBalance();

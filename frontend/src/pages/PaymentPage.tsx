@@ -5,9 +5,9 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES, toPoints } from '@/shared/constants';
 import { env } from '@/shared/config';
-import { cn, formatPrice } from '@/shared/lib';
+import { cn, formatPoints, formatPrice } from '@/shared/lib';
 import { HoldTimer, seatLabel, useBookingStore, useSeatHold, useSeatMap } from '@/features/booking';
-import { useTokenBalance } from '@/features/nft';
+import { useTokenBalance } from '@/features/token';
 import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment';
 
 /**
@@ -53,7 +53,13 @@ export function PaymentPage() {
      (프론트가 계산한 숫자를 그대로 결제에 쓰면 공짜 티켓이 나옵니다) */
   const pointsNeeded = toPoints(total + fee);
   const pointBalance = token?.balance ?? 0;
-  const shortOfPoints = payMethod === 'POINT' && pointBalance < pointsNeeded;
+  const payingWithPoints = payMethod === 'POINT';
+  const shortOfPoints = payingWithPoints && pointBalance < pointsNeeded;
+
+  /* 수수료 줄은 **총액에서 빼서** 구합니다. 각 줄을 따로 올림하면
+     두 줄의 합이 총액과 1 포도알씩 어긋날 수 있습니다. */
+  const ticketPoints = toPoints(total);
+  const feePoints = pointsNeeded - ticketPoints;
 
   /* 위젯 키(test_gck_)면 결제수단 UI 가 페이지에 삽입되므로 시트에 담아 띄웁니다.
      개별 연동 키(test_ck_)면 토스가 새 창을 띄우니 시트가 필요 없습니다. */
@@ -127,23 +133,33 @@ export function PaymentPage() {
         {/* 금액 */}
         <section>
           <SectionTitle>결제 금액</SectionTitle>
+          {/* 포도알로 낼 거면 **줄마다 포도알**로 보여줍니다.
+              위는 원, 맨 아래만 포도알이면 "그래서 얼마가 나가는 건데?" 를 암산하게 됩니다.
+              (환산은 표시용 어림값입니다 — 차감량은 서버가 확정합니다) */}
           <Card flat className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">티켓 금액</span>
-              <span>{formatPrice(total)}</span>
+              <span>{payingWithPoints ? formatPoints(ticketPoints) : formatPrice(total)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted">예매 수수료</span>
-              <span>{formatPrice(fee)}</span>
+              <span>{payingWithPoints ? formatPoints(feePoints) : formatPrice(fee)}</span>
             </div>
             <div className="mt-2 flex justify-between border-t pt-2 font-bold">
               <span>총 결제금액</span>
-              <AnimatedNumber value={total + fee} format="price" className="text-base" />
+              {payingWithPoints ? (
+                <span className="text-base">
+                  <AnimatedNumber value={pointsNeeded} className="tabular-nums" />
+                  <span className="ml-1">포도알</span>
+                </span>
+              ) : (
+                <AnimatedNumber value={total + fee} format="price" className="text-base" />
+              )}
             </div>
           </Card>
           <p className="text-subtle mt-1.5 px-1 text-xs">
-            {payMethod === 'POINT'
-              ? `포도알 ${pointsNeeded.toLocaleString()}개가 차감됩니다.`
+            {payingWithPoints
+              ? `보유 ${pointBalance.toLocaleString()}포도알에서 차감됩니다.`
               : '결제 직전에 금액을 한 번 더 확인해 드려요.'}
           </p>
         </section>
@@ -154,7 +170,7 @@ export function PaymentPage() {
           화면 안에서 진행해 주세요.
         </p>
 
-        {env.payment.mode === 'mock' && payMethod !== 'POINT' && (
+        {env.payment.mode === 'mock' && !payingWithPoints && (
           <p className="surface-2 text-muted rounded-xl p-3 text-xs leading-relaxed">
             현재 <b>모의 결제</b> 모드입니다. 실제 결제는 일어나지 않고 확인 창으로 대체됩니다.
             <code>.env</code> 의 <code>VITE_TOSS_CLIENT_KEY</code> 에 토스페이먼츠 클라이언트 키를
@@ -179,8 +195,8 @@ export function PaymentPage() {
             ? STAGE_LABEL[stage]
             : shortOfPoints
               ? '포도알이 부족해요'
-              : payMethod === 'POINT'
-                ? `포도알 ${pointsNeeded.toLocaleString()}개로 결제`
+              : payingWithPoints
+                ? `${formatPoints(pointsNeeded)}로 결제`
                 : `${formatPrice(total + fee)} 결제하기`}
         </Button>
       </BottomBar>
