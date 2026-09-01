@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: teacat
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/teacat
+    username: teacat
+    password: teacat_local_pw
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: teacat_local_pw
