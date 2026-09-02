@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Clock, MapPin, ShieldAlert, Users } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Card, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
+import { Card, Lightbox, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useModal } from '@/app/providers';
@@ -15,6 +16,8 @@ export function ConcertDetailPage() {
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
   const { data: concert, isPending, isError } = useConcertDetail(concertId);
+  /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
+  const [posterZoomed, setPosterZoomed] = useState(false);
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
@@ -65,17 +68,44 @@ export function ConcertDetailPage() {
     <>
       <Header title={concert.title} showBack />
 
+      <Lightbox
+        open={posterZoomed}
+        onClose={() => setPosterZoomed(false)}
+        label={`${concert.title} 포스터 크게 보기`}
+        caption={
+          <>
+            <p className="text-base font-bold text-white">{concert.title}</p>
+            <p className="text-sm text-white/60">{concert.artist}</p>
+          </>
+        }
+      >
+        <PosterImage
+          src={concert.posterUrl}
+          seed={concert.posterSeed}
+          alt={`${concert.title} 포스터`}
+        />
+      </Lightbox>
+
       <div className="space-y-6 p-4">
         {/* 헤드 — 제목은 포스터 위쪽에, 장소·시간·연령은 **포스터 아래쪽에** 맞춥니다.
             제목 바로 밑에 붙이면 셋이 한 덩어리로 뭉쳐 제목이 묻히고,
             포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다. */}
         <section className="flex gap-4">
-          <PosterImage
-            src={concert.posterUrl}
-            seed={concert.posterSeed}
-            alt={`${concert.title} 포스터`}
-            className="w-28 shrink-0"
-          />
+          {/* 눌러서 크게 봅니다 (포토카드와 같은 방식 — Lightbox).
+              포스터는 정보가 아니라 그림이라, 작게 보고 넘어가면 다시 못 봅니다.
+              기울이기·빛 반사는 없습니다 — 그건 "소유한 카드" 의 연출입니다. */}
+          <button
+            type="button"
+            onClick={() => setPosterZoomed(true)}
+            aria-label="포스터 크게 보기"
+            className="w-28 shrink-0 rounded-xl transition-opacity active:opacity-80"
+          >
+            <PosterImage
+              src={concert.posterUrl}
+              seed={concert.posterSeed}
+              alt={`${concert.title} 포스터`}
+            />
+          </button>
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <div>
               <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
@@ -119,9 +149,9 @@ export function ConcertDetailPage() {
             blocked={
               needsFace
                 ? {
-                    title: '얼굴 등록이 필요합니다',
+                    title: '얼굴 등록이 필요해요',
                     description:
-                      '',
+                      '마이페이지에서 한 번만 등록하면 예매한 티켓에 자동으로 매칭돼요.',
                     actionLabel: '등록하러 가기',
                     onAction: goFaceRegister,
                   }

@@ -104,7 +104,7 @@ export function HomePage() {
       {/* 짙은 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다 */}
       <div
         aria-hidden
-        className="surface-ink absolute inset-x-0 top-0"
+        className="surface-strong absolute inset-x-0 top-0"
         style={{
           /* env(노치) + 헤더 위 여백 + 헤더 높이 + 배너 위 여백 + 배너의 90% */
           height:
@@ -247,7 +247,7 @@ export function HomePage() {
                           className="w-full"
                         />
                         <span className="absolute top-1.5 left-1.5">
-                          <Badge tone="neutral" icon={<LiveDot />} className="shadow-card">
+                          <Badge tone="live" icon={<LiveDot />} className="shadow-card">
                             예매중
                           </Badge>
                         </span>

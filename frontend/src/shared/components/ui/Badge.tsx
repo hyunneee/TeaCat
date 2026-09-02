@@ -11,7 +11,18 @@ type Tone =
   | 'success'
   | 'warning'
   | 'danger'
-  | 'info';
+  | 'info'
+  /**
+   * 지금 열려 있음 — "예매중". 카드 위에 얹는 상태 칩입니다.
+   *
+   * 붉은색이지만 **위험 신호가 아닙니다.** 방송의 LIVE 표시와 같은 관습으로
+   * "지금 진행 중" 을 뜻합니다. (LiveDot 이 이미 같은 이유로 붉은 점을 씁니다)
+   * 되돌릴 수 없는 동작에 쓰는 `danger` 와 자리가 겹치지 않게,
+   * 버튼에는 절대 쓰지 마세요 — 상태 표시 전용입니다.
+   */
+  | 'live'
+  /** 조용한 상태 — "오픈 예정". 면만 있고 테두리는 없습니다 */
+  | 'quiet';
 type Size = 'sm' | 'md' | 'lg';
 
 /* 색만 보고도 의미가 읽히도록 배경 + 텍스트 + 테두리를 함께 씁니다. */
@@ -24,6 +35,10 @@ const TONE: Record<Tone, string> = {
   warning: 'bg-surface-2 text-ink border-line-strong',
   danger: 'bg-danger-soft text-danger border-danger/55',
   info: 'bg-surface-2 text-ink-subtle border-line',
+  /* 카드 모서리에 얹히는 칩이라 **테두리를 두지 않습니다** —
+     테두리가 있으면 카드 위에 스티커를 붙인 것처럼 떠 보입니다. */
+  live: 'bg-danger-soft text-danger border-transparent',
+  quiet: 'surface-2 text-ink-muted border-transparent',
 };
 
 /**

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setupAuthBridge } from '@/app/providers';
+import { warmRoutes } from '@/app/router';
 import App from './App';
 import '@/styles/index.css';
 
@@ -26,6 +27,10 @@ async function bootstrap() {
       <App />
     </StrictMode>,
   );
+
+  /* 화면이 그려진 뒤, 한가할 때 자주 가는 화면의 코드를 미리 받습니다.
+     (이동할 때 화면이 비었다가 채워지는 걸 없앱니다 — router.tsx 의 warmRoutes) */
+  warmRoutes();
 }
 
 void bootstrap();

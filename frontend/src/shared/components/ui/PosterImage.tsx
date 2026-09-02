@@ -46,6 +46,7 @@ export function PosterImage({
         src={src}
         alt={alt}
         loading="lazy"
+        draggable={false}
         className={cn('border-line w-full rounded-xl border object-cover', RATIO[ratio], className)}
       />
     );

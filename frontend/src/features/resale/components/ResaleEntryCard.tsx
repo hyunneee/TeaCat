@@ -1,5 +1,5 @@
 import { Clock, Hourglass, PartyPopper } from 'lucide-react';
-import { Button } from '@/shared/components/ui';
+import { Badge, Button } from '@/shared/components/ui';
 import { cn, formatDateTime, formatRemaining } from '@/shared/lib';
 import { RESALE_STATUS_LABEL, isPayable, remainToDeadline } from '../model/resale.model';
 import type { ResaleEntry } from '../model/resale.types';
@@ -28,37 +28,32 @@ export function ResaleEntryCard({ entry, onCancel, onPay, onForfeit }: Props) {
   const payable = isPayable(entry);
   const lost = entry.status === 'LOST' || entry.status === 'EXPIRED';
 
-  /* 목록 항목이라 테두리를 두지 않습니다. 구분은 **면**이 합니다.
-     모든 카드가 흰 면 하나로 끝나면 바탕과 붙어 어디가 한 건인지 안 보여서,
-     상태를 **머리띠**로 얹어 카드마다 시작점을 만듭니다.
-     당첨만 짙은 띠 — 이 화면에서 유일하게 "지금 뭔가 해야 하는" 상태입니다. */
+  /* 목록 항목이라 테두리를 두지 않습니다. 구분은 **면과 그림자**가 합니다.
+     상태는 예전에 카드 위에 **머리띠**로 얹었는데, 무엇을 신청했는지보다
+     띠가 먼저 읽혀서 목록을 훑을 때 공연 이름이 눈에 안 들어왔습니다.
+     이제 제목 줄 오른쪽의 칩 하나로 줄였습니다 — 카드가 조용해지고
+     "무엇을 / 어떤 상태로" 가 한 줄에서 같이 읽힙니다. */
   return (
     <div className={cn('surface shadow-list overflow-hidden rounded-2xl', lost && 'opacity-70')}>
-      <div
-        className={cn(
-          'flex items-center gap-1.5 px-4 py-2 text-[0.8125rem] font-bold',
-          payable ? 'bg-brand-900 text-white' : 'surface-2 text-ink-muted',
-        )}
-      >
-        {payable ? (
-          <>
-            <PartyPopper size={15} className="shrink-0" />
-            추첨에 당첨됐어요
-          </>
-        ) : (
-          <>
-            <Hourglass size={14} className="shrink-0" />
-            {RESALE_STATUS_LABEL[entry.status]}
-          </>
-        )}
-      </div>
-
       <div className="space-y-3 p-4">
-        <div className="min-w-0">
-          <p className="truncate font-bold">{entry.concertTitle}</p>
-          <p className="text-subtle mt-0.5 truncate text-xs">
-            {formatDateTime(entry.startAt)} · {entry.sectionName} {entry.quantity}매
-          </p>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-bold">{entry.concertTitle}</p>
+            <p className="text-subtle mt-0.5 truncate text-xs">
+              {formatDateTime(entry.startAt)} · {entry.sectionName} {entry.quantity}매
+            </p>
+          </div>
+
+          {/* 당첨만 짙은 칩 — 이 화면에서 유일하게 "지금 뭔가 해야 하는" 상태입니다 */}
+          {payable ? (
+            <Badge tone="accent-solid" size="md" icon={<PartyPopper size={13} />}>
+              당첨
+            </Badge>
+          ) : (
+            <Badge tone="quiet" size="md" icon={<Hourglass size={12} />}>
+              {RESALE_STATUS_LABEL[entry.status]}
+            </Badge>
+          )}
         </div>
 
         {payable && (

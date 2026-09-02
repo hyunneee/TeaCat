@@ -11,6 +11,7 @@ export { SectionTitle, type SectionTitleProps } from './SectionTitle';
 export { AnimatedNumber, type AnimatedNumberProps } from './AnimatedNumber';
 export { PosterImage, type PosterImageProps } from './PosterImage';
 export { Modal, type ModalProps } from './Modal';
+export { Lightbox, type LightboxProps } from './Lightbox';
 export { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';
 export { Spinner } from './Spinner';
 export { Skeleton, SkeletonList } from './Skeleton';

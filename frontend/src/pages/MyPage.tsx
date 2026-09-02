@@ -69,7 +69,7 @@ export function MyPage() {
         <div className="relative px-4">
           <div
             aria-hidden
-            className="surface-ink absolute inset-x-0 bottom-1/2"
+            className="surface-strong absolute inset-x-0 bottom-1/2"
             style={{
               /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다.
                  위 여백과 **같은 값**이어야 경계가 카드 중앙에 옵니다 (HEADER_GAP) */
