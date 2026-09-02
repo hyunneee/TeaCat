@@ -11,7 +11,7 @@ interface Props {
   /** 취소표 추첨 대기 신청 (매진이거나 오픈 전일 때) */
   onWaitlist: (scheduleId: string) => void;
   /**
-   * 예매를 막아야 하는 이유. 주어지면 목록 위를 덮고 버튼도 잠급니다.
+   * 예매를 막아야 하는 이유. 주어지면 **목록 맨 위에 안내를 붙이고** 버튼을 잠급니다.
    * (지금은 얼굴 미등록 — 다른 조건이 생겨도 문구만 바꿔 재사용합니다)
    */
   blocked?: { title: string; description: string; actionLabel: string; onAction: () => void };
@@ -20,32 +20,38 @@ interface Props {
 /**
  * 회차 목록.
  *
+ * ── 막힌 이유는 이 컴포넌트가 직접 그립니다 ───────────────
+ * 예전에는 목록 위를 덮는 **떠 있는 카드**였습니다. 화면에서 자리를 차지하지 않는
+ * `absolute` 요소라, 감싸는 쪽의 여백·높이가 바뀔 때마다 안내가 엉뚱한 곳에 얹혔습니다.
+ * 이제 안내는 **목록의 첫 줄**입니다 — 회차가 몇 개든, 바깥이 어떻게 생겼든
+ * 언제나 회차 바로 위에 옵니다. 위치를 바깥에서 정할 일이 없습니다.
+ *
  * ⚠️ `blocked` 는 **보여주기용 안내일 뿐**입니다.
- *    덮개를 개발자도구로 지워도 예매가 되면 안 되므로
+ *    안내를 개발자도구로 지워도 예매가 되면 안 되므로
  *    버튼 자체를 `disabled` 로 잠그고, 그마저 우회해도
  *    `onBook` 핸들러와 라우트 가드(RequireFace)가 다시 막습니다. (3중 방어)
  */
 export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) {
   return (
-    <div className="relative">
+    <div className="space-y-3">
       {blocked && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-3">
-          {/* 목록이 흐릿하게 비쳐서 "가려져 있다"는 게 읽히게 합니다 */}
-          <div aria-hidden className="surface/80 absolute inset-0 rounded-2xl backdrop-blur-[3px]" />
-          <div className="border-line surface shadow-card relative w-full rounded-2xl border p-4 text-center">
-            <span className="surface-2 border-line text-ink-muted mx-auto mb-2.5 flex size-10 items-center justify-center rounded-full border">
-              <ScanFace size={19} />
-            </span>
+        <div className="surface border-line flex items-start gap-3 rounded-2xl border p-3.5">
+          <span className="surface-2 text-ink-muted flex size-9 shrink-0 items-center justify-center rounded-full">
+            <ScanFace size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">{blocked.title}</p>
-            <p className="text-muted mt-1 text-xs leading-relaxed">{blocked.description}</p>
-            <Button size="sm" variant="secondary" className="mt-3" onClick={blocked.onAction}>
+            <p className="text-muted mt-0.5 text-xs leading-relaxed">{blocked.description}</p>
+            {/* 이 화면에서 눌러야 할 것은 이 버튼 하나입니다 —
+                아래 예매 버튼은 잠겨 있으므로 강조가 겹치지 않습니다. (DESIGN.md 1장) */}
+            <Button size="sm" variant="dark" className="mt-2.5" onClick={blocked.onAction}>
               {blocked.actionLabel}
             </Button>
           </div>
         </div>
       )}
 
-      <Stagger as="ul" className={cn('space-y-2', blocked && 'pointer-events-none select-none')}>
+      <Stagger as="ul" className={cn('space-y-2', blocked && 'opacity-60')}>
       {schedules.map((schedule) => {
         const bookable = isBookable(schedule);
 
@@ -66,7 +72,7 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
               {bookable ? (
                 <Button
                   size="sm"
-                  /* 덮개가 떠 있을 땐 강조색을 덮개의 버튼 하나에만 둡니다.
+                  /* 막혀 있을 땐 강조색을 위 안내의 버튼 하나에만 둡니다.
                      초록이 여러 개면 어디를 눌러야 할지 알 수 없습니다. (DESIGN.md 1장) */
                   variant={blocked ? 'secondary' : 'primary'}
                   leftIcon={<Ticket size={14} />}

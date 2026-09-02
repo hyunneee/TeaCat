@@ -1,9 +1,7 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
-import { X } from 'lucide-react';
+import { Lightbox } from '@/shared/components/ui';
 import { useReducedMotion } from '@/shared/hooks';
-import { DURATION, EASE } from '@/shared/lib';
 import { useGlareSweep } from '../hooks/useGlareSweep';
 import { PocaArt } from './PocaArt';
 import { PocaGlare } from './PocaGlare';
@@ -27,22 +25,21 @@ const TILT_RANGE = 130;
 const SETTLE = { type: 'spring', stiffness: 320, damping: 28 } as const;
 
 /**
- * 포토카드 전체화면 보기.
+ * 포토카드 전체화면 보기 — 실물 카드를 눈앞에 들어 **손으로 기울여 보는 것**.
  *
- * 실물 카드를 눈앞에 들어 **손으로 기울여 보는 것**에 해당합니다.
- * 아트 말고는 아무것도 두지 않고, 배경을 어둡게 깔아 카드만 남깁니다.
+ * 검은 화면·닫기·ESC 같은 껍데기는 `Lightbox` 가 맡고, 여기는 카드와 기울기만 봅니다.
  *
- * ── 왜 공용 Modal 을 쓰지 않나 ─────────────────────────────
- * Modal 은 흰 시트에 제목·본문·푸터를 담는 껍데기입니다.
- * 여기 필요한 건 그 반대(테두리·여백 없는 검은 화면)라서,
- * Modal 에 예외 옵션을 늘리는 대신 별도 컴포넌트로 둡니다.
- *
- * 닫는 방법은 셋 — 배경 탭 / 아래 X 버튼 / ESC. 하나라도 막히면 갇힌 느낌이 듭니다.
- *
- * ⚠️ 퇴장(exit) 애니메이션을 쓰지 않습니다. AnimatePresence 의 exit 이 어떤 이유로든
- *    끝나지 않으면 **검은 화면이 그대로 남아 앱을 덮습니다.** 화면 전체를 가리는
- *    오버레이에서 그건 치명적이라, 나가는 연출을 포기하고 즉시 사라지게 합니다.
- *    (DESIGN.md 3장 — 페이지 전환에 AnimatePresence 를 쓰지 않는 것과 같은 이유)
+ * ── 실제 휴대폰에서 기울기가 안 먹던 이유 ─────────────────
+ * 1. **동작 줄이기(prefers-reduced-motion)** — 켜져 있으면 기울이기를 통째로 막고
+ *    있었습니다. 안드로이드는 **절전 모드만 켜도** 이 값이 reduce 가 되고,
+ *    iOS 도 손쉬운 사용에서 흔히 켭니다. PC 는 대개 꺼져 있어 재현되지 않습니다.
+ *    → 손가락을 그대로 따라가는 **직접 조작**은 "덜어낼 애니메이션" 이 아니라
+ *      조작 그 자체입니다. 이제 동작 줄이기에서도 기울어지고,
+ *      **손을 뗐을 때 튕겨 돌아오는 연출과 빛 반사만** 생략합니다.
+ * 2. **손가락이 카드 밖으로 나가면** 포인터 캡처가 실패한 브라우저에서
+ *    이동이 뚝 끊겼습니다. → 끄는 동안은 `window` 에서 직접 듣습니다.
+ * 3. **길게 누르면** 브라우저가 이미지 저장/드래그를 가로챘습니다(pointercancel).
+ *    → 카드에 `no-select`(터치 콜아웃·선택 금지) + `touch-none` 을 겁니다.
  */
 export function PocaFullscreen({ open, onClose, seed, imageUrl, name, concertTitle }: Props) {
   const reduced = useReducedMotion();
@@ -66,99 +63,69 @@ export function PocaFullscreen({ open, onClose, seed, imageUrl, name, concertTit
   /** 누른 지점. null 이면 지금 끌고 있지 않다는 뜻입니다. */
   const grabbedAt = useRef<{ x: number; y: number } | null>(null);
 
-  const startTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (reduced) return;
-    grabbedAt.current = { x: event.clientX, y: event.clientY };
-    try {
-      // 손가락이 카드 밖으로 나가도 계속 따라오게 (안 잡으면 중간에 뚝 끊깁니다)
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      /* 이미 놓인 포인터면 브라우저가 던집니다. 캡처는 편의일 뿐이라 무시합니다. */
-    }
-  };
-
-  const moveTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const from = grabbedAt.current;
-    if (!from) return;
-    offsetX.set(event.clientX - from.x);
-    offsetY.set(event.clientY - from.y);
-  };
-
-  const endTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const settle = useCallback(() => {
     if (!grabbedAt.current) return;
     grabbedAt.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    animate(offsetX, 0, SETTLE);
-    animate(offsetY, 0, SETTLE);
+    /* 동작 줄이기면 튕기지 않고 그 자리에서 눕습니다 (움직임 자체는 유지) */
+    const options = reduced ? { duration: 0 } : SETTLE;
+    animate(offsetX, 0, options);
+    animate(offsetY, 0, options);
+  }, [offsetX, offsetY, reduced]);
+
+  /* 끄는 동안은 **window 에서** 듣습니다.
+     카드에만 걸어두면 손가락이 카드 밖으로 조금만 나가도 이동이 끊깁니다
+     (포인터 캡처는 브라우저마다 실패하거나 취소될 수 있어 믿고 맡기지 않습니다). */
+  useEffect(() => {
+    if (!open) return;
+
+    const move = (event: PointerEvent) => {
+      const from = grabbedAt.current;
+      if (!from) return;
+      offsetX.set(event.clientX - from.x);
+      offsetY.set(event.clientY - from.y);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', settle);
+    window.addEventListener('pointercancel', settle);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', settle);
+      window.removeEventListener('pointercancel', settle);
+      grabbedAt.current = null;
+      offsetX.set(0);
+      offsetY.set(0);
+    };
+  }, [open, settle, offsetX, offsetY]);
+
+  const startTilt = (event: ReactPointerEvent<HTMLDivElement>) => {
+    grabbedAt.current = { x: event.clientX, y: event.clientY };
   };
 
-  // 배경 스크롤 잠금
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  const root = document.getElementById('modal-root');
-  if (!root || !open) return null;
-
-  return createPortal(
-    <motion.div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${name} 크게 보기`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: DURATION.base, ease: EASE.out }}
-      onClick={onClose}
-      className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col items-center justify-center gap-5 bg-black/92 p-6"
+  return (
+    <Lightbox
+      open={open}
+      onClose={onClose}
+      label={`${name} 크게 보기`}
+      caption={
+        <>
+          <p className="text-base font-bold text-white">{name}</p>
+          <p className="text-sm text-white/60">{concertTitle}</p>
+        </>
+      }
     >
       <motion.div
-        initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: DURATION.slow, ease: EASE.out }}
-        // 카드 자체를 눌러도 닫히지 않게 (자세히 보려고 누르는 경우)
-        onClick={(event) => event.stopPropagation()}
         onPointerDown={startTilt}
-        onPointerMove={moveTilt}
-        onPointerUp={endTilt}
-        onPointerCancel={endTilt}
         // 위치(x·y)는 건드리지 않습니다 — 카드는 늘 화면 한가운데입니다.
         style={{ rotateX, rotateY, transformPerspective: 900 }}
-        className="relative w-full max-w-[min(80vw,22rem)] cursor-grab touch-none active:cursor-grabbing"
+        /* touch-none — 손가락 움직임을 스크롤로 가져가지 않게.
+           no-select  — 길게 눌렀을 때 뜨는 이미지 저장/선택 메뉴를 막습니다.
+                        (그게 뜨는 순간 pointercancel 이 와서 기울이기가 끊깁니다) */
+        className="no-select relative w-full cursor-grab touch-none active:cursor-grabbing"
       >
         <PocaArt seed={seed} imageUrl={imageUrl} alt={`${name} 포토카드`} />
         <PocaGlare glare={glare} intensity={intensity} />
       </motion.div>
-
-      <div className="space-y-1.5 text-center">
-        <p className="text-base font-bold text-white">{name}</p>
-        <p className="text-sm text-white/60">{concertTitle}</p>
-      </div>
-
-      {/* 닫기는 **엄지가 닿는 아래쪽**에 둡니다.
-          전체화면에서 우상단은 한 손으로 잡았을 때 가장 먼 자리입니다. */}
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="닫기"
-        className="flex size-12 items-center justify-center rounded-full bg-white/12 text-white transition-colors hover:bg-white/22 active:bg-white/28"
-      >
-        <X size={22} />
-      </button>
-    </motion.div>,
-    root,
+    </Lightbox>
   );
 }

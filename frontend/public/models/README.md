@@ -4,6 +4,47 @@
 용량이 커서 저장소에 커밋하지 않습니다(`.gitignore`). 없으면 등록 화면이
 "얼굴 인식을 준비하지 못했어요" 로 끝납니다 (앱의 나머지는 정상 동작).
 
+## 🔴 배포 — 빌드가 받아 옵니다
+
+커밋하지 않으므로 **저장소를 클론해 빌드하는 파이프라인에는 이 파일들이 없습니다.**
+그대로 배포하면 브라우저가 `/models/....onnx` 를 받으려다 SPA 폴백(index.html)을
+받아 오고, onnxruntime 이 HTML 을 protobuf 로 읽으려다 이렇게 죽습니다.
+
+```
+Can't create a session. ERROR_CODE: 7,
+ERROR_MESSAGE: Failed to load model because protobuf parsing failed.
+```
+
+로컬에는 파일이 있으니 **재현되지 않습니다.** 그래서 셋을 걸어 뒀습니다.
+
+| 어디 | 무엇 |
+|---|---|
+| `npm run build` 맨 앞 | `npm run models` — 없으면 받아서 **sha256 검증** 후 저장. 못 받으면 빌드 실패 |
+| `_redirects` · `vercel.json` | `/models/` 는 SPA 폴백에서 **제외** — 없으면 200(HTML) 대신 404 |
+| `face.worker.ts` | 받은 바이트가 ONNX(`0x08`)인지 확인한 뒤에만 세션 생성·캐시 |
+
+```bash
+npm run models                     # 지금 상태 확인 / 없으면 받기
+SKIP_FACE_MODELS=1 npm run build   # 얼굴 등록 없이 빌드만 확인
+```
+
+출처는 OpenCV Zoo 이고 **Git LFS** 로 관리됩니다 —
+`raw.githubusercontent.com` 은 131바이트 포인터를 주므로
+`media.githubusercontent.com/media/...` 를 씁니다.
+(주소·해시는 `scripts/fetch-face-models.mjs` 한 곳에 있습니다)
+
+| 파일 | sha256 |
+|---|---|
+| `face_detection_yunet_2023mar.onnx` | `8f2383e4…52fa4` (232,589 B) |
+| `face_recognition_sface_2021dec_int8.onnx` | `2b0e941e…48d78a` (9,896,933 B) |
+
+🔴 **모델을 바꾸면 해시와 `VITE_FACE_MODEL_VERSION` 을 함께 올리세요.**
+임베딩은 같은 모델끼리만 대조됩니다 — 조용히 바뀌면 등록해 둔 얼굴로 입장이 안 됩니다.
+
+CDN·오브젝트 스토리지에 올려 쓰려면 `.env.production` 의
+`VITE_FACE_DETECTOR_URL`·`VITE_FACE_EMBEDDER_URL` 을 절대 주소로 두세요.
+그러면 다운로드 단계를 건너뜁니다.
+
 | 파일 | 무엇 | 크기 | 출처 |
 |---|---|---|---|
 | `face_detection_yunet_2023mar.onnx` | 얼굴 검출 + 5점 랜드마크 | 232 KB | OpenCV Zoo |

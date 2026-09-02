@@ -334,7 +334,7 @@ npm run preview
 
 **`npm run dev` 가 잘 돌아도 배포본은 깨질 수 있습니다.** 배포 전에 `preview` 로 확인하세요.
 
-### 반드시 해야 하는 두 가지
+### 반드시 해야 하는 세 가지
 
 **1. SPA 폴백** — 이 앱은 주소를 브라우저가 처리합니다. 서버에 `/login` 이라는 파일이
 없으니, 그 주소를 직접 열거나 새로고침하면 **404** 가 납니다.
@@ -347,7 +347,25 @@ npm run preview
 | nginx | `try_files $uri $uri/ /index.html;` ⚠️ 직접 |
 | S3 + CloudFront | 403·404 → `/index.html` (200) ⚠️ 직접 |
 
-**2. HTTPS** — 아래 기능은 `http://` 에서 조용히 실패합니다.
+🔴 **`/models/` 는 폴백에서 빼세요.** 얼굴 인식 모델(`.onnx`)이 없을 때
+index.html 을 200 으로 돌려주면, onnxruntime 이 그 HTML 을 모델로 읽으려다
+`Failed to load model because protobuf parsing failed` 로 죽습니다.
+원인을 알 수 없는 오류라 찾는 데 오래 걸립니다 — 없으면 그냥 404 가 나야 합니다.
+(`_redirects` · `vercel.json` 에는 이미 들어 있습니다. nginx 는
+`location /models/ { try_files $uri =404; }`)
+
+**2. 얼굴 인식 모델** — `public/models/*.onnx` 는 용량 때문에 커밋하지 않습니다.
+저장소를 클론해 빌드하는 파이프라인에는 파일이 없으므로, `npm run build` 가
+맨 앞에서 `npm run models`(= `scripts/fetch-face-models.mjs`)를 돌려
+OpenCV Zoo 에서 받아 **sha256 을 검증한 뒤** `public/models/` 에 놓습니다.
+
+- 이미 있으면 아무것도 하지 않습니다 (해시만 확인)
+- 받지 못하면 **빌드가 실패합니다** — 모델 없는 번들이 배포되는 것보다 낫습니다
+- CDN 에 올려 쓰려면 `.env.production` 의 `VITE_FACE_DETECTOR_URL`·
+  `VITE_FACE_EMBEDDER_URL` 을 절대 주소로 두세요 (그러면 다운로드를 건너뜁니다)
+- 얼굴 등록 없이 빌드만 확인할 때는 `SKIP_FACE_MODELS=1 npm run build`
+
+**3. HTTPS** — 아래 기능은 `http://` 에서 조용히 실패합니다.
 
 - 얼굴 등록 (카메라 = `getUserMedia`)
 - PWA 설치 (서비스워커)
@@ -413,7 +431,7 @@ WebSocket 이 붙으면 훅 내부만 소켓 구독으로 바꾸면 되고 **화
 
 ### 모바일
 
-- 컨테이너 최대 폭 `max-w-app`(448px — 데스크톱에서도 폰 폭), 터치 타겟 최소 44px
+- 컨테이너 폭 `.app-width` — 폰에서는 화면 꽉, 480px 이상에서 336px 고정, 터치 타겟 최소 44px
 - 노치 대응: 상단 `pt-safe`, 하단 고정 요소 `pb-safe`
 - 하단 고정 버튼이 있으면 `<BottomBar.Spacer />` 로 본문 가림 방지
 

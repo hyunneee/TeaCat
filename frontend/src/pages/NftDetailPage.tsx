@@ -5,7 +5,7 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Card, Input, Textarea } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
-import { formatDateTime } from '@/shared/lib';
+import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
   PocaFullscreen,
@@ -102,34 +102,9 @@ export function NftDetailPage() {
             </p>
           </div>
 
-          {/* 검수 안내 — 남의 물건을 사는 화면이라 신뢰 신호가 필요합니다 */}
-          <div className="surface-2 flex gap-2.5 rounded-2xl p-4">
-            <BadgeCheck size={19} className="text-ink-muted mt-0.5 shrink-0" />
-            <p className="text-ink-muted text-sm leading-relaxed">
-              <b className="text-ink">공연 좌석에서 발행된 카드</b>입니다. 발행 기록이 남아 있어
-              같은 카드가 두 번 나올 수 없어요.
-            </p>
-          </div>
-
-          {/* 테두리로 가두지 않습니다. 세 줄뿐이라 여백만으로 충분히 묶여 보입니다. */}
-          <dl className="space-y-3 px-1 text-[0.9375rem]">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted flex shrink-0 items-center gap-1.5">
-                <Armchair size={16} /> 발행 좌석
-              </dt>
-              <dd className="truncate font-semibold">{nft.seatLabel}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted shrink-0">소유자</dt>
-              <dd className="truncate font-semibold">{mine ? '나' : nft.ownerName}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted shrink-0">발행일</dt>
-              <dd className="truncate font-semibold">{formatDateTime(nft.mintedAt)}</dd>
-            </div>
-          </dl>
-
-          {/* 판매자가 남긴 설명 — 있을 때만 */}
+          {/* 판매자가 남긴 설명 — 있을 때만.
+              **가격 바로 아래**입니다. 값을 보고 "왜 이 값인지" 를 읽는 순서라,
+              출처 안내(아래)보다 먼저 와야 합니다. */}
           {nft.description && (
             <div className="surface-2 space-y-1.5 rounded-2xl p-4">
               <p className="text-subtle text-sm font-semibold">판매자 설명</p>
@@ -138,6 +113,23 @@ export function NftDetailPage() {
               </p>
             </div>
           )}
+
+          {/* 출처 — 남의 물건을 사는 화면이라 신뢰 신호가 필요합니다.
+              한 문장 + 그 근거(어느 좌석에서 언제)를 **한 덩어리**로 둡니다.
+              표로 나누면 "좌석 / 발행일" 이 각각 무슨 뜻인지 다시 읽게 됩니다.
+              소유자는 보여주지 않습니다 — 살지 말지에 영향을 주지 않는 값입니다. */}
+          <div className="surface-2 flex gap-2.5 rounded-2xl p-4">
+            <BadgeCheck size={19} className="text-ink-muted mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[0.9375rem] font-semibold">공연 좌석에서 발행된 카드입니다</p>
+              <p className="text-muted mt-1 flex items-center gap-1.5 text-sm">
+                <Armchair size={15} className="shrink-0" />
+                <span className="truncate">
+                  {nft.seatLabel} · {formatDate(nft.mintedAt)} 발행
+                </span>
+              </p>
+            </div>
+          </div>
 
           {mine && nft.listPrice === null && (
             <Card className="space-y-3">

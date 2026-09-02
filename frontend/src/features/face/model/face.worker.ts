@@ -62,16 +62,53 @@ async function loadModel(url: string): Promise<{ buffer: ArrayBuffer; cached: bo
   }
 
   const hit = await cache?.match(url);
-  if (hit) return { buffer: await hit.arrayBuffer(), cached: true };
+  if (hit) {
+    const buffer = await hit.arrayBuffer();
+    /* 예전 배포에서 **엉뚱한 응답이 캐시에 들어가 있을 수** 있습니다.
+       그러면 서버를 고쳐도 이 브라우저만 계속 실패합니다 — 지우고 다시 받습니다. */
+    if (looksLikeOnnx(buffer)) return { buffer, cached: true };
+    await cache?.delete(url).catch(() => undefined);
+  }
 
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`모델을 불러오지 못했습니다 (${response.status}) — ${url}`);
   }
 
-  // put 은 body 를 소비하므로 복제해서 넣습니다.
-  await cache?.put(url, response.clone()).catch(() => undefined);
-  return { buffer: await response.arrayBuffer(), cached: false };
+  const buffer = await response.arrayBuffer();
+  /* 🔴 **200 이라고 모델인 건 아닙니다.**
+     모델이 배포에 빠져 있으면 SPA 폴백이 index.html 을 200 으로 돌려주고,
+     onnxruntime 은 그 HTML 을 protobuf 로 읽으려다
+       "ERROR_CODE: 7 ... protobuf parsing failed"
+     로 죽습니다. 그 메시지로는 원인을 알 수 없으니 여기서 먼저 걸러
+     무엇이 잘못됐는지 말해 줍니다. */
+  assertOnnx(buffer, url, response.headers.get('content-type'));
+
+  // put 은 body 를 소비하므로 복제해서 넣습니다. **검증을 통과한 것만** 캐시합니다.
+  await cache?.put(url, new Response(buffer.slice(0))).catch(() => undefined);
+  return { buffer, cached: false };
+}
+
+/**
+ * ONNX 는 protobuf 이고 첫 필드가 `ir_version`(field 1, varint)이라
+ * 파일이 언제나 **0x08** 로 시작합니다. (실측: YuNet·SFace 둘 다 08 06 12…)
+ */
+function looksLikeOnnx(buffer: ArrayBuffer): boolean {
+  return buffer.byteLength > 1024 && new Uint8Array(buffer, 0, 1)[0] === 0x08;
+}
+
+function assertOnnx(buffer: ArrayBuffer, url: string, contentType: string | null) {
+  if (looksLikeOnnx(buffer)) return;
+
+  const head = new Uint8Array(buffer, 0, Math.min(1, buffer.byteLength))[0];
+  const html = contentType?.includes('text/html') || head === 0x3c; // '<'
+
+  throw new Error(
+    html
+      ? `얼굴 인식 모델을 찾지 못했습니다. 서버가 모델 대신 페이지(HTML)를 돌려줬어요. ` +
+        `배포에 모델 파일이 포함됐는지 확인해 주세요 — ${url}`
+      : `모델 파일이 손상됐습니다 (${buffer.byteLength}바이트) — ${url}`,
+  );
 }
 
 /** 기대한 출력이 없으면 조용히 이상한 좌표를 내는 대신 여기서 터뜨립니다. */
@@ -99,7 +136,6 @@ async function loadWasmBinary(url: string): Promise<ArrayBuffer | null> {
     const hit = await cache?.match(gzUrl);
     const response = hit ?? (await fetch(gzUrl));
     if (!response.ok) return null;
-    if (!hit) await cache?.put(gzUrl, response.clone()).catch(() => undefined);
 
     const buffer = await response.arrayBuffer();
     const head = new Uint8Array(buffer.slice(0, 4));
@@ -108,9 +144,16 @@ async function loadWasmBinary(url: string): Promise<ArrayBuffer | null> {
        그럼 여기 도착한 건 wasm 그 자체입니다. 안 붙이면 gzip 바이트가 그대로 옵니다.
        어느 쪽이든 **회선을 지나간 양은 압축본 크기**로 같습니다 — 앞 4바이트로 구분합니다. */
     const isWasm = head[0] === 0x00 && head[1] === 0x61 && head[2] === 0x73 && head[3] === 0x6d;
-    if (isWasm) return buffer;
-
     const isGzip = head[0] === 0x1f && head[1] === 0x8b;
+
+    /* `.gz` 가 없는 호스트는 SPA 폴백으로 **index.html 을 200 으로** 줍니다.
+       그걸 캐시에 넣어두면 다음 방문에도 같은 쓰레기를 읽습니다 —
+       둘 중 하나로 확인된 것만 캐시합니다. */
+    if (!hit && (isWasm || isGzip)) {
+      await cache?.put(gzUrl, new Response(buffer.slice(0))).catch(() => undefined);
+    }
+
+    if (isWasm) return buffer;
     if (!isGzip || typeof DecompressionStream !== 'function') return null;
 
     return await new Response(

@@ -27,6 +27,9 @@ export function PocaArt({ seed, imageUrl, alt, className }: Props) {
         src={imageUrl}
         alt={alt}
         loading="lazy"
+        /* 길게 누르면 브라우저가 이미지 드래그·저장을 가로채면서 pointercancel 이 옵니다.
+           그러면 기울이기가 중간에 끊깁니다. (PocaFullscreen 주석 참고) */
+        draggable={false}
         className={cn('aspect-[2/3] w-full rounded-lg object-cover', className)}
       />
     );
