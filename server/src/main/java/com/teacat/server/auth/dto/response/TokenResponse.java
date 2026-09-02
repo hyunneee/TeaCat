@@ -2,8 +2,13 @@ package com.teacat.server.auth.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "로그인 응답")
-public record LoginResponse(
+/**
+ * 로그인 · 토큰 재발급 응답.
+ *
+ * 리프레시 토큰은 여기 담지 않는다. httpOnly 쿠키로만 나간다(JS 가 읽을 수 없어야 한다).
+ */
+@Schema(description = "액세스 토큰 응답")
+public record TokenResponse(
 
         @Schema(description = "액세스 토큰")
         String accessToken,
@@ -17,7 +22,7 @@ public record LoginResponse(
 
     private static final String TOKEN_TYPE_BEARER = "Bearer";
 
-    public static LoginResponse of(String accessToken, long expiresIn) {
-        return new LoginResponse(accessToken, TOKEN_TYPE_BEARER, expiresIn);
+    public static TokenResponse of(String accessToken, long expiresIn) {
+        return new TokenResponse(accessToken, TOKEN_TYPE_BEARER, expiresIn);
     }
 }

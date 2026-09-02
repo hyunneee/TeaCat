@@ -134,6 +134,21 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
 - 공개 경로는 `SecurityConfig.PUBLIC_ENDPOINTS` 한 곳에서만 관리합니다.
 - 비밀번호는 `PasswordEncoder`(BCrypt)로만 저장·검증합니다.
 
+### 인증 흐름 (자동 로그인)
+
+| 토큰 | 어디에 | 수명 | 저장소 |
+|---|---|---|---|
+| 액세스 토큰 (JWT) | 응답 바디 → 프론트 메모리/스토어 → `Authorization: Bearer` | 1시간 | 없음(무상태 검증) |
+| 리프레시 토큰 (난수) | **httpOnly 쿠키** (`jwt.refresh-cookie.path`, 기본 `/`) | 14일 | Redis `refresh:{token}` → userId |
+
+- 리프레시 토큰은 JWT 가 아니라 **의미 없는 난수**입니다. Redis 에서 지우면 즉시 무효화됩니다.
+- `POST /auth/refresh` 는 **회전**합니다 — 쓴 토큰은 폐기하고 새 토큰을 쿠키로 다시 내려줍니다.
+- 리프레시 토큰을 응답 바디에 담거나 JS 가 읽을 수 있는 곳에 두지 마세요.
+- 쿠키를 주고받으려면 CORS `allowCredentials` 가 필요하고, 그래서 origin 에 `*` 를 못 씁니다.
+  허용 주소는 `cors.allowed-origins` 에만 적습니다.
+- 쿠키 `path` 는 **브라우저가 보는 경로** 기준입니다. 프론트가 `/api` 프리픽스로 호출하면
+  `REFRESH_COOKIE_PATH=/api/auth` 처럼 맞춰야 재발급 요청에 쿠키가 실려 옵니다.
+
 ---
 
 ## 5. Flyway 규칙
@@ -191,3 +206,4 @@ cd server
 ## [규칙 변경 이력]
 
 - 2026-09-02 최초 작성 (회원 도메인 작업 중 정리)
+- 2026-09-02 인증 흐름(자동 로그인 · 리프레시 토큰 회전) 항목 추가

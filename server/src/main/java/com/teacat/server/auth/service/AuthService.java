@@ -2,10 +2,11 @@ package com.teacat.server.auth.service;
 
 import com.teacat.server.auth.dto.request.LoginRequest;
 import com.teacat.server.auth.dto.request.SignupRequest;
-import com.teacat.server.auth.dto.response.LoginResponse;
 import com.teacat.server.auth.dto.response.SignupResponse;
+import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.exception.AuthErrorCode;
 import com.teacat.server.auth.security.JwtTokenProvider;
+import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenProvider refreshTokenProvider;
 
     /**
      * 회원가입 (API-101).
@@ -62,7 +65,7 @@ public class AuthService {
      *
      * 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다(계정 존재 여부 노출 방지).
      */
-    public LoginResponse login(LoginRequest request) {
+    public TokenPair login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.LOGIN_FAILED));
 
@@ -70,9 +73,46 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.LOGIN_FAILED);
         }
 
-        return LoginResponse.of(
+        return issueTokens(user);
+    }
+
+    /**
+     * 액세스 토큰 재발급 (자동 로그인).
+     *
+     * 한 번 쓴 리프레시 토큰은 즉시 폐기하고 새로 발급한다(회전).
+     * 탈퇴한 회원은 조회되지 않으므로 자연히 재발급이 막힌다.
+     */
+    public TokenPair reissue(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw new BusinessException(AuthErrorCode.REFRESH_TOKEN_REQUIRED);
+        }
+
+        Long userId = refreshTokenProvider.resolveUserId(refreshToken);
+        refreshTokenProvider.revoke(refreshToken);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN));
+
+        return issueTokens(user);
+    }
+
+    /**
+     * 로그아웃.
+     *
+     * 이미 지워진 토큰으로 다시 불러도 실패로 취급하지 않는다(멱등).
+     * 액세스 토큰은 만료(기본 1시간)까지 유효하다 — 즉시 차단이 필요해지면 블랙리스트를 도입해야 한다.
+     */
+    public void logout(String refreshToken) {
+        if (StringUtils.hasText(refreshToken)) {
+            refreshTokenProvider.revoke(refreshToken);
+        }
+    }
+
+    private TokenPair issueTokens(User user) {
+        return new TokenPair(
                 jwtTokenProvider.createAccessToken(user.getId(), user.getRole()),
-                jwtTokenProvider.getAccessTokenValiditySeconds()
+                jwtTokenProvider.getAccessTokenValiditySeconds(),
+                refreshTokenProvider.issue(user.getId())
         );
     }
 }
