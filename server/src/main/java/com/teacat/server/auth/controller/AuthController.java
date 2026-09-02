@@ -2,6 +2,8 @@ package com.teacat.server.auth.controller;
 
 import com.teacat.server.auth.dto.request.LoginRequest;
 import com.teacat.server.auth.dto.request.SignupRequest;
+import com.teacat.server.auth.dto.response.LoginResponse;
+import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.SignupResponse;
 import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.dto.response.TokenResponse;
@@ -40,11 +42,14 @@ public class AuthController {
 
     @Operation(
             summary = "로그인",
-            description = "액세스 토큰은 응답 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려갑니다."
+            description = "액세스 토큰과 내 정보는 응답 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려갑니다."
     )
     @PostMapping("/login")
-    public ResponseEntity<BaseResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {
-        return tokenResponse(authService.login(request));
+    public ResponseEntity<BaseResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
+        LoginResult result = authService.login(request);
+
+        return withRefreshTokenCookie(result.tokens())
+                .body(BaseResponse.success(LoginResponse.of(result.tokens(), result.user())));
     }
 
     @Operation(
@@ -55,7 +60,10 @@ public class AuthController {
     public ResponseEntity<BaseResponse<TokenResponse>> refresh(
             @Parameter(hidden = true)
             @CookieValue(name = RefreshTokenCookieFactory.COOKIE_NAME, required = false) String refreshToken) {
-        return tokenResponse(authService.reissue(refreshToken));
+        TokenPair tokens = authService.reissue(refreshToken);
+
+        return withRefreshTokenCookie(tokens)
+                .body(BaseResponse.success(TokenResponse.of(tokens.accessToken(), tokens.accessTokenExpiresIn())));
     }
 
     @Operation(summary = "로그아웃", description = "리프레시 토큰을 폐기하고 쿠키를 지웁니다.")
@@ -70,10 +78,8 @@ public class AuthController {
                 .body(BaseResponse.success("로그아웃되었습니다."));
     }
 
-    private ResponseEntity<BaseResponse<TokenResponse>> tokenResponse(TokenPair tokens) {
+    private ResponseEntity.BodyBuilder withRefreshTokenCookie(TokenPair tokens) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.create(tokens.refreshToken()).toString())
-                .body(BaseResponse.success(
-                        TokenResponse.of(tokens.accessToken(), tokens.accessTokenExpiresIn())));
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.create(tokens.refreshToken()).toString());
     }
 }

@@ -2,12 +2,14 @@ package com.teacat.server.auth.service;
 
 import com.teacat.server.auth.dto.request.LoginRequest;
 import com.teacat.server.auth.dto.request.SignupRequest;
+import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.SignupResponse;
 import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.exception.AuthErrorCode;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
@@ -65,7 +67,7 @@ public class AuthService {
      *
      * 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다(계정 존재 여부 노출 방지).
      */
-    public TokenPair login(LoginRequest request) {
+    public LoginResult login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.LOGIN_FAILED));
 
@@ -73,7 +75,7 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.LOGIN_FAILED);
         }
 
-        return issueTokens(user);
+        return new LoginResult(issueTokens(user), MyInfoResponse.from(user));
     }
 
     /**

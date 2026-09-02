@@ -1,6 +1,5 @@
 package com.teacat.server.auth.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teacat.server.auth.exception.AuthErrorCode;
 import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.common.response.BaseResponse;
@@ -10,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +36,6 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        objectMapper.writeValue(response.getWriter(), BaseResponse.fail(errorCode));
+        response.getWriter().write(objectMapper.writeValueAsString(BaseResponse.fail(errorCode)));
     }
 }

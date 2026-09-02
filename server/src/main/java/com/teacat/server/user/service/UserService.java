@@ -82,7 +82,7 @@ public class UserService {
             throw new BusinessException(UserErrorCode.INVALID_FACE_EMBEDDING);
         }
 
-        user.registerFace(Face.of(request.embedding().clone()));
+        user.registerFace(Face.of(request.embedding().clone(), request.modelVersion()));
     }
 
     /** 얼굴 정보 삭제 (API-110) */

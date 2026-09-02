@@ -1,6 +1,5 @@
 package com.teacat.server.common.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teacat.server.auth.security.JwtAccessDeniedHandler;
 import com.teacat.server.auth.security.JwtAuthenticationEntryPoint;
 import com.teacat.server.auth.security.JwtAuthenticationFilter;
@@ -22,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
