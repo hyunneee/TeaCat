@@ -15,11 +15,4 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SwaggerConfig {
 
-    @Bean
-    public GroupedOpenApi paymentOpenApi() {
-        return GroupedOpenApi.builder()
-                .group("결제 관련 API")
-                .pathsToMatch("/api/payment/**")
-                .build();
-    }
 }
