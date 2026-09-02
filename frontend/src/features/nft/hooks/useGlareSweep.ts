@@ -5,6 +5,14 @@ import { EASE } from '@/shared/lib';
 /** 빛이 카드를 한 번 훑는 데 걸리는 시간 */
 const SWEEP_SECONDS = 1.05;
 
+/* ── 동작 줄이기용 **정지 광택** ────────────────────────────
+   움직임을 지운다고 광택까지 지우면 카드가 인쇄된 종이처럼 죽어 보입니다.
+   빛을 사선 한가운데에 **세워두기만** 합니다 (애니메이션 없음).
+   🔴 안드로이드는 **절전 모드만 켜도** prefers-reduced-motion 이 reduce 라,
+      여기서 아무것도 안 하면 "실제 폰에서만 반짝임이 없는" 상태가 됩니다. */
+const STATIC_POSITION = 0.42;
+const STATIC_INTENSITY = 0.5;
+
 interface Options {
   /** 처음 한 번 훑기까지의 지연(ms). 화면에 자리를 잡은 뒤여야 "막 도착한 카드" 로 읽힙니다. */
   delayMs?: number;
@@ -23,7 +31,8 @@ interface Options {
  *    무한 루프 반짝임은 전형적인 "AI 가 만든 티" 입니다. (DESIGN.md 8장)
  *    상세 화면의 **한 장**에만, 그리고 반복은 전체화면처럼 카드가 주인공일 때만.
  *
- * ⚠️ `prefers-reduced-motion` 이면 아무것도 움직이지 않습니다.
+ * ⚠️ `prefers-reduced-motion` 이면 **움직이지 않는 광택**으로 대체합니다
+ *    (끄지 않습니다 — DESIGN.md 3장 "동작 줄이기" 참고).
  */
 export function useGlareSweep({ delayMs = 260, repeatMs, enabled = true }: Options = {}) {
   const reduced = useReducedMotion() ?? false;
@@ -42,7 +51,13 @@ export function useGlareSweep({ delayMs = 260, repeatMs, enabled = true }: Optio
   }, [glare, intensity, reduced]);
 
   useEffect(() => {
-    if (!enabled || reduced) return;
+    if (!enabled) return;
+
+    if (reduced) {
+      glare.set(STATIC_POSITION);
+      intensity.set(STATIC_INTENSITY);
+      return;
+    }
 
     const first = setTimeout(sweep, delayMs);
     if (!repeatMs) return () => clearTimeout(first);
@@ -52,7 +67,7 @@ export function useGlareSweep({ delayMs = 260, repeatMs, enabled = true }: Optio
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [sweep, delayMs, repeatMs, enabled, reduced]);
+  }, [sweep, delayMs, repeatMs, enabled, reduced, glare, intensity]);
 
   return { glare, intensity, sweep };
 }

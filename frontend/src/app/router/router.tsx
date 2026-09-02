@@ -58,6 +58,41 @@ const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
+/**
+ * 첫 화면이 그려진 뒤 **한가할 때** 미리 받아 두는 화면들.
+ *
+ * 페이지를 lazy 로 쪼갠 이유는 첫 진입을 가볍게 하려는 것이지, 이동할 때마다
+ * 기다리게 하려는 게 아닙니다. 코드 조각이 아직 없으면 이동하는 순간
+ * 화면이 **비었다가**(로딩) 채워져서, 특히 휴대폰에서 흰 화면이 깜빡이는 것처럼 보입니다.
+ *
+ * 그래서 **첫 페인트 뒤 유휴 시간에** 자주 가는 화면만 먼저 받아 둡니다.
+ * 첫 진입 속도는 그대로고(이미 화면은 그려진 뒤), 두 번째 이동부터 대기가 사라집니다.
+ * ⚠️ 여기에 무거운 화면(얼굴 등록·좌석맵)을 넣지 마세요 — 안 갈 사람의 데이터를 태웁니다.
+ */
+const WARM_ROUTES = [
+  () => import('@/pages/ConcertListPage'),
+  () => import('@/pages/ConcertDetailPage'),
+  () => import('@/pages/NftMarketPage'),
+  () => import('@/pages/NftDetailPage'),
+  () => import('@/pages/MyTicketsPage'),
+  () => import('@/pages/MyPage'),
+];
+
+export function warmRoutes() {
+  const run = () => {
+    /* 실패는 무시합니다 — 미리 받기는 편의일 뿐이고,
+       실제 이동할 때 lazy 가 다시 받습니다. */
+    for (const load of WARM_ROUTES) void load().catch(() => undefined);
+  };
+
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    // 사파리에는 requestIdleCallback 이 없습니다 (17.4 이전)
+    setTimeout(run, 1200);
+  }
+}
+
 /** lazy 페이지를 Suspense + ErrorBoundary 로 감싸는 헬퍼.
     경로가 바뀌면 에러 상태가 자동으로 풀립니다. */
 const withBoundary = (element: ReactNode) => <RouteBoundary>{element}</RouteBoundary>;
