@@ -262,6 +262,17 @@
     height: 100%;
     -webkit-text-size-adjust: 100%;
 
+    /* 🔴 화면 끝에서 더 끌었을 때의 **고무줄 스크롤을 막습니다.**
+       이건 반드시 `html` 에 있어야 합니다 — overflow 와 달리
+       overscroll-behavior 는 body → 뷰포트로 **전파되지 않습니다.**
+       (크롬은 호환을 위해 body 도 봐 주지만, 사파리는 규격대로 html 만 봅니다)
+
+       body 에만 걸어 뒀을 때 iOS 에서 이런 일이 났습니다:
+       목록 맨 아래에서 더 끌면 문서 전체가 위로 딸려 올라가는데
+       `position: sticky` 헤더는 그 튕김을 따라가지 못해,
+       **내용이 헤더를 덮고 지나가는 것처럼** 보였습니다. */
+    overscroll-behavior: none;
+
     /* 스크롤바를 숨깁니다.
        데스크톱에서 스크롤바가 나타났다 사라질 때마다 폭이 바뀌어
        레이아웃이 좌우로 밀립니다(콘텐츠 양에 따라 페이지가 흔들림).
@@ -274,7 +285,7 @@
     background-color: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    /* iOS 고무줄 스크롤 때문에 PWA 가 웹처럼 보이는 것 방지 */
+    /* 크롬 호환용 — 규격대로 듣는 건 위 html 쪽입니다 (거기 주석 참고) */
     overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
