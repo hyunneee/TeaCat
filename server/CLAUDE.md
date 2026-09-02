@@ -1,0 +1,193 @@
+# CLAUDE.md — 티캣 백엔드 공통 규칙
+
+> 이 파일은 **Claude Code가 `server/` 에서 작업할 때 따라야 하는 규칙**입니다.
+> 팀원 여러 명이 각자 Claude로 작업하기 때문에, 이 문서가 유일한 기준입니다.
+> (프론트엔드 규칙은 [`../client/CLAUDE.md`](../client/CLAUDE.md) 에 따로 있습니다)
+
+---
+
+## 0. 규칙 변경 절차
+
+아래를 바꿔야 하는 작업은 **먼저 사용자에게 물어보세요.**
+
+| 변경 대상 | 예시 |
+|---|---|
+| 이 `CLAUDE.md` 자체 | 규칙 추가/수정/삭제 |
+| 패키지 구조 | 새 최상위 패키지, 도메인 내부 구성 변경 |
+| 공통 응답·예외 구조 | `BaseResponse`, `ErrorCode`, `GlobalExceptionHandler` |
+| 인증 방식 | JWT 정책, `SecurityConfig` 의 공개 경로 |
+| 라이브러리 추가/교체 | `build.gradle` 의존성 |
+| 이미 머지된 마이그레이션 | `db/migration/**` 수정 |
+| 설정 체계 | `application.yaml` 구조, 환경변수 |
+
+규칙 **안에서** 하는 일반 작업(도메인 추가, API 구현, 버그 수정)은 물어볼 필요 없습니다.
+
+---
+
+## 1. 기술 스택
+
+| 영역 | 선택 |
+|---|---|
+| 언어/런타임 | Java 21 (Gradle toolchain), Spring Boot 4.1.x |
+| 웹 | `spring-boot-starter-webmvc` |
+| 영속성 | Spring Data JPA + Hibernate, PostgreSQL 18 (pgvector) |
+| 마이그레이션 | Flyway (`ddl-auto: validate` — 스키마의 원본은 SQL) |
+| 캐시/세션 | Redis |
+| 인증 | Spring Security + JWT (jjwt) |
+| 문서 | springdoc-openapi (Swagger UI) |
+| 벡터 | hibernate-vector + pgvector (얼굴 임베딩 512차원) |
+| 보일러플레이트 | Lombok |
+
+---
+
+## 2. 패키지 구조
+
+```
+com.teacat.server
+├── common/              도메인을 모르는 공용 코드
+│   ├── config/          SwaggerConfig, SecurityConfig …
+│   ├── exception/       BaseResponse 규격의 예외 뼈대
+│   └── response/        BaseResponse
+├── auth/                인증 도메인
+└── <도메인>/             user, performance, booking, ticket …
+```
+
+### 도메인 내부 구성 (예: `performance`)
+
+```
+<도메인>/
+├── controller/
+├── dto/
+│   ├── request/
+│   └── response/
+├── entity/
+├── exception/           <도메인>ErrorCode
+├── repository/
+└── service/
+```
+
+**모든 도메인이 이 구조를 그대로 따릅니다.** 폴더를 늘리거나 이름을 바꾸려면 0번 절차입니다.
+(예외: `auth/security/` — 필터·토큰 프로바이더처럼 인증 도메인 고유의 인프라 코드)
+
+### 의존 방향
+
+```
+controller → service → repository → entity
+                  ↘ 다른 도메인의 service / repository
+```
+
+- `common` 은 도메인을 **모릅니다.** `common` 안에서 도메인 패키지를 import 하지 마세요.
+  (`SecurityConfig` 가 `auth.security` 를 조립하는 것처럼, 스프링 설정이 빈을 엮는 경우만 예외)
+- 컨트롤러는 **엔티티를 노출하지 않습니다.** 응답은 항상 `dto/response` 의 record 로 변환합니다.
+
+---
+
+## 3. 공통 응답과 예외
+
+### 3-1. 모든 응답은 `BaseResponse` 로 감쌉니다
+
+```java
+return ResponseEntity.ok(BaseResponse.success(data));                    // 데이터만
+return ResponseEntity.ok(BaseResponse.success("변경되었습니다."));         // 메시지만
+return ResponseEntity.status(HttpStatus.CREATED)
+        .body(BaseResponse.success("가입이 완료되었습니다.", data));        // 메시지 + 데이터
+```
+
+`null` 필드는 응답 JSON에서 빠집니다(`@JsonInclude(NON_NULL)`).
+프론트는 `{ success, data }` 봉투를 벗겨 쓰므로 **봉투를 건너뛰지 마세요.**
+
+### 3-2. 예외는 `BusinessException` + 도메인별 `ErrorCode`
+
+```java
+throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+```
+
+- 에러 코드는 **도메인마다 하나의 enum** 으로 관리합니다: `<도메인>/exception/<도메인>ErrorCode.java`
+- `ErrorCode` 인터페이스(`httpStatus`, `code`, `message`)를 구현합니다.
+- 코드 문자열은 `도메인_일련번호` 형식이고 **한 번 나간 코드는 바꾸지 않습니다.**
+  (프론트가 코드로 분기합니다)
+
+| 도메인 | prefix | 예 |
+|---|---|---|
+| 인증 | `AUTH_` | `AUTH_001` 로그인 실패 |
+| 회원 | `USER_` | `USER_001` 존재하지 않는 회원 |
+
+- `GlobalExceptionHandler` 가 `BusinessException`, `@Valid` 실패, 그 외 예외를 처리합니다.
+  **컨트롤러/서비스에서 try-catch 로 응답을 만들지 마세요.**
+- Security 필터에서 나는 401/403 은 핸들러까지 오지 않으므로
+  `JwtAuthenticationEntryPoint` / `JwtAccessDeniedHandler` 가 같은 형식으로 내려줍니다.
+
+### 3-3. 검증은 DTO에서
+
+요청 DTO는 record + Bean Validation(`@NotBlank`, `@Pattern` …)이고, 컨트롤러에서 `@Valid` 를 붙입니다.
+서비스는 **비즈니스 규칙**(중복, 상태 전이)만 검사합니다.
+
+---
+
+## 4. API 규칙
+
+- 문서화: 컨트롤러에 `@Tag`, 메서드에 `@Operation`, DTO 필드에 `@Schema` 를 답니다.
+- 인증이 필요한 컨트롤러에는 `@SecurityRequirement(name = "bearerAuth")` 를 붙입니다.
+- 인증 주체는 `@AuthenticationPrincipal AuthUser authUser` 로 받습니다.
+  (`@Parameter(hidden = true)` 를 함께 붙여 Swagger 파라미터에서 숨깁니다)
+  **경로/바디로 받은 userId 를 믿지 마세요.**
+- 공개 경로는 `SecurityConfig.PUBLIC_ENDPOINTS` 한 곳에서만 관리합니다.
+- 비밀번호는 `PasswordEncoder`(BCrypt)로만 저장·검증합니다.
+
+---
+
+## 5. Flyway 규칙
+
+- **버전 번호**: 날짜 + 시간 + 수정사항 조합 (예: `V20260722_0837__add_user.sql`)
+  - 언더스코어 개수 정확히 — 날짜 뒤 1개, 시간 뒤 2개
+- **한번 머지된 SQL은 수정 금지** (수정이 필요하면 새 버전을 추가)
+- **머지 전에 최신화 및 순서 정렬 필수**
+  - 작업 브랜치에 `dev` 를 PULL 하여 최신화
+  - 추가한 SQL 버전이 **제일 마지막에 실행되도록** 날짜+시간 수정
+  - 로컬 DB에서 문제없이 실행되는지 확인
+- 엔티티는 SQL을 따라갑니다. `ddl-auto` 는 `validate` 이며 **바꾸지 마세요.**
+
+---
+
+## 6. 개인정보 · 생체정보
+
+- **얼굴 원본 이미지는 서버로 오지 않습니다.** 클라이언트(브라우저)에서 추출한
+  512차원 임베딩만 받아 `faces.embedding` 에 저장합니다.
+  (프론트 규칙 `client/CLAUDE.md` 7장과 한 쌍입니다 — 서버가 이미지를 받고 싶어지면 먼저 상의)
+- 회원 탈퇴는 소프트 삭제(`users.deleted_at`)이고, **생체정보는 탈퇴 시 즉시 파기**합니다.
+- 로그에 이메일·전화번호·토큰·임베딩을 남기지 마세요.
+- 시크릿은 코드에 박지 않습니다. `application.yaml` 은 로컬 기본값 + 환경변수 오버라이드
+  (`${JWT_SECRET:...}`) 형태로만 둡니다.
+
+---
+
+## 7. 로컬 실행
+
+```bash
+# 1) 인프라 (프로젝트 루트에서)
+docker compose -f docker/docker-compose.yml up -d
+
+# 2) 서버
+cd server
+./gradlew bootRun
+```
+
+- JDK 21 이 필요합니다 (`JAVA_HOME` 설정 필요).
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- 애플리케이션 기동 시 Flyway가 마이그레이션을 적용하고 Hibernate가 스키마를 검증합니다.
+
+---
+
+## 8. 커밋
+
+```
+<type>: <요약> (S15P21A402-<이슈번호>)
+```
+
+`feat`, `fix`, `chore`, `refactor`, `test`, `docs` 를 씁니다. 본문·요약은 한국어입니다.
+
+---
+
+## [규칙 변경 이력]
+
+- 2026-09-02 최초 작성 (회원 도메인 작업 중 정리)
