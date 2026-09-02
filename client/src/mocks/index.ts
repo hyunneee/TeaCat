@@ -19,14 +19,13 @@ import { createMockAdapter } from './router';
 export async function setupMocks() {
   // 핸들러 파일들은 import 되는 순간 스스로 라우트를 등록합니다.
   await Promise.all([
-    import('./handlers/auth'),
+    import('./handlers/auth'), // 캡차만 남아 있습니다 (로그인·내 정보·얼굴은 실서버)
     import('./handlers/concert'),
     import('./handlers/booking'),
     import('./handlers/ticket'),
     import('./handlers/resale'),
     import('./handlers/nft'),
     import('./handlers/token'),
-    import('./handlers/face'),
     import('./handlers/banner'),
     import('./handlers/payment'),
     import('./handlers/appInfo'),
@@ -37,7 +36,7 @@ export async function setupMocks() {
   http.raw.defaults.adapter = createMockAdapter(getAdapter(original));
 
   console.info(
-    '%c[MOCK] 목업 데이터로 동작 중입니다. 로그인: ssafy / ssafy1234',
+    '%c[MOCK] 일부 도메인만 목업입니다. 회원·인증·얼굴은 실제 서버로 나갑니다.',
     'color:#a855f7;font-weight:bold',
   );
 }

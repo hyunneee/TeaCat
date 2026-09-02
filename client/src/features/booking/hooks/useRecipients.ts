@@ -17,7 +17,7 @@ export function useRecipients(seatIds: readonly string[]) {
   const recipients = useBookingStore((s) => s.recipients);
   const setRecipient = useBookingStore((s) => s.setRecipient);
 
-  const myLoginId = user?.loginId ?? '';
+  const myLoginId = user?.nickname ?? '';
 
   // 아직 지정되지 않은 좌석은 본인으로 채워 둡니다.
   useEffect(() => {

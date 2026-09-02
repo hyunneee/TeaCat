@@ -51,7 +51,7 @@ export function NftDetailPage() {
     );
   }
 
-  const mine = nft.ownerId === user?.id;
+  const mine = !!user && nft.ownerId === String(user.userId);
   const balance = token?.balance ?? 0;
   const affordable = nft.listPrice !== null && balance >= nft.listPrice;
 
