@@ -22,6 +22,7 @@ import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
+import com.teacat.server.wallet.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +64,7 @@ public class OauthService {
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenProvider refreshTokenProvider;
+    private final WalletService walletService;
 
     public Duration getSignupTicketValidity() {
         return SIGNUP_TICKET_TTL;
@@ -126,6 +128,9 @@ public class OauthService {
                 request.phone()
         ));
         link(user, profile);
+
+        // 일반 가입과 같다 — 지갑 발급이 실패하면 이 가입도 통째로 롤백된다
+        walletService.provision(user);
 
         // 티켓은 한 번만 쓴다
         oauthSignupTicketRepository.delete(ticket);

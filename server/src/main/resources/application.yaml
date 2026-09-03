@@ -95,3 +95,14 @@ oauth:
     # SSAFY 문서에 state 가 없어 기본은 끕니다. 지원이 확인되면 true 로 켜세요.
     #   꺼도 CSRF 방어는 유지됩니다 — 같은 값을 httpOnly 쿠키로 들고 있다가 콜백에서 대조합니다.
     send-state: ${SSAFY_SEND_STATE:false}
+
+blockchain:
+  # 블록체인 서비스(Node.js)는 마스터 니모닉을 쥐고 있어 루프백에만 열려 있습니다
+  base-url: ${BLOCKCHAIN_API_URL:http://127.0.0.1:4000}
+  # blockchain/.env 의 INTERNAL_API_KEY 와 같은 값이어야 합니다. server/.env 에 넣으세요
+  internal-api-key: ${BLOCKCHAIN_INTERNAL_API_KEY:}
+  # blockchain/.env 의 CHAIN_ID 와 반드시 같아야 합니다 (31221 SSAFY 체인 / 31337 로컬)
+  chain-id: ${BLOCKCHAIN_CHAIN_ID:31221}
+  connect-timeout: 3s
+  # 체인에 트랜잭션을 보내고 오므로 넉넉히 잡습니다 (SSAFY 체인은 블록이 10초)
+  read-timeout: 20s
