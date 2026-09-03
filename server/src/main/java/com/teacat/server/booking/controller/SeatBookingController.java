@@ -1,5 +1,6 @@
 package com.teacat.server.booking.controller;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.booking.dto.response.SeatHoldResponse;
 import com.teacat.server.common.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,18 +10,20 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Seat Booking", description = "공연 회차별 좌석 선점(HOLD) API")
+@Tag(name = "좌석 선점", description = "공연 회차별 좌석 선점(HOLD) API")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@RequestMapping("/api/performance-details/{performanceDetailId}/seats")
+@RequestMapping("/performance-details/{performanceDetailId}/seats")
 public class SeatBookingController {
 
     @Operation(
@@ -145,8 +148,7 @@ public class SeatBookingController {
             @Parameter(description = "선점할 좌석 ID", example = "1024")
             @PathVariable Long seatId,
 
-            @Parameter(description = "요청자 ID (인증 도입 전 임시 헤더)", example = "7")
-            @RequestHeader("X-User-Id") Long userId
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
     ) {
         throw new UnsupportedOperationException("TODO: 좌석 선점 구현");
     }
@@ -235,8 +237,7 @@ public class SeatBookingController {
             @Parameter(description = "해제할 좌석 ID", example = "1024")
             @PathVariable Long seatId,
 
-            @Parameter(description = "요청자 ID (인증 도입 전 임시 헤더)", example = "7")
-            @RequestHeader("X-User-Id") Long userId
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
     ) {
         throw new UnsupportedOperationException("TODO: 좌석 선점 해제 구현");
     }
