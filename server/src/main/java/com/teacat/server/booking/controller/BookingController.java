@@ -1,7 +1,9 @@
 package com.teacat.server.booking.controller;
 
 import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.booking.dto.response.MyHoldResponse;
 import com.teacat.server.booking.dto.response.SeatHoldResponse;
+import com.teacat.server.booking.service.BookingService;
 import com.teacat.server.common.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,19 +14,28 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "좌석 선점", description = "공연 회차별 좌석 선점(HOLD) API")
+import java.util.List;
+
+@Tag(name = "좌석 선점", description = "좌석 선점(HOLD) · 해제 · 내 선점 목록 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
-@RequestMapping("/performance-details/{performanceDetailId}/seats")
+@RequiredArgsConstructor
 public class BookingController {
+
+    // 선점/해제는 회차 하위 리소스이고 내 선점 목록은 사용자 기준이라 루트가 다르다.
+    // 클래스 레벨 @RequestMapping 으로는 두 루트를 담을 수 없어 메서드마다 전체 경로를 쓴다.
+    private static final String SEAT_PATH = "/performance-details/{performanceDetailId}/seats/{seatId}";
+
+    private final BookingService bookingService;
 
     @Operation(
             summary = "좌석 선점",
@@ -37,7 +48,8 @@ public class BookingController {
                     - **선점 시간 연장은 불가능합니다.** 이미 본인이 선점한 좌석을
                       다시 선점하면 `ERR_BOOKING_010`으로 실패합니다.
                       만료 시각은 최초 선점 시점에 확정되며 재요청으로 갱신되지 않습니다.
-                    - 선점 시간이 만료된 다른 사용자의 좌석은 재선점 가능합니다.
+                    - 선점 시간이 만료된 좌석은 다른 사용자가 곧바로 재선점할 수 있습니다.
+                      본인의 만료된 선점도 새 좌석을 선점할 때 자동으로 해제됩니다.
                     """
     )
     @ApiResponses({
@@ -140,7 +152,7 @@ public class BookingController {
                     )
             )
     })
-    @PostMapping("/{seatId}/hold")
+    @PostMapping(SEAT_PATH + "/hold")
     public ResponseEntity<BaseResponse<SeatHoldResponse>> holdSeat(
             @Parameter(description = "공연 회차 ID", example = "45")
             @PathVariable Long performanceDetailId,
@@ -150,7 +162,8 @@ public class BookingController {
 
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
     ) {
-        throw new UnsupportedOperationException("TODO: 좌석 선점 구현");
+        return ResponseEntity.ok(BaseResponse.success(
+                bookingService.holdSeat(performanceDetailId, seatId, authUser.id())));
     }
 
     @Operation(
@@ -229,7 +242,7 @@ public class BookingController {
                     )
             )
     })
-    @DeleteMapping("/{seatId}/hold")
+    @DeleteMapping(SEAT_PATH + "/hold")
     public ResponseEntity<BaseResponse<Void>> releaseSeat(
             @Parameter(description = "공연 회차 ID", example = "45")
             @PathVariable Long performanceDetailId,
@@ -240,5 +253,29 @@ public class BookingController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
     ) {
         throw new UnsupportedOperationException("TODO: 좌석 선점 해제 구현");
+    }
+
+    @Operation(
+            summary = "내 선점 좌석 목록",
+            description = """
+                    현재 내가 선점 중인 좌석을 결제 화면에 필요한 정보와 함께 조회합니다.
+                    결제 페이지 진입점으로 사용합니다.
+
+                    - 1인 1매 제약은 **회차 단위**이므로, 회차가 다르면 여러 건이 나올 수 있습니다.
+                    - 조회 직전에 만료된 선점을 정리하므로 **유효한 선점만** 내려갑니다.
+                      선점이 없으면 빈 배열입니다.
+                    - `remainingSeconds` 는 서버(DB) 시계로 계산한 값입니다.
+                      클라이언트 시계로 `heldUntil` 을 다시 계산하지 말고 이 값으로 타이머를 돌리세요.
+                    - 만료가 임박한 순서(`heldUntil` 오름차순)로 정렬됩니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공 (선점이 없으면 빈 배열)")
+    })
+    @GetMapping("/me/holds")
+    public ResponseEntity<BaseResponse<List<MyHoldResponse>>> getMyHolds(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(bookingService.getMyHolds(authUser.id())));
     }
 }
