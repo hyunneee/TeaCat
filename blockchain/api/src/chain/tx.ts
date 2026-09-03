@@ -69,7 +69,24 @@ async function revertReasonOf(hash: string, blockNumber: number): Promise<string
     });
     return null; // 다시 해보니 성공했다면 알아낼 수 없습니다
   } catch (error) {
-    const e = error as { shortMessage?: string; reason?: string; message?: string };
+    const e = error as { data?: string; shortMessage?: string; reason?: string; message?: string };
+
+    /* 커스텀 에러를 풀어봅니다.
+       우리 컨트랙트는 `OperationAlreadyExecuted` 처럼 커스텀 에러를 쓰고, OZ 도
+       `ERC20InsufficientBalance` 를 씁니다. ABI 없이 읽으면 전부
+       "unknown custom error" 로만 나와서 Spring 이 원인을 구분할 수 없습니다. */
+    if (typeof e.data === 'string' && e.data.length > 2) {
+      try {
+        const parsed = catMoney.parseError(e.data);
+        if (parsed) {
+          const args = parsed.args.length > 0 ? `(${parsed.args.join(', ')})` : '';
+          return `${parsed.name}${args}`;
+        }
+      } catch {
+        // 우리가 모르는 에러입니다. 아래 일반 메시지로 넘어갑니다.
+      }
+    }
+
     return e.reason ?? e.shortMessage ?? e.message ?? null;
   }
 }
