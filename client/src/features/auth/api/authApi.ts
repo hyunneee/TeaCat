@@ -1,11 +1,14 @@
 import { http } from '@/shared/api';
+import { env } from '@/shared/config';
 import type {
   AuthTokens,
+  CaptchaChallenge,
   ChangeNicknameRequest,
   ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
-  CaptchaChallenge,
+  OauthSignupRequest,
+  PendingOauthSignup,
   SignupRequest,
   SignupResponse,
   User,
@@ -37,6 +40,22 @@ export const authApi = {
 
   withdraw: () => http.delete<void>('/users/me'),
 
+  /* ── SSAFY 계정 로그인 ── */
+
+  /**
+   * SSAFY 로그인 시작 주소.
+   *
+   * axios 로 부르지 않고 **페이지를 이동**시킵니다. 리디렉션을 따라가야 하고,
+   * 돌아올 때 서버가 httpOnly 쿠키를 심어 주기 때문입니다.
+   */
+  ssafyAuthorizeUrl: (): string => env.apiBaseUrl + '/auth/oauth/ssafy/authorize',
+
+  /** 가입 대기 정보 (가입 티켓 쿠키로 식별) */
+  oauthPending: () => http.get<PendingOauthSignup>('/auth/oauth/ssafy/pending'),
+
+  oauthSignup: (body: OauthSignupRequest) =>
+    http.post<LoginResponse>('/auth/oauth/ssafy/signup', body, { skipAuthRefresh: true }),
+
   /* 자동입력 방지 (캡차) — TODO(backend): 아직 목업입니다 */
   issueCaptcha: () => http.get<CaptchaChallenge>('/auth/captcha'),
 
@@ -49,4 +68,5 @@ export const authKeys = {
   all: ['auth'] as const,
   me: () => [...authKeys.all, 'me'] as const,
   captcha: (scheduleId: string) => [...authKeys.all, 'captcha', scheduleId] as const,
+  oauthPending: () => [...authKeys.all, 'oauth', 'pending'] as const,
 };

@@ -3,10 +3,8 @@ package com.teacat.server.common.config;
 import com.teacat.server.auth.security.JwtAccessDeniedHandler;
 import com.teacat.server.auth.security.JwtAuthenticationEntryPoint;
 import com.teacat.server.auth.security.JwtAuthenticationFilter;
-import com.teacat.server.auth.security.JwtProperties;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,7 +25,6 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
 

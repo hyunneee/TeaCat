@@ -1,0 +1,26 @@
+{
+  "name": "teacat-blockchain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "티캣 온체인 서비스 — Hardhat 컨트랙트 + Express API",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "workspaces": [
+    "contracts",
+    "api"
+  ],
+  "scripts": {
+    "postinstall": "npm -w @teacat/contracts run setup:env",
+    "setup:env": "npm -w @teacat/contracts run setup:env",
+    "chain": "npm -w @teacat/contracts run chain",
+    "chain:slow": "npm -w @teacat/contracts run chain:slow",
+    "chain:reset": "npm -w @teacat/contracts run deploy:localhost",
+    "deploy:ssafy": "npm -w @teacat/contracts run deploy:ssafy",
+    "compile": "npm -w @teacat/contracts run compile",
+    "test": "npm -w @teacat/contracts run test",
+    "dev": "npm -w @teacat/api run dev",
+    "build": "npm -w @teacat/contracts run build && npm -w @teacat/api run build",
+    "typecheck": "npm -w @teacat/contracts run typecheck && npm -w @teacat/api run typecheck"
+  }
+}
