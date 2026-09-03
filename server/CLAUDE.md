@@ -127,6 +127,9 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
 ## 4. API 규칙
 
 - 문서화: 컨트롤러에 `@Tag`, 메서드에 `@Operation`, DTO 필드에 `@Schema` 를 답니다.
+- Swagger 그룹은 **경로가 아니라 도메인 패키지**로 나눕니다 (`SwaggerConfig`).
+  URL 이 바뀌어도 그룹이 안 깨집니다. 도메인을 추가하면 `GroupedOpenApi` 빈을 하나 추가하세요.
+  (드롭다운 정렬은 `displayName` 기준입니다 — 그룹 이름의 숫자 접두어는 문서 주소에만 씁니다)
 - 인증이 필요한 컨트롤러에는 `@SecurityRequirement(name = "bearerAuth")` 를 붙입니다.
 - 인증 주체는 `@AuthenticationPrincipal AuthUser authUser` 로 받습니다.
   (`@Parameter(hidden = true)` 를 함께 붙여 Swagger 파라미터에서 숨깁니다)
@@ -148,6 +151,26 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
   허용 주소는 `cors.allowed-origins` 에만 적습니다.
 - 쿠키 `path` 는 **브라우저가 보는 경로** 기준입니다. 프론트가 `/api` 프리픽스로 호출하면
   `REFRESH_COOKIE_PATH=/api/auth` 처럼 맞춰야 재발급 요청에 쿠키가 실려 옵니다.
+
+### SSAFY 계정 로그인 (OAuth 2.0 Authorization Code)
+
+```
+버튼 → GET /auth/oauth/ssafy/authorize → (SSAFY 로그인)
+     → GET /auth/oauth/ssafy/callback  → 기존 회원: 리프레시 쿠키 + status=success
+                                       → 신규:     가입 티켓 쿠키 + status=signup
+     → 프론트 /oauth/callback 이 처리 (success 면 POST /auth/refresh 로 토큰 획득)
+```
+
+- **제공자 스펙에 의존하는 곳은 `auth/client/SsafyOauthClient` 하나입니다.** 주소·키는 `oauth.ssafy.*` 설정에 있고,
+  `client-secret` 은 설정 파일에 적지 않고 환경변수(`SSAFY_CLIENT_SECRET`)로만 넣습니다.
+- 설정이 비어 있으면 `AUTH_008` 로 거절합니다. 나머지 기능은 그대로 동작합니다.
+- **콜백에서 회원을 미리 만들지 않습니다.** 닉네임·전화번호가 빈 "유령 회원" 이 남기 때문입니다.
+  인증만 끝난 상태는 Redis 의 가입 티켓(10분)으로 들고 있다가 추가정보를 받을 때 회원을 만듭니다.
+- 연결의 기준은 제공자 식별자(`provider_user_id`)입니다. 이메일은 바뀔 수 있어 기준이 될 수 없습니다.
+  단, 이메일이 같은 기존 회원이 있으면 같은 사람으로 보고 자동으로 연결합니다.
+- 소셜 전용 계정은 `users.password` 가 null 입니다. 비밀번호를 쓰는 기능은 `User.hasPassword()` 로 먼저 막습니다.
+- authorize/callback 은 **브라우저가 직접 오가는 페이지 이동**이라 실패해도 JSON 을 보여줄 수 없습니다.
+  결과를 쿼리 파라미터에 담아 프론트로 되돌려 보냅니다.
 
 ---
 
@@ -188,6 +211,8 @@ cd server
 ```
 
 - JDK 21 이 필요합니다 (`JAVA_HOME` 설정 필요).
+- 시크릿은 `server/.env` 에 둡니다. `.env.example` 을 복사해서 값을 채우세요 (`.env` 는 커밋되지 않습니다).
+  `application.yaml` 의 `spring.config.import` 가 읽어들이므로 `${...}` 자리에 그대로 들어갑니다.
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - 애플리케이션 기동 시 Flyway가 마이그레이션을 적용하고 Hibernate가 스키마를 검증합니다.
 
@@ -207,3 +232,5 @@ cd server
 
 - 2026-09-02 최초 작성 (회원 도메인 작업 중 정리)
 - 2026-09-02 인증 흐름(자동 로그인 · 리프레시 토큰 회전) 항목 추가
+- 2026-09-03 SSAFY 계정 로그인 항목 추가
+- 2026-09-03 Swagger 그룹(도메인 패키지 기준) · 로컬 시크릿(.env) 항목 추가

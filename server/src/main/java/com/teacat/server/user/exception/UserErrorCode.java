@@ -17,7 +17,8 @@ public enum UserErrorCode implements ErrorCode {
     SAME_NICKNAME(HttpStatus.BAD_REQUEST, "USER_006", "현재 닉네임과 다른 닉네임을 입력해 주세요."),
     FACE_ALREADY_REGISTERED(HttpStatus.CONFLICT, "USER_007", "이미 등록된 얼굴 정보가 있습니다."),
     FACE_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_008", "등록된 얼굴 정보가 없습니다."),
-    INVALID_FACE_EMBEDDING(HttpStatus.BAD_REQUEST, "USER_009", "얼굴 특징값 형식이 올바르지 않습니다.");
+    INVALID_FACE_EMBEDDING(HttpStatus.BAD_REQUEST, "USER_009", "얼굴 특징값 형식이 올바르지 않습니다."),
+    SOCIAL_ACCOUNT_NO_PASSWORD(HttpStatus.BAD_REQUEST, "USER_010", "SSAFY 계정으로 가입한 회원은 비밀번호를 사용하지 않습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

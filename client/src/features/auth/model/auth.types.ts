@@ -79,3 +79,18 @@ export interface ChangePasswordRequest {
 export interface ChangeNicknameRequest {
   nickname: string;
 }
+
+/* ── SSAFY 계정 로그인 ── */
+
+/** SSAFY 인증은 끝났지만 가입이 안 끝난 상태. 화면을 미리 채우는 용도입니다 */
+export interface PendingOauthSignup {
+  email: string;
+  /** SSAFY 가 이름을 주지 않으면 null */
+  name: string | null;
+}
+
+export interface OauthSignupRequest {
+  name: string;
+  nickname: string;
+  phone: string;
+}

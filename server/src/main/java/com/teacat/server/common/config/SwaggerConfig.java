@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import org.springdoc.core.models.GroupedOpenApi;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @OpenAPIDefinition(
@@ -22,4 +24,52 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class SwaggerConfig {
 
+    private static final String BASE_PACKAGE = "com.teacat.server";
+
+    /**
+     * 그룹은 경로가 아니라 <b>도메인 패키지</b> 기준으로 나눈다.
+     * URL 이 바뀌어도 그룹이 깨지지 않고, 도메인별 패키지 구조와 1:1 로 맞물린다.
+     * <p>
+     * 도메인을 추가하면 여기에 빈을 하나 추가한다. 그룹 이름의 숫자 접두어는 정렬용이다.
+     */
+    @Bean
+    public GroupedOpenApi allApi() {
+        return GroupedOpenApi.builder()
+                .group("00-all")
+                .displayName("전체")
+                .packagesToScan(BASE_PACKAGE)
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi authApi() {
+        return GroupedOpenApi.builder()
+                .group("01-auth")
+                .displayName("인증")
+                .packagesToScan(BASE_PACKAGE + ".auth")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi userApi() {
+        return GroupedOpenApi.builder()
+                .group("02-user")
+                .displayName("회원")
+                .packagesToScan(BASE_PACKAGE + ".user")
+                .build();
+    }
+
+    /*
+     * 도메인이 생기면 아래 모양으로 한 벌씩 추가한다.
+     * 아직 없는 패키지로 그룹을 만들면 문서에 빈 그룹만 남으므로, 패키지를 만든 뒤에 넣는다.
+     *
+     * @Bean
+     * public GroupedOpenApi bookingApi() {
+     *     return GroupedOpenApi.builder()
+     *             .group("03-booking")
+     *             .displayName("예매")
+     *             .packagesToScan(BASE_PACKAGE + ".booking")
+     *             .build();
+     * }
+     */
 }

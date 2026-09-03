@@ -42,7 +42,8 @@ public class User {
     @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "password", nullable = false)
+    /** 소셜(SSAFY) 전용 계정은 비밀번호가 없다 */
+    @Column(name = "password")
     private String password;
 
     @Column(name = "name", nullable = false, length = 50)
@@ -89,6 +90,11 @@ public class User {
         return new User(email, encodedPassword, name, nickname, phone, UserRole.USER);
     }
 
+    /** SSAFY 등 외부 계정으로 가입 (비밀번호 없음) */
+    public static User createSocial(String email, String name, String nickname, String phone) {
+        return new User(email, null, name, nickname, phone, UserRole.USER);
+    }
+
     /** 비밀번호 변경 (API-104) */
     public void changePassword(String encodedPassword) {
         this.password = encodedPassword;
@@ -107,6 +113,11 @@ public class User {
     /** 얼굴 정보 삭제 (API-110). orphanRemoval 로 faces 행까지 함께 지워진다. */
     public void removeFace() {
         this.face = null;
+    }
+
+    /** 비밀번호로 로그인할 수 있는 계정인가 (소셜 전용 계정은 false) */
+    public boolean hasPassword() {
+        return this.password != null;
     }
 
     public boolean hasFace() {

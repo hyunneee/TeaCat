@@ -7,7 +7,7 @@ import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.SignupResponse;
 import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.dto.response.TokenResponse;
-import com.teacat.server.auth.security.RefreshTokenCookieFactory;
+import com.teacat.server.auth.security.AuthCookieFactory;
 import com.teacat.server.auth.service.AuthService;
 import com.teacat.server.common.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
-    private final RefreshTokenCookieFactory refreshTokenCookieFactory;
+    private final AuthCookieFactory authCookieFactory;
 
     @Operation(summary = "회원가입", description = "회원 생성과 1,500 CAT 지급을 한 트랜잭션으로 처리합니다. (CAT 지급은 지갑 API 연동 후 추가)")
     @PostMapping("/signup")
@@ -59,7 +59,7 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<BaseResponse<TokenResponse>> refresh(
             @Parameter(hidden = true)
-            @CookieValue(name = RefreshTokenCookieFactory.COOKIE_NAME, required = false) String refreshToken) {
+            @CookieValue(name = AuthCookieFactory.REFRESH_TOKEN_COOKIE, required = false) String refreshToken) {
         TokenPair tokens = authService.reissue(refreshToken);
 
         return withRefreshTokenCookie(tokens)
@@ -70,16 +70,16 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<BaseResponse<Void>> logout(
             @Parameter(hidden = true)
-            @CookieValue(name = RefreshTokenCookieFactory.COOKIE_NAME, required = false) String refreshToken) {
+            @CookieValue(name = AuthCookieFactory.REFRESH_TOKEN_COOKIE, required = false) String refreshToken) {
         authService.logout(refreshToken);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.expire().toString())
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.expiredRefreshToken().toString())
                 .body(BaseResponse.success("로그아웃되었습니다."));
     }
 
     private ResponseEntity.BodyBuilder withRefreshTokenCookie(TokenPair tokens) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.create(tokens.refreshToken()).toString());
+                .header(HttpHeaders.SET_COOKIE, authCookieFactory.refreshToken(tokens.refreshToken()).toString());
     }
 }

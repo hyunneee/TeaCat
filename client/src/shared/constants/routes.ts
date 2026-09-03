@@ -10,6 +10,10 @@ export const ROUTES = {
   LOGIN: '/login',
   SIGNUP: '/signup',
   SIGNUP_DONE: '/signup/done',
+  /** SSAFY 로그인 결과를 처리하는 화면 (서버가 여기로 돌려보냅니다) */
+  OAUTH_CALLBACK: '/oauth/callback',
+  /** SSAFY 인증은 됐지만 가입이 안 끝난 사람이 닉네임·전화번호를 채우는 화면 */
+  OAUTH_SIGNUP: '/oauth/signup',
 
   /* ── 얼굴 등록 (티켓 사용 자격) ── */
   FACE_REGISTER: '/face',

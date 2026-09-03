@@ -34,6 +34,10 @@ public class UserService {
     public void changePassword(Long userId, PasswordChangeRequest request) {
         User user = getUser(userId);
 
+        if (!user.hasPassword()) {
+            throw new BusinessException(UserErrorCode.SOCIAL_ACCOUNT_NO_PASSWORD);
+        }
+
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             throw new BusinessException(UserErrorCode.PASSWORD_MISMATCH);
         }
