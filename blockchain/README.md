@@ -364,7 +364,7 @@ SSAFY 체인에서는 10초쯤 걸려 무너집니다. 통합 테스트할 때 �
 | **M0** 뼈대 · SSAFY 체인 연결 · `/health` | 완료 |
 | **M1** `TicketSBT` + 릴레이어 + 발행/사용/취소 | |
 | **M2** 대사·복구 (드롭된 tx 재전송, 가스 상향) | |
-| **M3** `CatMoney`(캣머니) | 컨트랙트·테스트·가입 시드 발행 완료. SSAFY 체인 배포는 아직 |
+| **M3** `CatMoney`(캣머니) | 컨트랙트·API(잔액·발행·소각)·가입 시드 완료. SSAFY 체인 배포는 아직 |
 | | (캣머니는 발행/소각으로만 움직입니다 — 트레저리 없음. [DESIGN.md 6장](DESIGN.md#6-컨트랙트-설계)) |
 | **M4** ERC-4337 | **이 체인에서는 불가** (아래) |
 
@@ -382,6 +382,12 @@ GET  /health                      인증 없음. 체인 연결·오퍼레이터 
 POST /internal/wallets            { "derivationIndex": 7, "seedAmount": "1500" }
                                   → 주소 + 가입 시드 발행 (202 + txHash)
 
+GET  /internal/tokens/catmoney/balance?address=0x…    잔액 조회
+POST /internal/tokens/catmoney/mint    발행 (입금·보상·환급)
+POST /internal/tokens/catmoney/burn    소각 (결제·출금)
+
+GET  /internal/tx/{txHash}        모든 쓰기의 확정 확인
+
 GET  /docs                        Swagger UI (운영 제외)
 GET  /docs.json                   OpenAPI 원본
 ```
@@ -392,9 +398,8 @@ Swagger 에는 **아직 안 만든 것도 계약만 먼저** 올려뒀습니다.
 
 | 태그 | | |
 |---|---|---|
-| 캣머니 (예정) | `balance` · `mint` · `burn` | M3 |
+| 캣머니 (예정) | `transfer` — 포카 마켓 정산 | M6 |
 | 티켓 (예정) | `issue` · 조회 · `by-key` · `use` · `void` | M1~M2 |
-| 트랜잭션 (예정) | `tx/{txHash}` | M1 |
 
 구현하면 `api/src/docs/planned.ts` 에서 지우고 `openapi.ts` 로 옮깁니다.
 거기서는 컨트롤러의 zod 스키마를 그대로 쓰고 응답도 타입과 대조합니다.
