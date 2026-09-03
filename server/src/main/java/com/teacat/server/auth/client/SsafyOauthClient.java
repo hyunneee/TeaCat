@@ -14,15 +14,19 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
- * SSAFY OAuth 제공자와 통신한다. 표준 Authorization Code 흐름을 따른다.
+ * SSAFY OAuth 제공자와 통신한다. (SSAFY 프로젝트 API 문서 기준)
  *
- * 🔴 **여기가 제공자 스펙에 의존하는 유일한 곳입니다.**
- *    주소·클라이언트 정보는 application.yaml(oauth.ssafy.*)에 있고,
- *    응답 필드 이름만 아래 {@link #toProfile} 에서 읽습니다.
- *    SSAFY 문서를 받으면 이 클래스 하나만 고치면 됩니다.
+ *   인가   GET  https://project.ssafy.com/oauth/sso-check
+ *   토큰   POST https://project.ssafy.com/ssafy/oauth2/token
+ *   정보   GET  https://project.ssafy.com/ssafy/resources/userInfo
+ *
+ * 주소·클라이언트 정보는 application.yaml(oauth.ssafy.*)에 있다.
+ * 제공자 스펙이 바뀌면 이 클래스 하나만 고치면 된다.
  */
 @Slf4j
 @Component
@@ -30,17 +34,17 @@ public class SsafyOauthClient {
 
     private static final String RESPONSE_TYPE_CODE = "code";
     private static final String GRANT_TYPE_AUTHORIZATION_CODE = "authorization_code";
+
+    private static final String TOKEN_TYPE_FIELD = "token_type";
     private static final String ACCESS_TOKEN_FIELD = "access_token";
+
+    /** 사용자 정보 응답 필드 (userId 고정 제공, email·name 은 필수 동의 항목) */
+    private static final String USER_ID_FIELD = "userId";
+    private static final String EMAIL_FIELD = "email";
+    private static final String NAME_FIELD = "name";
+
     private static final int CONNECT_TIMEOUT_MILLIS = 3_000;
     private static final int READ_TIMEOUT_MILLIS = 5_000;
-
-    /**
-     * 제공자마다 이름이 달라서 후보를 순서대로 찾습니다.
-     * TODO(ssafy): 실제 응답 필드가 확정되면 후보 목록을 그 이름 하나로 줄이세요.
-     */
-    private static final String[] ID_FIELDS = {"userId", "id", "sub", "loginId", "memberId"};
-    private static final String[] EMAIL_FIELDS = {"email", "userEmail", "mail"};
-    private static final String[] NAME_FIELDS = {"name", "userName", "koreanName", "nickname"};
 
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT =
             new ParameterizedTypeReference<>() {
@@ -62,29 +66,31 @@ public class SsafyOauthClient {
         return factory;
     }
 
-    /** 사용자를 보낼 SSAFY 로그인 주소 */
+    /**
+     * 사용자를 보낼 SSAFY 로그인 주소.
+     *
+     * state 는 SSAFY 문서에 없는 값이라 그대로 돌려준다는 보장이 없다.
+     * 돌려주지 않아도 검증할 수 있도록 서버가 쿠키에도 같은 값을 심어 둔다.
+     */
     public String buildAuthorizationUri(String state) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.authorizationUri())
-                .queryParam("response_type", RESPONSE_TYPE_CODE)
+        return UriComponentsBuilder.fromUriString(properties.authorizationUri())
                 .queryParam("client_id", properties.clientId())
-                .queryParam("redirect_uri", properties.redirectUri())
-                .queryParam("state", state);
-
-        if (properties.scope() != null && !properties.scope().isBlank()) {
-            builder.queryParam("scope", properties.scope());
-        }
-
-        return builder.build(true).toUriString();
+                // redirect_uri 는 값 자체가 URL 이라 퍼센트 인코딩해서 넘긴다(RFC 6749 3.1)
+                .queryParam("redirect_uri", URLEncoder.encode(properties.redirectUri(), StandardCharsets.UTF_8))
+                .queryParam("response_type", RESPONSE_TYPE_CODE)
+                .queryParam("state", state)
+                .build(true)
+                .toUriString();
     }
 
     /** 인가 코드를 액세스 토큰으로 교환한다. client_secret 은 이 요청에서만 쓰인다 */
-    public String exchangeCodeForAccessToken(String code) {
+    public SsafyToken exchangeCodeForToken(String code) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", GRANT_TYPE_AUTHORIZATION_CODE);
-        form.add("code", code);
         form.add("client_id", properties.clientId());
         form.add("client_secret", properties.clientSecret());
         form.add("redirect_uri", properties.redirectUri());
+        form.add("code", code);
 
         Map<String, Object> response = post(properties.tokenUri(), form);
         Object accessToken = response.get(ACCESS_TOKEN_FIELD);
@@ -95,32 +101,23 @@ public class SsafyOauthClient {
             throw new BusinessException(AuthErrorCode.OAUTH_EXCHANGE_FAILED);
         }
 
-        return accessToken.toString();
+        return new SsafyToken(text(response.get(TOKEN_TYPE_FIELD)), accessToken.toString());
     }
 
-    public OauthProfile fetchProfile(String accessToken) {
-        return toProfile(get(properties.userInfoUri(), accessToken));
-    }
-
-    private OauthProfile toProfile(Map<String, Object> body) {
-        String providerUserId = firstPresent(body, ID_FIELDS);
+    public OauthProfile fetchProfile(SsafyToken token) {
+        Map<String, Object> body = get(properties.userInfoUri(), token.authorizationHeader());
+        String providerUserId = text(body.get(USER_ID_FIELD));
 
         if (providerUserId == null) {
-            log.error("SSAFY 사용자 정보에서 식별자를 찾지 못했습니다. 응답 키: {}", body.keySet());
+            log.error("SSAFY 사용자 정보에 {} 가 없습니다. 응답 키: {}", USER_ID_FIELD, body.keySet());
             throw new BusinessException(AuthErrorCode.OAUTH_EXCHANGE_FAILED);
         }
 
-        return new OauthProfile(providerUserId, firstPresent(body, EMAIL_FIELDS), firstPresent(body, NAME_FIELDS));
+        return new OauthProfile(providerUserId, text(body.get(EMAIL_FIELD)), text(body.get(NAME_FIELD)));
     }
 
-    private String firstPresent(Map<String, Object> body, String[] candidates) {
-        for (String candidate : candidates) {
-            Object value = body.get(candidate);
-            if (value != null && !value.toString().isBlank()) {
-                return value.toString();
-            }
-        }
-        return null;
+    private String text(Object value) {
+        return value == null || value.toString().isBlank() ? null : value.toString();
     }
 
     private Map<String, Object> post(String uri, MultiValueMap<String, String> form) {
@@ -140,11 +137,12 @@ public class SsafyOauthClient {
         }
     }
 
-    private Map<String, Object> get(String uri, String accessToken) {
+    private Map<String, Object> get(String uri, String authorization) {
         try {
             Map<String, Object> body = restClient.get()
                     .uri(uri)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header(HttpHeaders.AUTHORIZATION, authorization)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE)
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .body(JSON_OBJECT);

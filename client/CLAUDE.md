@@ -269,16 +269,34 @@ export function Card({ className, ...rest }: CardProps) {
 
 ## 5. 목업 데이터 (백엔드 연동 전)
 
-현재 백엔드가 없어서 `src/mocks/` 의 가짜 응답을 봅니다.
+`src/mocks/` 의 가짜 응답과 실제 서버가 **섞여 있습니다.**
+회원·인증·얼굴은 실서버로 나가고, 나머지는 아직 목업입니다.
+
+| 도메인 | 지금 |
+|---|---|
+| 회원가입·로그인·내 정보·비밀번호·닉네임·탈퇴 | **실서버** (`/auth/*`, `/users/me*`) |
+| 자동 로그인(토큰 재발급)·SSAFY 계정 로그인 | **실서버** |
+| 얼굴 등록·삭제 | **실서버** (`/users/me/face`) |
+| 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
+| 공연·예매·티켓·취소표·포카·캣머니·결제·배너·앱정보 | 목업 |
 
 - 켜고 끄기: `.env.development` 의 `VITE_USE_MOCK`
 - 동작: `shared/api/client.ts` 의 axios 어댑터를 가로챕니다.
   **화면·훅·api 파일은 목업의 존재를 전혀 모릅니다.**
 - 핸들러에 없는 경로는 실제 네트워크로 나갑니다
   → 백엔드가 완성되는 순서대로 `mocks/handlers/` 에서 한 줄씩 지우면 점진적 연동이 됩니다.
+- 🔴 **목업이 실서버 로그인을 알아보게 하는 다리가 하나 있습니다.**
+  `mocks/handlers/auth.ts` 의 `requireUser` 는 실서버 JWT 를 보면 **시연용 목업 사용자**로
+  이어 붙입니다. 그래야 아직 목업인 내 티켓·포카 화면이 빈 화면이 되지 않습니다.
+  남은 도메인이 실서버로 바뀌면 이 다리도 함께 지웁니다.
 - 백엔드가 다 되면 `src/mocks/` 폴더 삭제 + `main.tsx` 의 `setupMocks()` 한 줄 삭제로 끝납니다.
 
 **목업을 쓴다고 `api/` 파일을 대충 쓰지 마세요.** 실제 스펙대로 작성하고 응답만 가짜입니다.
+
+### 서버 쪽 규칙은 `server/CLAUDE.md` 가 기준입니다
+
+응답 봉투, 에러 코드 체계(`AUTH_*` · `USER_*`), 인증 흐름은 백엔드 문서에 적혀 있습니다.
+프론트에서 규칙을 새로 만들지 말고 그쪽을 먼저 보세요.
 
 ---
 
@@ -365,10 +383,21 @@ npm run typecheck && npm run lint
   "등록이 된 건가?" 가 남아 같은 화면을 또 찾아옵니다. 원래 가려던 곳(가드가 넘겨준
   `state.from`)은 완료 화면이 들고 있다가 "이어서 진행하기" 로 보냅니다.
 
+### 로그인은 이메일, SSAFY 계정도 됩니다
+
+- 로그인 식별자는 **이메일**입니다. (예전 `loginId` 는 없어졌습니다)
+- 표시 이름은 `nickname` 입니다. 티켓 수령인을 지정할 때도 이 값을 씁니다.
+- 액세스 토큰은 헤더로, **리프레시 토큰은 httpOnly 쿠키**로 오갑니다.
+  프론트는 리프레시 토큰을 볼 수 없고, 401 이 나면 인터셉터가 조용히 재발급합니다.
+
 ### 회원가입은 자동 로그인시키지 않습니다
 
 가입 성공 → `/signup/done` (완료 화면) → 사용자가 직접 로그인.
 가입과 로그인이 한 번에 일어나면 "가입이 된 건가?" 하고 헷갈립니다.
+
+**예외는 SSAFY 계정 가입 하나입니다.** 이미 SSAFY 로그인을 한 번 거친 사람이라
+`/oauth/signup` 에서 닉네임·전화번호만 채우면 그대로 로그인 상태가 됩니다.
+여기서 또 로그인을 시키면 방금 한 인증을 두 번 하는 셈입니다.
 
 ### 예매 진입 관문 — 봇 확인(캡차)
 
@@ -448,8 +477,13 @@ npm run typecheck && npm run lint
 
 ### 배포
 
-- **`VITE_USE_MOCK` 을 배포에서 끄지 마세요** (백엔드 붙기 전까지). 끄면 배포한 사이트에서
-  로그인부터 전부 실패합니다. 개발 서버의 `/api` 프록시는 배포 환경에 없습니다.
+- **`VITE_USE_MOCK` 을 배포에서 끄지 마세요** (남은 도메인이 실서버로 바뀌기 전까지).
+  끄면 예매·티켓·포카가 전부 404 가 됩니다.
+- 회원·인증·얼굴은 이제 **실서버**입니다. 배포본에서 로그인이 되려면 `/api` 요청이 백엔드로
+  가도록 프록시(nginx rewrite / `vercel.json`)를 걸어야 합니다.
+  **개발 서버의 `/api` 프록시는 배포 환경에 없습니다.**
+- 리프레시 토큰 쿠키는 프론트와 API 의 도메인이 다르면 `SameSite=None; Secure` 여야 갑니다.
+  백엔드에도 허용 origin 을 등록해야 합니다 (`server/CLAUDE.md` 인증 흐름).
 - SPA 폴백이 없으면 `/login` 직접 진입·새로고침이 404 입니다.
   `public/_redirects`(Netlify) / `vercel.json`(Vercel) 은 이미 있고,
   nginx·S3 는 직접 설정해야 합니다. (README 9장)
@@ -486,24 +520,29 @@ npm run typecheck && npm run lint
 
 정하지 않고 코드에 가정으로 박아두지 말고, 여기에 적어두고 사용자에게 알리세요.
 
+- [x] 응답 봉투 — `{ success, data, message, code }` **확정** (`shared/types/api.ts`)
+- [x] 에러 코드 — 서버가 도메인별로 관리합니다 (`AUTH_001~`, `USER_001~`).
+      목록은 `server/CLAUDE.md` 3-2 를 보세요. `shared/api/ApiError.ts` 의 `ERROR_CODE` 는
+      네트워크 오류처럼 **서버가 못 준 경우**를 위한 프론트 전용 값입니다
+- [x] 인증 — **확정**. 액세스 토큰(1시간, 헤더) + 리프레시 토큰(14일, httpOnly 쿠키, 재발급 시 회전)
+- [x] API 프리픽스 — 서버 context-path 가 `/api` 입니다. `VITE_API_BASE_URL=/api` 를 그대로 씁니다
+- [x] 얼굴 임베딩 수신 API — `POST /users/me/face` `{ embedding: number[128], modelVersion: string }`.
+      **원본 이미지를 받는 엔드포인트는 만들지 않습니다** (7장 생체정보 규칙)
+- [x] 임베딩 모델·차원 — **YuNet 2023mar + SFace 2021dec INT8 / 128차원** (실측). 게이트 검표도 **같은 모델**이어야 대조가 됩니다
+- [x] SSAFY OAuth — 연동 완료. 버튼 → `/auth/oauth/ssafy/authorize` 로 페이지 이동 →
+      복귀는 `/oauth/callback`, 처음이면 `/oauth/signup` 에서 닉네임·전화번호를 받습니다.
+      **인가 코드 교환은 백엔드가 합니다** — client_secret 을 프론트에 두지 마세요
+- [ ] 캣머니 잔액 — 서버가 아직 `catBalance: null` 을 줍니다 (지갑·블록체인 연동 후 확정).
+      화면에 보이는 잔액은 여전히 목업 값입니다
+- [ ] 캡차 — 아직 목업입니다 (현재 5글자 / 3분). 실서버는 이미지 렌더링 방식도 정해야 함
 - [ ] 토스페이먼츠 **상점 계약** — 지금은 문서용 공개 테스트 키(`test_gck_docs_...`)로 동작
 - [ ] 캣머니 ↔ 원 환산율 (현재 `POINT_UNIT_KRW = 100` 가정)
 - [ ] 가상계좌·계좌이체 재도입 여부 (현재 화면에서 제외, 웹훅 미구현)
 - [ ] 예매 수수료 정책 (현재 매당 2,000원 가정)
 - [ ] 결제 취소·환불 API 및 부분 취소 정책
-- [ ] 응답 봉투 형태 — 현재 `{ success, data, message, code }` 가정 (`shared/types/api.ts`)
-- [ ] 에러 코드 문자열 — `shared/api/ApiError.ts` 의 `ERROR_CODE`
-- [ ] 인증 — accessToken(헤더) + refreshToken(httpOnly 쿠키) 가정
-- [ ] 캡차 난이도·유효시간 (현재 5글자 / 3분) — 실서버는 이미지 렌더링 방식도 정해야 함
 - [ ] **웹 푸시** — 백엔드 VAPID 키 + 발송 API, 서비스워커 `push` 핸들러
       (지금은 앱이 열려 있을 때만 알림이 뜹니다. `injectManifest` 로 바꿔야 하므로 0번 절차)
 - [ ] 배포 버전 API — `GET /app/version` 응답 형태 (`features/appInfo` 에 가정해 둠)
-- [ ] SSAFY OAuth — 버튼만 있고 연동 전 (`SsafyLoginButton`).
-      백엔드의 인가 시작 주소와 복귀 주소가 정해지면 onClick 만 바꾸면 됩니다.
-      **인가 코드 교환은 백엔드가 합니다** — client_secret 을 프론트에 두지 마세요.
-- [ ] 얼굴 임베딩 수신 API — `POST /face/enroll` `{ embedding: number[128], modelVersion: string }` 가정.
-      **원본 이미지를 받는 엔드포인트는 만들지 않습니다** (7장 생체정보 규칙)
-- [x] 임베딩 모델·차원 — **YuNet 2023mar + SFace 2021dec INT8 / 128차원** (실측). 게이트 검표도 **같은 모델**이어야 대조가 됩니다
 - [ ] 모델 파일 호스팅 위치 — 지금은 자체 호스팅 `public/models/` (커밋 제외,
       빌드가 OpenCV Zoo 에서 받아 해시 검증). CDN 이전 여부와 버전 표기 규칙
       (CDN 을 쓰면 `VITE_FACE_*_URL` 을 절대 주소로 두면 끝입니다)
@@ -513,3 +552,10 @@ npm run typecheck && npm run lint
 - [ ] NRF 추첨 결과 통지 방식 (메일 + 인앱?)
 - [ ] 티켓 QR 규격 (플로우차트 주석: "QR은 추후 논의")
 - [ ] 토큰 벌기 / 순발력 컨텐츠 내용 (현재 `features/token` 은 빈 계획)
+
+---
+
+## [규칙 변경 이력]
+
+- 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
+  배포·8장 갱신. SSAFY 계정 로그인 화면(`/oauth/callback`, `/oauth/signup`) 추가

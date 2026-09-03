@@ -50,14 +50,13 @@ app:
   oauth-redirect-path: /oauth/callback
 
 oauth:
-  # TODO(ssafy): SSAFY 개발자 정보를 받으면 아래 주소들을 채우세요.
-  #   client-secret 은 이 파일에 적지 말고 환경변수 SSAFY_CLIENT_SECRET 로만 주입합니다.
-  #   값이 비어 있으면 SSAFY 로그인은 AUTH_008 로 거절되고 나머지 기능은 그대로 동작합니다.
+  # client-secret 은 이 파일에 적지 말고 환경변수 SSAFY_CLIENT_SECRET 로만 주입합니다.
+  #   (client-id 는 인가 주소에 그대로 실려 나가는 공개 값이라 기본값으로 둡니다)
+  #   secret 이 비어 있으면 SSAFY 로그인은 AUTH_008 로 거절되고 나머지 기능은 그대로 동작합니다.
   ssafy:
-    client-id: ${SSAFY_CLIENT_ID:}
+    client-id: ${SSAFY_CLIENT_ID:b0fb61a5-4caa-435c-87fd-a38d8007ab49}
     client-secret: ${SSAFY_CLIENT_SECRET:}
     redirect-uri: ${SSAFY_REDIRECT_URI:http://localhost:8080/api/auth/oauth/ssafy/callback}
-    authorization-uri: ${SSAFY_AUTHORIZATION_URI:}
-    token-uri: ${SSAFY_TOKEN_URI:}
-    user-info-uri: ${SSAFY_USER_INFO_URI:}
-    scope: ${SSAFY_SCOPE:}
+    authorization-uri: ${SSAFY_AUTHORIZATION_URI:https://project.ssafy.com/oauth/sso-check}
+    token-uri: ${SSAFY_TOKEN_URI:https://project.ssafy.com/ssafy/oauth2/token}
+    user-info-uri: ${SSAFY_USER_INFO_URI:https://project.ssafy.com/ssafy/resources/userInfo}

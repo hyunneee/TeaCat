@@ -1,6 +1,7 @@
 package com.teacat.server.auth.controller;
 
 import com.teacat.server.auth.dto.request.OauthSignupRequest;
+import com.teacat.server.auth.dto.response.AuthorizationRedirect;
 import com.teacat.server.auth.dto.response.LoginResponse;
 import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.OauthCallbackResult;
@@ -59,8 +60,13 @@ public class OauthController {
     @GetMapping("/authorize")
     public ResponseEntity<Void> authorize() {
         try {
+            AuthorizationRedirect redirect = oauthService.buildAuthorizationRedirect();
+
             return ResponseEntity.status(HttpStatus.FOUND)
-                    .location(URI.create(oauthService.buildAuthorizationUri()))
+                    .location(URI.create(redirect.uri()))
+                    .header(HttpHeaders.SET_COOKIE, authCookieFactory
+                            .oauthState(redirect.state(), oauthService.getStateValidity())
+                            .toString())
                     .build();
         } catch (BusinessException e) {
             // 브라우저가 직접 오는 주소라 JSON 을 보여줄 수 없다. 프론트가 안내하도록 돌려보낸다
@@ -75,20 +81,26 @@ public class OauthController {
     @GetMapping("/callback")
     public ResponseEntity<Void> callback(
             @RequestParam(required = false) String code,
+            @Parameter(description = "SSAFY 가 돌려주지 않으면 쿠키 값으로 검증합니다")
             @RequestParam(required = false) String state,
             @Parameter(description = "SSAFY 가 실패를 알릴 때 붙여 보내는 값")
-            @RequestParam(required = false) String error) {
+            @RequestParam(required = false) String error,
+            @Parameter(hidden = true)
+            @CookieValue(name = AuthCookieFactory.OAUTH_STATE_COOKIE, required = false) String stateCookie) {
         if (StringUtils.hasText(error)) {
             log.warn("SSAFY 인가 거부: {}", error);
-            return redirectToFrontend(STATUS_ERROR, AuthErrorCode.OAUTH_STATE_INVALID.getCode()).build();
+            return withExpiredState(redirectToFrontend(STATUS_ERROR, AuthErrorCode.OAUTH_STATE_INVALID.getCode()))
+                    .build();
         }
 
         try {
-            OauthCallbackResult result = oauthService.handleCallback(code, state);
+            // SSAFY 문서에 state 가 없어 돌려준다는 보장이 없다. 없으면 우리가 심어 둔 쿠키로 검증한다
+            OauthCallbackResult result =
+                    oauthService.handleCallback(code, StringUtils.hasText(state) ? state : stateCookie);
 
             if (result.needsSignup()) {
                 // 가입이 끝날 때까지만 쓰는 티켓. 주소창에 남지 않도록 쿠키로 넘긴다
-                return redirectToFrontend(STATUS_SIGNUP, null)
+                return withExpiredState(redirectToFrontend(STATUS_SIGNUP, null))
                         .header(HttpHeaders.SET_COOKIE, authCookieFactory
                                 .signupTicket(result.signupTicket(), oauthService.getSignupTicketValidity())
                                 .toString())
@@ -96,13 +108,18 @@ public class OauthController {
             }
 
             // 액세스 토큰은 주소에 싣지 않는다. 프론트가 곧바로 재발급을 호출해 받아 간다
-            return redirectToFrontend(STATUS_SUCCESS, null)
+            return withExpiredState(redirectToFrontend(STATUS_SUCCESS, null))
                     .header(HttpHeaders.SET_COOKIE,
                             authCookieFactory.refreshToken(result.tokens().refreshToken()).toString())
                     .build();
         } catch (BusinessException e) {
-            return redirectToFrontend(STATUS_ERROR, e.getErrorCode().getCode()).build();
+            return withExpiredState(redirectToFrontend(STATUS_ERROR, e.getErrorCode().getCode())).build();
         }
+    }
+
+    /** state 는 콜백 한 번으로 수명이 끝난다 */
+    private ResponseEntity.BodyBuilder withExpiredState(ResponseEntity.BodyBuilder builder) {
+        return builder.header(HttpHeaders.SET_COOKIE, authCookieFactory.expiredOauthState().toString());
     }
 
     @Operation(summary = "가입 대기 정보 조회", description = "추가정보 입력 화면이 SSAFY 가 알려준 이메일·이름을 미리 채울 때 씁니다.")

@@ -21,6 +21,9 @@ public class AuthCookieFactory {
     /** SSAFY 인증은 끝났지만 아직 가입이 안 끝난 사람을 잠깐 알아보기 위한 쿠키 */
     public static final String SIGNUP_TICKET_COOKIE = "oauthSignupTicket";
 
+    /** SSAFY 가 state 를 돌려주지 않아도 검증할 수 있게 같은 값을 여기에도 심는다 */
+    public static final String OAUTH_STATE_COOKIE = "oauthState";
+
     private final JwtProperties jwtProperties;
 
     public ResponseCookie refreshToken(String refreshToken) {
@@ -45,6 +48,19 @@ public class AuthCookieFactory {
     /** 가입이 끝났거나 실패했으면 티켓은 즉시 지운다. */
     public ResponseCookie expiredSignupTicket() {
         return builder(SIGNUP_TICKET_COOKIE, "")
+                .maxAge(Duration.ZERO)
+                .build();
+    }
+
+    public ResponseCookie oauthState(String state, Duration validity) {
+        return builder(OAUTH_STATE_COOKIE, state)
+                .maxAge(validity)
+                .build();
+    }
+
+    /** 콜백이 끝나면 state 는 쓸 일이 없다. */
+    public ResponseCookie expiredOauthState() {
+        return builder(OAUTH_STATE_COOKIE, "")
                 .maxAge(Duration.ZERO)
                 .build();
     }

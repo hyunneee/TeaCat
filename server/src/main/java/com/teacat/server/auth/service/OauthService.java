@@ -4,6 +4,7 @@ import com.teacat.server.auth.client.OauthProfile;
 import com.teacat.server.auth.client.SsafyOauthClient;
 import com.teacat.server.auth.client.SsafyOauthProperties;
 import com.teacat.server.auth.dto.request.OauthSignupRequest;
+import com.teacat.server.auth.dto.response.AuthorizationRedirect;
 import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.OauthCallbackResult;
 import com.teacat.server.auth.dto.response.PendingSignupResponse;
@@ -67,14 +68,18 @@ public class OauthService {
         return SIGNUP_TICKET_TTL;
     }
 
+    public Duration getStateValidity() {
+        return STATE_TTL;
+    }
+
     /** 사용자를 보낼 SSAFY 로그인 주소 */
-    public String buildAuthorizationUri() {
+    public AuthorizationRedirect buildAuthorizationRedirect() {
         requireConfigured();
 
         String state = randomToken();
         oauthStateRepository.save(state, STATE_TTL);
 
-        return ssafyOauthClient.buildAuthorizationUri(state);
+        return new AuthorizationRedirect(ssafyOauthClient.buildAuthorizationUri(state), state);
     }
 
     @Transactional
@@ -86,7 +91,7 @@ public class OauthService {
             throw new BusinessException(AuthErrorCode.OAUTH_STATE_INVALID);
         }
 
-        OauthProfile profile = ssafyOauthClient.fetchProfile(ssafyOauthClient.exchangeCodeForAccessToken(code));
+        OauthProfile profile = ssafyOauthClient.fetchProfile(ssafyOauthClient.exchangeCodeForToken(code));
 
         return findLinkedUser(profile)
                 .map(user -> OauthCallbackResult.loggedIn(issueTokens(user)))
