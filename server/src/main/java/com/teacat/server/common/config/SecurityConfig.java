@@ -55,6 +55,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**").permitAll()
+                        .requestMatchers("/admin/performances/*/photocards/issue").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(handler -> handler
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint(objectMapper))
