@@ -69,18 +69,22 @@ public class SsafyOauthClient {
     /**
      * 사용자를 보낼 SSAFY 로그인 주소.
      *
-     * state 는 SSAFY 문서에 없는 값이라 그대로 돌려준다는 보장이 없다.
-     * 돌려주지 않아도 검증할 수 있도록 서버가 쿠키에도 같은 값을 심어 둔다.
+     * state 는 SSAFY 문서에 없는 값이라 기본으로는 붙이지 않는다(oauth.ssafy.send-state).
+     * 붙이든 안 붙이든 서버가 같은 값을 쿠키에 심어 두므로 콜백에서 검증할 수 있다.
      */
     public String buildAuthorizationUri(String state) {
-        return UriComponentsBuilder.fromUriString(properties.authorizationUri())
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.authorizationUri())
                 .queryParam("client_id", properties.clientId())
                 // redirect_uri 는 값 자체가 URL 이라 퍼센트 인코딩해서 넘긴다(RFC 6749 3.1)
                 .queryParam("redirect_uri", URLEncoder.encode(properties.redirectUri(), StandardCharsets.UTF_8))
-                .queryParam("response_type", RESPONSE_TYPE_CODE)
-                .queryParam("state", state)
-                .build(true)
-                .toUriString();
+                .queryParam("response_type", RESPONSE_TYPE_CODE);
+
+        // 문서에 없는 파라미터는 기본으로 붙이지 않는다. SSAFY 가 지원하는 것이 확인되면 설정으로 켠다
+        if (properties.sendState()) {
+            builder.queryParam("state", state);
+        }
+
+        return builder.build(true).toUriString();
     }
 
     /** 인가 코드를 액세스 토큰으로 교환한다. client_secret 은 이 요청에서만 쓰인다 */
