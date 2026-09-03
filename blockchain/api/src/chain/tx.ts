@@ -30,6 +30,13 @@ export interface ChainTxStatus {
   operation: TxOperation | null;
   /** revert 사유. 알아내지 못하면 null */
   revertReason: string | null;
+  /**
+   * 디코딩된 커스텀 에러 이름. 서비스가 의미를 판단할 때 씁니다.
+   *
+   * 문자열 메시지를 파싱해서 분기하면 문구를 손대는 순간 조용히 깨집니다.
+   * 이름은 따로 들고 나옵니다.
+   */
+  revertErrorName: string | null;
 }
 
 /** 영수증 로그에서 무슨 작업이었는지 알아냅니다. */
@@ -55,10 +62,13 @@ function operationOf(logs: readonly { topics: readonly string[]; data: string }[
  * 튀어나오는 에러를 읽는 것이 유일한 방법입니다. 실패해도 조회 자체는
  * 성공해야 하므로 조용히 포기합니다.
  */
-async function revertReasonOf(hash: string, blockNumber: number): Promise<string | null> {
+async function revertReasonOf(
+  hash: string,
+  blockNumber: number,
+): Promise<{ reason: string | null; name: string | null }> {
   try {
     const tx = await provider.getTransaction(hash);
-    if (!tx) return null;
+    if (!tx) return { reason: null, name: null };
 
     await provider.call({
       to: tx.to,
@@ -67,7 +77,7 @@ async function revertReasonOf(hash: string, blockNumber: number): Promise<string
       value: tx.value,
       blockTag: blockNumber,
     });
-    return null; // 다시 해보니 성공했다면 알아낼 수 없습니다
+    return { reason: null, name: null }; // 다시 해보니 성공했다면 알아낼 수 없습니다
   } catch (error) {
     const e = error as { data?: string; shortMessage?: string; reason?: string; message?: string };
 
@@ -80,14 +90,14 @@ async function revertReasonOf(hash: string, blockNumber: number): Promise<string
         const parsed = catMoney.parseError(e.data);
         if (parsed) {
           const args = parsed.args.length > 0 ? `(${parsed.args.join(', ')})` : '';
-          return `${parsed.name}${args}`;
+          return { reason: `${parsed.name}${args}`, name: parsed.name };
         }
       } catch {
         // 우리가 모르는 에러입니다. 아래 일반 메시지로 넘어갑니다.
       }
     }
 
-    return e.reason ?? e.shortMessage ?? e.message ?? null;
+    return { reason: e.reason ?? e.shortMessage ?? e.message ?? null, name: null };
   }
 }
 
@@ -99,6 +109,7 @@ export async function getTxStatus(hash: string): Promise<ChainTxStatus> {
     blockNumber: null,
     operation: null,
     revertReason: null,
+    revertErrorName: null,
   };
 
   const [tx, receipt] = await Promise.all([
@@ -112,6 +123,9 @@ export async function getTxStatus(hash: string): Promise<ChainTxStatus> {
   if (!receipt) return { ...empty, found: true };
 
   const success = receipt.status === 1;
+  const revert = success
+    ? { reason: null, name: null }
+    : await revertReasonOf(hash, receipt.blockNumber);
 
   return {
     found: true,
@@ -119,6 +133,7 @@ export async function getTxStatus(hash: string): Promise<ChainTxStatus> {
     success,
     blockNumber: receipt.blockNumber,
     operation: success ? operationOf(receipt.logs) : null,
-    revertReason: success ? null : await revertReasonOf(hash, receipt.blockNumber),
+    revertReason: revert.reason,
+    revertErrorName: revert.name,
   };
 }

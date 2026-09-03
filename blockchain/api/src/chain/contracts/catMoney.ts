@@ -1,7 +1,7 @@
 import { keccak256, toUtf8Bytes } from 'ethers';
 import { CatMoney__factory, readDeployment, type CatMoney } from '@teacat/contracts';
 import { env, networkNameOf } from '../../config';
-import { operatorSigner, provider } from '../provider';
+import { operatorAddress, operatorSigner, provider } from '../provider';
 import { userSigner } from '../keys/hdWallet';
 import { ensureLocalGas } from '../localGas';
 import { sendSerialized } from '../nonce';
@@ -75,7 +75,7 @@ export async function balanceOf(address: string): Promise<bigint> {
 export async function mint(to: string, amount: bigint, operationKey: string): Promise<string> {
   // 논스를 명시적으로 넘깁니다. 안 넘기면 ethers 가 캐시된 값을 재사용해
   // 동시 요청이 같은 논스를 씁니다. (chain/nonce.ts)
-  return sendSerialized(async (nonce) => {
+  return sendSerialized(operatorAddress, async (nonce) => {
     const tx = await contract().mint(to, amount, operationKey, { nonce });
     return tx.hash;
   });
@@ -84,12 +84,12 @@ export async function mint(to: string, amount: bigint, operationKey: string): Pr
 /**
  * 소각. **유저 본인이 서명합니다.**
  *
+ *
  * 컨트랙트에 `burnFrom` 을 두지 않았기 때문입니다 — 남의 잔액을 태우는 함수가 있으면
  * 키 하나로 전 유저의 포인트를 지울 수 있습니다. 그래서 니모닉에서 그 유저의 키를
  * 파생해 서명합니다. 온체인에는 "유저 본인이 태웠다" 로 남습니다.
  *
- * 논스는 유저마다 따로라 오퍼레이터 큐를 타지 않습니다. 한 유저가 동시에 두 번
- * 결제하는 상황은 Spring 이 막습니다.
+ * 논스는 주소별로 셉니다 — 같은 유저의 중복 요청이 겹쳐도 트랜잭션이 사라지지 않습니다.
  */
 export async function burnAs(
   derivationIndex: number,
@@ -97,11 +97,22 @@ export async function burnAs(
   operationKey: string,
 ): Promise<string> {
   const signer = userSigner(derivationIndex);
-  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
-  await ensureLocalGas(await signer.getAddress());
+  const address = await signer.getAddress();
 
-  const tx = await CatMoney__factory.connect(requireAddress(), signer).burn(amount, operationKey);
-  return tx.hash;
+  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
+  await ensureLocalGas(address);
+
+  /* 유저 주소도 논스를 세서 넘깁니다. 같은 유저의 중복 요청이 겹치면
+     ethers 가 캐시된 논스를 재사용해 트랜잭션 하나가 통째로 사라집니다.
+     Spring 은 202 로 받은 txHash 를 영원히 조회하지 못하게 됩니다. */
+  return sendSerialized(address, async (nonce) => {
+    const tx = await CatMoney__factory.connect(requireAddress(), signer).burn(
+      amount,
+      operationKey,
+      { nonce },
+    );
+    return tx.hash;
+  });
 }
 
 /** 주소를 못 찾으면 던집니다. 부르는 쪽이 미리 `catMoneyAddress()` 로 확인합니다. */

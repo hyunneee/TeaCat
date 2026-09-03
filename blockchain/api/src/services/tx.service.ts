@@ -1,8 +1,16 @@
 import { getTxStatus, type TxOperation } from '../chain/tx';
 import { errors } from '../shared/errors';
 
+/**
+ * 컨트랙트가 "이미 처리된 작업" 이라고 거부할 때 쓰는 에러 이름.
+ *
+ * 이건 실패가 아니라 **성공의 다른 모양**입니다 — 그 작업은 다른 트랜잭션이
+ * 이미 해냈다는 뜻이니까요. 아래에서 ALREADY_DONE 으로 바꿔 내려줍니다.
+ */
+const ALREADY_EXECUTED = 'OperationAlreadyExecuted';
+
 export interface TxReport {
-  status: 'PENDING' | 'CONFIRMED' | 'FAILED';
+  status: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'ALREADY_DONE';
   txHash: string;
   /** 블록에 실렸으면 번호, 아니면 null */
   blockNumber: number | null;
@@ -26,6 +34,21 @@ export async function reportTx(txHash: string): Promise<TxReport> {
 
   if (!chain.mined) {
     return { status: 'PENDING', txHash, blockNumber: null, result: null, error: null };
+  }
+
+  /* 블록이 10초라, 같은 요청이 연달아 오면 앞의 트랜잭션이 아직 확정되지 않아
+     서비스의 사전 확인(isMintExecuted 등)을 둘 다 통과합니다. 그러면 두 번째
+     트랜잭션이 나가고 컨트랙트가 거부합니다 — **자산은 안전하지만**, 그걸 그대로
+     FAILED 로 내리면 Spring 이 정상 결제를 실패로 오인합니다.
+     실제로 확정 전 중복 요청에서 재현한 경우입니다. */
+  if (!chain.success && chain.revertErrorName === ALREADY_EXECUTED) {
+    return {
+      status: 'ALREADY_DONE',
+      txHash,
+      blockNumber: chain.blockNumber,
+      result: null,
+      error: null,
+    };
   }
 
   if (!chain.success) {

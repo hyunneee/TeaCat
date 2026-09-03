@@ -265,8 +265,18 @@ registry.registerPath({
     '| `REFUND` | 예매 취소로 결제한 캣머니를 돌려줄 때 |\n\n' +
     '**가입 시드는 여기가 아닙니다.** `POST /internal/wallets` 의 `seedAmount` 로 ' +
     '지갑 생성과 함께 나갑니다.\n\n' +
+    '### ⚠️ `to` 는 반드시 우리가 파생한 유저 지갑이어야 합니다\n\n' +
+    '`POST /internal/wallets` 가 돌려준 주소만 넣으세요. ' +
+    '**개인 MetaMask 같은 외부 주소에 발행하면 그 캣머니는 영원히 회수할 수 없습니다.**\n\n' +
+    '소각(`burn`)은 유저 본인의 서명이 필요한데, 서버는 니모닉에서 파생한 지갑의 키만 ' +
+    '가지고 있습니다. 외부 지갑의 키는 모르고, 컨트랙트에 `burnFrom` 도 없어서 ' +
+    'admin 이라도 남의 잔액은 태울 수 없습니다. 즉 **결제에 쓸 수 없는 캣머니**가 됩니다.\n\n' +
+    '이 서비스는 `to` 가 파생 지갑인지 검사하지 못합니다 — 인덱스를 전부 훑어볼 수 없기 ' +
+    '때문입니다. **Spring 이 자기 DB 의 지갑 주소만 넣어주셔야 합니다.**\n\n' +
     '수량과 지급 정책은 Spring 이 확정합니다. 이 서비스는 판단하지 않고 실행만 합니다.\n\n' +
-    '같은 `operationKey` 가 다시 오면 `200` + `ALREADY_DONE` 입니다. 재시도가 안전합니다.',
+    '같은 `operationKey` 가 다시 오면 `200` + `ALREADY_DONE` 입니다. 재시도가 안전합니다.\n\n' +
+    '주의: `operationKey` 는 **Spring 이 만드는 식별자**입니다. 비밀값을 넣지 마세요 — ' +
+    '해싱된 값이 온체인에 영구히 기록됩니다.',
   security: [{ [internalKey.name]: [] }],
   request: {
     body: {
@@ -346,9 +356,11 @@ registry.registerPath({
 const txResponse = registry.register(
   'TxReport',
   z.object({
-    status: z.enum(['PENDING', 'CONFIRMED', 'FAILED']).openapi({
+    status: z.enum(['PENDING', 'CONFIRMED', 'FAILED', 'ALREADY_DONE']).openapi({
       description:
-        '`PENDING` 아직 블록에 안 실림 · `CONFIRMED` 성공 · `FAILED` 실렸지만 컨트랙트가 거부',
+        '`PENDING` 아직 블록에 안 실림 · `CONFIRMED` 성공 · ' +
+        '`ALREADY_DONE` 같은 작업이 다른 트랜잭션으로 이미 처리됨(**성공으로 취급하세요**) · ' +
+        '`FAILED` 컨트랙트가 거부',
     }),
     txHash: z.string(),
     blockNumber: z.number().int().nullable().openapi({ description: 'PENDING 이면 null' }),
