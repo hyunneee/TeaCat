@@ -259,6 +259,81 @@ describe('CatMoney', () => {
     });
   });
 
+  describe('transferWithKey — 포카 마켓 정산', () => {
+    it('유저에서 유저로 옮긴다', async () => {
+      const { token, minter, operator, alice, bob } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 1000, opKey('seed_t1'));
+
+      await expect(token.connect(alice).transferWithKey(bob.address, 300, opKey('trade_1')))
+        .to.emit(token, 'TransferredWithKey')
+        .withArgs(alice.address, bob.address, 300, opKey('trade_1'));
+
+      expect(await token.balanceOf(alice.address)).to.equal(700);
+      expect(await token.balanceOf(bob.address)).to.equal(300);
+      // 옮긴 것이지 태운 게 아닙니다.
+      expect(await token.totalSupply()).to.equal(1000);
+    });
+
+    it('재시도해도 두 번 송금되지 않는다 — 표준 transfer 로는 못 막는 것', async () => {
+      const { token, minter, operator, alice, bob } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 1000, opKey('seed_t2'));
+      await token.connect(alice).transferWithKey(bob.address, 300, opKey('trade_2'));
+
+      await expect(
+        token.connect(alice).transferWithKey(bob.address, 300, opKey('trade_2')),
+      ).to.be.revertedWithCustomError(token, 'OperationAlreadyExecuted');
+
+      expect(await token.balanceOf(bob.address)).to.equal(300);
+    });
+
+    it('남이 내 정산 키를 미리 쓸 수 없다 — 호출자별 격리', async () => {
+      const { token, minter, operator, alice, bob, attacker } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 1000, opKey('seed_t3'));
+      await token.connect(minter).mint(attacker.address, 10, opKey('seed_t4'));
+
+      const key = opKey('trade_3');
+      await token.connect(attacker).transferWithKey(bob.address, 1, key); // 선점 시도
+
+      await expect(token.connect(alice).transferWithKey(bob.address, 300, key)).to.emit(
+        token,
+        'TransferredWithKey',
+      );
+      expect(await token.balanceOf(bob.address)).to.equal(301);
+    });
+
+    it('mint · burn 과 이름공간이 겹치지 않는다', async () => {
+      const { token, minter, operator, alice, bob } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 1000, opKey('seed_t5'));
+
+      const same = opKey('same_string');
+      await token.connect(alice).transferWithKey(bob.address, 100, same);
+      await token.connect(alice).burn(100, same);
+      await token.connect(minter).mint(alice.address, 100, same);
+
+      expect(await token.isTransferExecuted(alice.address, same)).to.equal(true);
+      expect(await token.isBurnExecuted(alice.address, same)).to.equal(true);
+      expect(await token.isMintExecuted(same)).to.equal(true);
+    });
+
+    it('잔액이 부족하면 거부한다', async () => {
+      const { token, minter, operator, alice, bob } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 100, opKey('seed_t6'));
+      await expect(
+        token.connect(alice).transferWithKey(bob.address, 300, opKey('trade_6')),
+      ).to.be.revertedWithCustomError(token, 'ERC20InsufficientBalance');
+    });
+
+    it('정지 중에는 막힌다', async () => {
+      const { token, minter, operator, alice, bob } = await loadFixture(deploy);
+      await token.connect(minter).mint(alice.address, 1000, opKey('seed_t7'));
+      await token.connect(operator).pause();
+
+      await expect(
+        token.connect(alice).transferWithKey(bob.address, 100, opKey('trade_7')),
+      ).to.be.revertedWithCustomError(token, 'EnforcedPause');
+    });
+  });
+
   describe('pause — 나가는 것만 막는다', () => {
     it('정지하면 소각이 막힌다', async () => {
       const { token, operator, minter, alice } = await loadFixture(deploy);

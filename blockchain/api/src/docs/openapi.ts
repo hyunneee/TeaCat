@@ -4,6 +4,10 @@ import { env } from '../config';
 import { createWalletBody } from '../controllers/wallet.controller';
 import type { HealthReport } from '../services/health.service';
 import type { WalletResult } from '../services/wallet.service';
+import type { TxReport } from '../services/tx.service';
+import { txParams } from '../controllers/tx.controller';
+import { balanceQuery, burnBody, mintBody } from '../controllers/catMoney.controller';
+import type { BalanceResult, WriteResult } from '../services/catMoney.service';
 import { registerPlannedPaths } from './planned';
 
 // `.openapi()` 를 쓰려면 zod 를 먼저 확장해야 합니다. 스키마 정의보다 앞서야 합니다.
@@ -193,6 +197,236 @@ registry.registerPath({
   },
 });
 
+/* ── /internal/tokens/catmoney ─────────────────────────────────── */
+
+const balanceResponse = registry.register(
+  'CatMoneyBalance',
+  z.object({
+    address: z.string().openapi({ example: '0x82b00adc4bb58753d25b860204f378065172a950' }),
+    balance: z.string().openapi({ example: '1200', description: '정수 문자열' }),
+    decimals: z.literal(0),
+    symbol: z.literal('TCAT'),
+  }),
+);
+
+type _BalanceMatches = Assert<Exact<z.infer<typeof balanceResponse>, BalanceResult>>;
+
+const writeResponse = registry.register(
+  'CatMoneyWriteResult',
+  z.object({
+    status: z.enum(['PENDING', 'ALREADY_DONE']).openapi({
+      description:
+        '`PENDING` 방금 전송했습니다. `ALREADY_DONE` 같은 operationKey 가 이미 처리돼 ' +
+        '새 트랜잭션을 보내지 않았습니다 — 재시도가 안전한 이유입니다.',
+    }),
+    txHash: z
+      .string()
+      .nullable()
+      .openapi({ description: '`ALREADY_DONE` 이면 보낸 트랜잭션이 없어 null 입니다' }),
+  }),
+);
+
+type _WriteMatches = Assert<Exact<z.infer<typeof writeResponse>, WriteResult>>;
+
+registry.registerPath({
+  method: 'get',
+  path: '/internal/tokens/catmoney/balance',
+  tags: ['캣머니'],
+  summary: '캣머니 잔액 조회',
+  description:
+    '**온체인 잔액을 결제 판정 근거로 쓰지 마세요.** Spring 이 확정하고 체인은 결과를 ' +
+    '기록합니다 (DESIGN.md 6장). 화면 표시나 대사(reconciliation)에 씁니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: { query: registry.register('CatMoneyBalanceQuery', balanceQuery) },
+  responses: {
+    200: { description: '잔액', content: { 'application/json': { schema: balanceResponse } } },
+    400: {
+      description: '`address` 형식 오류',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'CatMoney 미배포 (`CONTRACT_UNAVAILABLE`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/tokens/catmoney/mint',
+  tags: ['캣머니'],
+  summary: '캣머니 발행',
+  description:
+    '캣머니를 **새로 만들어** 유저에게 넣습니다.\n\n' +
+    '| `reason` | 언제 |\n' +
+    '|---|---|\n' +
+    '| `DEPOSIT` | 원화 입금이 Spring 에서 확인됐을 때 (환전 — 사는 쪽) |\n' +
+    '| `REWARD` | 이벤트·보상 지급 |\n' +
+    '| `REFUND` | 예매 취소로 결제한 캣머니를 돌려줄 때 |\n\n' +
+    '**가입 시드는 여기가 아닙니다.** `POST /internal/wallets` 의 `seedAmount` 로 ' +
+    '지갑 생성과 함께 나갑니다.\n\n' +
+    '### ⚠️ `to` 는 반드시 우리가 파생한 유저 지갑이어야 합니다\n\n' +
+    '`POST /internal/wallets` 가 돌려준 주소만 넣으세요. ' +
+    '**개인 MetaMask 같은 외부 주소에 발행하면 그 캣머니는 영원히 회수할 수 없습니다.**\n\n' +
+    '소각(`burn`)은 유저 본인의 서명이 필요한데, 서버는 니모닉에서 파생한 지갑의 키만 ' +
+    '가지고 있습니다. 외부 지갑의 키는 모르고, 컨트랙트에 `burnFrom` 도 없어서 ' +
+    'admin 이라도 남의 잔액은 태울 수 없습니다. 즉 **결제에 쓸 수 없는 캣머니**가 됩니다.\n\n' +
+    '이 서비스는 `to` 가 파생 지갑인지 검사하지 못합니다 — 인덱스를 전부 훑어볼 수 없기 ' +
+    '때문입니다. **Spring 이 자기 DB 의 지갑 주소만 넣어주셔야 합니다.**\n\n' +
+    '수량과 지급 정책은 Spring 이 확정합니다. 이 서비스는 판단하지 않고 실행만 합니다.\n\n' +
+    '같은 `operationKey` 가 다시 오면 `200` + `ALREADY_DONE` 입니다. 재시도가 안전합니다.\n\n' +
+    '주의: `operationKey` 는 **Spring 이 만드는 식별자**입니다. 비밀값을 넣지 마세요 — ' +
+    '해싱된 값이 온체인에 영구히 기록됩니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: {
+    body: {
+      required: true,
+      content: { 'application/json': { schema: registry.register('CatMoneyMintRequest', mintBody) } },
+    },
+  },
+  responses: {
+    202: {
+      description: '전송했습니다. 확정은 `GET /internal/tx/{txHash}`',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    200: {
+      description: '이미 처리된 `operationKey` 입니다. 새 트랜잭션을 보내지 않았습니다',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    400: { description: '본문 형식 오류', content: { 'application/json': { schema: errorResponse } } },
+    503: {
+      description: 'CatMoney 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/tokens/catmoney/burn',
+  tags: ['캣머니'],
+  summary: '캣머니 소각',
+  description:
+    '유저 잔액에서 캣머니를 **없앱니다.** 트레저리로 옮기지 않습니다.\n\n' +
+    '| `reason` | 언제 |\n' +
+    '|---|---|\n' +
+    '| `PAYMENT` | 티켓 결제. 캣머니는 포인트처럼 **일부만** 낼 수 있습니다 |\n' +
+    '| `WITHDRAWAL` | 원화 출금이 Spring 에서 확인됐을 때 (환전 — 파는 쪽) |\n\n' +
+    '서버가 `derivationIndex` 로 유저 키를 파생해 서명하므로, 온체인에는 ' +
+    '**유저 본인이 태운 것**으로 남습니다. 남의 잔액을 태우는 함수는 컨트랙트에 없습니다.\n' +
+    '`derivationIndex` 로 만든 주소가 `from` 과 다르면 `400` 입니다.\n\n' +
+    '### 원화 출금(`WITHDRAWAL`)은 되돌릴 준비를 하고 부르세요\n\n' +
+    '토큰을 먼저 태우면 원화 지급 실패 시 유저만 손해이고, 원화를 먼저 주면 ' +
+    '소각 실패 시 유저가 둘 다 갖습니다.\n\n' +
+    '**소각 확정 → 원화 지급 → 실패하면 별도 `operationKey` 로 `mint` 하여 복구** ' +
+    '순서로 가세요. Spring 이 이 상태 전이를 소유합니다. 소각도 복구도 멱등입니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: {
+    body: {
+      required: true,
+      content: { 'application/json': { schema: registry.register('CatMoneyBurnRequest', burnBody) } },
+    },
+  },
+  responses: {
+    202: {
+      description: '전송했습니다. 확정은 `GET /internal/tx/{txHash}`',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    200: {
+      description: '이미 처리된 `operationKey` 입니다',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    400: {
+      description: '본문 형식 오류, 또는 `derivationIndex` 로 만든 주소가 `from` 과 다름',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    422: {
+      description: '잔액 부족 (`INSUFFICIENT_BALANCE`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'CatMoney 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+/* ── /internal/tx/{txHash} ─────────────────────────────────────── */
+
+const txResponse = registry.register(
+  'TxReport',
+  z.object({
+    status: z.enum(['PENDING', 'CONFIRMED', 'FAILED', 'ALREADY_DONE']).openapi({
+      description:
+        '`PENDING` 아직 블록에 안 실림 · `CONFIRMED` 성공 · ' +
+        '`ALREADY_DONE` 같은 작업이 다른 트랜잭션으로 이미 처리됨(**성공으로 취급하세요**) · ' +
+        '`FAILED` 컨트랙트가 거부',
+    }),
+    txHash: z.string(),
+    blockNumber: z.number().int().nullable().openapi({ description: 'PENDING 이면 null' }),
+    result: z
+      .object({
+        operation: z
+          .enum(['CATMONEY_MINT', 'CATMONEY_BURN', 'CATMONEY_TRANSFER', 'UNKNOWN'])
+          .openapi({
+            description:
+              '영수증 로그로 알아낸 작업. 우리 컨트랙트가 아니면 `UNKNOWN` 입니다',
+          }),
+        tokenId: z
+          .string()
+          .nullable()
+          .openapi({ description: '티켓(M1)이 붙으면 채워집니다. 캣머니는 항상 null' }),
+      })
+      .nullable()
+      .openapi({ description: 'CONFIRMED 일 때만 채워집니다' }),
+    error: z
+      .object({ code: z.string(), message: z.string() })
+      .nullable()
+      .openapi({ description: 'FAILED 일 때만 채워집니다' }),
+  }),
+);
+
+type _TxMatches = Assert<Exact<z.infer<typeof txResponse>, TxReport>>;
+
+const txRequest = registry.register('TxHashParam', txParams);
+
+registry.registerPath({
+  method: 'get',
+  path: '/internal/tx/{txHash}',
+  tags: ['트랜잭션'],
+  summary: '트랜잭션 확정 상태 조회',
+  description:
+    '모든 쓰기 API 의 **최종 성공 여부**를 여기서 확인합니다.\n\n' +
+    '쓰기는 블록 확정을 기다리지 않고 `202` + `txHash` 를 돌려줍니다. ' +
+    'Spring 은 그 해시를 저장했다가 이 API 로 확정을 확인하고 DB 에 반영합니다. (DESIGN.md 4-2)\n\n' +
+    '### `FAILED` 는 서버 장애가 아닙니다\n\n' +
+    '체인이 실행을 거부한 것도 **정상적인 조회 결과**라 `200` 으로 내려갑니다. ' +
+    'revert 를 500 으로 던지지 않습니다 (DESIGN.md 7장). ' +
+    '가능하면 `error.message` 에 revert 사유를 담습니다.\n\n' +
+    'SSAFY 체인은 블록이 약 10초입니다. 보내고 바로 조회하면 대개 `PENDING` 입니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: { params: txRequest },
+  responses: {
+    200: {
+      description: '조회 성공. 확정 여부는 `status` 를 보세요',
+      content: { 'application/json': { schema: txResponse } },
+    },
+    400: {
+      description: '`txHash` 가 0x + 64자리 hex 가 아닙니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    401: {
+      description: '`x-internal-key` 가 없거나 틀립니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    404: {
+      description:
+        '체인이 모르는 해시입니다 (`TX_NOT_FOUND`). 드롭됐거나 애초에 없는 해시입니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
 /* ── 아직 구현되지 않은 것 ─────────────────────────────────────── */
 
 // Spring 팀이 붙일 자리를 미리 볼 수 있게 계약만 적어둡니다.
@@ -226,9 +460,10 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateD
     tags: [
       { name: '상태', description: '인증 없이 열려 있습니다' },
       { name: '회원', description: '지갑 파생' },
+      { name: '캣머니', description: '발행·소각으로만 움직입니다 (트레저리 없음)' },
       { name: '캣머니 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
       { name: '티켓 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
-      { name: '트랜잭션 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
+      { name: '트랜잭션', description: '모든 쓰기의 확정 확인' },
     ],
   });
 }

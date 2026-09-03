@@ -57,49 +57,21 @@ export function registerPlannedPaths(registry: OpenAPIRegistry, internalKeyName:
   /* ── 캣머니 ─────────────────────────────────────────────────── */
 
   registry.registerPath({
-    method: 'get',
-    path: '/internal/tokens/catmoney/balance',
-    tags: ['캣머니 (예정)'],
-    summary: '[미구현] 캣머니 잔액 조회',
-    description:
-      '**주의: 온체인 잔액을 결제 판정 근거로 쓰지 마세요.** ' +
-      'Spring 이 확정하고 체인은 결과를 기록합니다. (DESIGN.md 6장)',
-    security: secured,
-    request: {
-      query: z.object({ address }),
-    },
-    responses: {
-      200: {
-        description: '잔액',
-        content: {
-          'application/json': {
-            schema: z.object({
-              address,
-              balance: z.string().openapi({ example: '1200', description: '정수 문자열' }),
-              decimals: z.literal(0),
-              symbol: z.literal('TCAT'),
-            }),
-          },
-        },
-      },
-    },
-  });
-
-  registry.registerPath({
     method: 'post',
-    path: '/internal/tokens/catmoney/mint',
+    path: '/internal/tokens/catmoney/transfer',
     tags: ['캣머니 (예정)'],
-    summary: '[미구현] 캣머니 발행',
+    summary: '[미구현] 캣머니 전송 (포카 마켓 정산)',
     description:
-      '캣머니를 **새로 만들어** 유저에게 넣습니다. 세 경우가 전부 여기로 옵니다.\n\n' +
-      '| `reason` | 언제 |\n' +
-      '|---|---|\n' +
-      '| `DEPOSIT` | 원화 입금이 Spring 에서 확인됐을 때 (환전 — 사는 쪽) |\n' +
-      '| `REWARD` | 이벤트·보상 지급 |\n' +
-      '| `REFUND` | 예매 취소로 결제한 캣머니를 돌려줄 때 |\n\n' +
-      '**가입 시드는 여기가 아닙니다.** `POST /internal/wallets` 의 `seedAmount` 로 ' +
-      '지갑 생성과 함께 나갑니다 — 파생 인덱스로 멱등이 걸려 재시도해도 한 번만 지급됩니다.\n\n' +
-      '수량과 지급 정책은 Spring 이 확정합니다. 이 서비스는 판단하지 않고 실행만 합니다.\n\n' +
+      '유저 → 유저로 캣머니를 옮깁니다. 포카 마켓에서 구매자가 판매자에게 낼 때 씁니다.\n\n' +
+      '**발행도 소각도 아닙니다.** `totalSupply` 는 그대로고 소유자만 바뀝니다.\n\n' +
+      '컨트랙트의 `transferWithKey` 를 부릅니다. 표준 `transfer` 를 쓰지 않는 이유는 ' +
+      '거기엔 `operationKey` 를 걸 자리가 없어서입니다 — 응답을 못 받고 재시도하면 ' +
+      '**구매자가 두 번 냅니다.**\n\n' +
+      '서버가 `derivationIndex` 로 보내는 유저의 키를 파생해 서명합니다. ' +
+      '계산한 주소가 `from` 과 다르면 `400` 입니다.\n\n' +
+      '주의: 이 API 는 **돈만 옮깁니다.** NFT 소유권 이전은 별개이고, 둘이 원자적이지 ' +
+      '않으면 한쪽만 성공할 수 있습니다. 마켓 컨트랙트에서 에스크로로 묶을지 ' +
+      'Spring 이 보상 트랜잭션으로 처리할지는 M6 착수 전에 정합니다.\n\n' +
       PENDING_DESCRIPTION,
     security: secured,
     request: {
@@ -109,56 +81,11 @@ export function registerPlannedPaths(registry: OpenAPIRegistry, internalKeyName:
           'application/json': {
             schema: z.object({
               operationKey,
-              to: address.openapi({ description: '캣머니를 받을 주소' }),
-              amount,
-              reason: z.enum(['DEPOSIT', 'REWARD', 'REFUND']),
-            }),
-          },
-        },
-      },
-    },
-    responses: {
-      202: {
-        description: '전송했습니다. 확정은 아직입니다',
-        content: { 'application/json': { schema: accepted } },
-      },
-      409: { description: '같은 `operationKey` 가 이미 처리됐습니다 (`DUPLICATE_OPERATION`)' },
-    },
-  });
-
-  registry.registerPath({
-    method: 'post',
-    path: '/internal/tokens/catmoney/burn',
-    tags: ['캣머니 (예정)'],
-    summary: '[미구현] 캣머니 소각',
-    description:
-      '유저 잔액에서 캣머니를 **없앱니다.** 트레저리로 옮기지 않습니다.\n\n' +
-      '| `reason` | 언제 |\n' +
-      '|---|---|\n' +
-      '| `PAYMENT` | 티켓 결제. 캣머니는 포인트처럼 **일부만** 낼 수 있습니다 |\n' +
-      '| `WITHDRAWAL` | 원화 출금이 Spring 에서 확인됐을 때 (환전 — 파는 쪽) |\n\n' +
-      '서버가 `derivationIndex` 로 유저 키를 파생해 서명하므로, 온체인에는 ' +
-      '**유저 본인이 태운 것**으로 남습니다. 남의 잔액을 태우는 함수는 컨트랙트에 없습니다.\n\n' +
-      '`derivationIndex` 로 계산한 주소가 `from` 과 다르면 `400` 입니다.\n\n' +
-      '### 원화 출금(`WITHDRAWAL`)은 되돌릴 준비를 하고 부르세요\n\n' +
-      '토큰을 먼저 태우면 원화 지급이 실패했을 때 유저만 손해입니다. ' +
-      '반대로 원화를 먼저 주면 소각 실패 시 유저가 둘 다 갖습니다.\n\n' +
-      '**소각 확정 → 원화 지급 → 실패하면 별도 `operationKey` 로 `mint` 하여 복구** ' +
-      '순서로 가세요. Spring 이 이 상태 전이를 소유합니다(보상 트랜잭션). ' +
-      '소각도 복구도 멱등이라 재시도가 안전합니다.\n\n' +
-      PENDING_DESCRIPTION,
-    security: secured,
-    request: {
-      body: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: z.object({
-              operationKey,
-              from: address.openapi({ description: '소각할 유저의 지갑 주소' }),
+              from: address.openapi({ description: '보내는 유저의 지갑 주소' }),
               derivationIndex: z.number().int().min(0).openapi({ example: 42 }),
+              to: address.openapi({ description: '받는 유저의 지갑 주소' }),
               amount,
-              reason: z.enum(['PAYMENT', 'WITHDRAWAL']),
+              tradeId: z.string().openapi({ example: 'trade_00001', description: 'Spring 거래 식별자' }),
             }),
           },
         },
@@ -340,52 +267,4 @@ export function registerPlannedPaths(registry: OpenAPIRegistry, internalKeyName:
     },
   });
 
-  /* ── 트랜잭션 ───────────────────────────────────────────────── */
-
-  registry.registerPath({
-    method: 'get',
-    path: '/internal/tx/{txHash}',
-    tags: ['트랜잭션 (예정)'],
-    summary: '[미구현] 트랜잭션 확정 상태 조회',
-    description:
-      '모든 쓰기 API 의 **최종 성공 여부**를 여기서 확인합니다.\n\n' +
-      '`FAILED` 는 서버 장애가 아니라 정상적인 조회 결과입니다. ' +
-      '체인의 revert 를 500 으로 던지지 않습니다. (DESIGN.md 7장)\n\n' +
-      'SSAFY 체인은 블록이 약 10초입니다. 보내고 바로 조회하면 대개 `PENDING` 입니다.',
-    security: secured,
-    request: { params: z.object({ txHash: z.string().openapi({ example: '0xabc123…' }) }) },
-    responses: {
-      200: {
-        description: '확정 상태',
-        content: {
-          'application/json': {
-            schema: z.union([
-              z.object({ status: z.literal('PENDING'), txHash: z.string() }),
-              z.object({
-                status: z.literal('CONFIRMED'),
-                txHash: z.string(),
-                blockNumber: z.number().int(),
-                result: z.object({
-                  operation: z.enum([
-                    'TICKET_ISSUE',
-                    'TICKET_USE',
-                    'TICKET_VOID',
-                    'CATMONEY_MINT',
-                    'CATMONEY_BURN',
-                  ]),
-                  tokenId: z.string().optional(),
-                }),
-              }),
-              z.object({
-                status: z.literal('FAILED'),
-                txHash: z.string(),
-                error: z.object({ code: z.string(), message: z.string() }),
-              }),
-            ]),
-          },
-        },
-      },
-      404: { description: '체인에서 찾을 수 없습니다 (`TX_NOT_FOUND`)' },
-    },
-  });
 }
