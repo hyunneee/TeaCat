@@ -103,6 +103,23 @@ public class BookingService {
     }
 
     /**
+     * 좌석 선점 해제. 좌석을 변경하거나 예매를 중단할 때 호출한다.
+     *
+     * <p>권한 검사를 UPDATE 의 WHERE 에 넣어 처리한다. 소유자를 조회로 확인한 뒤 UPDATE 하면 그 사이에
+     * 소유자가 바뀔 수 있는데, 이 방식은 남의 선점을 해제하는 것이 원자적으로 불가능하다.
+     * 실패했을 때만 사유를 판별하므로 성공 경로는 쿼리 한 번이다.
+     */
+    @Transactional
+    public void releaseSeat(Long performanceDetailId, Long seatId, Long userId) {
+        int updated = performanceSeatRepository.releaseHold(performanceDetailId, seatId, userId);
+
+        if (updated == 0) {
+            throw new BusinessException(resolveReleaseFailure(
+                    new PerformanceSeatId(performanceDetailId, seatId), userId));
+        }
+    }
+
+    /**
      * 예매 오픈 여부 검증.
      *
      * <p>TODO 스키마에 예매 <b>종료</b> 시각 컬럼이 없어 종료는 회차 상태(SOLD_OUT / CLOSED)로만 판단한다.
@@ -135,6 +152,31 @@ public class BookingService {
                     : BookingErrorCode.SEAT_ALREADY_HELD;
             // UPDATE 가 밀린 직후 그 선점이 해제된 경우. 이 요청은 경합에서 진 것이므로 선점 실패로 알린다
             case AVAILABLE -> BookingErrorCode.SEAT_ALREADY_HELD;
+        };
+    }
+
+    /**
+     * 해제 실패 사유 판별. UPDATE 가 0 행일 때만 호출된다.
+     *
+     * <p>남의 선점에 대해 403 을 주는 것은 정보 노출이 아니다 — 좌석의 선점 여부는 좌석 배치도로
+     * 누구나 볼 수 있는 공개 정보다. 중요한 것은 <b>실제로 해제되지 않는다</b>는 점이고 그건 UPDATE 의
+     * WHERE 가 보장한다.
+     */
+    private BookingErrorCode resolveReleaseFailure(PerformanceSeatId seatKey, Long userId) {
+        PerformanceSeat seat = performanceSeatRepository.findById(seatKey).orElse(null);
+        if (seat == null) {
+            return BookingErrorCode.SEAT_NOT_FOUND;
+        }
+
+        return switch (seat.getStatus()) {
+            // 결제까지 끝난 좌석에는 해제할 선점이 없다
+            case SOLD -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
+            // 남의 선점이면 권한 없음, 내 선점인데 UPDATE 가 실패했다면 만료된 것이다
+            case HELD -> !userId.equals(seat.getHeldBy())
+                    ? BookingErrorCode.NOT_SEAT_HOLDER
+                    : BookingErrorCode.SEAT_HOLD_EXPIRED;
+            // 이미 풀려 있다 (만료 흡수 또는 다른 요청이 먼저 해제)
+            case AVAILABLE -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
         };
     }
 

@@ -171,6 +171,12 @@ public class BookingController {
             description = """
                     본인이 선점한 좌석을 해제하여 다시 예매 가능한 상태로 되돌립니다.
                     좌석을 변경하거나 예매를 중단할 때 호출합니다.
+
+                    - **본인이 선점한 좌석만 해제할 수 있습니다.** 다른 사용자가 선점한 좌석에 대한
+                      요청은 `ERR_BOOKING_008`로 거절되며, 그 선점에는 어떤 영향도 주지 않습니다.
+                    - 이미 만료된 선점은 해제 대상이 아니라 `ERR_BOOKING_009`로 응답합니다.
+                      좌석을 다시 선택해야 합니다.
+                    - 해제 후에는 다른 사용자가 곧바로 그 좌석을 선점할 수 있습니다.
                     """
     )
     @ApiResponses({
@@ -252,7 +258,8 @@ public class BookingController {
 
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
     ) {
-        throw new UnsupportedOperationException("TODO: 좌석 선점 해제 구현");
+        bookingService.releaseSeat(performanceDetailId, seatId, authUser.id());
+        return ResponseEntity.ok(BaseResponse.success("좌석 선점이 해제되었습니다."));
     }
 
     @Operation(

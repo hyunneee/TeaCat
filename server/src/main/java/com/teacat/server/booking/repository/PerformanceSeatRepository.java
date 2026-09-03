@@ -74,6 +74,35 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              @Param("heldUntil") LocalDateTime heldUntil);
 
     /**
+     * 내가 선점한 좌석을 해제한다.
+     *
+     * <p>{@code held_by = :userId} 를 WHERE 에 두는 것이 <b>권한 검사 그 자체</b>다. 조회로 소유자를
+     * 확인한 뒤 UPDATE 하면 그 사이에 소유자가 바뀔 수 있지만, 이 조건은 행 락을 얻은 뒤 재평가되므로
+     * 남의 선점을 해제하는 일이 원자적으로 불가능하다. 실패 사유는 갱신된 행 수가 0 일 때만 따로 읽는다.
+     *
+     * <p>{@code held_until >= now()} 까지 요구하는 이유: 이미 만료된 선점은 해제할 대상이 아니라
+     * "다시 고르라"고 알려야 하는 상태다({@code ERR_BOOKING_009}).
+     *
+     * @return 갱신된 행 수. 1 이면 해제 성공, 0 이면 실패이며 사유는 좌석을 다시 읽어 판별한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'AVAILABLE',
+                   held_by = NULL,
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'HELD'
+               AND held_by = :userId
+               AND held_until >= now()
+            """, nativeQuery = true)
+    int releaseHold(@Param("performanceDetailId") Long performanceDetailId,
+                    @Param("seatId") Long seatId,
+                    @Param("userId") Long userId);
+
+    /**
      * 이 유저의 만료된 선점을 <b>회차 구분 없이 전부</b> 해제한다. 내 선점 목록을 조회하기 직전에 호출한다.
      *
      * <p>{@link #releaseExpiredHold} 와 조건이 겹치지만 범위가 다르다. 선점 경로는 해당 회차만 건드려야
