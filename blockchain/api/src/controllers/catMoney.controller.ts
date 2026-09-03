@@ -18,13 +18,28 @@ const MAX_DERIVATION_INDEX = 2 ** 31 - 1;
 const amount = z.string().regex(/^[1-9][0-9]*$/, '0 보다 큰 정수 문자열이어야 합니다');
 const address = z.string().regex(ADDRESS, '0x + 40자리 hex 여야 합니다');
 
-/** Spring 이 만드는 영구 유일 키. 서버가 keccak256 으로 해싱합니다. */
+/**
+ * Spring 이 만드는 영구 유일 키. 서버가 keccak256 으로 해싱해 온체인에 넣습니다.
+ *
+ * 주의: **비밀값을 넣으면 안 됩니다.** 해시가 체인에 영구히 남습니다.
+ *       주문번호·티켓 PK 같은 식별자를 쓰세요.
+ */
 const operationKey = z.string().min(1).max(200);
 
 export const balanceQuery = z.object({ address });
 
 export const mintBody = z.object({
   operationKey,
+  /**
+   * 받는 주소. **반드시 `POST /internal/wallets` 가 만들어준 파생 지갑이어야 합니다.**
+   *
+   * 외부 지갑(개인 MetaMask 등)에 발행하면 그 캣머니는 영원히 회수할 수 없습니다 —
+   * 소각은 유저 본인의 서명이 필요한데 서버는 그 키를 모르고, 컨트랙트에 `burnFrom`
+   * 도 없어서 admin 이라도 못 태웁니다.
+   *
+   * 여기서 검사하지는 못합니다. 파생 인덱스를 전부 훑어볼 수 없기 때문입니다.
+   * Spring 이 자기 DB 의 주소만 보내야 합니다.
+   */
   to: address,
   amount,
   /** 발행 사유. 온체인에는 남기지 않고 로그·대사용입니다 */
@@ -53,8 +68,8 @@ export async function postCatMoneyMint(req: Request, res: Response): Promise<voi
     throw errors.badRequest('요청 본문이 올바르지 않습니다', parsed.error.flatten());
   }
 
-  const { operationKey: key, to, amount: value } = parsed.data;
-  const result = await mintCatMoney(key, to, value);
+  const { operationKey: key, to, amount: value, reason } = parsed.data;
+  const result = await mintCatMoney(key, to, value, reason);
 
   // 보냈으면 202, 이미 처리돼 있었으면 바뀐 게 없으니 200 입니다. (DESIGN.md 4-2)
   res.status(result.status === 'PENDING' ? 202 : 200).json(result);
@@ -66,8 +81,8 @@ export async function postCatMoneyBurn(req: Request, res: Response): Promise<voi
     throw errors.badRequest('요청 본문이 올바르지 않습니다', parsed.error.flatten());
   }
 
-  const { operationKey: key, from, derivationIndex, amount: value } = parsed.data;
-  const result = await burnCatMoney(key, from, derivationIndex, value);
+  const { operationKey: key, from, derivationIndex, amount: value, reason } = parsed.data;
+  const result = await burnCatMoney(key, from, derivationIndex, value, reason);
 
   res.status(result.status === 'PENDING' ? 202 : 200).json(result);
 }

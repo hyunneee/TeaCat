@@ -9,6 +9,7 @@ import {
 } from '../chain/contracts/catMoney';
 import { deriveUserAddress } from '../chain/keys/hdWallet';
 import { errors } from '../shared/errors';
+import { logger } from '../shared/logger';
 
 /**
  * 캣머니 유스케이스.
@@ -29,11 +30,34 @@ export interface BalanceResult {
   symbol: typeof SYMBOL;
 }
 
+/** 발행 사유. 온체인에는 안 남고 로그에만 남습니다 — 대사(M2) 때 씁니다. */
+export type MintReason = 'DEPOSIT' | 'REWARD' | 'REFUND';
+/** 소각 사유. */
+export type BurnReason = 'PAYMENT' | 'WITHDRAWAL';
+
 export interface WriteResult {
   /** 방금 보냈으면 PENDING, 이미 처리돼 있었으면 ALREADY_DONE */
   status: 'PENDING' | 'ALREADY_DONE';
   /** ALREADY_DONE 이면 새로 보낸 트랜잭션이 없어 null 입니다 */
   txHash: string | null;
+}
+
+/* 로그에는 **해싱된** operationKey 를 남깁니다. Spring 이 보낸 원문이 아닙니다.
+   두 가지 이유입니다.
+     1. 온체인 이벤트의 topic 과 같은 값이라 대사할 때 바로 맞춰볼 수 있습니다
+     2. 그 자리에 무엇이 들어올지 우리가 정하지 못합니다. 실제로 개인키를 붙여넣은
+        사고가 있었습니다 — 원문을 찍었다면 로그에 남았을 것입니다 (DESIGN.md 5-1) */
+
+/**
+ * 로그용으로 앞부분만 남깁니다.
+ *
+ * 해시·txHash 는 개인키와 모양이 같아서(0x + 64 hex) 로거가 통째로 [REDACTED] 로
+ * 가립니다. 마스킹이 잘못된 게 아니라 **모양만으로는 구분할 수 없기 때문**입니다.
+ * 줄여서 남기면 대사에 쓸 만큼은 식별되고, 혹시 비밀값이 흘러와도 의미 있는 양이
+ * 새지 않습니다. 전체 값이 필요하면 API 응답과 온체인에 있습니다.
+ */
+function short(hex: string): string {
+  return `${hex.slice(0, 18)}…`;
 }
 
 /** 컨트랙트가 배포돼 있는지. 없으면 여기서 멈춥니다 — 조용히 넘기면 안 됩니다. */
@@ -61,13 +85,21 @@ export async function mintCatMoney(
   operationKey: string,
   to: string,
   amount: string,
+  reason: MintReason,
 ): Promise<WriteResult> {
   requireDeployed();
 
   const key = operationKeyOf(operationKey);
-  if (await isMintExecuted(key)) return { status: 'ALREADY_DONE', txHash: null };
+  if (await isMintExecuted(key)) {
+    logger.info(
+      `캣머니 발행 건너뜀 (이미 처리됨) ${reason} ${amount} → ${to} key=${short(key)}`,
+    );
+    return { status: 'ALREADY_DONE', txHash: null };
+  }
 
-  return { status: 'PENDING', txHash: await mint(to, BigInt(amount), key) };
+  const txHash = await mint(to, BigInt(amount), key);
+  logger.info(`캣머니 발행 ${reason} ${amount} → ${to} key=${short(key)} tx=${short(txHash)}`);
+  return { status: 'PENDING', txHash };
 }
 
 /**
@@ -81,6 +113,7 @@ export async function burnCatMoney(
   from: string,
   derivationIndex: number,
   amount: string,
+  reason: BurnReason,
 ): Promise<WriteResult> {
   requireDeployed();
 
@@ -93,7 +126,12 @@ export async function burnCatMoney(
   }
 
   const key = operationKeyOf(operationKey);
-  if (await isBurnExecuted(derived, key)) return { status: 'ALREADY_DONE', txHash: null };
+  if (await isBurnExecuted(derived, key)) {
+    logger.info(
+      `캣머니 소각 건너뜀 (이미 처리됨) ${reason} ${amount} ← ${derived} key=${short(key)}`,
+    );
+    return { status: 'ALREADY_DONE', txHash: null };
+  }
 
   /* 잔액을 미리 봅니다. 안 보면 체인에서 revert 되고, Spring 은 202 를 받은 뒤
      한참 있다 tx 조회에서야 실패를 압니다. 여기서 막으면 즉시 422 로 알려줍니다.
@@ -104,5 +142,7 @@ export async function burnCatMoney(
     throw errors.insufficientBalance(derived);
   }
 
-  return { status: 'PENDING', txHash: await burnAs(derivationIndex, value, key) };
+  const txHash = await burnAs(derivationIndex, value, key);
+  logger.info(`캣머니 소각 ${reason} ${amount} ← ${derived} key=${short(key)} tx=${short(txHash)}`);
+  return { status: 'PENDING', txHash };
 }
