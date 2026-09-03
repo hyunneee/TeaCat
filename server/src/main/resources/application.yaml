@@ -7,6 +7,10 @@ spring:
   application:
     name: teacat
 
+  # 로컬 시크릿은 server/.env 에 둔다 (커밋 안 됨). 파일이 없어도 그냥 뜬다
+  config:
+    import: optional:file:./.env[.properties]
+
   datasource:
     url: jdbc:postgresql://localhost:5432/teacat
     username: teacat

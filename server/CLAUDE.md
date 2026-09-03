@@ -127,6 +127,9 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
 ## 4. API 규칙
 
 - 문서화: 컨트롤러에 `@Tag`, 메서드에 `@Operation`, DTO 필드에 `@Schema` 를 답니다.
+- Swagger 그룹은 **경로가 아니라 도메인 패키지**로 나눕니다 (`SwaggerConfig`).
+  URL 이 바뀌어도 그룹이 안 깨집니다. 도메인을 추가하면 `GroupedOpenApi` 빈을 하나 추가하세요.
+  (드롭다운 정렬은 `displayName` 기준입니다 — 그룹 이름의 숫자 접두어는 문서 주소에만 씁니다)
 - 인증이 필요한 컨트롤러에는 `@SecurityRequirement(name = "bearerAuth")` 를 붙입니다.
 - 인증 주체는 `@AuthenticationPrincipal AuthUser authUser` 로 받습니다.
   (`@Parameter(hidden = true)` 를 함께 붙여 Swagger 파라미터에서 숨깁니다)
@@ -208,6 +211,8 @@ cd server
 ```
 
 - JDK 21 이 필요합니다 (`JAVA_HOME` 설정 필요).
+- 시크릿은 `server/.env` 에 둡니다. `.env.example` 을 복사해서 값을 채우세요 (`.env` 는 커밋되지 않습니다).
+  `application.yaml` 의 `spring.config.import` 가 읽어들이므로 `${...}` 자리에 그대로 들어갑니다.
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - 애플리케이션 기동 시 Flyway가 마이그레이션을 적용하고 Hibernate가 스키마를 검증합니다.
 
@@ -228,3 +233,4 @@ cd server
 - 2026-09-02 최초 작성 (회원 도메인 작업 중 정리)
 - 2026-09-02 인증 흐름(자동 로그인 · 리프레시 토큰 회전) 항목 추가
 - 2026-09-03 SSAFY 계정 로그인 항목 추가
+- 2026-09-03 Swagger 그룹(도메인 패키지 기준) · 로컬 시크릿(.env) 항목 추가
