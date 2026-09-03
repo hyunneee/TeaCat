@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/performance-details/{performanceDetailId}/seats")
-public class SeatBookingController {
+public class BookingController {
 
     @Operation(
             summary = "좌석 선점",
