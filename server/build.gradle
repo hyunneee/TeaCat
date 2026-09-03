@@ -44,6 +44,9 @@ dependencies {
     implementation 'org.hibernate.orm:hibernate-vector'
     implementation 'com.pgvector:pgvector:0.1.6'
 
+    // 오브젝트 스토리지 (MinIO / S3 호환)
+    implementation 'io.minio:minio:8.5.17'
+
     // JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'

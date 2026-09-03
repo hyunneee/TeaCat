@@ -24,6 +24,12 @@ spring:
   flyway:
     enabled: true
 
+  servlet:
+    multipart:
+      # 업로드 파일 크기 제한. minio.max-file-size 보다 넉넉해야 우리 에러 메시지가 먼저 나온다
+      max-file-size: 20MB
+      max-request-size: 100MB
+
   data:
     redis:
       host: localhost
@@ -41,6 +47,28 @@ jwt:
     same-site: ${REFRESH_COOKIE_SAME_SITE:Lax}
     # 쿠키 path 는 브라우저가 보는 경로 기준이다. 프론트가 /api 프리픽스로 호출하면 /api/auth 로 좁혀야 한다.
     path: ${REFRESH_COOKIE_PATH:/api/auth}
+
+booking:
+  # 예매 정책 (API-205). 공연별이 아니라 서비스 전체 기준이다.
+  policy:
+    # 기획 초안은 1인 4매였으나 배포 기준은 1매다. 늘리려면 이 값만 바꾼다
+    max-tickets-per-user: ${BOOKING_MAX_TICKETS_PER_USER:1}
+    # 1인 1매라 동행자를 지정할 여지가 없다. 매수 제한을 늘리면 매크로 방지용으로 다시 켠다
+    companion-required: false
+    # 입장 게이트에서 얼굴로 본인을 확인한다
+    face-verification-required: true
+    # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
+
+minio:
+  # 코드가 붙는 포트는 9000 이다. 브라우저로 보는 관리 콘솔(9001)이 아니다.
+  #   계정 정보는 로컬 도커 기본값이라 여기 두고, 배포 환경에서는 .env / 환경변수로 덮어쓴다.
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:admin}
+  secret-key: ${MINIO_SECRET_KEY:password123}
+  bucket: ${MINIO_BUCKET:teacat}
+  # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
+  presigned-url-validity: 10m
+  max-file-size: 10MB
 
 cors:
   # allowCredentials 를 켜야 해서 와일드카드를 못 쓴다. 허용할 프론트 주소를 명시한다
