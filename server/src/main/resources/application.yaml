@@ -43,3 +43,21 @@ cors:
   allowed-origins:
     - http://localhost:5173
     - http://localhost:4173
+
+app:
+  # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  oauth-redirect-path: /oauth/callback
+
+oauth:
+  # TODO(ssafy): SSAFY 개발자 정보를 받으면 아래 주소들을 채우세요.
+  #   client-secret 은 이 파일에 적지 말고 환경변수 SSAFY_CLIENT_SECRET 로만 주입합니다.
+  #   값이 비어 있으면 SSAFY 로그인은 AUTH_008 로 거절되고 나머지 기능은 그대로 동작합니다.
+  ssafy:
+    client-id: ${SSAFY_CLIENT_ID:}
+    client-secret: ${SSAFY_CLIENT_SECRET:}
+    redirect-uri: ${SSAFY_REDIRECT_URI:http://localhost:8080/api/auth/oauth/ssafy/callback}
+    authorization-uri: ${SSAFY_AUTHORIZATION_URI:}
+    token-uri: ${SSAFY_TOKEN_URI:}
+    user-info-uri: ${SSAFY_USER_INFO_URI:}
+    scope: ${SSAFY_SCOPE:}

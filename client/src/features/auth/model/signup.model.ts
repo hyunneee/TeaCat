@@ -170,3 +170,35 @@ export function validateSignup(form: SignupForm): SignupErrors {
 export function isSignupValid(form: SignupForm): boolean {
   return Object.keys(validateSignup(form)).length === 0;
 }
+
+/* ── SSAFY 가입 추가정보 ───────────────────────────────────
+   SSAFY 가 이메일과 비밀번호를 대신하므로 나머지만 받습니다.
+   검증 규칙을 두 벌 적지 않도록 위 테이블을 그대로 재사용합니다. */
+
+const OAUTH_SIGNUP_FIELD_NAMES = ['name', 'nickname', 'phone'] as const;
+
+export type OauthSignupForm = Pick<SignupForm, (typeof OAUTH_SIGNUP_FIELD_NAMES)[number]>;
+export type OauthSignupErrors = Partial<Record<keyof OauthSignupForm, string>>;
+
+export const OAUTH_SIGNUP_FIELDS: SignupFieldSpec[] = SIGNUP_FIELDS.filter((field) =>
+  (OAUTH_SIGNUP_FIELD_NAMES as readonly string[]).includes(field.name),
+);
+
+export const EMPTY_OAUTH_SIGNUP: OauthSignupForm = { name: '', nickname: '', phone: '' };
+
+export function validateOauthSignup(form: OauthSignupForm): OauthSignupErrors {
+  const full: SignupForm = { ...EMPTY_SIGNUP, ...form };
+  const errors: OauthSignupErrors = {};
+
+  for (const field of OAUTH_SIGNUP_FIELDS) {
+    const key = field.name as keyof OauthSignupForm;
+    const message = field.validate(full[key], full);
+    if (message) errors[key] = message;
+  }
+
+  return errors;
+}
+
+export function isOauthSignupValid(form: OauthSignupForm): boolean {
+  return Object.keys(validateOauthSignup(form)).length === 0;
+}
