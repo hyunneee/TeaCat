@@ -29,6 +29,10 @@ export const errors = {
   chainUnavailable: (detail?: unknown) =>
     new AppError('CHAIN_UNAVAILABLE', '체인에 연결할 수 없습니다', 503, detail),
 
+  /** 컨트랙트가 아직 배포되지 않았을 때. 재시도해도 배포 전까지는 같습니다. */
+  contractUnavailable: (name: string) =>
+    new AppError('CONTRACT_UNAVAILABLE', `${name} 이 아직 배포되지 않았습니다`, 503),
+
   internal: (message = '알 수 없는 오류') => new AppError('INTERNAL', message, 500),
 };
 

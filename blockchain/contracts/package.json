@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "티캣 온체인 컨트랙트 (Hardhat) — ABI·주소·타입을 api 로 export",
-  "main": "index.ts",
-  "types": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "prepare": "hardhat compile",
     "setup:env": "tsx scripts/setupEnv.ts",
@@ -14,7 +14,7 @@
     "test": "hardhat test",
     "deploy:localhost": "hardhat run scripts/deploy.ts --network localhost",
     "typecheck": "tsc --noEmit",
-    "build": "hardhat compile",
+    "build": "hardhat compile && tsc -p tsconfig.build.json",
     "clean": "hardhat clean",
     "deploy:ssafy": "hardhat run scripts/deploy.ts --network ssafy"
   },

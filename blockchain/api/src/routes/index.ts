@@ -16,7 +16,8 @@ router.get('/health', asyncHandler(getHealth));
 const internal = Router();
 internal.use(internalAuth);
 
-internal.post('/wallets', createWallet);
+// 시드 발행이 붙으면서 쓰기가 됐습니다. async 는 반드시 감싸야 합니다.
+internal.post('/wallets', asyncHandler(createWallet));
 
 // 쓰기 엔드포인트는 202 + txHash 를 즉시 돌려주고, 확정은 Spring 이 폴링합니다.
 // (DESIGN.md 4-2, 7장)

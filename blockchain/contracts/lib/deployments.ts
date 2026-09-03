@@ -19,7 +19,23 @@ export interface Deployment {
   contracts: Record<string, string>;
 }
 
-const DEPLOYMENTS_DIR = path.resolve(__dirname, '../deployments');
+/**
+ * 패키지 루트를 찾아 올라갑니다.
+ *
+ * `../deployments` 로 고정하면 안 됩니다. 소스에서는 `lib/` 이지만 빌드본은
+ * `dist/lib/` 이라 한 단계가 더 깊어져서, **빌드했을 때만** 엉뚱한 곳을 봅니다.
+ * 타입 검사도 단위 테스트도 못 잡고 운영에서 "배포 안 됨" 으로만 보입니다.
+ */
+function packageRoot(): string {
+  let dir = __dirname;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
+    dir = path.dirname(dir);
+  }
+  throw new Error(`[deployments] 패키지 루트를 찾지 못했습니다 (${__dirname})`);
+}
+
+const DEPLOYMENTS_DIR = path.join(packageRoot(), 'deployments');
 
 function filePathFor(network: string): string {
   return path.join(DEPLOYMENTS_DIR, `${network}.json`);
