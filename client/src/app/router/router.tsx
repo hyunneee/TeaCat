@@ -53,6 +53,10 @@ const PasswordChangePage = page(
   () => import('@/pages/PasswordChangePage'),
   'PasswordChangePage',
 );
+const NicknameChangePage = page(
+  () => import('@/pages/NicknameChangePage'),
+  'NicknameChangePage',
+);
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
@@ -158,6 +162,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
+          { path: ROUTES.SETTINGS_NICKNAME, element: withBoundary(<NicknameChangePage />) },
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.

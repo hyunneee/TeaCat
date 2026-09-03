@@ -1,3 +1,8 @@
+server:
+  servlet:
+    # 프론트가 /api 프리픽스로 호출한다 (vite 프록시가 경로를 그대로 넘긴다)
+    context-path: /api
+
 spring:
   application:
     name: teacat
@@ -20,3 +25,21 @@ spring:
       host: localhost
       port: 6379
       password: teacat_local_pw
+
+jwt:
+  secret: ${JWT_SECRET:teacat-local-dev-access-token-secret-key-change-me-32bytes-over}
+  access-token-validity: 1h
+  refresh-token-validity: 14d
+  # 프론트와 도메인이 다른 환경(운영)에서는 same-site: None, secure: true 여야 쿠키가 전달된다.
+  # 개발은 vite 프록시를 타서 같은 사이트이므로 Lax 로 충분하다.
+  refresh-cookie:
+    secure: ${REFRESH_COOKIE_SECURE:false}
+    same-site: ${REFRESH_COOKIE_SAME_SITE:Lax}
+    # 쿠키 path 는 브라우저가 보는 경로 기준이다. 프론트가 /api 프리픽스로 호출하면 /api/auth 로 좁혀야 한다.
+    path: ${REFRESH_COOKIE_PATH:/api/auth}
+
+cors:
+  # allowCredentials 를 켜야 해서 와일드카드를 못 쓴다. 허용할 프론트 주소를 명시한다
+  allowed-origins:
+    - http://localhost:5173
+    - http://localhost:4173

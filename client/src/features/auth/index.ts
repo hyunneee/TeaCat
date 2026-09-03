@@ -20,7 +20,7 @@ export {
   type SignupErrors,
   type SignupFieldSpec,
 } from './model/signup.model';
-export { useChangePassword, useWithdraw } from './hooks/useAccount';
+export { useChangePassword, useChangeNickname, useWithdraw } from './hooks/useAccount';
 
 // Model
 export { useAuthStore } from './store/authStore';
@@ -34,4 +34,7 @@ export type {
   LoginResponse,
   CaptchaChallenge,
   ChangePasswordRequest,
+  ChangeNicknameRequest,
+  SignupResponse,
+  AuthTokens,
 } from './model/auth.types';

@@ -39,8 +39,7 @@ export function SignupPage() {
     if (!valid) return;
 
     const { passwordConfirm: _ignored, ...body } = form;
-    // 선택 항목은 비어 있으면 아예 보내지 않습니다 (빈 문자열을 저장하지 않도록).
-    signup.mutate({ ...body, phone: body.phone || undefined });
+    signup.mutate(body);
   };
 
   return (

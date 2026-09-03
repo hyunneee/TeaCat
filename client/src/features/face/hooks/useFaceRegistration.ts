@@ -25,7 +25,7 @@ export function useFaceRegistration() {
   return useMutation({
     mutationFn: (embedding: Float32Array) =>
       faceApi.enroll({
-        // JSON 으로 나가야 하므로 일반 배열로. 512개면 약 6KB 입니다.
+        // JSON 으로 나가야 하므로 일반 배열로. 128개면 약 1.5KB 입니다.
         embedding: Array.from(embedding),
         modelVersion: env.face.modelVersion,
       }),

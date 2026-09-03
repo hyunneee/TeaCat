@@ -61,6 +61,7 @@ export const ROUTES = {
   MY: '/my',
   SETTINGS: '/my/settings',
   SETTINGS_PASSWORD: '/my/settings/password',
+  SETTINGS_NICKNAME: '/my/settings/nickname',
   SETTINGS_ABOUT: '/my/settings/about',
 
   /* ── 운영 ── */
