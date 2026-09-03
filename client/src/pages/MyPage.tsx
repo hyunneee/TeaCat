@@ -86,7 +86,7 @@ export function MyPage() {
             </span>
 
             <p className="truncate text-lg font-extrabold">{user?.name}</p>
-            <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.loginId}</p>
+            <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.nickname}</p>
 
             <div className="mt-2.5 flex justify-center">
               {user?.faceRegistered ? (

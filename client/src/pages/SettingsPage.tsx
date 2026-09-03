@@ -1,12 +1,20 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, Info, KeyRound, ScanFace, ShieldX, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  Bell,
+  Info,
+  KeyRound,
+  ScanFace,
+  ShieldX,
+  Trash2,
+  TriangleAlert,
+  UserRound,
+} from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
 import { ROUTES } from '@/shared/constants';
-import { toast } from '@/shared/stores';
 import { useAuth, useWithdraw } from '@/features/auth';
-import { faceApi } from '@/features/face';
+import { useFaceRemoval } from '@/features/face';
 import { PERMISSION_LABEL, useNotificationPermission } from '@/features/notification';
 import { useAppVersion } from '@/features/appInfo';
 
@@ -15,6 +23,7 @@ export function SettingsPage() {
   const { open } = useModal();
   const { user } = useAuth();
   const withdraw = useWithdraw();
+  const removeFace = useFaceRemoval();
   const notify = useNotificationPermission();
   const version = useAppVersion();
 
@@ -30,6 +39,12 @@ export function SettingsPage() {
               icon={<KeyRound size={18} />}
               title="비밀번호 변경"
               onClick={() => navigate(ROUTES.SETTINGS_PASSWORD)}
+            />
+            <ListRow
+              icon={<UserRound size={18} />}
+              title="닉네임 변경"
+              description={user?.nickname}
+              onClick={() => navigate(ROUTES.SETTINGS_NICKNAME)}
             />
             {/* 권한 요청은 사용자가 직접 누른 직후에만 할 수 있습니다.
                 한 번 차단되면 앱에서 되돌릴 수 없어 브라우저 설정으로 안내합니다. */}
@@ -78,9 +93,7 @@ export function SettingsPage() {
                   message: '삭제하면 보유한 티켓으로 입장할 수 없습니다. 다시 등록해야 합니다.',
                   confirmText: '삭제',
                   danger: true,
-                  onConfirm: () => {
-                    void faceApi.remove().then(() => toast.info('삭제했어요.'));
-                  },
+                  onConfirm: () => removeFace.mutate(),
                 })
               }
             />

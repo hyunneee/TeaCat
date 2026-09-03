@@ -5,16 +5,12 @@
  *    Blob·File·dataURL 을 서버로 보내는 타입을 여기 추가하지 마세요.
  */
 
-export interface FaceStatus {
-  faceRegistered: boolean;
-}
-
 /**
  * 서버로 나가는 것 — **이게 전부입니다.**
  * 얼굴 사진은 기기 밖으로 나가지 않고, 브라우저에서 뽑은 특징값만 전달됩니다.
  */
 export interface FaceEnrollRequest {
-  /** L2 정규화된 임베딩 (기본 512차원) */
+  /** L2 정규화된 임베딩. 차원은 모델이 정합니다 (SFace = 128) */
   embedding: number[];
   /** 어떤 모델로 뽑았는지. 게이트 대조 때 같은 모델이어야 합니다. */
   modelVersion: string;
