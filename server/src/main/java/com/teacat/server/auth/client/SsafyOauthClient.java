@@ -69,8 +69,8 @@ public class SsafyOauthClient {
     /**
      * 사용자를 보낼 SSAFY 로그인 주소.
      *
-     * state 는 SSAFY 문서에 없는 값이라 기본으로는 붙이지 않는다(oauth.ssafy.send-state).
-     * 붙이든 안 붙이든 서버가 같은 값을 쿠키에 심어 두므로 콜백에서 검증할 수 있다.
+     * state 는 SSAFY 문서에 없고, SSAFY 가 자기 값을 따로 만들어 쓰는 것이 확인되어 기본으로는 붙이지 않는다
+     * (oauth.ssafy.send-state). CSRF 검증은 서버가 쿠키에 심어 둔 값으로 한다.
      */
     public String buildAuthorizationUri(String state) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.authorizationUri())

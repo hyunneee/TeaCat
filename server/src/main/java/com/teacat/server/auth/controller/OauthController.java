@@ -81,8 +81,6 @@ public class OauthController {
     @GetMapping("/callback")
     public ResponseEntity<Void> callback(
             @RequestParam(required = false) String code,
-            @Parameter(description = "SSAFY 가 돌려주지 않으면 쿠키 값으로 검증합니다")
-            @RequestParam(required = false) String state,
             @Parameter(description = "SSAFY 가 실패를 알릴 때 붙여 보내는 값")
             @RequestParam(required = false) String error,
             @Parameter(hidden = true)
@@ -94,9 +92,9 @@ public class OauthController {
         }
 
         try {
-            // SSAFY 문서에 state 가 없어 돌려준다는 보장이 없다. 없으면 우리가 심어 둔 쿠키로 검증한다
-            OauthCallbackResult result =
-                    oauthService.handleCallback(code, StringUtils.hasText(state) ? state : stateCookie);
+            // 콜백에 실려 오는 state 는 SSAFY 가 자기 흐름을 위해 만든 값이라 우리 것이 아니다.
+            // 그래서 쿼리가 아니라 우리가 심어 둔 쿠키로만 검증한다.
+            OauthCallbackResult result = oauthService.handleCallback(code, stateCookie);
 
             if (result.needsSignup()) {
                 // 가입이 끝날 때까지만 쓰는 티켓. 주소창에 남지 않도록 쿠키로 넘긴다

@@ -21,7 +21,7 @@ public class AuthCookieFactory {
     /** SSAFY 인증은 끝났지만 아직 가입이 안 끝난 사람을 잠깐 알아보기 위한 쿠키 */
     public static final String SIGNUP_TICKET_COOKIE = "oauthSignupTicket";
 
-    /** SSAFY 가 state 를 돌려주지 않아도 검증할 수 있게 같은 값을 여기에도 심는다 */
+    /** 우리가 시작한 인가 요청인지 확인하는 값. SSAFY 는 자기 state 를 따로 쓰므로 검증은 이 쿠키로만 한다 */
     public static final String OAUTH_STATE_COOKIE = "oauthState";
 
     private final JwtProperties jwtProperties;
