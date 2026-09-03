@@ -13,6 +13,7 @@ import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
+import com.teacat.server.wallet.service.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,19 +25,17 @@ import org.springframework.util.StringUtils;
 @Transactional(readOnly = true)
 public class AuthService {
 
-    /** 가입 축하금 (API-101) */
-    private static final long SIGNUP_REWARD_CAT = 1_500L;
-
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenProvider refreshTokenProvider;
+    private final WalletService walletService;
 
     /**
      * 회원가입 (API-101).
      *
-     * 회원 생성과 1,500 CAT 지급은 한 트랜잭션으로 처리해야 한다.
-     * 지갑 생성 API 가 아직 없어서 지금은 회원 생성까지만 수행한다.
+     * 회원 생성과 지갑 발급(1,500 CAT 지급 포함)을 한 트랜잭션으로 처리한다.
+     * 지갑 발급이 실패하면 회원 생성도 함께 롤백되어 사용자가 다시 가입할 수 있다.
      */
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -55,9 +54,8 @@ public class AuthService {
                 request.phone()
         ));
 
-        // TODO(wallet): 지갑 생성 API 가 나오면 아래를 풀어 같은 트랜잭션 안에서 지급까지 끝낸다.
-        //  Wallet wallet = walletService.create(user.getId());
-        //  tokenService.grant(wallet, SIGNUP_REWARD_CAT);
+        // 실패하면 예외가 올라가 회원 생성까지 롤백된다
+        walletService.provision(user);
 
         return SignupResponse.from(user);
     }
