@@ -35,6 +35,7 @@ contract CatMoney is ERC20, AccessControl, Pausable {
 
     uint8 private constant OP_MINT = 1;
     uint8 private constant OP_BURN = 2;
+    uint8 private constant OP_TRANSFER = 3;
 
     /**
      * 실행된 작업. 키는 `_slot()` 이 만듭니다 — **operationKey 를 그대로 쓰지 않습니다.**
@@ -47,6 +48,12 @@ contract CatMoney is ERC20, AccessControl, Pausable {
 
     event Minted(address indexed to, uint256 amount, bytes32 indexed operationKey);
     event Burned(address indexed from, uint256 amount, bytes32 indexed operationKey);
+    event TransferredWithKey(
+        address indexed from,
+        address indexed to,
+        uint256 amount,
+        bytes32 indexed operationKey
+    );
 
     /// 같은 operationKey 가 두 번 왔습니다. 서비스는 이걸 성공으로 변환합니다. (4-3)
     error OperationAlreadyExecuted(bytes32 operationKey);
@@ -109,6 +116,29 @@ contract CatMoney is ERC20, AccessControl, Pausable {
         emit Burned(_msgSender(), amount, operationKey);
     }
 
+    /**
+     * 멱등 전송. 포카 마켓의 유저 간 정산이 여기로 옵니다.
+     *
+     * 표준 `transfer` 로는 재시도를 막을 수 없습니다 — 키를 걸 자리가 없어서
+     * 응답을 못 받고 다시 보내면 두 번 송금됩니다. 마켓 정산에서 그 일이 나면
+     * 구매자가 두 번 냅니다.
+     *
+     * 보내는 쪽이 직접 부릅니다(서버가 파생 키로 서명). 실행 기록도 호출자별입니다 —
+     * 누구나 부를 수 있는 함수라 전역으로 두면 남의 정산 키를 미리 소비할 수 있습니다.
+     *
+     * `transfer` 도 그대로 남겨둡니다. 지갑·탐색기가 표준을 기대하기 때문입니다.
+     */
+    function transferWithKey(address to, uint256 amount, bytes32 operationKey)
+        external
+        whenNotPaused
+        returns (bool)
+    {
+        _consume(_slot(OP_TRANSFER, _msgSender(), operationKey), operationKey, amount);
+        _transfer(_msgSender(), to, amount);
+        emit TransferredWithKey(_msgSender(), to, amount, operationKey);
+        return true;
+    }
+
     // ── 조회 ──────────────────────────────────────────────────────
     // 응답을 못 받았을 때 서비스가 "이미 했는지" 확인하는 용도입니다. (DESIGN.md 4-3)
 
@@ -118,6 +148,14 @@ contract CatMoney is ERC20, AccessControl, Pausable {
 
     function isBurnExecuted(address account, bytes32 operationKey) external view returns (bool) {
         return _executed[_slot(OP_BURN, account, operationKey)];
+    }
+
+    function isTransferExecuted(address account, bytes32 operationKey)
+        external
+        view
+        returns (bool)
+    {
+        return _executed[_slot(OP_TRANSFER, account, operationKey)];
     }
 
     // ── 운영 ──────────────────────────────────────────────────────
@@ -146,7 +184,8 @@ contract CatMoney is ERC20, AccessControl, Pausable {
     }
 
     /* ── 정지가 막는 것과 막지 않는 것 ─────────────────────────────
-       막습니다   : burn · transfer · transferFrom  (유저 잔액에서 **나가는** 것)
+       막습니다   : burn · transfer · transferFrom · transferWithKey
+                    (유저 잔액에서 **나가는** 것)
        안 막습니다: mint                            (유저 잔액으로 **들어오는** 것)
 
        사고로 컨트랙트를 멈춰도 환불 경로는 살아 있어야 합니다.
