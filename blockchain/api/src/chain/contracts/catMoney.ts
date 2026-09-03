@@ -1,7 +1,9 @@
 import { keccak256, toUtf8Bytes } from 'ethers';
 import { CatMoney__factory, readDeployment, type CatMoney } from '@teacat/contracts';
 import { env, networkNameOf } from '../../config';
-import { operatorSigner } from '../provider';
+import { operatorSigner, provider } from '../provider';
+import { userSigner } from '../keys/hdWallet';
+import { ensureLocalGas } from '../localGas';
 import { sendSerialized } from '../nonce';
 
 /**
@@ -56,6 +58,15 @@ export async function isMintExecuted(operationKey: string): Promise<boolean> {
   return contract().isMintExecuted(operationKey);
 }
 
+/** 이미 소각됐는지. 소각은 호출자별로 기록되므로 주소가 필요합니다. */
+export async function isBurnExecuted(account: string, operationKey: string): Promise<boolean> {
+  return contract().isBurnExecuted(account, operationKey);
+}
+
+export async function balanceOf(address: string): Promise<bigint> {
+  return contract().balanceOf(address);
+}
+
 /**
  * 발행. **확정을 기다리지 않고** txHash 만 돌려줍니다. (DESIGN.md 4-2)
  *
@@ -68,4 +79,36 @@ export async function mint(to: string, amount: bigint, operationKey: string): Pr
     const tx = await contract().mint(to, amount, operationKey, { nonce });
     return tx.hash;
   });
+}
+
+/**
+ * 소각. **유저 본인이 서명합니다.**
+ *
+ * 컨트랙트에 `burnFrom` 을 두지 않았기 때문입니다 — 남의 잔액을 태우는 함수가 있으면
+ * 키 하나로 전 유저의 포인트를 지울 수 있습니다. 그래서 니모닉에서 그 유저의 키를
+ * 파생해 서명합니다. 온체인에는 "유저 본인이 태웠다" 로 남습니다.
+ *
+ * 논스는 유저마다 따로라 오퍼레이터 큐를 타지 않습니다. 한 유저가 동시에 두 번
+ * 결제하는 상황은 Spring 이 막습니다.
+ */
+export async function burnAs(
+  derivationIndex: number,
+  amount: bigint,
+  operationKey: string,
+): Promise<string> {
+  const signer = userSigner(derivationIndex);
+  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
+  await ensureLocalGas(await signer.getAddress());
+
+  const tx = await CatMoney__factory.connect(requireAddress(), signer).burn(amount, operationKey);
+  return tx.hash;
+}
+
+/** 주소를 못 찾으면 던집니다. 부르는 쪽이 미리 `catMoneyAddress()` 로 확인합니다. */
+function requireAddress(): string {
+  const address = catMoneyAddress();
+  if (address === null) {
+    throw new Error(`${CONTRACT_NAME} 이 ${networkNameOf(env.CHAIN_ID)} 에 배포되지 않았습니다`);
+  }
+  return address;
 }
