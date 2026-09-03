@@ -111,6 +111,24 @@ registry.registerPath({
 
 /* ── /internal/wallets ─────────────────────────────────────────── */
 
+const seedResponse = registry
+  .register(
+    'WalletSeed',
+    z.object({
+      status: z.enum(['PENDING', 'ALREADY_DONE']).openapi({
+        description:
+          '`PENDING` 방금 발행 트랜잭션을 보냈습니다. `ALREADY_DONE` 이미 발행돼 있어 ' +
+          '새 트랜잭션을 보내지 않았습니다 — 재시도가 안전한 이유입니다.',
+      }),
+      amount: z.string().openapi({ example: '1500' }),
+      txHash: z
+        .string()
+        .nullable()
+        .openapi({ description: '`ALREADY_DONE` 이면 보낸 트랜잭션이 없어 null 입니다' }),
+    }),
+  )
+  .openapi({ description: '가입 시드 발행 결과' });
+
 const walletResponse = registry.register(
   'Wallet',
   z.object({
@@ -119,6 +137,9 @@ const walletResponse = registry.register(
     path: z.string().openapi({ example: "m/44'/60'/1'/0/42" }),
     type: z.literal('RELAYER_EOA').openapi({
       description: '릴레이어 단계에서는 EOA 입니다 (DESIGN.md 5-3)',
+    }),
+    seed: seedResponse.nullable().openapi({
+      description: '`seedAmount` 를 보내지 않았으면 null 입니다',
     }),
   }),
 );
@@ -148,15 +169,25 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: '주소를 계산했습니다',
+      description: '주소를 계산했습니다. 새로 보낸 트랜잭션은 없습니다',
+      content: { 'application/json': { schema: walletResponse } },
+    },
+    202: {
+      description: '주소를 계산하고 시드 발행을 전송했습니다. 확정은 아직입니다',
       content: { 'application/json': { schema: walletResponse } },
     },
     400: {
-      description: '`derivationIndex` 가 0 이상의 정수가 아닙니다',
+      description: '`derivationIndex` 범위(0 ~ 2^31-1) 또는 `seedAmount` 형식 오류',
       content: { 'application/json': { schema: errorResponse } },
     },
     401: {
       description: '`x-internal-key` 가 없거나 틀립니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description:
+        'CatMoney 가 아직 배포되지 않았습니다 (`CONTRACT_UNAVAILABLE`). ' +
+        '배포 전까지는 `seedAmount` 를 빼고 호출하세요',
       content: { 'application/json': { schema: errorResponse } },
     },
   },

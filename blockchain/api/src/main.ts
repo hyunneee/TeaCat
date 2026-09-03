@@ -6,8 +6,11 @@ import { buildHealthReport } from './services/health.service';
 async function main(): Promise<void> {
   const app = createApp();
 
-  const server = app.listen(env.PORT, () => {
-    logger.info(`blockchain api 기동 — http://localhost:${env.PORT} (${env.NODE_ENV})`);
+  /* 기본은 루프백입니다. 이 프로세스는 오퍼레이터 개인키와 마스터 니모닉을 쥐고 있어서,
+     실수로 사설망·공인 IP 에 열리면 안 됩니다. 컨테이너처럼 외부에서 붙어야 하는
+     환경에서만 HOST 로 넓히고, 그때도 앞단에서 접근을 막으세요. (DESIGN.md 1장) */
+  const server = app.listen(env.PORT, env.HOST, () => {
+    logger.info(`blockchain api 기동 — http://${env.HOST}:${env.PORT} (${env.NODE_ENV})`);
     logger.info(`tx sender: ${env.TX_SENDER}`);
   });
 

@@ -364,7 +364,7 @@ SSAFY 체인에서는 10초쯤 걸려 무너집니다. 통합 테스트할 때 �
 | **M0** 뼈대 · SSAFY 체인 연결 · `/health` | 완료 |
 | **M1** `TicketSBT` + 릴레이어 + 발행/사용/취소 | |
 | **M2** 대사·복구 (드롭된 tx 재전송, 가스 상향) | |
-| **M3** `CatMoney`(캣머니) | 컨트랙트·테스트 완료. 배포와 API 는 아직 |
+| **M3** `CatMoney`(캣머니) | 컨트랙트·테스트·가입 시드 발행 완료. SSAFY 체인 배포는 아직 |
 | | (캣머니는 발행/소각으로만 움직입니다 — 트레저리 없음. [DESIGN.md 6장](DESIGN.md#6-컨트랙트-설계)) |
 | **M4** ERC-4337 | **이 체인에서는 불가** (아래) |
 
@@ -379,7 +379,8 @@ SSAFY 체인에서는 10초쯤 걸려 무너집니다. 통합 테스트할 때 �
 
 ```bash
 GET  /health                      인증 없음. 체인 연결·오퍼레이터 잔고·배포 상태
-POST /internal/wallets            { "derivationIndex": 7 }  → 유저 지갑 주소
+POST /internal/wallets            { "derivationIndex": 7, "seedAmount": "1500" }
+                                  → 주소 + 가입 시드 발행 (202 + txHash)
 
 GET  /docs                        Swagger UI (운영 제외)
 GET  /docs.json                   OpenAPI 원본

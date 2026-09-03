@@ -20,6 +20,8 @@ const HEX_PRIVATE_KEY = /^0x[0-9a-fA-F]{64}$/;
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
+  /** 기본은 루프백. 컨테이너에서 외부 접속을 받아야 할 때만 0.0.0.0 으로 넓힙니다. */
+  HOST: z.string().min(1).default('127.0.0.1'),
 
   CHAIN_ID: z.coerce.number().int().positive(),
   RPC_URL: z.string().url(),

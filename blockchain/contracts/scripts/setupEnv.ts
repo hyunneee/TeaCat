@@ -38,6 +38,8 @@ function build(): string {
 
 NODE_ENV=development
 PORT=4000
+# 기본은 루프백입니다. 컨테이너에서 밖으로 열어야 할 때만 0.0.0.0 으로 넓히세요.
+HOST=127.0.0.1
 
 # SSAFY 체인 (팀 공용). 가스가 무료라 오퍼레이터에 자금을 채울 필요가 없습니다.
 CHAIN_ID=${SSAFY_CHAIN_ID}

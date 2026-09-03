@@ -97,6 +97,8 @@ export function registerPlannedPaths(registry: OpenAPIRegistry, internalKeyName:
       '| `DEPOSIT` | 원화 입금이 Spring 에서 확인됐을 때 (환전 — 사는 쪽) |\n' +
       '| `REWARD` | 이벤트·보상 지급 |\n' +
       '| `REFUND` | 예매 취소로 결제한 캣머니를 돌려줄 때 |\n\n' +
+      '**가입 시드는 여기가 아닙니다.** `POST /internal/wallets` 의 `seedAmount` 로 ' +
+      '지갑 생성과 함께 나갑니다 — 파생 인덱스로 멱등이 걸려 재시도해도 한 번만 지급됩니다.\n\n' +
       '수량과 지급 정책은 Spring 이 확정합니다. 이 서비스는 판단하지 않고 실행만 합니다.\n\n' +
       PENDING_DESCRIPTION,
     security: secured,
@@ -138,6 +140,12 @@ export function registerPlannedPaths(registry: OpenAPIRegistry, internalKeyName:
       '서버가 `derivationIndex` 로 유저 키를 파생해 서명하므로, 온체인에는 ' +
       '**유저 본인이 태운 것**으로 남습니다. 남의 잔액을 태우는 함수는 컨트랙트에 없습니다.\n\n' +
       '`derivationIndex` 로 계산한 주소가 `from` 과 다르면 `400` 입니다.\n\n' +
+      '### 원화 출금(`WITHDRAWAL`)은 되돌릴 준비를 하고 부르세요\n\n' +
+      '토큰을 먼저 태우면 원화 지급이 실패했을 때 유저만 손해입니다. ' +
+      '반대로 원화를 먼저 주면 소각 실패 시 유저가 둘 다 갖습니다.\n\n' +
+      '**소각 확정 → 원화 지급 → 실패하면 별도 `operationKey` 로 `mint` 하여 복구** ' +
+      '순서로 가세요. Spring 이 이 상태 전이를 소유합니다(보상 트랜잭션). ' +
+      '소각도 복구도 멱등이라 재시도가 안전합니다.\n\n' +
       PENDING_DESCRIPTION,
     security: secured,
     request: {

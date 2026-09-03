@@ -78,7 +78,7 @@ DB가 하나라 두 DB 사이 동기화 문제가 없고, 티켓 발행과 지�
 |---|---|---|
 | 런타임 | Node.js 20.19+ | |
 | 웹 | Express + TypeScript | |
-| 컨트랙트 | Solidity 0.8.28 (evmVersion `cancun`) + **OpenZeppelin 5** | ERC 표준 직접 구현 |
+| 컨트랙트 | Solidity 0.8.28 (evmVersion `constantinople`) + **OpenZeppelin 5.1.0 고정** | 체인 EVM 이 Constantinople (8장) |
 | 개발 프레임워크 | Hardhat 2.x + `@nomicfoundation/hardhat-toolbox` | |
 | 체인 라이브러리 | ethers v6 + typechain | 여러 라이브러리 혼용 |
 | DB | **없음** | 이 서비스에 DB·ORM을 붙이는 것 |
@@ -544,6 +544,7 @@ function _update(address to, uint256 tokenId, address auth)
 
 | 사건 | 온체인 |
 |---|---|
+| 회원가입 — 지갑 생성 시드 | `mint` (`POST /internal/wallets` 의 `seedAmount`) |
 | 원화 입금이 Spring 에서 확인됨 | `mint` (`DEPOSIT`) |
 | 이벤트·보상 지급 | `mint` (`REWARD`) |
 | 티켓 결제 — 캣머니는 **일부만** 낼 수 있습니다 | `burn` (`PAYMENT`) |
@@ -561,9 +562,24 @@ function _update(address to, uint256 tokenId, address auth)
 
 | 함수 | 권한 | 하는 일 |
 |---|---|---|
-| `mint(to, amount, operationKey)` | `MINTER_ROLE` | 입금·보상·환급 |
+| `mint(to, amount, operationKey)` | `MINTER_ROLE` | 가입 시드·입금·보상·환급 |
 | `burn(amount, operationKey)` | **유저 본인** | 결제·출금 |
 | `pause()` / `unpause()` | `OPERATOR_ROLE` | 사고 시 정지 |
+
+**`operationKey` 는 그대로 쓰지 않습니다.** mint 와 burn 이 실행 기록을 나눠 갖습니다.
+
+| | 실행 기록의 키 | 왜 |
+|---|---|---|
+| `mint` | `hash(MINT, operationKey)` — **전역** | `MINTER_ROLE` 만 부를 수 있어 외부인이 소비할 수 없습니다. 전역으로 둬야 Spring 이 키를 재사용해도 막힙니다 |
+| `burn` | `hash(BURN, msg.sender, operationKey)` — **호출자별** | 누구나 부를 수 있는 함수라, 전역이면 아무나 남의 결제 키를 미리 태워 막을 수 있습니다 |
+
+하나로 합쳐두면 **토큰 1개를 가진 아무나** 예정된 민트 키로 `burn(1, 그키)` 를 먼저 실행해
+남의 지급을 영구히 막을 수 있습니다. Spring 키는 순번이라 예측 가능하고 이 체인은 공용이라
+실제로 노출됩니다. 회귀 테스트가 있습니다.
+
+**역할은 셋으로 나눠 배포합니다.** `admin`(권한 관리) · `minter`(발행, api 키) ·
+`operator`(정지). admin 을 API 프로세스에 올리지 마세요 — 그 키가 털리면
+무제한 발행과 권한 조작이 한꺼번에 가능해집니다.
 
 **왜 표준 `transfer`·`burn` 만으로 안 되나** — 멱등 키를 걸 자리가 없습니다.
 Spring 이 tx 를 보낸 직후 응답 전에 죽으면 다시 보내고, 그러면 두 번 나갑니다.
@@ -586,6 +602,13 @@ Spring 이 tx 를 보낸 직후 응답 전에 죽으면 다시 보내고, 그러
 mint 를 막으면 환불이 함께 멈춥니다 (TicketSBT 의 취소와 같은 이유).
 발행 키가 털린 경우는 정지가 아니라 **`MINTER_ROLE` 회수**로 막습니다 —
 두 사고에 같은 도구를 쓰면 둘 다 어설프게 막습니다.
+
+**원화 출금(캐시아웃)은 2단계 커밋 문제입니다.** 토큰을 먼저 태우면 원화 지급 실패 시
+유저만 손해이고, 원화를 먼저 주면 소각 실패 시 유저가 둘 다 갖습니다. escrow 를 둬도
+문제는 사라지지 않고 옮겨갈 뿐입니다(잠금 실패·해제 실패가 새로 생깁니다).
+
+**소각 확정 → 원화 지급 → 실패 시 별도 키로 `mint` 복구** 순서로 갑니다.
+Spring 이 이 상태 전이를 소유합니다. 소각도 복구도 멱등이라 재시도가 안전합니다.
 
 주의: **`ERC20Permit`(EIP-2612)은 붙일 수 없습니다.** EIP-712 가 `block.chainid` 를
 쓰는데 이 체인에는 그 옵코드가 없습니다 (8장).
@@ -929,6 +952,9 @@ npm run chain:reset    # 체인 초기화 + 재배포 + 주소 파일 갱신
 - **팀 공용 오퍼레이터 키를 어떻게 나눌지** — 키 자체는 정해졌지만 전달 방법이 남았습니다.
   git 밖으로 전달합니다. `setup:env` 는 일단 개인 키를 넣어두고, 받은 키로 바꾸는 방식입니다.
   누가 만들어 배포할지, 어디에 보관할지 정해야 합니다.
+- **포카 마켓의 유저 간 정산** — 표준 `transfer` 에는 `operationKey` 를 걸 자리가 없어
+  재시도 시 중복 송금이 납니다. M6 착수 전에 정할 것: 마켓 컨트랙트가 에스크로로
+  받으면서 키를 걸지, `transfer` 를 감싼 함수를 둘지.
 - **트랜잭션 전송 권한(permissioning)** — `eth_estimateGas` 는 임의 주소로도 통과하지만,
   실제 전송이 허용 목록으로 막혀 있는지는 트랜잭션을 보내봐야 확인됩니다. M1 첫 배포 때 확인.
 - **제네시스 하드포크를 올릴 수 있는지** — SSAFY 에 문의할 것. Istanbul 이상이면

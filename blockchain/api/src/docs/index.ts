@@ -33,8 +33,9 @@ export function mountDocs(app: Express): void {
     swaggerUi.setup(document, {
       customSiteTitle: '티캣 블록체인 내부 API',
       swaggerOptions: {
-        // 새로고침해도 펼친 상태와 Authorize 값이 남습니다.
-        persistAuthorization: true,
+        // 끕니다. 켜면 내부 API 키가 브라우저 저장소에 남아, 그 브라우저를
+        // 쓰는 사람 누구나 꺼내 볼 수 있습니다. 새로고침마다 다시 넣는 편이 낫습니다.
+        persistAuthorization: false,
         displayRequestDuration: true,
       },
     }),

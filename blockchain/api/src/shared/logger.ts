@@ -13,15 +13,21 @@ const SECRET_PATTERNS: RegExp[] = [
   /\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b/g,
 ];
 
+/**
+ * 주의: **전부 소문자로 적습니다.** 아래에서 `key.toLowerCase()` 와 비교하므로
+ *       `privateKey` 처럼 대문자가 섞이면 영원히 안 맞아 마스킹이 조용히 무력해집니다.
+ */
 const SECRET_KEYS = [
   'mnemonic',
-  'privateKey',
+  'privatekey',
   'private_key',
-  'signingKey',
+  'signingkey',
+  'signing_key',
   'secret',
   'password',
   'authorization',
   'x-internal-key',
+  'seed',
 ];
 
 function maskString(value: string): string {
