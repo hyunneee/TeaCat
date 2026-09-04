@@ -23,7 +23,7 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class BookingService {
 
-    /** 1인 1매 제약을 강제하는 부분 유니크 인덱스 이름 (V20260903_1030 마이그레이션) */
+    /** 1인 1매 제약을 강제하는 부분 유니크 인덱스 이름 (V20260903_1705 마이그레이션) */
     private static final String HELD_BY_UNIQUE_INDEX = "uq_performance_seats_held_by";
 
     /** performance_details.status 가 이 값일 때만 예매를 받는다 */
