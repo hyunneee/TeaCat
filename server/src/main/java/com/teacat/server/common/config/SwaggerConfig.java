@@ -59,6 +59,15 @@ public class SwaggerConfig {
                 .build();
     }
 
+    @Bean
+    public GroupedOpenApi walletApi() {
+        return GroupedOpenApi.builder()
+                .group("03-wallet")
+                .displayName("지갑")
+                .packagesToScan(BASE_PACKAGE + ".wallet")
+                .build();
+    }
+
     /*
      * 도메인이 생기면 아래 모양으로 한 벌씩 추가한다.
      * 아직 없는 패키지로 그룹을 만들면 문서에 빈 그룹만 남으므로, 패키지를 만든 뒤에 넣는다.
@@ -66,7 +75,7 @@ public class SwaggerConfig {
      * @Bean
      * public GroupedOpenApi bookingApi() {
      *     return GroupedOpenApi.builder()
-     *             .group("03-booking")
+     *             .group("04-booking")
      *             .displayName("예매")
      *             .packagesToScan(BASE_PACKAGE + ".booking")
      *             .build();
