@@ -68,6 +68,15 @@ public class SwaggerConfig {
                 .build();
     }
 
+    @Bean
+    public GroupedOpenApi performanceApi() {
+        return GroupedOpenApi.builder()
+                .group("05-performance")
+                .displayName("공연")
+                .packagesToScan(BASE_PACKAGE + ".performance")
+                .build();
+    }
+
     /*
      * 도메인이 생기면 아래 모양으로 한 벌씩 추가한다.
      * 아직 없는 패키지로 그룹을 만들면 문서에 빈 그룹만 남으므로, 패키지를 만든 뒤에 넣는다.

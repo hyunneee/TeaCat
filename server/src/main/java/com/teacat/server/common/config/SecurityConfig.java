@@ -4,6 +4,7 @@ import com.teacat.server.auth.security.JwtAccessDeniedHandler;
 import com.teacat.server.auth.security.JwtAuthenticationEntryPoint;
 import com.teacat.server.auth.security.JwtAuthenticationFilter;
 import com.teacat.server.auth.security.JwtTokenProvider;
+import com.teacat.server.user.entity.UserRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +37,13 @@ public class SecurityConfig {
             "/v3/api-docs/**"
     };
 
+    /** GET 만 인증 없이 열어두는 경로 */
+    private static final String[] PUBLIC_GET_ENDPOINTS = {
+            "/concerts",
+            "/concerts/**",
+            "/schedules/**"
+    };
+
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;
 
     private final JwtTokenProvider jwtTokenProvider;
@@ -55,8 +63,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
+                        .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**").permitAll()
-                        .requestMatchers("/admin/performances/*/photocards/issue").hasRole("ADMIN")
+                        // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
+                        .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
+                        // 매처를 빠뜨린 관리자 API 도 잠기도록 마지막에 포괄 규칙을 둔다
+                        .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().authenticated())
                 .exceptionHandling(handler -> handler
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint(objectMapper))
