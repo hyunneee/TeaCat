@@ -1,20 +1,34 @@
 package com.teacat.server.wallet.service;
 
 import com.teacat.server.common.exception.BusinessException;
-import com.teacat.server.wallet.client.CatMoneyClient;
+import com.teacat.server.user.entity.User;
+import com.teacat.server.user.exception.UserErrorCode;
+import com.teacat.server.user.repository.UserRepository;
 import com.teacat.server.wallet.client.BlockchainProperties;
+import com.teacat.server.wallet.client.CatMoneyClient;
+import com.teacat.server.wallet.client.CatMoneyWriteResult;
+import com.teacat.server.wallet.client.TxReportResult;
 import com.teacat.server.wallet.dto.response.BalanceResponse;
+import com.teacat.server.wallet.entity.CatTransaction;
+import com.teacat.server.wallet.entity.CatTxReason;
+import com.teacat.server.wallet.entity.CatTxStatus;
 import com.teacat.server.wallet.entity.Wallet;
 import com.teacat.server.wallet.entity.WalletOwner;
 import com.teacat.server.wallet.exception.WalletErrorCode;
+import com.teacat.server.wallet.repository.CatTransactionRepository;
 import com.teacat.server.wallet.repository.WalletOwnerRepository;
 import com.teacat.server.wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
+import java.util.Optional;
+
 /**
- * 캣머니 조회.
+ * 캣머니 조회·발행.
  *
  * <b>잔액이 필요한 곳은 전부 여기를 부릅니다.</b> 화면(마이페이지·포카 마켓)뿐 아니라
  * 결제처럼 서버 안에서 잔액을 봐야 하는 도메인도 HTTP 가 아니라 이 서비스를 직접 부릅니다.
@@ -23,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 잔액은 저장하지 않습니다. 체인이 진실이고 캐시하면 반드시 어긋납니다
  * (blockchain/DESIGN.md 5-3).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -30,26 +45,113 @@ public class CatMoneyService {
 
     private final WalletOwnerRepository walletOwnerRepository;
     private final WalletRepository walletRepository;
+    private final UserRepository userRepository;
+    private final CatTransactionRepository catTransactionRepository;
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyClient catMoneyClient;
 
     public BalanceResponse getBalance(Long userId) {
-        return BalanceResponse.from(catMoneyClient.getBalance(resolveAddress(userId)));
+        return BalanceResponse.from(catMoneyClient.getBalance(resolveWallet(userId).getAddress()));
     }
 
     /**
-     * 유저 → 지갑 주소.
+     * 지금 실제로 쓸 수 있는 캣머니.
+     *
+     * <p>체인 잔액을 그대로 쓰면 안 됩니다. 소각을 보내고 확정되기까지 블록 하나(10초)가 걸리는데
+     * 그 동안 체인 잔액은 예전 값이라, 포카 마켓 구매와 티켓 결제가 <b>같은 잔액을 두 번</b> 쓸 수
+     * 있습니다. 아직 확정되지 않은 소각은 이미 나간 돈으로 보고 빼줍니다.
+     *
+     * <p>반대로 아직 확정되지 않은 <b>발행</b>은 더하지 않습니다. 실패할 수 있는 돈을 미리 쓰게
+     * 하면 안 됩니다 — 충전 직후 잠깐 잔액에 안 잡히는 편이 낫습니다.
+     */
+    public BigInteger getSpendableBalance(Long userId) {
+        BigInteger onChain = new BigInteger(
+                catMoneyClient.getBalance(resolveWallet(userId).getAddress()).balance());
+        BigInteger pendingBurns = catTransactionRepository.sumPendingBurns(userId);
+
+        return onChain.subtract(pendingBurns).max(BigInteger.ZERO);
+    }
+
+    /**
+     * 캣머니를 발행하고 그 요청을 원장에 남깁니다.
+     *
+     * <p><b>트랜잭션 밖에서 돕니다.</b> 체인에 다녀오는 동안(최대 20초) DB 커넥션을 잡고 있으면
+     * 풀이 마릅니다. 저장은 리포지토리가 각자 짧은 트랜잭션으로 처리합니다.
+     *
+     * @param operationKey 우리가 정하는 영구 유일 키. 같은 키로 다시 불러도 두 번 발행되지 않습니다.
+     *                     비밀값을 넣으면 안 됩니다 — 해시가 체인에 영구히 남습니다
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CatTransaction mint(Long userId, BigInteger amount, CatTxReason reason, String operationKey) {
+        // 재시도로 다시 들어온 경우. 체인은 멱등이지만 원장에 같은 키가 두 줄 생기면 안 된다
+        Optional<CatTransaction> recorded = catTransactionRepository.findByOperationKey(operationKey);
+        if (recorded.isPresent()) {
+            return recorded.get();
+        }
+
+        Wallet wallet = resolveWallet(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        CatMoneyWriteResult result = catMoneyClient.mint(operationKey, wallet.getAddress(), amount, reason);
+
+        CatTransaction transaction = result.isPending()
+                ? CatTransaction.sent(user, wallet, reason, amount, operationKey, result.txHash())
+                : CatTransaction.alreadyDone(user, wallet, reason, amount, operationKey);
+
+        return catTransactionRepository.save(transaction);
+    }
+
+    /**
+     * 확정 여부를 체인에 물어 원장에 반영합니다. 확정 폴링이 건별로 부릅니다.
+     *
+     * @return 아직 확정되지 않았으면 false (다음 차례에 다시 봅니다)
+     */
+    @Transactional
+    public boolean settle(Long catTransactionId) {
+        CatTransaction transaction = catTransactionRepository.findById(catTransactionId).orElse(null);
+        if (transaction == null || !transaction.isPending()) {
+            return true;
+        }
+
+        // 보내긴 했는데 해시를 못 받은 건은 여기서 판단할 수 없다. 재발행 쪽이 처리한다
+        if (transaction.getTxHash() == null) {
+            return false;
+        }
+
+        Optional<TxReportResult> report = catMoneyClient.findTxReport(transaction.getTxHash());
+        if (report.isEmpty()) {
+            // 체인이 이 해시를 모른다 = 드롭됐다. 원장에 남은 요청은 재발행 대상이다
+            log.warn("체인이 트랜잭션을 모릅니다. 재발행 대상입니다. catTransactionId={}", catTransactionId);
+            return false;
+        }
+
+        CatTxStatus status = report.get().toCatTxStatus();
+        if (!status.isSettled()) {
+            return false;
+        }
+
+        transaction.settle(status, report.get().failureCode());
+        if (status == CatTxStatus.FAILED) {
+            log.error("캣머니 {} 이 체인에서 실패했습니다. catTransactionId={} reason={} code={}",
+                    transaction.getDirection(), catTransactionId, transaction.getReason(),
+                    report.get().failureCode());
+        }
+
+        return true;
+    }
+
+    /**
+     * 유저 → 지갑.
      *
      * 지갑이 없으면 조용히 0 으로 넘기지 않는다. "잔액 0" 과 "지갑이 없음" 은 다른 상태이고,
      * 후자는 가입이 반쪽으로 끝났다는 뜻이라 드러나야 한다.
      */
-    private String resolveAddress(Long userId) {
+    private Wallet resolveWallet(Long userId) {
         WalletOwner owner = walletOwnerRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
 
-        Wallet wallet = walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
+        return walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
-
-        return wallet.getAddress();
     }
 }

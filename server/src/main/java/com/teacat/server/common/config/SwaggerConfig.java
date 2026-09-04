@@ -86,6 +86,15 @@ public class SwaggerConfig {
                 .build();
     }
 
+    @Bean
+    public GroupedOpenApi paymentApi() {
+        return GroupedOpenApi.builder()
+                .group("07-payment")
+                .displayName("결제")
+                .packagesToScan(BASE_PACKAGE + ".payment")
+                .build();
+    }
+
     // 04 는 nft, 05 는 performance 가 이미 쓰고 있어 06 을 쓴다.
     // 접두어는 문서 주소용이고 드롭다운 정렬은 displayName 기준이라 번호 자체는 순서에 영향이 없다.
     @Bean

@@ -22,6 +22,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * 회원.
@@ -64,6 +65,15 @@ public class User {
     @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "face_id")
     private Face face;
+
+    /**
+     * 토스 결제창·결제위젯이 요구하는 고객 식별자. 같은 회원은 늘 같은 값이어야 한다.
+     *
+     * 회원 PK 를 쓰지 않는 이유는 두 가지다 — 이메일·전화번호처럼 <b>개인정보를 넣으면 안 되고</b>,
+     * 순번이라 추측 가능해서도 안 된다. 첫 결제 때 만들어 넣으므로 null 일 수 있다.
+     */
+    @Column(name = "payment_customer_key", columnDefinition = "uuid")
+    private UUID paymentCustomerKey;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -118,6 +128,17 @@ public class User {
     /** 비밀번호로 로그인할 수 있는 계정인가 (소셜 전용 계정은 false) */
     public boolean hasPassword() {
         return this.password != null;
+    }
+
+    /**
+     * 결제용 고객 식별자를 발급한다. 이미 있으면 그대로 쓴다 — 회원마다 <b>고정</b>이어야
+     * 토스 쪽에서 같은 고객으로 묶인다.
+     */
+    public UUID issuePaymentCustomerKey() {
+        if (this.paymentCustomerKey == null) {
+            this.paymentCustomerKey = UUID.randomUUID();
+        }
+        return this.paymentCustomerKey;
     }
 
     public boolean hasFace() {
