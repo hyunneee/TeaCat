@@ -72,4 +72,13 @@ public class SwaggerConfig {
      *             .build();
      * }
      */
+
+    @Bean
+    public GroupedOpenApi nftApi() {
+        return GroupedOpenApi.builder()
+                .group("04-nft")
+                .displayName("NFT 포토카드")
+                .packagesToScan(BASE_PACKAGE + ".nft")
+                .build();
+    }
 }
