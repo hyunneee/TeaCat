@@ -1,0 +1,75 @@
+package com.teacat.server.performance.controller;
+
+import com.teacat.server.common.response.BaseResponse;
+import com.teacat.server.performance.dto.request.ConcertCreateRequest;
+import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
+import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
+import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
+import com.teacat.server.performance.service.AdminPerformanceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Tag(name = "공연 관리", description = "관리자용 공연 등록·수정·삭제 API")
+@SecurityRequirement(name = "bearerAuth")
+@RestController
+@RequestMapping("/admin/concerts")
+@RequiredArgsConstructor
+public class AdminPerformanceController {
+
+    private final AdminPerformanceService adminPerformanceService;
+
+    @Operation(summary = "공연 등록",
+            description = "공연을 등록합니다. 포스터·상세 이미지를 함께 올리면 MinIO 에 저장되고 DB 에는 저장 경로만 남습니다.")
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BaseResponse<ConcertCreateResponse>> create(
+            @Valid @ModelAttribute ConcertCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success("공연이 등록되었습니다.", adminPerformanceService.create(request)));
+    }
+
+    @Operation(summary = "공연 수정",
+            description = "보낸 필드만 변경합니다. 티켓팅이 시작된 뒤에는 제목만 변경할 수 있습니다.")
+    @PatchMapping("/{concertId}")
+    public ResponseEntity<BaseResponse<Void>> update(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
+            @Valid @RequestBody ConcertUpdateRequest request) {
+        adminPerformanceService.update(concertId, request);
+        return ResponseEntity.ok(BaseResponse.success("공연 정보가 수정되었습니다."));
+    }
+
+    @Operation(summary = "회차 등록",
+            description = "공연에 회차를 추가합니다. 회차 번호를 생략하면 다음 번호가 자동으로 붙습니다.")
+    @PostMapping("/{concertId}/schedules")
+    public ResponseEntity<BaseResponse<ScheduleCreateResponse>> createSchedule(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
+            @Valid @RequestBody ScheduleCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success("회차가 등록되었습니다.",
+                        adminPerformanceService.createSchedule(concertId, request)));
+    }
+
+    @Operation(summary = "공연 삭제 · 비공개",
+            description = "예매 이력이 없으면 삭제하고, 있으면 비공개 처리합니다.")
+    @DeleteMapping("/{concertId}")
+    public ResponseEntity<Void> delete(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
+        adminPerformanceService.deleteOrHide(concertId);
+        return ResponseEntity.noContent().build();
+    }
+}

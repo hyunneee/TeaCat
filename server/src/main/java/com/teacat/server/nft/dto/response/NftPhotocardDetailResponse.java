@@ -1,0 +1,53 @@
+package com.teacat.server.nft.dto.response;
+
+import com.teacat.server.nft.entity.NftMintStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.time.LocalDateTime;
+
+public record NftPhotocardDetailResponse(
+
+        @Schema(description = "포토카드 ID", example = "501")
+        Long photocardId,
+
+        @Schema(description = "도안명")
+        String designName,
+
+        @Schema(description = "이미지 URL")
+        String imageUrl,
+
+        @Schema(description = "공연명")
+        String performanceTitle,
+
+        @Schema(description = "현재 소유자 닉네임")
+        String ownerNickname,
+
+        @Schema(description = "포토카드 발행 시각")
+        LocalDateTime issuedAt,
+
+        @Schema(description = "포토카드가 발행된 공연 좌석 정보")
+        Origin origin,
+
+        @Schema(description = "민팅 상태", example = "PENDING")
+        NftMintStatus status,
+
+        @Schema(description = "활성 판매 정보. 판매 중이 아니면 null")
+        Listing listing
+) {
+
+    public record Listing(
+            @Schema(description = "판매 등록 ID") Long listingId,
+            @Schema(description = "판매가(CAT)") Long price,
+            @Schema(description = "판매자 설명") String sellerDescription,
+            @Schema(description = "판매 등록 시각") LocalDateTime listedAt
+    ) {
+    }
+
+    public record Origin(
+            @Schema(description = "좌석 등급", example = "VIP") String seatGrade,
+            @Schema(description = "공연장 구역 코드", example = "A") String areaCode,
+            @Schema(description = "좌석 열. 스탠딩이면 null", example = "3") String rowLabel,
+            @Schema(description = "좌석 번호. 스탠딩이면 null", example = "5") Integer seatNumber
+    ) {
+    }
+}

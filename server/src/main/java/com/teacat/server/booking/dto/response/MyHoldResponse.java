@@ -3,7 +3,6 @@ package com.teacat.server.booking.dto.response;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.MyHold;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Schema(description = "내가 선점 중인 좌석 (결제 화면 표시용)")
@@ -30,8 +29,8 @@ public record MyHoldResponse(
         @Schema(description = "회차 번호", example = "1")
         Integer performanceNum,
 
-        @Schema(description = "공연 날짜")
-        LocalDate performanceDate,
+        @Schema(description = "공연 일시")
+        LocalDateTime performanceDate,
 
         @Schema(description = "공연장명", example = "올림픽공원 체조경기장")
         String stadiumName,

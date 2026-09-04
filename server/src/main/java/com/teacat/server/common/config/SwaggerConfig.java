@@ -60,9 +60,38 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi walletApi() {
+        return GroupedOpenApi.builder()
+                .group("03-wallet")
+                .displayName("지갑")
+                .packagesToScan(BASE_PACKAGE + ".wallet")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi performanceApi() {
+        return GroupedOpenApi.builder()
+                .group("05-performance")
+                .displayName("공연")
+                .packagesToScan(BASE_PACKAGE + ".performance")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi nftApi() {
+        return GroupedOpenApi.builder()
+                .group("04-nft")
+                .displayName("NFT 포토카드")
+                .packagesToScan(BASE_PACKAGE + ".nft")
+                .build();
+    }
+
+    // 04 는 nft, 05 는 performance 가 이미 쓰고 있어 06 을 쓴다.
+    // 접두어는 문서 주소용이고 드롭다운 정렬은 displayName 기준이라 번호 자체는 순서에 영향이 없다.
+    @Bean
     public GroupedOpenApi bookingApi() {
         return GroupedOpenApi.builder()
-                .group("03-booking")
+                .group("06-booking")
                 .displayName("예매")
                 .packagesToScan(BASE_PACKAGE + ".booking")
                 .build();
