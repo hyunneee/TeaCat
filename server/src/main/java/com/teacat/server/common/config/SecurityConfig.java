@@ -65,7 +65,10 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-                        // 관리자 API 는 ADMIN 만
+                        .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**").permitAll()
+                        // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
+                        .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
+                        // 매처를 빠뜨린 관리자 API 도 잠기도록 마지막에 포괄 규칙을 둔다
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().authenticated())
                 .exceptionHandling(handler -> handler

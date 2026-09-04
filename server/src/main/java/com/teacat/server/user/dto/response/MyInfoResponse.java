@@ -30,9 +30,6 @@ public record MyInfoResponse(
         @Schema(description = "얼굴 등록 여부", example = "true")
         boolean faceRegistered,
 
-        @Schema(description = "캣머니(CAT) 잔액. 지갑 연동 전에는 null 로 내려간다", example = "1500")
-        Long catBalance,
-
         @Schema(description = "가입 일시")
         LocalDateTime createdAt
 ) {
@@ -46,8 +43,6 @@ public record MyInfoResponse(
                 user.getPhone(),
                 user.getRole(),
                 user.hasFace(),
-                // TODO(wallet): 지갑/CAT 지급 API 가 나오면 실제 잔액을 채운다
-                null,
                 user.getCreatedAt()
         );
     }

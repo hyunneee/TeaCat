@@ -1,0 +1,173 @@
+package com.teacat.server.nft.controller;
+
+import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.common.response.BaseResponse;
+import com.teacat.server.nft.dto.request.NftListingCreateRequest;
+import com.teacat.server.nft.dto.request.NftMarketSort;
+import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
+import com.teacat.server.nft.dto.response.NftCursorPageResponse;
+import com.teacat.server.nft.dto.response.NftListingResponse;
+import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPurchaseResponse;
+import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.service.NftService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@Tag(name = "NFT 포토카드", description = "NFT 포토카드 조회 · 판매 · 구매 API")
+@RestController
+@RequiredArgsConstructor
+public class NftController {
+
+    private final NftService nftService;
+
+    @Operation(
+            summary = "NFT 포토카드 목록 조회",
+            description = "현재 판매 중인 포토카드를 커서 기반으로 조회합니다. 공연·도안명 검색과 최신순·가격순 정렬을 지원하며, size는 1~100만 허용합니다."
+    )
+    @GetMapping("/nft-market/photocards")
+    public ResponseEntity<BaseResponse<NftCursorPageResponse<NftMarketPhotocardResponse>>> getMarketPhotocards(
+            @RequestParam(required = false) Long performanceId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "RECENT") NftMarketSort sort,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getMarketPhotocards(performanceId, keyword, sort, cursor, size)));
+    }
+
+    @Operation(
+            summary = "NFT 포토카드 상세 조회",
+            description = "포토카드의 도안·공연·발행 시각·원발행 좌석·현재 소유자·민팅 상태와 활성 판매 정보를 조회합니다. 판매 중이 아니면 판매 정보는 null입니다."
+    )
+    @GetMapping("/photocards/{photocardId}")
+    public ResponseEntity<BaseResponse<NftPhotocardDetailResponse>> getPhotocard(
+            @PathVariable Long photocardId) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getPhotocard(photocardId)));
+    }
+
+    @Operation(
+            summary = "NFT 포토카드 판매 등록",
+            description = "본인이 소유한 포토카드를 CAT 가격과 판매자 설명으로 판매 등록합니다. 이미 판매 중인 카드이거나 소유자가 아니면 등록할 수 없습니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @PostMapping("/photocards/{photocardId}/listing")
+    public ResponseEntity<BaseResponse<NftListingResponse>> registerListing(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId,
+            @Valid @RequestBody NftListingCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(BaseResponse.success(nftService.registerListing(authUser.id(), photocardId, request)));
+    }
+
+    @Operation(
+            summary = "NFT 포토카드 판매 취소",
+            description = "본인이 등록한 활성 판매를 취소합니다. 이미 판매되었거나 취소된 판매는 다시 취소할 수 없습니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @DeleteMapping("/photocards/{photocardId}/listing")
+    public ResponseEntity<BaseResponse<Void>> cancelListing(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId) {
+        nftService.cancelListing(authUser.id(), photocardId);
+        return ResponseEntity.ok(BaseResponse.success("판매 등록이 취소되었습니다."));
+    }
+
+    @Operation(
+            summary = "NFT 포토카드 구매",
+            description = "활성 판매를 구매하고 판매 상태·포토카드 소유권·거래 이력을 한 트랜잭션에서 변경합니다. "
+                    + "동시 구매는 행 잠금으로 한 건만 체결되며, 필수 UUID Idempotency-Key로 같은 요청의 중복 체결을 방지합니다. "
+                    + "현재 CAT 원장 미연동 상태이므로 잔액 차감·판매자 지급과 구매 후 잔액 반환은 추후 추가됩니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @Parameter(
+            name = "Idempotency-Key",
+            description = "중복 구매 방지용 UUID",
+            required = true,
+            in = ParameterIn.HEADER,
+            example = "550e8400-e29b-41d4-a716-446655440000"
+    )
+    @PostMapping("/photocards/{photocardId}/purchase")
+    public ResponseEntity<BaseResponse<NftPurchaseResponse>> purchase(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.purchase(authUser.id(), photocardId, idempotencyKey)));
+    }
+
+    @Operation(
+            summary = "내 NFT 포토카드 구매 내역 조회",
+            description = "인증 사용자가 구매자로 체결한 거래를 최신순 커서 기반으로 조회합니다. size는 1~100만 허용합니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/users/me/photocards/purchases")
+    public ResponseEntity<BaseResponse<NftCursorPageResponse<NftPurchaseHistoryResponse>>> getPurchaseHistory(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getPurchaseHistory(authUser.id(), cursor, size)));
+    }
+
+    @Operation(
+            summary = "내 NFT 포토카드 판매 내역 조회",
+            description = "인증 사용자가 판매자로 체결한 거래를 최신순 커서 기반으로 조회합니다. size는 1~100만 허용합니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/users/me/photocards/sales")
+    public ResponseEntity<BaseResponse<NftCursorPageResponse<NftSaleHistoryResponse>>> getSaleHistory(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getSaleHistory(authUser.id(), cursor, size)));
+    }
+
+    @Operation(
+            summary = "내 NFT 포토카드 목록 조회",
+            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 판매 등록 여부를 필터링할 수 있습니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/users/me/photocards")
+    public ResponseEntity<BaseResponse<NftCursorPageResponse<MyNftPhotocardResponse>>> getMyPhotocards(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) Boolean listed,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getMyPhotocards(authUser.id(), listed, cursor, size)));
+    }
+
+    @Operation(
+            summary = "NFT 포토카드 거래 내역 조회",
+            description = "특정 포토카드에서 체결된 판매자·구매자·체결가 이력을 최신순 커서 기반으로 조회합니다."
+    )
+    @GetMapping("/photocards/{photocardId}/trades")
+    public ResponseEntity<BaseResponse<NftCursorPageResponse<NftPhotocardTradeHistoryResponse>>> getPhotocardTrades(
+            @PathVariable Long photocardId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getPhotocardTrades(photocardId, cursor, size)));
+    }
+}

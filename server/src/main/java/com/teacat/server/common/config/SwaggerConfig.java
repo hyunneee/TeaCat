@@ -60,9 +60,18 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi walletApi() {
+        return GroupedOpenApi.builder()
+                .group("03-wallet")
+                .displayName("지갑")
+                .packagesToScan(BASE_PACKAGE + ".wallet")
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi performanceApi() {
         return GroupedOpenApi.builder()
-                .group("03-performance")
+                .group("05-performance")
                 .displayName("공연")
                 .packagesToScan(BASE_PACKAGE + ".performance")
                 .build();
@@ -75,10 +84,19 @@ public class SwaggerConfig {
      * @Bean
      * public GroupedOpenApi bookingApi() {
      *     return GroupedOpenApi.builder()
-     *             .group("03-booking")
+     *             .group("04-booking")
      *             .displayName("예매")
      *             .packagesToScan(BASE_PACKAGE + ".booking")
      *             .build();
      * }
      */
+
+    @Bean
+    public GroupedOpenApi nftApi() {
+        return GroupedOpenApi.builder()
+                .group("04-nft")
+                .displayName("NFT 포토카드")
+                .packagesToScan(BASE_PACKAGE + ".nft")
+                .build();
+    }
 }
