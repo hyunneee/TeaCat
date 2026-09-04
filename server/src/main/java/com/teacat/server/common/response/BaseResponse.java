@@ -13,7 +13,7 @@ public class BaseResponse<T> {
     @Schema(description = "요청 성공 여부", example = "true")
     private final boolean success;
 
-    @Schema(description = "에러 코드 (성공 시 응답에서 생략됨)", example = "AUTH_001")
+    @Schema(description = "에러 코드 (성공 시 응답에서 생략됨)", example = "ERR_AUTH_001")
     private final String code;
 
     @Schema(description = "응답 메시지 (없으면 응답에서 생략됨)", example = "요청이 성공적으로 처리되었습니다.")

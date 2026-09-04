@@ -49,6 +49,9 @@ jwt:
     path: ${REFRESH_COOKIE_PATH:/api/auth}
 
 booking:
+  hold:
+    # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
+    duration: ${BOOKING_HOLD_DURATION:10m}
   # 예매 정책 (API-205). 공연별이 아니라 서비스 전체 기준이다.
   policy:
     # 기획 초안은 1인 4매였으나 배포 기준은 1매다. 늘리려면 이 값만 바꾼다
