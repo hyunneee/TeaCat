@@ -4,15 +4,24 @@ import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
 import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
+import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
+import com.teacat.server.performance.dto.request.PresignedUploadRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
+import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
+import com.teacat.server.performance.dto.response.PresignedUploadResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
+import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
+import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
+import com.teacat.server.stadium.entity.Area;
 import com.teacat.server.stadium.entity.Stadium;
+import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,9 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * 공연 관리 (API-261 ~ 263, 265).
+ * 공연 관리 (API-261 ~ 263, 265, 268, 270, 271).
  *
  * 이미지는 MinIO 에 올리고 DB 에는 key 만 남긴다.
  */
@@ -38,6 +52,8 @@ public class AdminPerformanceService {
 
     private final PerformanceGeneralRepository performanceGeneralRepository;
     private final PerformanceDetailRepository performanceDetailRepository;
+    private final PerformanceAreaRepository performanceAreaRepository;
+    private final AreaRepository areaRepository;
     private final StadiumRepository stadiumRepository;
     private final FileStorageService fileStorageService;
 
@@ -95,21 +111,62 @@ public class AdminPerformanceService {
         }
 
         performance.update(request.title(), stadium, request.ticketingStartAt(), request.visibleFrom());
+
+        replaceImagesIfPresent(performance, request.posterImageKey(), request.detailImageKey());
     }
 
     /**
-     * 공연 삭제 · 비공개 (API-263).
+     * 업로드 URL 발급(API-270)으로 올린 이미지로 교체한다.
      *
-     * 예매 이력이 없으면 물리 삭제하고, 있으면 비공개(소프트 삭제)로 남긴다.
-     * 이력이 있는데 지워버리면 발권된 티켓이 어떤 공연이었는지 추적할 수 없게 된다.
+     * key 는 클라이언트가 보내는 값이라 그대로 믿지 않는다.
+     * 정해진 경로로 시작하는지, 실제로 파일이 올라와 있는지 확인한 뒤 바꾼다.
+     */
+    private void replaceImagesIfPresent(PerformanceGeneral performance, String posterKey, String detailKey) {
+        String oldPoster = performance.getPosterImageKey();
+        String oldDetail = performance.getDetailImageKey();
+
+        if (posterKey != null) {
+            validateUploadedKey(posterKey, POSTER_DIRECTORY);
+        }
+        if (detailKey != null) {
+            validateUploadedKey(detailKey, DETAIL_IMAGE_DIRECTORY);
+        }
+
+        performance.replaceImages(posterKey, detailKey);
+
+        // 교체가 끝난 뒤에 옛 파일을 지운다. 실패해도 요청을 되돌리지 않는다
+        if (posterKey != null && !posterKey.equals(oldPoster)) {
+            deleteQuietly(oldPoster);
+        }
+        if (detailKey != null && !detailKey.equals(oldDetail)) {
+            deleteQuietly(oldDetail);
+        }
+    }
+
+    private void validateUploadedKey(String key, String expectedDirectory) {
+        if (!key.startsWith(expectedDirectory + "/")) {
+            throw new BusinessException(PerformanceErrorCode.IMAGE_NOT_UPLOADED);
+        }
+        if (!fileStorageService.exists(key)) {
+            throw new BusinessException(PerformanceErrorCode.IMAGE_NOT_UPLOADED);
+        }
+    }
+
+    /**
+     * 공연 삭제 (API-263).
+     *
+     * 예매 이력이 있으면 지우지 않고 거절한다. 발권된 티켓이 어떤 공연이었는지
+     * 추적할 수 없게 되기 때문이다. 그럴 때는 비공개(API-271)로 감춘다.
+     *
+     * 예전에는 이력이 있으면 조용히 비공개로 바꿨는데,
+     * "삭제를 눌렀는데 비공개가 됐다"는 결과가 관리자에게 보이지 않아 분리했다.
      */
     @Transactional
-    public void deleteOrHide(Long concertId) {
+    public void delete(Long concertId) {
         PerformanceGeneral performance = getPerformance(concertId);
 
         if (performanceGeneralRepository.existsTicketByPerformanceId(concertId)) {
-            performance.hide(LocalDateTime.now());
-            return;
+            throw new BusinessException(PerformanceErrorCode.PERFORMANCE_HAS_TICKETS);
         }
 
         // 자식 행이 FK 로 묶여 있어 아래에서 위로 지운다
@@ -149,6 +206,109 @@ public class AdminPerformanceService {
                 PerformanceDetail.create(performance, performanceNum, request.performanceDate()));
 
         return ScheduleCreateResponse.of(detail.getId(), detail.getPerformanceNum());
+    }
+
+    /**
+     * 공연 공개 · 비공개 전환 (API-271).
+     *
+     * 예매 이력과 무관하게 관리자가 직접 고른다.
+     * 등록만 해두고 아직 공개하지 않거나, 정보가 틀려 잠깐 내리는 경우가 있다.
+     *
+     * 비공개는 목록·상세에서 감출 뿐 데이터를 지우지 않아 언제든 되돌릴 수 있다.
+     */
+    @Transactional
+    public ConcertVisibilityResponse setVisibility(Long concertId, boolean visible) {
+        PerformanceGeneral performance = getPerformance(concertId);
+
+        if (visible) {
+            performance.show();
+        } else {
+            performance.hide(LocalDateTime.now());
+        }
+
+        return ConcertVisibilityResponse.from(performance);
+    }
+
+    /**
+     * 공연 구역 등급·가격 일괄 저장 (API-268).
+     *
+     * PUT 이라 보낸 목록이 전체가 된다. 빠진 구역은 판매하지 않는다는 뜻이므로 지운다.
+     * 이미 팔린 구역을 빼거나 판매량보다 적게 줄이는 것은 막는다 — DB CHECK 에 걸리기 전에 걸러낸다.
+     */
+    @Transactional
+    public List<PerformanceAreaResponse> saveAreas(Long concertId, PerformanceAreaSaveRequest request) {
+        PerformanceGeneral performance = getPerformance(concertId);
+
+        List<Long> requestedAreaIds = request.areas().stream()
+                .map(PerformanceAreaSaveRequest.AreaSetting::areaId)
+                .toList();
+
+        if (requestedAreaIds.size() != Set.copyOf(requestedAreaIds).size()) {
+            throw new BusinessException(PerformanceErrorCode.DUPLICATE_AREA);
+        }
+
+        // 남의 공연장 구역을 붙이면 배치도와 좌석이 어긋난다
+        Map<Long, Area> stadiumAreas = areaRepository.findByStadiumId(performance.getStadium().getId()).stream()
+                .collect(Collectors.toMap(Area::getId, Function.identity()));
+
+        if (!stadiumAreas.keySet().containsAll(requestedAreaIds)) {
+            throw new BusinessException(PerformanceErrorCode.AREA_NOT_IN_STADIUM);
+        }
+
+        Map<Long, PerformanceArea> existing = performanceAreaRepository.findAllByPerformanceId(concertId).stream()
+                .collect(Collectors.toMap(pa -> pa.getArea().getId(), Function.identity()));
+
+        for (PerformanceAreaSaveRequest.AreaSetting setting : request.areas()) {
+            PerformanceArea current = existing.get(setting.areaId());
+
+            if (current != null && current.wouldBreakSoldCount(setting.maxCnt())) {
+                throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
+            }
+        }
+
+        // 판매 이력이 있는 구역을 빼면 그 티켓의 가격·등급 근거가 사라진다
+        boolean removesSoldArea = existing.values().stream()
+                .anyMatch(pa -> pa.getSoldCnt() > 0 && !requestedAreaIds.contains(pa.getArea().getId()));
+
+        if (removesSoldArea) {
+            throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
+        }
+
+        performanceAreaRepository.deleteByPerformanceIdAndAreaIdNotIn(concertId, requestedAreaIds);
+
+        List<PerformanceArea> saved = request.areas().stream()
+                .map(setting -> {
+                    PerformanceArea current = existing.get(setting.areaId());
+
+                    if (current != null) {
+                        current.updateSetting(setting.grade(), setting.price(), setting.maxCnt());
+                        return current;
+                    }
+
+                    return PerformanceArea.create(
+                            performance, stadiumAreas.get(setting.areaId()),
+                            setting.grade(), setting.price(), setting.maxCnt());
+                })
+                .toList();
+
+        return performanceAreaRepository.saveAll(saved).stream()
+                .map(PerformanceAreaResponse::from)
+                .toList();
+    }
+
+    /**
+     * 이미지 업로드 URL 발급 (API-270).
+     *
+     * 파일 바이트가 서버를 거치지 않고 클라이언트에서 MinIO 로 직접 간다.
+     * 큰 이미지가 서버 메모리와 대역폭을 잡아먹지 않게 하기 위함이다.
+     */
+    public PresignedUploadResponse issueUploadUrl(PresignedUploadRequest request) {
+        String directory = request.imageType() == PresignedUploadRequest.ImageType.POSTER
+                ? POSTER_DIRECTORY
+                : DETAIL_IMAGE_DIRECTORY;
+
+        return PresignedUploadResponse.from(
+                fileStorageService.presignedUploadUrl(directory, request.contentType()));
     }
 
     private String uploadIfPresent(MultipartFile file, String directory) {

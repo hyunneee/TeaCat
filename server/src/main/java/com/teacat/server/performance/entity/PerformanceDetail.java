@@ -57,6 +57,16 @@ public class PerformanceDetail {
         this.status = TicketingStatus.SCHEDULED;
     }
 
+    /** 회차 수정 (API-266). null 인 필드는 그대로 둔다 */
+    public void update(LocalDateTime performanceDate, TicketingStatus status) {
+        if (performanceDate != null) {
+            this.performanceDate = performanceDate;
+        }
+        if (status != null) {
+            this.status = status;
+        }
+    }
+
     /** 회차 등록 (API-265) */
     public static PerformanceDetail create(PerformanceGeneral performance, int performanceNum,
                                            LocalDateTime performanceDate) {

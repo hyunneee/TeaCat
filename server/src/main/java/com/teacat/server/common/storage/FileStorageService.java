@@ -7,6 +7,8 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -91,6 +94,64 @@ public class FileStorageService {
         }
 
         return key;
+    }
+
+    /**
+     * 클라이언트가 파일을 직접 올릴 수 있는 임시 업로드 URL 을 발급한다 (API-270).
+     *
+     * 파일 바이트가 서버를 거치지 않아 서버 메모리·대역폭을 쓰지 않는다.
+     * 클라이언트는 이 URL 로 PUT 한 뒤, 돌려받은 key 를 등록·수정 API 에 넘긴다.
+     *
+     * @param directory   용도별 상위 경로
+     * @param contentType 올릴 파일의 MIME 타입. 허용 목록에 없으면 거절한다
+     */
+    public PresignedUpload presignedUploadUrl(String directory, String contentType) {
+        String extension = ALLOWED_IMAGE_TYPES.get(contentType);
+
+        if (extension == null) {
+            throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
+        }
+
+        String key = generateKey(directory, extension);
+        Duration validity = properties.presignedUrlValidity();
+
+        try {
+            String url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.PUT)
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .expiry((int) validity.toSeconds(), TimeUnit.SECONDS)
+                    .build());
+
+            return new PresignedUpload(key, url, validity.toSeconds());
+        } catch (Exception e) {
+            log.error("업로드 URL 발급 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
+        }
+    }
+
+    /**
+     * key 에 해당하는 객체가 실제로 올라와 있는지.
+     *
+     * 업로드 URL 을 받고 파일을 올리지 않은 채 key 만 등록하는 것을 막는 데 쓴다.
+     */
+    public boolean exists(String key) {
+        try {
+            minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .build());
+            return true;
+        } catch (ErrorResponseException e) {
+            return false;
+        } catch (Exception e) {
+            log.error("객체 확인 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
+        }
+    }
+
+    /** 발급된 업로드 URL 과 그때 정해진 저장 key */
+    public record PresignedUpload(String key, String uploadUrl, long expiresInSeconds) {
     }
 
     /**

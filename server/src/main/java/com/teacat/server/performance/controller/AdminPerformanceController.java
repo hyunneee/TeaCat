@@ -3,8 +3,12 @@ package com.teacat.server.performance.controller;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
 import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
+import com.teacat.server.performance.dto.request.ConcertVisibilityRequest;
+import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
+import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
 import com.teacat.server.performance.service.AdminPerformanceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,9 +25,12 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "공연 관리", description = "관리자용 공연 등록·수정·삭제 API")
 @SecurityRequirement(name = "bearerAuth")
@@ -64,12 +71,35 @@ public class AdminPerformanceController {
                         adminPerformanceService.createSchedule(concertId, request)));
     }
 
-    @Operation(summary = "공연 삭제 · 비공개",
-            description = "예매 이력이 없으면 삭제하고, 있으면 비공개 처리합니다.")
+    @Operation(summary = "공연 구역 등급·가격 설정",
+            description = "공연장 구역에 등급·가격·최대 판매수량을 매깁니다. "
+                    + "보낸 목록이 전체가 되며, 빠진 구역은 판매하지 않는 것으로 보고 삭제됩니다.")
+    @PutMapping("/{concertId}/areas")
+    public ResponseEntity<BaseResponse<List<PerformanceAreaResponse>>> saveAreas(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
+            @Valid @RequestBody PerformanceAreaSaveRequest request) {
+        return ResponseEntity.ok(BaseResponse.success("공연 구역 설정이 저장되었습니다.",
+                adminPerformanceService.saveAreas(concertId, request)));
+    }
+
+    @Operation(summary = "공연 노출 전환",
+            description = "공연을 공개하거나 비공개로 감춥니다. 예매 이력과 무관하게 언제든 전환할 수 있고, "
+                    + "비공개는 목록·상세에서 감출 뿐 데이터를 지우지 않아 되돌릴 수 있습니다.")
+    @PatchMapping("/{concertId}/visibility")
+    public ResponseEntity<BaseResponse<ConcertVisibilityResponse>> setVisibility(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
+            @Valid @RequestBody ConcertVisibilityRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(
+                adminPerformanceService.setVisibility(concertId, request.visible())));
+    }
+
+    @Operation(summary = "공연 삭제",
+            description = "공연을 완전히 지웁니다. 예매 이력이 있으면 거절되므로, "
+                    + "그럴 때는 노출 전환으로 비공개 처리하세요.")
     @DeleteMapping("/{concertId}")
     public ResponseEntity<Void> delete(
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
-        adminPerformanceService.deleteOrHide(concertId);
+        adminPerformanceService.delete(concertId);
         return ResponseEntity.noContent().build();
     }
 }

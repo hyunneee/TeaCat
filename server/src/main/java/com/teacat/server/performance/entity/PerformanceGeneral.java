@@ -17,7 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
@@ -30,13 +29,15 @@ import java.time.LocalDateTime;
  * 포스터·상세 이미지는 파일 자체가 아니라 MinIO 의 key 만 저장한다.
  * 조회 URL 은 만료되므로 응답을 만들 때마다 새로 발급한다.
  *
- * 비공개(API-263)는 deleted_at 으로 처리하며, {@link SQLRestriction} 덕분에 조회에서 자동 제외된다.
+ * 비공개는 deleted_at 으로 표시한다 (API-271).
+ *
+ * 조회에서 자동으로 빼주지 않는다 — 관리자는 비공개 공연도 봐야 하기 때문이다.
+ * 클라이언트용 조회 쿼리가 deleted_at is null 조건을 직접 건다.
  */
 @Entity
 @Table(name = "performance_general")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLRestriction("deleted_at is null")
 public class PerformanceGeneral {
 
     @Id
@@ -121,8 +122,27 @@ public class PerformanceGeneral {
         }
     }
 
-    /** 공연 비공개 (API-263). 예매 이력이 있어 물리 삭제할 수 없을 때 쓴다 */
+    /** 이미지 교체 (API-262). null 인 쪽은 그대로 둔다 */
+    public void replaceImages(String posterImageKey, String detailImageKey) {
+        if (posterImageKey != null) {
+            this.posterImageKey = posterImageKey;
+        }
+        if (detailImageKey != null) {
+            this.detailImageKey = detailImageKey;
+        }
+    }
+
+    /** 공연 비공개 (API-271). 목록·상세에서 감추되 데이터는 남긴다 */
     public void hide(LocalDateTime hiddenAt) {
         this.deletedAt = hiddenAt;
+    }
+
+    /** 공연 공개 (API-271). 비공개를 되돌린다 */
+    public void show() {
+        this.deletedAt = null;
+    }
+
+    public boolean isHidden() {
+        return this.deletedAt != null;
     }
 }
