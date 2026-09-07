@@ -49,8 +49,6 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class NftService {
 
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
     private static final String MARKET_SCOPE_PREFIX = "market:";
     private static final String PURCHASE_SCOPE = "purchases";
     private static final String SALE_SCOPE = "sales";
@@ -327,11 +325,7 @@ public class NftService {
     }
 
     private UUID parseIdempotencyKey(String header) {
-        try {
-            return UUID.fromString(header);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            throw new BusinessException(NftErrorCode.INVALID_IDEMPOTENCY_KEY);
-        }
+        return NftRequestSupport.parseIdempotencyKey(header);
     }
 
     private void validateIdempotentTarget(NftPhotocardTrade trade, Long photocardId) {
@@ -341,11 +335,7 @@ public class NftService {
     }
 
     private int validateSize(Integer requestedSize) {
-        int size = requestedSize == null ? DEFAULT_PAGE_SIZE : requestedSize;
-        if (size < 1 || size > MAX_PAGE_SIZE) {
-            throw new BusinessException(NftErrorCode.INVALID_PAGE_SIZE);
-        }
-        return size;
+        return NftRequestSupport.validateSize(requestedSize);
     }
 
     private String normalizeKeyword(String keyword) {
