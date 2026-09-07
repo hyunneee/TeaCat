@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -264,6 +265,80 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void 즉시구매는_경매를_끝내고_소유권을_넘기며_최고_입찰자의_홀드를_풀어준다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long buyer = insertFundedUser("b@test.com", "구매자", 10_000);
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+        Long auctionId = insertAuction(photocardId, sellerId, 1_000, 5_000L, "now() + interval '1 day'");
+        var bid = auctionService.placeBid(a, auctionId, new NftBidRequest(2_000L));
+
+        var trade = auctionService.buyNow(buyer, auctionId, UUID.randomUUID().toString());
+
+        assertThat(trade.price()).isEqualTo(5_000L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(buyer);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SOLD");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT winner_id FROM nft_auctions WHERE id = ?", Long.class, auctionId)).isEqualTo(buyer);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT auction_id FROM nft_photocard_trades WHERE id = ?", Long.class, trade.tradeId()))
+                .isEqualTo(auctionId);
+        assertThat(holdStatus("AUCTION_BID", bid.bidId())).isEqualTo("RELEASED");
+        assertThat(holdStatus("AUCTION_BUY_NOW", auctionId)).isEqualTo("CAPTURED");
+        assertThat(holdService.availableBalance(a)).isEqualTo(10_000L);
+        // 구매/판매 내역 API 가 경매 거래를 그대로 보여준다
+        assertThat(nftService.getPurchaseHistory(buyer, null, 20).items()).hasSize(1);
+        assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
+        assertThat(nftService.getPhotocardTrades(photocardId, null, 20).items()).hasSize(1);
+    }
+
+    @Test
+    void 같은_멱등키로_즉시구매를_재요청하면_같은_거래를_돌려준다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long buyer = insertFundedUser("b@test.com", "구매자", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 5_000L,
+                "now() + interval '1 day'");
+        String key = UUID.randomUUID().toString();
+
+        var first = auctionService.buyNow(buyer, auctionId, key);
+        var second = auctionService.buyNow(buyer, auctionId, key);
+
+        assertThat(second.tradeId()).isEqualTo(first.tradeId());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isEqualTo(1L);
+    }
+
+    @Test
+    void 즉시구매_규칙_위반은_각각의_코드로_거절된다() {
+        Long sellerId = insertFundedUser("s@test.com", "판매자", 10_000);
+        Long buyer = insertFundedUser("b@test.com", "구매자", 10_000);
+        Long poor = insertFundedUser("p@test.com", "빈털터리", 10);
+        Long noBuyNow = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+        Long withBuyNow = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 5_000L,
+                "now() + interval '1 day'");
+
+        assertCode(() -> auctionService.buyNow(buyer, noBuyNow, UUID.randomUUID().toString()),
+                NftErrorCode.BUY_NOW_NOT_AVAILABLE);
+        assertCode(() -> auctionService.buyNow(sellerId, withBuyNow, UUID.randomUUID().toString()),
+                NftErrorCode.SELF_PURCHASE_NOT_ALLOWED);
+        assertCode(() -> auctionService.buyNow(buyer, withBuyNow, "not-a-uuid"),
+                NftErrorCode.INVALID_IDEMPOTENCY_KEY);
+        assertThatThrownBy(() -> auctionService.buyNow(poor, withBuyNow, UUID.randomUUID().toString()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(WalletErrorCode.INSUFFICIENT_BALANCE);
+
+        auctionService.buyNow(buyer, withBuyNow, UUID.randomUUID().toString());
+        assertCode(() -> auctionService.buyNow(buyer, withBuyNow, UUID.randomUUID().toString()),
+                NftErrorCode.AUCTION_NOT_ACTIVE);
+        assertCode(() -> auctionService.placeBid(buyer, withBuyNow, new NftBidRequest(2_000L)),
+                NftErrorCode.AUCTION_NOT_ACTIVE);
     }
 
     private String holdStatus(String refType, Long refId) {

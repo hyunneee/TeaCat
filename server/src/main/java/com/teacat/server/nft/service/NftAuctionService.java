@@ -6,11 +6,13 @@ import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
 import com.teacat.server.nft.dto.request.NftBidRequest;
 import com.teacat.server.nft.dto.response.NftAuctionResponse;
 import com.teacat.server.nft.dto.response.NftBidResponse;
+import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.entity.NftAuction;
 import com.teacat.server.nft.entity.NftAuctionBid;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
+import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftAuctionBidRepository;
 import com.teacat.server.nft.repository.NftAuctionQueryRepository;
@@ -28,6 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * NFT 포토카드 경매 — 등록·취소·입찰·즉시구매·조회.
@@ -155,6 +159,66 @@ public class NftAuctionService {
         if (auction.hasBuyNow() && amount >= auction.getBuyNowPrice()) {
             throw new BusinessException(NftErrorCode.BID_NOT_BELOW_BUY_NOW);
         }
+    }
+
+    /**
+     * 즉시구매. 판매자가 정한 가격으로 바로 체결하고 경매를 끝낸다.
+     *
+     * 고정가 구매와 같은 멱등 처리(UUID Idempotency-Key, (buyer_id, idempotency_key) 유니크). 구매자의 돈은
+     * hold → capture 를 한 트랜잭션에서 거친다 — "돈이 나가는 경로는 capture 하나" 를 지키기 위해서다.
+     * 현재 최고 입찰자는 낸 돈이 없으므로 홀드만 풀어준다.
+     */
+    @Transactional
+    public NftPurchaseResponse buyNow(Long buyerId, Long auctionId, String idempotencyKeyHeader) {
+        UUID idempotencyKey = NftRequestSupport.parseIdempotencyKey(idempotencyKeyHeader);
+        NftPhotocardTrade existing = tradeRepository.findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey)
+                .orElse(null);
+        if (existing != null) {
+            return sameAuctionOrThrow(existing, auctionId);
+        }
+
+        closer.close(auctionId);
+        NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
+        // 락을 기다리는 동안 같은 키의 요청이 끝났을 수 있다
+        existing = tradeRepository.findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey).orElse(null);
+        if (existing != null) {
+            return sameAuctionOrThrow(existing, auctionId);
+        }
+
+        if (!auction.isActive()) {
+            throw new BusinessException(NftErrorCode.AUCTION_NOT_ACTIVE);
+        }
+        if (!auction.hasBuyNow()) {
+            throw new BusinessException(NftErrorCode.BUY_NOW_NOT_AVAILABLE);
+        }
+        if (auction.isSeller(buyerId)) {
+            throw new BusinessException(NftErrorCode.SELF_PURCHASE_NOT_ALLOWED);
+        }
+
+        NftPhotocard photocard = photocardRepository.findByIdForUpdate(auction.getPhotocard().getId())
+                .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
+        User buyer = getUser(buyerId);
+        Long price = auction.getBuyNowPrice();
+
+        holdService.hold(buyerId, price, CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
+        holdService.capture(CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
+        if (auction.hasBids()) {
+            holdService.release(CatMoneyHoldRefType.AUCTION_BID, auction.getTopBid().getId());
+        }
+
+        photocard.transferTo(buyer);
+        auction.soldTo(buyer, price, LocalDateTime.now());
+        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
+                NftPhotocardTrade.fromAuction(auction, buyer, price, idempotencyKey));
+        return NftPurchaseResponse.from(trade);
+    }
+
+    private NftPurchaseResponse sameAuctionOrThrow(NftPhotocardTrade trade, Long auctionId) {
+        if (trade.getAuction() == null || !trade.getAuction().getId().equals(auctionId)) {
+            throw new BusinessException(NftErrorCode.IDEMPOTENCY_KEY_REUSED);
+        }
+        return NftPurchaseResponse.from(trade);
     }
 
     private User getUser(Long userId) {
