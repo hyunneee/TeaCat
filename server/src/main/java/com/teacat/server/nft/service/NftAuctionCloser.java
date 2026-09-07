@@ -52,6 +52,9 @@ public class NftAuctionCloser {
         LocalDateTime now = LocalDateTime.now();
         if (!auction.hasBids()) {
             auction.expire(now);
+            // 상세 조회처럼 같은 트랜잭션에서 native SQL 로 곧바로 다시 읽는 호출자가 있다.
+            // 영속성 컨텍스트의 변경을 DB 에 밀어 넣지 않으면 그 읽기가 옛 행을 본다
+            auctionRepository.flush();
             log.info("경매 유찰 auctionId={}", auctionId);
             return true;
         }
@@ -69,6 +72,7 @@ public class NftAuctionCloser {
         photocard.transferTo(winner);
         auction.soldTo(winner, winningBid.getAmount(), now);
         tradeRepository.save(NftPhotocardTrade.fromAuction(auction, winner, winningBid.getAmount(), UUID.randomUUID()));
+        auctionRepository.flush(); // 위 유찰 분기와 같은 이유
         log.info("경매 낙찰 auctionId={} winnerId={} price={}", auctionId, winner.getId(), winningBid.getAmount());
         return true;
     }

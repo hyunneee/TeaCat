@@ -2,8 +2,12 @@ package com.teacat.server.nft.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
+import com.teacat.server.nft.dto.request.NftAuctionSort;
 import com.teacat.server.nft.dto.request.NftBidRequest;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
+import com.teacat.server.nft.dto.response.MyNftBidResponse;
+import com.teacat.server.nft.dto.response.NftAuctionBidHistoryResponse;
+import com.teacat.server.nft.dto.response.NftAuctionSummaryResponse;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftAuctionBidRepository;
@@ -457,6 +461,102 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
                 "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("EXPIRED");
         assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)),
                 NftErrorCode.AUCTION_NOT_ACTIVE);
+    }
+
+    @Test
+    void 진행_중_경매_목록은_마감_임박순이_기본이고_커서로_이어진다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long late = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null, "now() + interval '3 day'");
+        Long soon = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 3_000, null, "now() + interval '1 day'");
+        Long mid = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 2_000, null, "now() + interval '2 day'");
+        insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 500, null, "now() - interval '1 minute'"); // 만료 → 목록에 없음
+
+        var page1 = auctionService.getAuctions(null, null, NftAuctionSort.ENDING_SOON, null, 2);
+        var page2 = auctionService.getAuctions(null, null, NftAuctionSort.ENDING_SOON, page1.nextCursor(), 2);
+
+        assertThat(page1.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(soon, mid);
+        assertThat(page1.hasNext()).isTrue();
+        assertThat(page2.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(late);
+        assertThat(page2.hasNext()).isFalse();
+
+        var byPrice = auctionService.getAuctions(null, null, NftAuctionSort.CURRENT_PRICE, null, 10);
+        assertThat(byPrice.items()).extracting(NftAuctionSummaryResponse::currentPrice)
+                .containsExactly(1_000L, 2_000L, 3_000L);
+    }
+
+    @Test
+    void 상세는_요청자_관점을_담고_만료된_경매는_먼저_닫아서_보여준다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long b = insertFundedUser("b@test.com", "B", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 9_000L,
+                "now() + interval '1 day'");
+        auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L));
+        auctionService.placeBid(b, auctionId, new NftBidRequest(2_000L));
+
+        var asSeller = auctionService.getAuction(auctionId, sellerId);
+        var asA = auctionService.getAuction(auctionId, a);
+        var anonymous = auctionService.getAuction(auctionId, null);
+
+        assertThat(asSeller.viewer().isSeller()).isTrue();
+        assertThat(asA.viewer().isTopBidder()).isFalse();
+        assertThat(asA.viewer().myHighestBid()).isEqualTo(1_500L);
+        assertThat(anonymous.viewer()).isNull();
+        assertThat(anonymous.topBidderNickname()).isEqualTo("B");
+        assertThat(anonymous.bidCount()).isEqualTo(2);
+        assertThat(anonymous.finalPrice()).isNull();
+
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
+        var closed = auctionService.getAuction(auctionId, b);
+
+        assertThat(closed.status()).isEqualTo(NftAuctionStatus.SOLD);
+        assertThat(closed.winnerNickname()).isEqualTo("B");
+        assertThat(closed.finalPrice()).isEqualTo(2_000L);
+        assertCode(() -> auctionService.getAuction(999_999L, null), NftErrorCode.AUCTION_NOT_FOUND);
+    }
+
+    @Test
+    void 입찰_이력과_내_입찰_목록이_결과를_구분한다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long b = insertFundedUser("b@test.com", "B", 10_000);
+        Long won = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null, "now() + interval '1 day'");
+        Long running = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null, "now() + interval '1 day'");
+        auctionService.placeBid(a, won, new NftBidRequest(1_500L));
+        auctionService.placeBid(b, won, new NftBidRequest(2_000L));
+        auctionService.placeBid(a, won, new NftBidRequest(2_500L));
+        auctionService.placeBid(a, running, new NftBidRequest(1_200L));
+        auctionService.placeBid(b, running, new NftBidRequest(1_300L));
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", won);
+        closer.close(won);
+
+        var bids = auctionService.getBids(won, null, 10);
+        var myBidsA = auctionService.getMyBids(a, null, 10);
+        var myBidsB = auctionService.getMyBids(b, null, 10);
+
+        assertThat(bids.items()).extracting(NftAuctionBidHistoryResponse::amount).containsExactly(2_500L, 2_000L, 1_500L);
+        assertThat(myBidsA.items()).hasSize(2);
+        assertThat(myBidsA.items()).extracting(MyNftBidResponse::auctionId).containsExactly(running, won);
+        assertThat(myBidsA.items().get(0).result()).isEqualTo(MyNftBidResponse.Result.OUTBID);
+        assertThat(myBidsA.items().get(1).result()).isEqualTo(MyNftBidResponse.Result.WON);
+        assertThat(myBidsA.items().get(1).myHighestBid()).isEqualTo(2_500L);
+        assertThat(myBidsB.items()).extracting(MyNftBidResponse::result)
+                .containsExactly(MyNftBidResponse.Result.BIDDING, MyNftBidResponse.Result.LOST);
+    }
+
+    @Test
+    void 내_경매_목록은_상태로_거른다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long active = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null, "now() + interval '1 day'");
+        Long expired = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null, "now() - interval '1 second'");
+        closer.close(expired);
+
+        var all = auctionService.getMyAuctions(sellerId, null, null, 10);
+        var onlyExpired = auctionService.getMyAuctions(sellerId, NftAuctionStatus.EXPIRED, null, 10);
+
+        assertThat(all.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(expired, active);
+        assertThat(onlyExpired.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(expired);
+        assertThat(onlyExpired.items().get(0).status()).isEqualTo(NftAuctionStatus.EXPIRED);
     }
 
     private String holdStatus(String refType, Long refId) {

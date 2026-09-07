@@ -3,9 +3,15 @@ package com.teacat.server.nft.service;
 import com.teacat.server.common.config.NftAuctionProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
+import com.teacat.server.nft.dto.request.NftAuctionSort;
 import com.teacat.server.nft.dto.request.NftBidRequest;
+import com.teacat.server.nft.dto.response.MyNftBidResponse;
+import com.teacat.server.nft.dto.response.NftAuctionBidHistoryResponse;
+import com.teacat.server.nft.dto.response.NftAuctionDetailResponse;
 import com.teacat.server.nft.dto.response.NftAuctionResponse;
+import com.teacat.server.nft.dto.response.NftAuctionSummaryResponse;
 import com.teacat.server.nft.dto.response.NftBidResponse;
+import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.entity.NftAuction;
 import com.teacat.server.nft.entity.NftAuctionBid;
@@ -31,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -52,6 +59,11 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class NftAuctionService {
 
+    private static final String AUCTION_SCOPE_PREFIX = "auction:";
+    private static final String BIDS_SCOPE = "auction-bids";
+    private static final String MY_AUCTIONS_SCOPE = "my-auctions";
+    private static final String MY_BIDS_SCOPE = "my-bids";
+
     private final NftAuctionRepository auctionRepository;
     private final NftAuctionBidRepository bidRepository;
     private final NftAuctionQueryRepository queryRepository;
@@ -62,6 +74,7 @@ public class NftAuctionService {
     private final CatMoneyHoldService holdService;
     private final NftAuctionProperties properties;
     private final NftAuctionCloser closer;
+    private final NftCursorCodec cursorCodec;
 
     /**
      * 경매 등록.
@@ -217,6 +230,159 @@ public class NftAuctionService {
         NftPhotocardTrade trade = tradeRepository.saveAndFlush(
                 NftPhotocardTrade.fromAuction(auction, buyer, price, idempotencyKey));
         return NftPurchaseResponse.from(trade);
+    }
+
+    public NftCursorPageResponse<NftAuctionSummaryResponse> getAuctions(Long performanceId, String keyword,
+                                                                        NftAuctionSort sort, String cursor,
+                                                                        Integer requestedSize) {
+        int size = NftRequestSupport.validateSize(requestedSize);
+        NftAuctionSort effectiveSort = sort == null ? NftAuctionSort.ENDING_SOON : sort;
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, AUCTION_SCOPE_PREFIX + effectiveSort.name());
+        validateAuctionCursor(decoded, effectiveSort);
+
+        List<NftAuctionQueryRepository.AuctionRow> rows = queryRepository.findActiveAuctions(
+                performanceId, normalizeKeyword(keyword), effectiveSort, decoded.value(), decoded.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftAuctionQueryRepository.AuctionRow> page = takePage(rows, size);
+        String nextCursor = hasNext ? auctionCursor(effectiveSort, page.getLast()) : null;
+        return new NftCursorPageResponse<>(page.stream().map(NftAuctionSummaryResponse::from).toList(),
+                nextCursor, hasNext);
+    }
+
+    /**
+     * 경매 상세. 만료된 경매면 먼저 닫아서 확정 결과를 돌려준다 — 그래서 readOnly 가 아니다.
+     * 읽기 경로는 거절 예외가 없으므로 합류한 close 가 롤백되지 않는다 (쓰기 경로가 close 를 안 부르는 이유는 클래스 주석).
+     *
+     * @param viewerId 로그인 사용자 id. 비로그인이면 null 이고 viewer 블록이 빠진다
+     */
+    @Transactional
+    public NftAuctionDetailResponse getAuction(Long auctionId, Long viewerId) {
+        closer.close(auctionId);
+        NftAuctionQueryRepository.AuctionDetailRow row = queryRepository.findAuctionDetail(auctionId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
+
+        NftAuctionDetailResponse.Viewer viewer = null;
+        if (viewerId != null) {
+            viewer = new NftAuctionDetailResponse.Viewer(
+                    viewerId.equals(row.sellerId()),
+                    viewerId.equals(row.topBidderId()),
+                    bidRepository.findMyHighestBid(auctionId, viewerId).orElse(null));
+        }
+        Long finalPrice = row.status() == NftAuctionStatus.SOLD ? row.currentPrice() : null;
+        return new NftAuctionDetailResponse(
+                row.auctionId(), row.status(),
+                new NftAuctionDetailResponse.Photocard(row.photocardId(), row.designName(), row.imageUrl(),
+                        row.performanceTitle()),
+                row.sellerNickname(), row.startPrice(), row.currentPrice(), row.buyNowPrice(), row.bidCount(),
+                row.topBidderNickname(), row.createdAt(), row.endsAt(), row.closedAt(), row.winnerNickname(),
+                finalPrice, viewer);
+    }
+
+    public NftCursorPageResponse<NftAuctionBidHistoryResponse> getBids(Long auctionId, String cursor,
+                                                                       Integer requestedSize) {
+        if (!auctionRepository.existsById(auctionId)) {
+            throw new BusinessException(NftErrorCode.AUCTION_NOT_FOUND);
+        }
+        int size = NftRequestSupport.validateSize(requestedSize);
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, BIDS_SCOPE);
+
+        List<NftAuctionQueryRepository.BidRow> rows = queryRepository.findBids(auctionId, decoded.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftAuctionQueryRepository.BidRow> page = takePage(rows, size);
+        String nextCursor = hasNext
+                ? cursorCodec.encode(BIDS_SCOPE, page.getLast().bidId().toString(), page.getLast().bidId())
+                : null;
+        return new NftCursorPageResponse<>(page.stream()
+                .map(r -> new NftAuctionBidHistoryResponse(r.bidId(), r.bidderNickname(), r.amount(), r.bidAt()))
+                .toList(), nextCursor, hasNext);
+    }
+
+    public NftCursorPageResponse<NftAuctionSummaryResponse> getMyAuctions(Long userId, NftAuctionStatus status,
+                                                                          String cursor, Integer requestedSize) {
+        int size = NftRequestSupport.validateSize(requestedSize);
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, MY_AUCTIONS_SCOPE);
+        LocalDateTime cursorAt = decoded.present() ? parseTime(decoded.value()) : null;
+
+        List<NftAuctionQueryRepository.AuctionRow> rows = queryRepository.findMyAuctions(
+                userId, status, cursorAt, decoded.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftAuctionQueryRepository.AuctionRow> page = takePage(rows, size);
+        String nextCursor = hasNext
+                ? cursorCodec.encode(MY_AUCTIONS_SCOPE, page.getLast().createdAt().toString(), page.getLast().auctionId())
+                : null;
+        return new NftCursorPageResponse<>(page.stream().map(NftAuctionSummaryResponse::from).toList(),
+                nextCursor, hasNext);
+    }
+
+    public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize) {
+        int size = NftRequestSupport.validateSize(requestedSize);
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, MY_BIDS_SCOPE);
+        Long cursorLastBidId = decoded.present() ? parseLong(decoded.value()) : null;
+
+        List<NftAuctionQueryRepository.MyBidRow> rows = queryRepository.findMyBids(userId, cursorLastBidId, size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftAuctionQueryRepository.MyBidRow> page = takePage(rows, size);
+        String nextCursor = hasNext
+                ? cursorCodec.encode(MY_BIDS_SCOPE, page.getLast().lastBidId().toString(), page.getLast().auctionId())
+                : null;
+        return new NftCursorPageResponse<>(page.stream().map(r -> toMyBid(userId, r)).toList(), nextCursor, hasNext);
+    }
+
+    private MyNftBidResponse toMyBid(Long userId, NftAuctionQueryRepository.MyBidRow row) {
+        boolean isTop = userId.equals(row.topBidderId());
+        MyNftBidResponse.Result result;
+        if (row.status() == NftAuctionStatus.ACTIVE) {
+            result = isTop ? MyNftBidResponse.Result.BIDDING : MyNftBidResponse.Result.OUTBID;
+        } else {
+            // 입찰이 있으면 취소·유찰이 불가능하므로 종료된 경매는 SOLD 다
+            result = userId.equals(row.winnerId()) ? MyNftBidResponse.Result.WON : MyNftBidResponse.Result.LOST;
+        }
+        return new MyNftBidResponse(row.auctionId(), row.photocardId(), row.designName(), row.imageUrl(),
+                row.myHighestBid(), row.currentPrice(), isTop, row.status(), row.endsAt(), result);
+    }
+
+    private String auctionCursor(NftAuctionSort sort, NftAuctionQueryRepository.AuctionRow row) {
+        String value = switch (sort) {
+            case ENDING_SOON -> row.endsAt().toString();
+            case CURRENT_PRICE -> row.currentPrice().toString();
+            case RECENT -> row.createdAt().toString();
+        };
+        return cursorCodec.encode(AUCTION_SCOPE_PREFIX + sort.name(), value, row.auctionId());
+    }
+
+    private void validateAuctionCursor(NftCursorCodec.Cursor cursor, NftAuctionSort sort) {
+        if (!cursor.present()) {
+            return;
+        }
+        if (sort == NftAuctionSort.CURRENT_PRICE) {
+            parseLong(cursor.value());
+        } else {
+            parseTime(cursor.value());
+        }
+    }
+
+    private LocalDateTime parseTime(String value) {
+        try {
+            return LocalDateTime.parse(value);
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_CURSOR);
+        }
+    }
+
+    private Long parseLong(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_CURSOR);
+        }
+    }
+
+    private String normalizeKeyword(String keyword) {
+        return keyword == null || keyword.isBlank() ? null : keyword.trim();
+    }
+
+    private <T> List<T> takePage(List<T> rows, int size) {
+        return rows.size() > size ? List.copyOf(rows.subList(0, size)) : List.copyOf(rows);
     }
 
     /** 마감 시각이 지났는가. 판정은 서버 시계가 아니라 DB now() 다 — 마감 처리(ends_at <= now())와 같은 시계여야 한다 */
