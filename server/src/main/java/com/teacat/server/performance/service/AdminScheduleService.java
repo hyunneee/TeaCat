@@ -34,12 +34,12 @@ public class AdminScheduleService {
 
     /** 회차 수정 (API-266) */
     @Transactional
-    public void update(Long scheduleId, ScheduleUpdateRequest request) {
+    public void update(Long scheduleId, ScheduleUpdateRequest request, Long userId) {
         if (request.isEmpty()) {
             throw new BusinessException(PerformanceErrorCode.NOTHING_TO_UPDATE);
         }
 
-        PerformanceDetail detail = getDetail(scheduleId);
+        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
 
         if (request.performanceDate() != null
                 && request.performanceDate().isBefore(detail.getPerformance().getTicketingStartAt())) {
@@ -54,17 +54,24 @@ public class AdminScheduleService {
      *
      * 예매 이력이 있으면 삭제하지 않는다. 발권된 티켓이 어느 회차였는지 잃어버리기 때문이다.
      * 좌석 행은 판매 상태일 뿐이라 회차와 함께 지운다.
+     * 지운 뒤에는 남은 회차 번호를 일시 순으로 다시 매겨 1, 3 처럼 구멍이 남지 않게 한다.
      */
     @Transactional
-    public void delete(Long scheduleId) {
-        PerformanceDetail detail = getDetail(scheduleId);
+    public void delete(Long scheduleId, Long userId) {
+        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
 
         if (performanceDetailRepository.existsTicketByScheduleId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SCHEDULE_HAS_TICKETS);
         }
 
+        Long performanceId = detail.getPerformance().getId();
+
         performanceDetailRepository.deleteSeatsByScheduleId(scheduleId);
         performanceDetailRepository.delete(detail);
+
+        // 빠진 번호를 남기지 않는다 — 남은 회차를 일시 순으로 1 부터 다시 매긴다 (등록 API-265 와 같은 규칙)
+        performanceDetailRepository.negatePerformanceNums(performanceId);
+        performanceDetailRepository.renumberByDate(performanceId);
     }
 
     /**
@@ -76,8 +83,8 @@ public class AdminScheduleService {
      * 이 API 를 돌리지 않으면 좌석 조회(API-302)가 읽을 데이터가 없다.
      */
     @Transactional
-    public SeatGenerateResponse generateSeats(Long scheduleId) {
-        PerformanceDetail detail = getDetail(scheduleId);
+    public SeatGenerateResponse generateSeats(Long scheduleId, Long userId) {
+        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
 
         if (performanceSeatRepository.existsByIdPerformanceDetailId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SEATS_ALREADY_GENERATED);
@@ -116,8 +123,15 @@ public class AdminScheduleService {
         return SeatGenerateResponse.of(scheduleId, performanceSeats.size(), seatedAreaIds.size());
     }
 
-    private PerformanceDetail getDetail(Long scheduleId) {
-        return performanceDetailRepository.findWithPerformanceById(scheduleId)
+    /** 회차는 공연에 속한다. 그 공연을 등록한 관리자만 회차를 다룰 수 있다 (AdminPerformanceService 와 같은 규칙) */
+    private PerformanceDetail getOwnedDetail(Long scheduleId, Long userId) {
+        PerformanceDetail detail = performanceDetailRepository.findWithPerformanceById(scheduleId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.SCHEDULE_NOT_FOUND));
+
+        if (!detail.getPerformance().isOwnedBy(userId)) {
+            throw new BusinessException(PerformanceErrorCode.NOT_OWNER);
+        }
+
+        return detail;
     }
 }

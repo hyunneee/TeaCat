@@ -42,6 +42,7 @@ class AdminPerformanceServiceImageLimitTests {
 
     private static final String POSTER_KEY = "performance/poster/2026/09/a.png";
     private static final String DETAIL_KEY = "performance/detail/2026/09/b.png";
+    private static final Long OWNER = 6L;
 
     @Mock private PerformanceGeneralRepository performanceGeneralRepository;
     @Mock private PerformanceDetailRepository performanceDetailRepository;
@@ -62,7 +63,7 @@ class AdminPerformanceServiceImageLimitTests {
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다
         performance = PerformanceGeneral.create(
-                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null);
+                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null, OWNER);
     }
 
     private void givenPerformanceExists() {
@@ -75,7 +76,7 @@ class AdminPerformanceServiceImageLimitTests {
         given(fileStorageService.objectSize(POSTER_KEY))
                 .willReturn(OptionalLong.of(DataSize.ofMegabytes(5).toBytes() + 1));
 
-        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null)))
+        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.IMAGE_TOO_LARGE);
@@ -90,7 +91,7 @@ class AdminPerformanceServiceImageLimitTests {
         given(fileStorageService.objectSize(DETAIL_KEY))
                 .willReturn(OptionalLong.of(DataSize.ofMegabytes(20).toBytes()));
 
-        service.update(1L, requestWith(null, DETAIL_KEY));
+        service.update(1L, requestWith(null, DETAIL_KEY), OWNER);
 
         assertThat(performance.getDetailImageKey()).isEqualTo(DETAIL_KEY);
         verify(fileStorageService, never()).delete(anyString());
@@ -102,7 +103,7 @@ class AdminPerformanceServiceImageLimitTests {
         long tenMb = DataSize.ofMegabytes(10).toBytes();
         given(fileStorageService.objectSize(POSTER_KEY)).willReturn(OptionalLong.of(tenMb));
 
-        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null)))
+        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.IMAGE_TOO_LARGE);
@@ -113,7 +114,7 @@ class AdminPerformanceServiceImageLimitTests {
         givenPerformanceExists();
         given(fileStorageService.objectSize(POSTER_KEY)).willReturn(OptionalLong.empty());
 
-        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null)))
+        assertThatThrownBy(() -> service.update(1L, requestWith(POSTER_KEY, null), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.IMAGE_NOT_UPLOADED);

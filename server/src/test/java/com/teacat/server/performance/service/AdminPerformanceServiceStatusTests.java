@@ -22,10 +22,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 /**
- * 공연 상태 전환 (API-264).
+ * 공연 상태 전환 (API-264) 과 등록자 확인.
  */
 @ExtendWith(MockitoExtension.class)
 class AdminPerformanceServiceStatusTests {
+
+    private static final Long OWNER = 6L;
+    private static final Long OTHER_ADMIN = 7L;
 
     @Mock
     private PerformanceGeneralRepository performanceGeneralRepository;
@@ -39,7 +42,7 @@ class AdminPerformanceServiceStatusTests {
     void setUp() {
         performance = PerformanceGeneral.create(
                 null, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
-                LocalDate.of(2026, 9, 1), null, null);
+                LocalDate.of(2026, 9, 1), null, null, OWNER);
     }
 
     private void givenPerformanceExists() {
@@ -50,7 +53,7 @@ class AdminPerformanceServiceStatusTests {
     void 예정에서_진행중으로_바꾸고_이전_상태를_함께_돌려준다() {
         givenPerformanceExists();
 
-        ConcertStatusResponse response = service.changeStatus(1L, PerformanceStatus.ONGOING);
+        ConcertStatusResponse response = service.changeStatus(1L, PerformanceStatus.ONGOING, OWNER);
 
         assertThat(performance.getStatus()).isEqualTo(PerformanceStatus.ONGOING);
         assertThat(response.previousStatus()).isEqualTo(PerformanceStatus.UPCOMING);
@@ -61,7 +64,7 @@ class AdminPerformanceServiceStatusTests {
     void 허용되지_않는_전이는_거절하고_상태를_바꾸지_않는다() {
         givenPerformanceExists();
 
-        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ENDED))
+        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ENDED, OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.INVALID_STATUS_TRANSITION);
@@ -73,10 +76,10 @@ class AdminPerformanceServiceStatusTests {
     void 종료된_공연은_되돌릴_수_없다() {
         givenPerformanceExists();
 
-        service.changeStatus(1L, PerformanceStatus.ONGOING);
-        service.changeStatus(1L, PerformanceStatus.ENDED);
+        service.changeStatus(1L, PerformanceStatus.ONGOING, OWNER);
+        service.changeStatus(1L, PerformanceStatus.ENDED, OWNER);
 
-        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ONGOING))
+        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ONGOING, OWNER))
                 .isInstanceOf(BusinessException.class);
         assertThat(performance.getStatus()).isEqualTo(PerformanceStatus.ENDED);
     }
@@ -85,9 +88,33 @@ class AdminPerformanceServiceStatusTests {
     void 없는_공연이면_404_에러코드() {
         given(performanceGeneralRepository.findById(99L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.changeStatus(99L, PerformanceStatus.ONGOING))
+        assertThatThrownBy(() -> service.changeStatus(99L, PerformanceStatus.ONGOING, OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.PERFORMANCE_NOT_FOUND);
+    }
+
+    @Test
+    void 다른_관리자가_등록한_공연은_403으로_거절하고_상태를_바꾸지_않는다() {
+        givenPerformanceExists();
+
+        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ONGOING, OTHER_ADMIN))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerformanceErrorCode.NOT_OWNER);
+
+        assertThat(performance.getStatus()).isEqualTo(PerformanceStatus.UPCOMING);
+    }
+
+    @Test
+    void 등록자를_알_수_없는_공연은_누구도_관리할_수_없다() {
+        PerformanceGeneral legacy = PerformanceGeneral.create(
+                null, "옛 공연", LocalDateTime.of(2026, 10, 1, 20, 0), LocalDate.of(2026, 9, 1), null, null, null);
+        given(performanceGeneralRepository.findById(2L)).willReturn(Optional.of(legacy));
+
+        assertThatThrownBy(() -> service.delete(2L, OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerformanceErrorCode.NOT_OWNER);
     }
 }

@@ -34,6 +34,7 @@ import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -45,6 +46,9 @@ import java.util.stream.Collectors;
  * 공연 관리 (API-261 ~ 265, 268, 270, 271).
  *
  * 이미지는 MinIO 에 올리고 DB 에는 key 만 남긴다.
+ *
+ * 등록(261)과 업로드 URL 발급(270)을 뺀 모든 API 는 **등록자 본인만** 쓸 수 있다.
+ * 관리자 여럿이 각자 공연을 올리는 구조라, 남의 공연을 실수로 지우는 일을 막아야 한다.
  */
 @Service
 @Slf4j
@@ -65,12 +69,16 @@ public class AdminPerformanceService {
 
     /** 공연 등록 (API-261) */
     @Transactional
-    public ConcertCreateResponse create(ConcertCreateRequest request) {
+    public ConcertCreateResponse create(ConcertCreateRequest request, Long userId) {
         Stadium stadium = getStadium(request.stadiumId());
 
         if (request.visibleFrom().isAfter(request.ticketingStartAt().toLocalDate())) {
             throw new BusinessException(PerformanceErrorCode.INVALID_VISIBLE_FROM);
         }
+
+        // 회차 검사는 이미지를 올리기 **전에** 한다. 여기서 거절되면 스토리지에 고아 파일이 남지 않는다
+        List<LocalDateTime> performanceDates = normalizePerformanceDates(
+                request.performanceDatesOrEmpty(), request.ticketingStartAt());
 
         String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY, imageProperties.posterMaxSize());
         String detailImageKey = uploadIfPresent(
@@ -83,9 +91,34 @@ public class AdminPerformanceService {
                         request.ticketingStartAt(),
                         request.visibleFrom(),
                         posterKey,
-                        detailImageKey));
+                        detailImageKey,
+                        userId));
 
-        return ConcertCreateResponse.of(performance.getId());
+        // 회차 번호는 일시 순으로 1 부터. 관리자가 순서를 섞어 보내도 1회차가 가장 빠른 공연이다
+        List<PerformanceDetail> details = new ArrayList<>();
+        for (int i = 0; i < performanceDates.size(); i++) {
+            details.add(PerformanceDetail.create(performance, i + 1, performanceDates.get(i)));
+        }
+        performanceDetailRepository.saveAll(details);
+
+        return ConcertCreateResponse.of(performance.getId(), details.size());
+    }
+
+    /**
+     * 함께 등록할 회차 일시를 정리한다 — 일시 순 정렬, 중복 거절, 티켓팅 시작 이전 거절.
+     * 회차 등록(API-265)과 같은 규칙이다. 한 요청 안에서 같은 일시가 두 번 오면 실수로 본다.
+     */
+    private List<LocalDateTime> normalizePerformanceDates(List<LocalDateTime> dates, LocalDateTime ticketingStartAt) {
+        List<LocalDateTime> sorted = dates.stream().sorted().toList();
+
+        if (sorted.size() != Set.copyOf(sorted).size()) {
+            throw new BusinessException(PerformanceErrorCode.DUPLICATE_PERFORMANCE_DATE);
+        }
+        if (!sorted.isEmpty() && sorted.getFirst().isBefore(ticketingStartAt)) {
+            throw new BusinessException(PerformanceErrorCode.INVALID_PERFORMANCE_DATE);
+        }
+
+        return sorted;
     }
 
     /**
@@ -95,12 +128,12 @@ public class AdminPerformanceService {
      * 공연장·티켓팅 시각·노출 시작일은 예매자가 이미 보고 결정한 정보라 뒤늦게 바꾸면 안 된다.
      */
     @Transactional
-    public void update(Long concertId, ConcertUpdateRequest request) {
+    public void update(Long concertId, ConcertUpdateRequest request, Long userId) {
         if (request.isEmpty()) {
             throw new BusinessException(PerformanceErrorCode.NOTHING_TO_UPDATE);
         }
 
-        PerformanceGeneral performance = getPerformance(concertId);
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
 
         if (performance.isTicketingStarted(LocalDateTime.now()) && request.touchesLockedFields()) {
             throw new BusinessException(PerformanceErrorCode.TICKETING_ALREADY_STARTED);
@@ -183,8 +216,8 @@ public class AdminPerformanceService {
      * "삭제를 눌렀는데 비공개가 됐다"는 결과가 관리자에게 보이지 않아 분리했다.
      */
     @Transactional
-    public void delete(Long concertId) {
-        PerformanceGeneral performance = getPerformance(concertId);
+    public void delete(Long concertId, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
 
         if (performanceGeneralRepository.existsTicketByPerformanceId(concertId)) {
             throw new BusinessException(PerformanceErrorCode.PERFORMANCE_HAS_TICKETS);
@@ -203,30 +236,51 @@ public class AdminPerformanceService {
     /**
      * 회차 등록 (API-265).
      *
-     * 회차 번호를 생략하면 마지막 번호 + 1 을 붙인다.
-     * (performance_general_id, performance_num) 에 UNIQUE 제약이 있어 중복은 미리 막는다.
+     * 회차 번호를 생략하면 등록 뒤 그 공연의 회차 번호를 **일시 순으로 다시 매긴다**.
+     * 번호를 직접 지정하면 그대로 쓰되, (performance_general_id, performance_num) UNIQUE 에 걸리는 중복은 미리 막는다.
      */
     @Transactional
-    public ScheduleCreateResponse createSchedule(Long concertId, ScheduleCreateRequest request) {
-        PerformanceGeneral performance = getPerformance(concertId);
+    public ScheduleCreateResponse createSchedule(Long concertId, ScheduleCreateRequest request, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
 
         // 티켓팅 시작일보다 앞선 공연일은 예매가 불가능한 회차가 된다
         if (request.performanceDate().isBefore(performance.getTicketingStartAt())) {
             throw new BusinessException(PerformanceErrorCode.INVALID_PERFORMANCE_DATE);
         }
 
-        int performanceNum = request.performanceNum() != null
-                ? request.performanceNum()
-                : performanceDetailRepository.findMaxPerformanceNum(concertId) + 1;
+        // 번호를 직접 지정하면 그대로 쓴다. 관리자가 의도한 번호 체계가 있다는 뜻이라 건드리지 않는다
+        if (request.performanceNum() != null) {
+            if (performanceDetailRepository.existsByPerformanceIdAndPerformanceNum(
+                    concertId, request.performanceNum())) {
+                throw new BusinessException(PerformanceErrorCode.DUPLICATE_SCHEDULE_NUM);
+            }
 
-        if (performanceDetailRepository.existsByPerformanceIdAndPerformanceNum(concertId, performanceNum)) {
-            throw new BusinessException(PerformanceErrorCode.DUPLICATE_SCHEDULE_NUM);
+            PerformanceDetail detail = performanceDetailRepository.save(
+                    PerformanceDetail.create(performance, request.performanceNum(), request.performanceDate()));
+
+            return ScheduleCreateResponse.of(detail.getId(), detail.getPerformanceNum());
         }
 
-        PerformanceDetail detail = performanceDetailRepository.save(
-                PerformanceDetail.create(performance, performanceNum, request.performanceDate()));
+        // 번호를 생략하면 일시 순으로 전체를 다시 매긴다 — 나중에 더 이른 날짜를 추가해도 1회차가 가장 빠른 공연이다.
+        // 저장할 때의 번호는 UNIQUE 를 피하기 위한 임시값(마지막 + 1)일 뿐이다
+        PerformanceDetail detail = performanceDetailRepository.save(PerformanceDetail.create(
+                performance,
+                performanceDetailRepository.findMaxPerformanceNum(concertId) + 1,
+                request.performanceDate()));
 
-        return ScheduleCreateResponse.of(detail.getId(), detail.getPerformanceNum());
+        renumberSchedulesByDate(concertId);
+
+        return ScheduleCreateResponse.of(
+                detail.getId(), performanceDetailRepository.findPerformanceNumById(detail.getId()));
+    }
+
+    /**
+     * 회차 번호를 공연 일시 순으로 1 부터 다시 매긴다.
+     * 두 단계(음수로 비켜두기 → 재부여)인 이유는 repository 주석 참고.
+     */
+    private void renumberSchedulesByDate(Long concertId) {
+        performanceDetailRepository.negatePerformanceNums(concertId);
+        performanceDetailRepository.renumberByDate(concertId);
     }
 
     /**
@@ -240,8 +294,8 @@ public class AdminPerformanceService {
      * 예매·티켓 도메인의 일이라 여기서 건드리지 않는다.
      */
     @Transactional
-    public ConcertStatusResponse changeStatus(Long concertId, PerformanceStatus target) {
-        PerformanceGeneral performance = getPerformance(concertId);
+    public ConcertStatusResponse changeStatus(Long concertId, PerformanceStatus target, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
         PerformanceStatus current = performance.getStatus();
 
         if (!current.canTransitionTo(target)) {
@@ -262,8 +316,8 @@ public class AdminPerformanceService {
      * 비공개는 목록·상세에서 감출 뿐 데이터를 지우지 않아 언제든 되돌릴 수 있다.
      */
     @Transactional
-    public ConcertVisibilityResponse setVisibility(Long concertId, boolean visible) {
-        PerformanceGeneral performance = getPerformance(concertId);
+    public ConcertVisibilityResponse setVisibility(Long concertId, boolean visible, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
 
         if (visible) {
             performance.show();
@@ -281,8 +335,9 @@ public class AdminPerformanceService {
      * 이미 팔린 구역을 빼거나 판매량보다 적게 줄이는 것은 막는다 — DB CHECK 에 걸리기 전에 걸러낸다.
      */
     @Transactional
-    public List<PerformanceAreaResponse> saveAreas(Long concertId, PerformanceAreaSaveRequest request) {
-        PerformanceGeneral performance = getPerformance(concertId);
+    public List<PerformanceAreaResponse> saveAreas(Long concertId, PerformanceAreaSaveRequest request,
+                                                   Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
 
         List<Long> requestedAreaIds = request.areas().stream()
                 .map(PerformanceAreaSaveRequest.AreaSetting::areaId)
@@ -373,9 +428,21 @@ public class AdminPerformanceService {
         }
     }
 
-    private PerformanceGeneral getPerformance(Long concertId) {
-        return performanceGeneralRepository.findById(concertId)
+    /**
+     * 관리자 API 는 본인이 등록한 공연만 다룬다.
+     *
+     * 남의 공연은 "없는 공연"(404)이 아니라 "권한 없음"(403)으로 알려준다.
+     * 관리자끼리는 공연이 존재한다는 사실을 감출 이유가 없고, 404 를 주면 ID 를 잘못 넣었다고 오해한다.
+     */
+    private PerformanceGeneral getOwnedPerformance(Long concertId, Long userId) {
+        PerformanceGeneral performance = performanceGeneralRepository.findById(concertId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND));
+
+        if (!performance.isOwnedBy(userId)) {
+            throw new BusinessException(PerformanceErrorCode.NOT_OWNER);
+        }
+
+        return performance;
     }
 
     private Stadium getStadium(Long stadiumId) {

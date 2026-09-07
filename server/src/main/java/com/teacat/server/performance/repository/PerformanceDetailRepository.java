@@ -61,6 +61,40 @@ public interface PerformanceDetailRepository extends JpaRepository<PerformanceDe
 
     boolean existsByPerformanceIdAndPerformanceNum(Long performanceId, int performanceNum);
 
+    /**
+     * 회차 번호 재부여 1단계 — 전부 음수로 비켜둔다 (API-265, 267).
+     *
+     * (performance_general_id, performance_num) 에 UNIQUE 가 있고 PostgreSQL 은 한 UPDATE 안에서도
+     * 행마다 즉시 검사하므로, 1↔2 처럼 번호가 자리를 바꾸는 갱신은 한 번에 하면 중간에 충돌한다.
+     * 음수는 쓰이지 않는 값이라 겹칠 일이 없다. 2단계(renumberByDate)와 같은 트랜잭션에서 실행한다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE performance_details
+            SET performance_num = -performance_num
+            WHERE performance_general_id = :performanceId
+            """, nativeQuery = true)
+    void negatePerformanceNums(@Param("performanceId") Long performanceId);
+
+    /**
+     * 회차 번호 재부여 2단계 — 공연 일시가 빠른 순으로 1 부터 다시 매긴다.
+     * 일시가 같으면 먼저 만들어진 회차(id 오름차순)가 앞이다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE performance_details d
+            SET performance_num = r.rn
+            FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY performance_date, id) AS rn
+                  FROM performance_details
+                  WHERE performance_general_id = :performanceId) r
+            WHERE d.id = r.id
+            """, nativeQuery = true)
+    void renumberByDate(@Param("performanceId") Long performanceId);
+
+    /** 재부여 뒤의 번호. 영속성 컨텍스트가 비워진 뒤라 DB 에서 다시 읽는다 */
+    @Query("SELECT d.performanceNum FROM PerformanceDetail d WHERE d.id = :scheduleId")
+    int findPerformanceNumById(@Param("scheduleId") Long scheduleId);
+
     /** 회차 등록(API-265) 시 다음 회차 번호를 정하는 데 쓴다 */
     @Query("SELECT COALESCE(MAX(d.performanceNum), 0) FROM PerformanceDetail d WHERE d.performance.id = :performanceId")
     int findMaxPerformanceNum(@Param("performanceId") Long performanceId);

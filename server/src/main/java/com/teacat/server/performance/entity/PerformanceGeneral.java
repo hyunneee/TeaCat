@@ -83,21 +83,41 @@ public class PerformanceGeneral {
     @Column(name = "hidden_at")
     private LocalDateTime hiddenAt;
 
+    /**
+     * 등록한 관리자(users.id). 관리자 API 는 등록자 본인만 쓸 수 있다.
+     * 회원 엔티티를 연관관계로 걸지 않고 id 만 둔다 — 여기서 회원 정보를 읽을 일이 없고,
+     * 공연 조회마다 회원 테이블을 끌고 오지 않기 위함이다.
+     */
+    @Column(name = "created_by")
+    private Long createdById;
+
     private PerformanceGeneral(Stadium stadium, String title, LocalDateTime ticketingStartAt,
-                               LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
+                               LocalDate visibleFrom, String posterImageKey, String detailImageKey,
+                               Long createdById) {
         this.stadium = stadium;
         this.title = title;
         this.ticketingStartAt = ticketingStartAt;
         this.visibleFrom = visibleFrom;
         this.posterImageKey = posterImageKey;
         this.detailImageKey = detailImageKey;
+        this.createdById = createdById;
         this.status = PerformanceStatus.UPCOMING;
     }
 
     /** 공연 등록 (API-261) */
     public static PerformanceGeneral create(Stadium stadium, String title, LocalDateTime ticketingStartAt,
-                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
-        return new PerformanceGeneral(stadium, title, ticketingStartAt, visibleFrom, posterImageKey, detailImageKey);
+                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey,
+                                            Long createdById) {
+        return new PerformanceGeneral(
+                stadium, title, ticketingStartAt, visibleFrom, posterImageKey, detailImageKey, createdById);
+    }
+
+    /**
+     * 이 사용자가 등록한 공연인지. 등록자가 없는(NULL) 공연은 누구의 것도 아니다.
+     * 마이그레이션 이전 데이터가 그렇고, 실수로 다른 관리자의 공연을 건드리는 것보다 거절이 안전하다.
+     */
+    public boolean isOwnedBy(Long userId) {
+        return this.createdById != null && this.createdById.equals(userId);
     }
 
     /**

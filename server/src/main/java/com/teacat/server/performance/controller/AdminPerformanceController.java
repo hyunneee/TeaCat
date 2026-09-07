@@ -1,5 +1,6 @@
 package com.teacat.server.performance.controller;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
 import com.teacat.server.performance.dto.request.ConcertStatusRequest;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -34,7 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "공연 관리", description = "관리자용 공연 등록·수정·삭제 API")
+/**
+ * 등록을 뺀 모든 API 는 본인이 등록한 공연에만 동작한다. 남의 공연은 PERFORMANCE_020(403).
+ */
+@Tag(name = "공연 관리", description = "관리자용 공연 등록·수정·삭제 API. 본인이 등록한 공연만 관리할 수 있습니다.")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/concerts")
@@ -44,21 +49,25 @@ public class AdminPerformanceController {
     private final AdminPerformanceService adminPerformanceService;
 
     @Operation(summary = "공연 등록",
-            description = "공연을 등록합니다. 포스터·상세 이미지를 함께 올리면 MinIO 에 저장되고 DB 에는 저장 경로만 남습니다.")
+            description = "공연을 등록합니다. 포스터·상세 이미지를 함께 올리면 MinIO 에 저장되고 DB 에는 저장 경로만 남습니다. "
+                    + "등록한 관리자가 이 공연의 관리자가 됩니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<BaseResponse<ConcertCreateResponse>> create(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Valid @ModelAttribute ConcertCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success("공연이 등록되었습니다.", adminPerformanceService.create(request)));
+                .body(BaseResponse.success("공연이 등록되었습니다.",
+                        adminPerformanceService.create(request, authUser.id())));
     }
 
     @Operation(summary = "공연 수정",
             description = "보낸 필드만 변경합니다. 티켓팅이 시작된 뒤에는 제목만 변경할 수 있습니다.")
     @PatchMapping("/{concertId}")
     public ResponseEntity<BaseResponse<Void>> update(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertUpdateRequest request) {
-        adminPerformanceService.update(concertId, request);
+        adminPerformanceService.update(concertId, request, authUser.id());
         return ResponseEntity.ok(BaseResponse.success("공연 정보가 수정되었습니다."));
     }
 
@@ -66,11 +75,12 @@ public class AdminPerformanceController {
             description = "공연에 회차를 추가합니다. 회차 번호를 생략하면 다음 번호가 자동으로 붙습니다.")
     @PostMapping("/{concertId}/schedules")
     public ResponseEntity<BaseResponse<ScheduleCreateResponse>> createSchedule(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ScheduleCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success("회차가 등록되었습니다.",
-                        adminPerformanceService.createSchedule(concertId, request)));
+                        adminPerformanceService.createSchedule(concertId, request, authUser.id())));
     }
 
     @Operation(summary = "공연 구역 등급·가격 설정",
@@ -78,10 +88,11 @@ public class AdminPerformanceController {
                     + "보낸 목록이 전체가 되며, 빠진 구역은 판매하지 않는 것으로 보고 삭제됩니다.")
     @PutMapping("/{concertId}/areas")
     public ResponseEntity<BaseResponse<List<PerformanceAreaResponse>>> saveAreas(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody PerformanceAreaSaveRequest request) {
         return ResponseEntity.ok(BaseResponse.success("공연 구역 설정이 저장되었습니다.",
-                adminPerformanceService.saveAreas(concertId, request)));
+                adminPerformanceService.saveAreas(concertId, request, authUser.id())));
     }
 
     @Operation(summary = "공연 상태 전환",
@@ -89,10 +100,11 @@ public class AdminPerformanceController {
                     + "UPCOMING·ONGOING 은 CANCELLED 로 바꿀 수 있습니다. 종료·취소된 공연은 되돌릴 수 없습니다.")
     @PatchMapping("/{concertId}/status")
     public ResponseEntity<BaseResponse<ConcertStatusResponse>> changeStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertStatusRequest request) {
         return ResponseEntity.ok(BaseResponse.success("공연 상태가 변경되었습니다.",
-                adminPerformanceService.changeStatus(concertId, request.status())));
+                adminPerformanceService.changeStatus(concertId, request.status(), authUser.id())));
     }
 
     @Operation(summary = "공연 노출 전환",
@@ -100,10 +112,11 @@ public class AdminPerformanceController {
                     + "비공개는 목록·상세에서 감출 뿐 데이터를 지우지 않아 되돌릴 수 있습니다.")
     @PatchMapping("/{concertId}/visibility")
     public ResponseEntity<BaseResponse<ConcertVisibilityResponse>> setVisibility(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertVisibilityRequest request) {
         return ResponseEntity.ok(BaseResponse.success(
-                adminPerformanceService.setVisibility(concertId, request.visible())));
+                adminPerformanceService.setVisibility(concertId, request.visible(), authUser.id())));
     }
 
     @Operation(summary = "공연 삭제",
@@ -111,8 +124,9 @@ public class AdminPerformanceController {
                     + "그럴 때는 노출 전환으로 비공개 처리하세요.")
     @DeleteMapping("/{concertId}")
     public ResponseEntity<Void> delete(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
-        adminPerformanceService.delete(concertId);
+        adminPerformanceService.delete(concertId, authUser.id());
         return ResponseEntity.noContent().build();
     }
 }

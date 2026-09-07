@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 공연 등록 요청 (API-261).
@@ -39,6 +40,20 @@ public record ConcertCreateRequest(
         MultipartFile poster,
 
         @Schema(description = "상세 페이지 이미지 (jpg/png/webp/gif, 20MB 이하)")
-        MultipartFile detailImage
+        MultipartFile detailImage,
+
+        /*
+         * 회차를 공연과 한 번에 만든다. 같은 키를 반복해서 보낸다:
+         *   performanceDates=2026-11-14T19:00:00&performanceDates=2026-11-15T19:00:00
+         * 회차 번호는 일시 순으로 1 부터 붙는다. 나중에 추가하려면 회차 등록(API-265)을 쓴다.
+         */
+        @Schema(description = "회차 공연 일시 목록 (같은 키 반복). 일시 순으로 1회차부터 번호가 붙는다. 생략 가능",
+                example = "[\"2026-11-14T19:00:00\", \"2026-11-15T19:00:00\"]")
+        List<@NotNull(message = "회차 일시가 비어 있습니다.") LocalDateTime> performanceDates
 ) {
+
+    /** null 도 빈 목록으로 다룬다 — multipart 에서 키를 안 보내면 null 이 들어온다 */
+    public List<LocalDateTime> performanceDatesOrEmpty() {
+        return performanceDates == null ? List.of() : performanceDates;
+    }
 }

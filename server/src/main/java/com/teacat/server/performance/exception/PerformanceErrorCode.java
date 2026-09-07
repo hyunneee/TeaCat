@@ -41,7 +41,11 @@ public enum PerformanceErrorCode implements ErrorCode {
             "허용되지 않는 상태 전환입니다. UPCOMING → ONGOING → ENDED 순서로만 바꿀 수 있고, "
                     + "종료·취소된 공연은 되돌릴 수 없습니다."),
     IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "PERFORMANCE_019",
-            "업로드한 이미지가 용량 한도를 넘어 삭제했습니다. 업로드 URL 발급 응답의 maxFileSizeBytes 이하로 줄여서 다시 올려 주세요.");
+            "업로드한 이미지가 용량 한도를 넘어 삭제했습니다. 업로드 URL 발급 응답의 maxFileSizeBytes 이하로 줄여서 다시 올려 주세요."),
+    NOT_OWNER(HttpStatus.FORBIDDEN, "PERFORMANCE_020",
+            "본인이 등록한 공연만 관리할 수 있습니다."),
+    DUPLICATE_PERFORMANCE_DATE(HttpStatus.BAD_REQUEST, "PERFORMANCE_021",
+            "같은 일시의 회차가 두 번 들어왔습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
