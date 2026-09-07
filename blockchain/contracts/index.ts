@@ -11,9 +11,6 @@
  *
  * 컨트랙트를 추가하면 여기에 typechain 타입을 함께 export 합니다.
  * typechain-types 는 `npm run compile` 이 만듭니다.
- *
- *   export { TicketSBT__factory } from './typechain-types/factories/…';
- *   export type { TicketSBT } from './typechain-types/contracts/…';
  */
 export {
   readDeployment,
@@ -27,3 +24,6 @@ export {
 
 export { CatMoney__factory } from './typechain-types/factories/contracts/CatMoney__factory';
 export type { CatMoney } from './typechain-types/contracts/CatMoney';
+
+export { TicketSBT__factory } from './typechain-types/factories/contracts/TicketSBT__factory';
+export type { TicketSBT } from './typechain-types/contracts/TicketSBT';
