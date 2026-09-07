@@ -15,12 +15,14 @@ import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardListing;
 import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.exception.NftErrorCode;
+import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
 import com.teacat.server.nft.repository.NftPhotocardListingRepository;
@@ -57,6 +59,7 @@ public class NftService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final NftPhotocardRepository photocardRepository;
+    private final NftAuctionRepository auctionRepository;
     private final NftPhotocardDesignRepository designRepository;
     private final NftPhotocardListingRepository listingRepository;
     private final NftPhotocardTradeRepository tradeRepository;
@@ -108,6 +111,10 @@ public class NftService {
         }
         if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
+        }
+        // 경매 등록도 포카 행 락을 먼저 잡으므로, 여기서 본 결과는 커밋까지 유효하다
+        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+            throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
         NftPhotocardListing listing = listingRepository.save(
