@@ -51,6 +51,9 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
     @Autowired
     private CatMoneyHoldService holdService;
 
+    @Autowired
+    private NftAuctionCloser closer;
+
     @Test
     void 만료된_진행중_경매만_마감_대상으로_잡힌다() {
         Long sellerId = insertUser("s@test.com", "판매자");
@@ -216,10 +219,8 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
                 "now() - interval '1 minute'");
 
-        assertThatThrownBy(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isIn(NftErrorCode.AUCTION_ENDED, NftErrorCode.AUCTION_NOT_ACTIVE);
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)),
+                NftErrorCode.AUCTION_ENDED);
     }
 
     @Test
@@ -338,6 +339,123 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertCode(() -> auctionService.buyNow(buyer, withBuyNow, UUID.randomUUID().toString()),
                 NftErrorCode.AUCTION_NOT_ACTIVE);
         assertCode(() -> auctionService.placeBid(buyer, withBuyNow, new NftBidRequest(2_000L)),
+                NftErrorCode.AUCTION_NOT_ACTIVE);
+    }
+
+    @Test
+    void 마감_시_최고_입찰자에게_낙찰되고_거래_이력이_남는다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long b = insertFundedUser("b@test.com", "B", 10_000);
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+        Long auctionId = insertAuction(photocardId, sellerId, 1_000, null, "now() + interval '1 day'");
+        auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L));
+        var top = auctionService.placeBid(b, auctionId, new NftBidRequest(2_000L));
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
+
+        boolean closed = closer.close(auctionId);
+
+        assertThat(closed).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SOLD");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT winner_id FROM nft_auctions WHERE id = ?", Long.class, auctionId)).isEqualTo(b);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(b);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT price FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isEqualTo(2_000L);
+        assertThat(holdStatus("AUCTION_BID", top.bidId())).isEqualTo("CAPTURED");
+        assertThat(nftService.getPurchaseHistory(b, null, 20).items()).hasSize(1);
+    }
+
+    @Test
+    void 입찰_없이_마감되면_유찰이다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+        Long auctionId = insertAuction(photocardId, sellerId, 1_000, null, "now() - interval '1 second'");
+
+        assertThat(closer.close(auctionId)).isTrue();
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("EXPIRED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(sellerId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isZero();
+    }
+
+    @Test
+    void 마감_전이거나_이미_닫힌_경매는_close_가_아무것도_하지_않는다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long running = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+        Long expired = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() - interval '1 second'");
+
+        assertThat(closer.close(running)).isFalse();
+        assertThat(closer.close(expired)).isTrue();
+        assertThat(closer.close(expired)).isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, running)).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void 같은_경매를_동시에_닫아도_한_번만_처리된다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+        auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L));
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(6);
+        List<Future<Boolean>> futures = new ArrayList<>();
+        try {
+            for (int i = 0; i < 6; i++) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return closer.close(auctionId);
+                }));
+            }
+            start.countDown();
+            long closedCount = 0;
+            for (Future<Boolean> f : futures) {
+                if (f.get()) {
+                    closedCount++;
+                }
+            }
+
+            assertThat(closedCount).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isEqualTo(1L);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void 마감_시각이_지난_경매는_입찰과_즉시구매를_거절하고_마감은_close_가_처리한다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 5_000L,
+                "now() - interval '1 second'");
+
+        // 쓰기 경로는 닫지 않고 거절만 한다. 같은 트랜잭션에서 닫으면 거절 예외의 롤백이 마감까지 되돌리기 때문이다
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)),
+                NftErrorCode.AUCTION_ENDED);
+        assertCode(() -> auctionService.buyNow(a, auctionId, UUID.randomUUID().toString()),
+                NftErrorCode.AUCTION_ENDED);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("ACTIVE");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM cat_money_holds WHERE user_id = ?", Long.class, a)).isZero();
+
+        // 마감은 스위퍼(또는 상세 조회)가 부르는 close 가 한다
+        assertThat(closer.close(auctionId)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("EXPIRED");
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)),
                 NftErrorCode.AUCTION_NOT_ACTIVE);
     }
 

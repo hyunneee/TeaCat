@@ -36,8 +36,14 @@ import java.util.UUID;
 /**
  * NFT 포토카드 경매 — 등록·취소·입찰·즉시구매·조회.
  *
- * 마감은 여기서 하지 않는다. {@code NftAuctionCloser} 가 멱등하게 닫고, 이 서비스는 상태를 바꾸기 전에
- * {@code closer.close(id)} 를 한 번 불러 만료된 경매가 열린 채 남지 않게 한다(지연 마감).
+ * 마감은 여기서 하지 않는다. {@code NftAuctionCloser} 가 멱등하게 닫는다.
+ * <ul>
+ *   <li>쓰기 경로(입찰·즉시구매)는 마감을 <b>부르지 않고</b> DB 시각으로 거절만 한다({@code AUCTION_ENDED}).
+ *       같은 트랜잭션에서 닫은 뒤 거절 예외를 던지면 롤백이 마감까지 되돌리고, 마감을 별도 트랜잭션으로
+ *       떼면 요청 하나가 커넥션 둘을 잡아 입찰이 몰릴 때 풀이 마른다.</li>
+ *   <li>읽기 경로(상세 조회)는 거절할 일이 없으므로 먼저 닫고 확정 결과를 돌려준다(지연 마감).</li>
+ *   <li>나머지는 스위퍼가 주기적으로 닫는다.</li>
+ * </ul>
  *
  * 락 순서는 모든 경로에서 경매 행 → 포카 행 → 유저 advisory lock(홀드 안) 이다.
  */
@@ -120,9 +126,6 @@ public class NftAuctionService {
      */
     @Transactional
     public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request) {
-        // 만료된 경매면 여기서 닫힌다(지연 마감). 이후 검사는 닫힌 상태를 본다
-        closer.close(auctionId);
-
         NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
         validateBiddable(auction, bidderId, request.amount());
@@ -143,8 +146,8 @@ public class NftAuctionService {
         if (!auction.isActive()) {
             throw new BusinessException(NftErrorCode.AUCTION_NOT_ACTIVE);
         }
-        // closer.close 와 락 획득 사이에 마감 시각이 지난 좁은 창. DB 시계로 다시 본다
-        if (!auction.getEndsAt().isAfter(queryRepository.currentTime())) {
+        // 마감 시각은 지났는데 스위퍼가 아직 안 닫은 경매. 마감 판정과 같은 DB 시계로 본다
+        if (isEnded(auction)) {
             throw new BusinessException(NftErrorCode.AUCTION_ENDED);
         }
         if (auction.isSeller(bidderId)) {
@@ -177,7 +180,6 @@ public class NftAuctionService {
             return sameAuctionOrThrow(existing, auctionId);
         }
 
-        closer.close(auctionId);
         NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
         // 락을 기다리는 동안 같은 키의 요청이 끝났을 수 있다
@@ -188,6 +190,9 @@ public class NftAuctionService {
 
         if (!auction.isActive()) {
             throw new BusinessException(NftErrorCode.AUCTION_NOT_ACTIVE);
+        }
+        if (isEnded(auction)) {
+            throw new BusinessException(NftErrorCode.AUCTION_ENDED);
         }
         if (!auction.hasBuyNow()) {
             throw new BusinessException(NftErrorCode.BUY_NOW_NOT_AVAILABLE);
@@ -212,6 +217,11 @@ public class NftAuctionService {
         NftPhotocardTrade trade = tradeRepository.saveAndFlush(
                 NftPhotocardTrade.fromAuction(auction, buyer, price, idempotencyKey));
         return NftPurchaseResponse.from(trade);
+    }
+
+    /** 마감 시각이 지났는가. 판정은 서버 시계가 아니라 DB now() 다 — 마감 처리(ends_at <= now())와 같은 시계여야 한다 */
+    private boolean isEnded(NftAuction auction) {
+        return !auction.getEndsAt().isAfter(queryRepository.currentTime());
     }
 
     private NftPurchaseResponse sameAuctionOrThrow(NftPhotocardTrade trade, Long auctionId) {
