@@ -11,8 +11,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Duration;
@@ -24,18 +22,25 @@ import static org.mockito.BDDMockito.given;
  *
  * 체인은 붙이지 않는다 — {@link CatMoneyClient} 를 스텁으로 바꿔 잔액을 주입한다.
  * 스위퍼는 꺼 둔다. 마감은 테스트가 직접 {@code close} 를 불러 검증한다.
+ *
+ * <p>컨테이너는 {@code @Container} 가 아니라 <b>static 초기화로 한 번만</b> 띄운다(싱글턴 컨테이너).
+ * 이 클래스를 상속하는 테스트 클래스들은 설정이 같아 Spring 컨텍스트를 공유하는데, {@code @Container} 는
+ * 첫 클래스가 끝나면 컨테이너를 내려 버린다 — 캐시된 컨텍스트의 DataSource 가 죽은 포트를 가리키게 되고
+ * 다음 클래스는 전부 {@code Failed to obtain JDBC Connection} 으로 실패한다. 정리는 Ryuk 가 JVM 종료 후 한다.
  */
-@Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
 public abstract class PostgresIntegrationTest {
 
-    @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("pgvector/pgvector:pg18")
             .withDatabaseName("teacat_test")
             .withUsername("teacat")
             .withPassword("teacat_test_pw")
             .withStartupTimeout(Duration.ofMinutes(2));
+
+    static {
+        POSTGRES.start();
+    }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {

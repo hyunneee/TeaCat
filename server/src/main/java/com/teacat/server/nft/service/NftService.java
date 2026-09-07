@@ -22,6 +22,7 @@ import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardListing;
 import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.exception.NftErrorCode;
+import com.teacat.server.nft.repository.NftAuctionQueryRepository;
 import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
@@ -60,6 +61,7 @@ public class NftService {
 
     private final NftPhotocardRepository photocardRepository;
     private final NftAuctionRepository auctionRepository;
+    private final NftAuctionQueryRepository auctionQueryRepository;
     private final NftPhotocardDesignRepository designRepository;
     private final NftPhotocardListingRepository listingRepository;
     private final NftPhotocardTradeRepository tradeRepository;
@@ -94,11 +96,17 @@ public class NftService {
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
                 : new NftPhotocardDetailResponse.Listing(
                         row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+        // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
+        NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
+                .map(summary -> new NftPhotocardDetailResponse.Auction(
+                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.bidCount(), summary.endsAt()))
+                .orElse(null);
         NftPhotocardDetailResponse.Origin origin = new NftPhotocardDetailResponse.Origin(
                 row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber());
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing);
+                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction);
     }
 
     @Transactional

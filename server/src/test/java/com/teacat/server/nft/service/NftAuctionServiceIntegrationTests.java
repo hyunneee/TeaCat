@@ -1,5 +1,6 @@
 package com.teacat.server.nft.service;
 
+import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
 import com.teacat.server.nft.dto.request.NftAuctionSort;
@@ -14,10 +15,14 @@ import com.teacat.server.nft.repository.NftAuctionBidRepository;
 import com.teacat.server.nft.repository.NftAuctionQueryRepository;
 import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.support.PostgresIntegrationTest;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.wallet.exception.WalletErrorCode;
 import com.teacat.server.wallet.service.CatMoneyHoldService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
@@ -31,6 +36,11 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
@@ -57,6 +67,16 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
     @Autowired
     private NftAuctionCloser closer;
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    private String bearer(Long userId) {
+        return "Bearer " + jwtTokenProvider.createAccessToken(userId, UserRole.USER);
+    }
 
     @Test
     void 만료된_진행중_경매만_마감_대상으로_잡힌다() {
@@ -557,6 +577,174 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(all.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(expired, active);
         assertThat(onlyExpired.items()).extracting(NftAuctionSummaryResponse::auctionId).containsExactly(expired);
         assertThat(onlyExpired.items().get(0).status()).isEqualTo(NftAuctionStatus.EXPIRED);
+    }
+
+    @Test
+    void 경매_조회는_토큰_없이_열려_있고_쓰기는_401이다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+
+        mockMvc.perform(get("/nft-market/auctions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+        // 비로그인 상세에는 viewer 블록이 없다 (null 필드는 봉투에서 빠진다)
+        mockMvc.perform(get("/auctions/" + auctionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.auctionId").value(auctionId))
+                .andExpect(jsonPath("$.data.viewer").doesNotExist());
+        mockMvc.perform(get("/auctions/" + auctionId + "/bids"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/auctions/" + auctionId + "/bids")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":2000}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/auctions/" + auctionId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/users/me/auctions"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/users/me/bids"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void 등록부터_즉시구매까지_HTTP_로_동작한다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long bidderId = insertFundedUser("b@test.com", "입찰자", 10_000);
+        Long buyerId = insertFundedUser("c@test.com", "즉시구매자", 10_000);
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+
+        mockMvc.perform(post("/photocards/" + photocardId + "/auction")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(sellerId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"startPrice":1000,"buyNowPrice":5000,"durationHours":24}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.photocardId").value(photocardId))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.currentPrice").value(1000));
+
+        Long auctionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM nft_auctions WHERE photocard_id = ?", Long.class, photocardId);
+
+        mockMvc.perform(post("/auctions/" + auctionId + "/bids")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":1500}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.currentPrice").value(1500))
+                .andExpect(jsonPath("$.data.bidCount").value(1))
+                .andExpect(jsonPath("$.data.isTopBidder").value(true));
+
+        mockMvc.perform(get("/auctions/" + auctionId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.topBidderNickname").value("입찰자"))
+                .andExpect(jsonPath("$.data.viewer.isSeller").value(false))
+                .andExpect(jsonPath("$.data.viewer.isTopBidder").value(true))
+                .andExpect(jsonPath("$.data.viewer.myHighestBid").value(1500));
+
+        mockMvc.perform(get("/auctions/" + auctionId + "/bids"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].bidderNickname").value("입찰자"))
+                .andExpect(jsonPath("$.data.items[0].amount").value(1500));
+
+        mockMvc.perform(post("/auctions/" + auctionId + "/buy-now")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
+                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.photocardId").value(photocardId))
+                .andExpect(jsonPath("$.data.price").value(5000));
+
+        mockMvc.perform(get("/users/me/auctions")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(sellerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].auctionId").value(auctionId))
+                .andExpect(jsonPath("$.data.items[0].status").value("SOLD"))
+                .andExpect(jsonPath("$.data.items[0].winnerNickname").value("즉시구매자"));
+
+        mockMvc.perform(get("/users/me/bids")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].auctionId").value(auctionId))
+                .andExpect(jsonPath("$.data.items[0].myHighestBid").value(1500))
+                .andExpect(jsonPath("$.data.items[0].result").value("LOST"));
+    }
+
+    @Test
+    void 판매자는_HTTP_로_경매를_취소한다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+
+        mockMvc.perform(delete("/auctions/" + auctionId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(sellerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("경매가 취소되었습니다."));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId))
+                .isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void 입찰_실패는_에러_코드_봉투로_내려온다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long bidderId = insertFundedUser("b@test.com", "입찰자", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+
+        // 비즈니스 규칙 위반 → BusinessException → code 가 실린다
+        mockMvc.perform(post("/auctions/" + auctionId + "/bids")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":900}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("NFT_027"));
+
+        // @Valid 위반 → GlobalExceptionHandler 가 code 없이 첫 필드 메시지만 내려준다
+        mockMvc.perform(post("/auctions/" + auctionId + "/bids")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("입찰가를 1 이상으로 입력해 주세요."));
+
+        // 즉시구매가 없는 경매
+        mockMvc.perform(post("/auctions/" + auctionId + "/buy-now")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bidderId))
+                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NFT_029"));
+    }
+
+    @Test
+    void 포토카드_상세에_진행_중_경매가_실린다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+        auctionService.createAuction(sellerId, photocardId, new NftAuctionCreateRequest(1_000L, 5_000L, 24));
+        Long auctionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM nft_auctions WHERE photocard_id = ?", Long.class, photocardId);
+
+        mockMvc.perform(get("/photocards/" + photocardId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.auction.auctionId").value(auctionId))
+                .andExpect(jsonPath("$.data.auction.currentPrice").value(1000))
+                .andExpect(jsonPath("$.data.auction.buyNowPrice").value(5000))
+                .andExpect(jsonPath("$.data.auction.bidCount").value(0))
+                // 고정가와 경매는 동시에 존재할 수 없다
+                .andExpect(jsonPath("$.data.listing").doesNotExist());
+
+        auctionService.cancelAuction(sellerId, auctionId);
+
+        mockMvc.perform(get("/photocards/" + photocardId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.auction").doesNotExist());
     }
 
     private String holdStatus(String refType, Long refId) {
