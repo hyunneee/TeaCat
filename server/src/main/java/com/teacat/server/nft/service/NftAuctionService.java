@@ -3,8 +3,11 @@ package com.teacat.server.nft.service;
 import com.teacat.server.common.config.NftAuctionProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
+import com.teacat.server.nft.dto.request.NftBidRequest;
 import com.teacat.server.nft.dto.response.NftAuctionResponse;
+import com.teacat.server.nft.dto.response.NftBidResponse;
 import com.teacat.server.nft.entity.NftAuction;
+import com.teacat.server.nft.entity.NftAuctionBid;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
@@ -18,6 +21,7 @@ import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
+import com.teacat.server.wallet.entity.CatMoneyHoldRefType;
 import com.teacat.server.wallet.service.CatMoneyHoldService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,6 +51,7 @@ public class NftAuctionService {
     private final UserRepository userRepository;
     private final CatMoneyHoldService holdService;
     private final NftAuctionProperties properties;
+    private final NftAuctionCloser closer;
 
     /**
      * 경매 등록.
@@ -100,6 +105,56 @@ public class NftAuctionService {
             throw new BusinessException(NftErrorCode.AUCTION_NOT_ACTIVE);
         }
         throw new BusinessException(NftErrorCode.AUCTION_HAS_BIDS);
+    }
+
+    /**
+     * 입찰.
+     *
+     * 경매 행을 잠가 한 경매의 입찰을 줄 세운다. 락을 기다린 요청은 갱신된 현재가로 다시 검사되므로
+     * 같은 금액을 동시에 넣어도 한 건만 통과한다. 담보는 입찰 행이 생긴 뒤 홀드로 잡고, 잔액이 부족하면
+     * 예외가 올라가 입찰 행까지 함께 롤백된다.
+     */
+    @Transactional
+    public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request) {
+        // 만료된 경매면 여기서 닫힌다(지연 마감). 이후 검사는 닫힌 상태를 본다
+        closer.close(auctionId);
+
+        NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
+        validateBiddable(auction, bidderId, request.amount());
+
+        User bidder = getUser(bidderId);
+        NftAuctionBid bid = bidRepository.save(NftAuctionBid.place(auction, bidder, request.amount()));
+        holdService.hold(bidderId, request.amount(), CatMoneyHoldRefType.AUCTION_BID, bid.getId());
+
+        NftAuctionBid previousTop = auction.getTopBid();
+        if (previousTop != null) {
+            holdService.release(CatMoneyHoldRefType.AUCTION_BID, previousTop.getId());
+        }
+        auction.acceptBid(bid);
+        return NftBidResponse.of(bid, auction);
+    }
+
+    private void validateBiddable(NftAuction auction, Long bidderId, Long amount) {
+        if (!auction.isActive()) {
+            throw new BusinessException(NftErrorCode.AUCTION_NOT_ACTIVE);
+        }
+        // closer.close 와 락 획득 사이에 마감 시각이 지난 좁은 창. DB 시계로 다시 본다
+        if (!auction.getEndsAt().isAfter(queryRepository.currentTime())) {
+            throw new BusinessException(NftErrorCode.AUCTION_ENDED);
+        }
+        if (auction.isSeller(bidderId)) {
+            throw new BusinessException(NftErrorCode.SELLER_CANNOT_BID);
+        }
+        if (auction.isTopBidder(bidderId)) {
+            throw new BusinessException(NftErrorCode.ALREADY_TOP_BIDDER);
+        }
+        if (amount <= auction.getCurrentPrice()) {
+            throw new BusinessException(NftErrorCode.BID_TOO_LOW);
+        }
+        if (auction.hasBuyNow() && amount >= auction.getBuyNowPrice()) {
+            throw new BusinessException(NftErrorCode.BID_NOT_BELOW_BUY_NOW);
+        }
     }
 
     private User getUser(Long userId) {

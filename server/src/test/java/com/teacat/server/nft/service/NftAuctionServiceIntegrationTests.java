@@ -2,6 +2,7 @@ package com.teacat.server.nft.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
+import com.teacat.server.nft.dto.request.NftBidRequest;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.exception.NftErrorCode;
@@ -9,11 +10,19 @@ import com.teacat.server.nft.repository.NftAuctionBidRepository;
 import com.teacat.server.nft.repository.NftAuctionQueryRepository;
 import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.support.PostgresIntegrationTest;
+import com.teacat.server.wallet.exception.WalletErrorCode;
+import com.teacat.server.wallet.service.CatMoneyHoldService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,6 +46,9 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
     @Autowired
     private NftService nftService;
+
+    @Autowired
+    private CatMoneyHoldService holdService;
 
     @Test
     void 만료된_진행중_경매만_마감_대상으로_잡힌다() {
@@ -142,6 +154,122 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
         jdbcTemplate.update("UPDATE nft_auctions SET bid_count = 1 WHERE id = ?", auctionId);
         assertCode(() -> auctionService.cancelAuction(sellerId, auctionId), NftErrorCode.AUCTION_HAS_BIDS);
+    }
+
+    @Test
+    void 입찰하면_현재가가_오르고_직전_최고_입찰자의_홀드는_풀린다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 5_000);
+        Long b = insertFundedUser("b@test.com", "B", 5_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 10_000L,
+                "now() + interval '1 day'");
+
+        var first = auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L));
+        var second = auctionService.placeBid(b, auctionId, new NftBidRequest(2_000L));
+
+        assertThat(first.currentPrice()).isEqualTo(1_500L);
+        assertThat(second.currentPrice()).isEqualTo(2_000L);
+        assertThat(second.bidCount()).isEqualTo(2);
+        assertThat(holdStatus("AUCTION_BID", first.bidId())).isEqualTo("RELEASED");
+        assertThat(holdStatus("AUCTION_BID", second.bidId())).isEqualTo("ACTIVE");
+        assertThat(holdService.availableBalance(a)).isEqualTo(5_000L);
+        assertThat(holdService.availableBalance(b)).isEqualTo(3_000L);
+    }
+
+    @Test
+    void 입찰_규칙_위반은_각각의_코드로_거절되고_홀드가_남지_않는다() {
+        Long sellerId = insertFundedUser("s@test.com", "판매자", 5_000);
+        Long a = insertFundedUser("a@test.com", "A", 5_000);
+        Long poor = insertFundedUser("p@test.com", "빈털터리", 100);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 3_000L,
+                "now() + interval '1 day'");
+
+        assertCode(() -> auctionService.placeBid(sellerId, auctionId, new NftBidRequest(1_500L)),
+                NftErrorCode.SELLER_CANNOT_BID);
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_000L)),
+                NftErrorCode.BID_TOO_LOW);
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(3_000L)),
+                NftErrorCode.BID_NOT_BELOW_BUY_NOW);
+        assertThatThrownBy(() -> auctionService.placeBid(poor, auctionId, new NftBidRequest(1_500L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(WalletErrorCode.INSUFFICIENT_BALANCE);
+
+        auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L));
+        assertCode(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(2_000L)),
+                NftErrorCode.ALREADY_TOP_BIDDER);
+        assertCode(() -> auctionService.placeBid(a, 999_999L, new NftBidRequest(2_000L)),
+                NftErrorCode.AUCTION_NOT_FOUND);
+
+        // 잔액 부족으로 롤백된 입찰은 행도 홀드도 남기지 않는다
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_auction_bids WHERE bidder_id = ?", Long.class, poor)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM cat_money_holds WHERE user_id = ?", Long.class, poor)).isZero();
+    }
+
+    @Test
+    void 마감된_경매에는_입찰할_수_없다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long a = insertFundedUser("a@test.com", "A", 5_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() - interval '1 minute'");
+
+        assertThatThrownBy(() -> auctionService.placeBid(a, auctionId, new NftBidRequest(1_500L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isIn(NftErrorCode.AUCTION_ENDED, NftErrorCode.AUCTION_NOT_ACTIVE);
+    }
+
+    @Test
+    void 동시에_입찰해도_한_건만_최고가가_되고_홀드도_하나만_남는다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, null,
+                "now() + interval '1 day'");
+        List<Long> bidders = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            bidders.add(insertFundedUser("b" + i + "@test.com", "B" + i, 10_000));
+        }
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(bidders.size());
+        List<Future<Boolean>> futures = new ArrayList<>();
+        try {
+            for (Long bidder : bidders) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    try {
+                        // 모두 같은 금액 → 먼저 잡은 한 명만 성공, 나머지는 BID_TOO_LOW
+                        auctionService.placeBid(bidder, auctionId, new NftBidRequest(2_000L));
+                        return true;
+                    } catch (BusinessException e) {
+                        return false;
+                    }
+                }));
+            }
+            start.countDown();
+            long successes = 0;
+            for (Future<Boolean> f : futures) {
+                if (f.get()) {
+                    successes++;
+                }
+            }
+
+            assertThat(successes).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT bid_count FROM nft_auctions WHERE id = ?", Integer.class, auctionId)).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM cat_money_holds WHERE ref_type = 'AUCTION_BID' AND status = 'ACTIVE'",
+                    Long.class)).isEqualTo(1L);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private String holdStatus(String refType, Long refId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT status::text FROM cat_money_holds WHERE ref_type = ?::cat_money_hold_ref_type AND ref_id = ?",
+                String.class, refType, refId);
     }
 
     private void assertCode(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, NftErrorCode expected) {
