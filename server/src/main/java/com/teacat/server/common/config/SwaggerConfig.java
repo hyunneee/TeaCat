@@ -78,34 +78,31 @@ public class SwaggerConfig {
     }
 
     @Bean
-    public GroupedOpenApi stadiumApi() {
-        return GroupedOpenApi.builder()
-                .group("06-stadium")
-                .displayName("공연장")
-                .packagesToScan(BASE_PACKAGE + ".stadium")
-                .build();
-    }
-
-    /*
-     * 도메인이 생기면 아래 모양으로 한 벌씩 추가한다.
-     * 아직 없는 패키지로 그룹을 만들면 문서에 빈 그룹만 남으므로, 패키지를 만든 뒤에 넣는다.
-     *
-     * @Bean
-     * public GroupedOpenApi bookingApi() {
-     *     return GroupedOpenApi.builder()
-     *             .group("04-booking")
-     *             .displayName("예매")
-     *             .packagesToScan(BASE_PACKAGE + ".booking")
-     *             .build();
-     * }
-     */
-
-    @Bean
     public GroupedOpenApi nftApi() {
         return GroupedOpenApi.builder()
                 .group("04-nft")
                 .displayName("NFT 포토카드")
                 .packagesToScan(BASE_PACKAGE + ".nft")
+                .build();
+    }
+
+    // 04 는 nft, 05 는 performance 가 이미 쓰고 있어 06 을 쓴다.
+    // 접두어는 문서 주소용이고 드롭다운 정렬은 displayName 기준이라 번호 자체는 순서에 영향이 없다.
+    @Bean
+    public GroupedOpenApi bookingApi() {
+        return GroupedOpenApi.builder()
+                .group("06-booking")
+                .displayName("예매")
+                .packagesToScan(BASE_PACKAGE + ".booking")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi stadiumApi() {
+        return GroupedOpenApi.builder()
+                .group("07-stadium")
+                .displayName("공연장")
+                .packagesToScan(BASE_PACKAGE + ".stadium")
                 .build();
     }
 }

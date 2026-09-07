@@ -73,3 +73,15 @@ export const logger = {
   warn: (message: string, meta?: unknown) => emit('warn', message, meta),
   error: (message: string, meta?: unknown) => emit('error', message, meta),
 };
+
+/**
+ * 해시·txHash 를 로그용으로 앞부분만 남깁니다.
+ *
+ * 이 값들은 개인키와 모양이 같아서(0x + 64 hex) 위 마스킹이 통째로 [REDACTED] 로
+ * 가립니다. 마스킹이 잘못된 게 아니라 **모양만으로는 구분할 수 없기 때문**입니다.
+ * 줄여서 남기면 대사(reconciliation)에 쓸 만큼은 식별되고, 혹시 비밀값이 흘러와도
+ * 의미 있는 양이 새지 않습니다. 전체 값은 API 응답과 온체인에 있습니다.
+ */
+export function short(hex: string): string {
+  return `${hex.slice(0, 18)}…`;
+}
