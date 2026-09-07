@@ -1,0 +1,16 @@
+# 워킹트리에 build/ 와 .gradle/ 이 있어서, 없으면 수백 MB 가 도커로 전송된다.
+build/
+.gradle/
+.idea/
+*.iml
+bin/
+out/
+
+# 🔴 시크릿은 환경변수로 주입한다
+.env
+.env.*
+!.env.example
+
+HELP.md
+CLAUDE.md
+*.log
