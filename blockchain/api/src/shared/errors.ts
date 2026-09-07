@@ -25,6 +25,21 @@ export const errors = {
 
   notFound: (message: string) => new AppError('NOT_FOUND', message, 404),
 
+  /**
+   * 주소 모양은 맞는데 EIP-55 체크섬이 틀렸습니다.
+   *
+   * 정규식은 통과하지만 ethers 가 거부하는 값이라, 안 걸러내면 500 으로 떨어집니다.
+   * 잘못된 건 클라이언트 입력이므로 400 입니다.
+   */
+  invalidAddress: (field: string, value: string) =>
+    new AppError(
+      'INVALID_ADDRESS',
+      `${field} 주소가 올바르지 않습니다. 대소문자가 섞인 주소는 EIP-55 체크섬이 맞아야 합니다 ` +
+        '(전부 소문자로 보내셔도 됩니다)',
+      400,
+      { [field]: value },
+    ),
+
   /** 체인이 모르는 트랜잭션. 드롭됐거나 애초에 없는 해시입니다. */
   txNotFound: (txHash: string) =>
     new AppError('TX_NOT_FOUND', `체인에서 ${txHash} 를 찾을 수 없습니다`, 404),

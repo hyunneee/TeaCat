@@ -66,6 +66,11 @@ const errorResponse = registry.register(
     .openapi({ description: '체인의 revert 도 500 이 아니라 이 형태로 내려갑니다 (DESIGN.md 7장)' }),
 );
 
+/* 실제로 파생되는 모양의 소문자 주소입니다.
+   예시를 안 주면 Swagger 가 정규식만 보고 주소를 만들어내는데, 그 값은 EIP-55
+   체크섬이 안 맞습니다. 그걸 그대로 눌러서 500 을 받은 적이 있습니다. */
+const ADDRESS_EXAMPLE = '0x5cd64f0ff93576e04ef21e81dfd8c24f54938c0a';
+
 /* ── /health ───────────────────────────────────────────────────── */
 
 const healthResponse = registry.register(
@@ -255,11 +260,16 @@ registry.registerPath({
     '**온체인 잔액을 결제 판정 근거로 쓰지 마세요.** Spring 이 확정하고 체인은 결과를 ' +
     '기록합니다 (DESIGN.md 6장). 화면 표시나 대사(reconciliation)에 씁니다.',
   security: [{ [internalKey.name]: [] }],
-  request: { query: registry.register('CatMoneyBalanceQuery', balanceQuery) },
+  request: {
+    query: registry.register(
+      'CatMoneyBalanceQuery',
+      balanceQuery.openapi({ example: { address: ADDRESS_EXAMPLE } }),
+    ),
+  },
   responses: {
     200: { description: '잔액', content: { 'application/json': { schema: balanceResponse } } },
     400: {
-      description: '`address` 형식 오류',
+      description: '`address` 형식 오류 또는 EIP-55 체크섬 불일치 (`INVALID_ADDRESS`)',
       content: { 'application/json': { schema: errorResponse } },
     },
     503: {
@@ -299,7 +309,21 @@ registry.registerPath({
   request: {
     body: {
       required: true,
-      content: { 'application/json': { schema: registry.register('CatMoneyMintRequest', mintBody) } },
+      content: {
+        'application/json': {
+          schema: registry.register(
+            'CatMoneyMintRequest',
+            mintBody.openapi({
+              example: {
+                operationKey: 'catmoney_deposit_20260904_00001',
+                to: ADDRESS_EXAMPLE,
+                amount: '500',
+                reason: 'DEPOSIT',
+              },
+            }),
+          ),
+        },
+      },
     },
   },
   responses: {
@@ -355,7 +379,9 @@ registry.registerPath({
       content: { 'application/json': { schema: writeResponse } },
     },
     400: {
-      description: '본문 형식 오류, 또는 `derivationIndex` 로 만든 주소가 `from` 과 다름',
+      description:
+        '본문 형식 오류, `to` 의 EIP-55 체크섬 불일치(`INVALID_ADDRESS`), ' +
+        '또는 `derivationIndex` 로 만든 주소가 `from` 과 다름',
       content: { 'application/json': { schema: errorResponse } },
     },
     422: {
@@ -488,7 +514,14 @@ registry.registerPath({
     body: {
       required: true,
       content: {
-        'application/json': { schema: registry.register('TicketIssueRequest', issueBody) },
+        'application/json': {
+          schema: registry.register(
+            'TicketIssueRequest',
+            issueBody.openapi({
+              example: { ticketKey: '42', to: ADDRESS_EXAMPLE },
+            }),
+          ),
+        },
       },
     },
   },
@@ -503,7 +536,12 @@ registry.registerPath({
         '**취소(소각)된 예매도 여기 해당합니다** — 그 키는 이미 소비됐습니다',
       content: { 'application/json': { schema: issueResponse } },
     },
-    400: { description: '본문 형식 오류', content: { 'application/json': { schema: errorResponse } } },
+    400: {
+      description:
+        '본문 형식 오류, 또는 `to` 의 EIP-55 체크섬이 틀립니다 (`INVALID_ADDRESS`). ' +
+        '대소문자를 섞어 보내려면 체크섬이 맞아야 하고, **전부 소문자로 보내면 항상 안전합니다**',
+      content: { 'application/json': { schema: errorResponse } },
+    },
     503: {
       description:
         'TicketSBT 미배포(`CONTRACT_UNAVAILABLE`), 또는 운영자가 발행을 정지시켰습니다 ' +
@@ -526,9 +564,23 @@ registry.registerPath({
     '발행되지 않았어도 `200` 에 `{ "issued": false }` 로 내려갑니다. 404 가 아닙니다 — ' +
     '404 로 만들면 "아직 안 됨" 과 "경로가 틀림" 을 구분할 수 없습니다.\n\n' +
     '취소(소각)된 티켓도 `issued: true` 이고 `burned: true` 입니다.\n\n' +
+    '### ⚠️ `tokenId` 를 넣지 마세요\n\n' +
+    '여기는 발행할 때 보낸 **`ticketKey` 원본 문자열**을 받습니다 (예: `42`). ' +
+    '`tokenId` 는 그 키를 해싱한 **결과**라, 그 숫자를 다시 넣으면 서버가 그걸 또 해싱해서 ' +
+    '엉뚱한 자리를 찾고 `issued: false` 를 돌려줍니다. 오류가 아니라 정상 응답이라 ' +
+    '더 헷갈립니다 — 실제로 한 번 밟았습니다.\n\n' +
+    '| 가진 값 | 쓸 곳 |\n' +
+    '|---|---|\n' +
+    '| `ticketKey` (`42`) | `GET /internal/tickets/by-key?key=42` |\n' +
+    '| `tokenId` (77자리) | `GET /internal/tickets/{tokenId}` |\n\n' +
     '`ticketKey` 는 자유 문자열이므로 **URL 인코딩해서** 보내세요.',
   security: [{ [internalKey.name]: [] }],
-  request: { query: registry.register('TicketKeyQuery', ticketKeyQuery) },
+  request: {
+    query: registry.register(
+      'TicketKeyQuery',
+      ticketKeyQuery.openapi({ example: { key: '42' } }),
+    ),
+  },
   responses: {
     200: {
       description: '발행 여부. 발행됐으면 tokenId·owner·burned 가 함께 옵니다',
@@ -564,7 +616,12 @@ registry.registerPath({
     '**화면용 조회로 쓰지 마세요.** "내 티켓 목록" 은 Spring 이 자기 DB 에서 내려줍니다. ' +
     '체인은 그게 진짜임을 증명하는 레이어지 조회 소스가 아닙니다 (DESIGN.md 4-5).',
   security: [{ [internalKey.name]: [] }],
-  request: { params: registry.register('TicketIdParam', ticketParams) },
+  request: {
+    params: registry.register(
+      'TicketIdParam',
+      ticketParams.openapi({ example: { tokenId: TOKEN_ID_EXAMPLE } }),
+    ),
+  },
   responses: {
     200: {
       description: '티켓 상태 (소각된 티켓 포함)',
@@ -608,7 +665,12 @@ registry.registerPath({
     '살아 있는 상태가 생깁니다.\n\n' +
     TICKET_PENDING,
   security: [{ [internalKey.name]: [] }],
-  request: { params: registry.register('TicketBurnParam', ticketParams) },
+  request: {
+    params: registry.register(
+      'TicketBurnParam',
+      ticketParams.openapi({ example: { tokenId: TOKEN_ID_EXAMPLE } }),
+    ),
+  },
   responses: {
     202: {
       description: '전송했습니다',

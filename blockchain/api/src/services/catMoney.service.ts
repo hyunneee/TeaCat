@@ -8,6 +8,7 @@ import {
   operationKeyOf,
 } from '../chain/contracts/catMoney';
 import { deriveUserAddress } from '../chain/keys/hdWallet';
+import { normalizeAddress } from '../chain/address';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
 
@@ -55,9 +56,13 @@ function requireDeployed(): void {
 
 export async function getBalance(address: string): Promise<BalanceResult> {
   requireDeployed();
+
+  const account = normalizeAddress(address);
+  if (account === null) throw errors.invalidAddress('address', address);
+
   return {
-    address: address.toLowerCase(),
-    balance: (await balanceOf(address)).toString(),
+    address: account,
+    balance: (await balanceOf(account)).toString(),
     decimals: DECIMALS,
     symbol: SYMBOL,
   };
@@ -77,16 +82,20 @@ export async function mintCatMoney(
 ): Promise<WriteResult> {
   requireDeployed();
 
+  // 티켓 발행과 같은 이유입니다 — 체크섬이 틀린 주소는 ethers 가 던져 500 이 됩니다.
+  const target = normalizeAddress(to);
+  if (target === null) throw errors.invalidAddress('to', to);
+
   const key = operationKeyOf(operationKey);
   if (await isMintExecuted(key)) {
     logger.info(
-      `캣머니 발행 건너뜀 (이미 처리됨) ${reason} ${amount} → ${to} key=${short(key)}`,
+      `캣머니 발행 건너뜀 (이미 처리됨) ${reason} ${amount} → ${target} key=${short(key)}`,
     );
     return { status: 'ALREADY_DONE', txHash: null };
   }
 
-  const txHash = await mint(to, BigInt(amount), key);
-  logger.info(`캣머니 발행 ${reason} ${amount} → ${to} key=${short(key)} tx=${short(txHash)}`);
+  const txHash = await mint(target, BigInt(amount), key);
+  logger.info(`캣머니 발행 ${reason} ${amount} → ${target} key=${short(key)} tx=${short(txHash)}`);
   return { status: 'PENDING', txHash };
 }
 
