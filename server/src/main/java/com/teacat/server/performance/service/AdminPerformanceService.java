@@ -1,5 +1,6 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.common.config.PerformanceImageProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
@@ -8,6 +9,7 @@ import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertStatusResponse;
 import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.PresignedUploadResponse;
@@ -15,6 +17,7 @@ import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
+import com.teacat.server.performance.entity.PerformanceStatus;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
@@ -27,17 +30,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 공연 관리 (API-261 ~ 263, 265, 268, 270, 271).
+ * 공연 관리 (API-261 ~ 265, 268, 270, 271).
  *
  * 이미지는 MinIO 에 올리고 DB 에는 key 만 남긴다.
  */
@@ -56,6 +61,7 @@ public class AdminPerformanceService {
     private final AreaRepository areaRepository;
     private final StadiumRepository stadiumRepository;
     private final FileStorageService fileStorageService;
+    private final PerformanceImageProperties imageProperties;
 
     /** 공연 등록 (API-261) */
     @Transactional
@@ -66,8 +72,9 @@ public class AdminPerformanceService {
             throw new BusinessException(PerformanceErrorCode.INVALID_VISIBLE_FROM);
         }
 
-        String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY);
-        String detailImageKey = uploadIfPresent(request.detailImage(), DETAIL_IMAGE_DIRECTORY);
+        String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY, imageProperties.posterMaxSize());
+        String detailImageKey = uploadIfPresent(
+                request.detailImage(), DETAIL_IMAGE_DIRECTORY, imageProperties.detailMaxSize());
 
         PerformanceGeneral performance = performanceGeneralRepository.save(
                 PerformanceGeneral.create(
@@ -119,17 +126,17 @@ public class AdminPerformanceService {
      * 업로드 URL 발급(API-270)으로 올린 이미지로 교체한다.
      *
      * key 는 클라이언트가 보내는 값이라 그대로 믿지 않는다.
-     * 정해진 경로로 시작하는지, 실제로 파일이 올라와 있는지 확인한 뒤 바꾼다.
+     * 정해진 경로로 시작하는지, 실제로 파일이 올라와 있는지, 용량 한도 안인지 확인한 뒤 바꾼다.
      */
     private void replaceImagesIfPresent(PerformanceGeneral performance, String posterKey, String detailKey) {
         String oldPoster = performance.getPosterImageKey();
         String oldDetail = performance.getDetailImageKey();
 
         if (posterKey != null) {
-            validateUploadedKey(posterKey, POSTER_DIRECTORY);
+            validateUploadedKey(posterKey, POSTER_DIRECTORY, imageProperties.posterMaxSize());
         }
         if (detailKey != null) {
-            validateUploadedKey(detailKey, DETAIL_IMAGE_DIRECTORY);
+            validateUploadedKey(detailKey, DETAIL_IMAGE_DIRECTORY, imageProperties.detailMaxSize());
         }
 
         performance.replaceImages(posterKey, detailKey);
@@ -143,12 +150,26 @@ public class AdminPerformanceService {
         }
     }
 
-    private void validateUploadedKey(String key, String expectedDirectory) {
+    /**
+     * 업로드 URL 로 올린 파일은 서버를 거치지 않아 올리는 순간에는 용량을 볼 수 없다.
+     * 그래서 key 를 넘겨받는 지금 실제 크기를 확인한다.
+     *
+     * 한도를 넘으면 그 파일을 지우고 거절한다. 남겨두면 아무 공연에도 연결되지 않은
+     * 큰 파일이 스토리지를 차지한 채 영원히 남기 때문이다.
+     */
+    private void validateUploadedKey(String key, String expectedDirectory, DataSize maxSize) {
         if (!key.startsWith(expectedDirectory + "/")) {
             throw new BusinessException(PerformanceErrorCode.IMAGE_NOT_UPLOADED);
         }
-        if (!fileStorageService.exists(key)) {
+
+        OptionalLong size = fileStorageService.objectSize(key);
+
+        if (size.isEmpty()) {
             throw new BusinessException(PerformanceErrorCode.IMAGE_NOT_UPLOADED);
+        }
+        if (size.getAsLong() > maxSize.toBytes()) {
+            deleteQuietly(key);
+            throw new BusinessException(PerformanceErrorCode.IMAGE_TOO_LARGE);
         }
     }
 
@@ -206,6 +227,30 @@ public class AdminPerformanceService {
                 PerformanceDetail.create(performance, performanceNum, request.performanceDate()));
 
         return ScheduleCreateResponse.of(detail.getId(), detail.getPerformanceNum());
+    }
+
+    /**
+     * 공연 상태 전환 (API-264).
+     *
+     * 전이 규칙은 {@link PerformanceStatus#canTransitionTo} 에 있다.
+     * 같은 상태로 바꾸는 요청도 거절한다 — 관리자가 화면을 새로 고치지 않고 두 번 눌렀을 가능성이 높고,
+     * 조용히 200 을 주면 그 사실을 알 수 없다.
+     *
+     * 취소(CANCELLED)는 공연 상태만 바꾼다. 이미 발권된 티켓의 환불·무효화는
+     * 예매·티켓 도메인의 일이라 여기서 건드리지 않는다.
+     */
+    @Transactional
+    public ConcertStatusResponse changeStatus(Long concertId, PerformanceStatus target) {
+        PerformanceGeneral performance = getPerformance(concertId);
+        PerformanceStatus current = performance.getStatus();
+
+        if (!current.canTransitionTo(target)) {
+            throw new BusinessException(PerformanceErrorCode.INVALID_STATUS_TRANSITION);
+        }
+
+        performance.changeStatus(target);
+
+        return ConcertStatusResponse.of(performance, current);
     }
 
     /**
@@ -303,16 +348,17 @@ public class AdminPerformanceService {
      * 큰 이미지가 서버 메모리와 대역폭을 잡아먹지 않게 하기 위함이다.
      */
     public PresignedUploadResponse issueUploadUrl(PresignedUploadRequest request) {
-        String directory = request.imageType() == PresignedUploadRequest.ImageType.POSTER
-                ? POSTER_DIRECTORY
-                : DETAIL_IMAGE_DIRECTORY;
+        boolean poster = request.imageType() == PresignedUploadRequest.ImageType.POSTER;
+        String directory = poster ? POSTER_DIRECTORY : DETAIL_IMAGE_DIRECTORY;
+        DataSize maxSize = poster ? imageProperties.posterMaxSize() : imageProperties.detailMaxSize();
 
-        return PresignedUploadResponse.from(
-                fileStorageService.presignedUploadUrl(directory, request.contentType()));
+        // 한도를 함께 내려줘야 클라이언트가 올리기 전에 걸러 줄 수 있다. 올린 뒤 거절되면 대역폭만 낭비다
+        return PresignedUploadResponse.of(
+                fileStorageService.presignedUploadUrl(directory, request.contentType()), maxSize);
     }
 
-    private String uploadIfPresent(MultipartFile file, String directory) {
-        return (file == null || file.isEmpty()) ? null : fileStorageService.uploadImage(file, directory);
+    private String uploadIfPresent(MultipartFile file, String directory, DataSize maxSize) {
+        return (file == null || file.isEmpty()) ? null : fileStorageService.uploadImage(file, directory, maxSize);
     }
 
     /**

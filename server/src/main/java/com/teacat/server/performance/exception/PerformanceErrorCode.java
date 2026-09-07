@@ -36,7 +36,12 @@ public enum PerformanceErrorCode implements ErrorCode {
     IMAGE_NOT_UPLOADED(HttpStatus.BAD_REQUEST, "PERFORMANCE_016",
             "업로드되지 않은 이미지입니다. 발급받은 URL 로 파일을 먼저 올려 주세요."),
     PERFORMANCE_HAS_TICKETS(HttpStatus.CONFLICT, "PERFORMANCE_017",
-            "예매 이력이 있는 공연은 삭제할 수 없습니다. 비공개로 전환해 주세요.");
+            "예매 이력이 있는 공연은 삭제할 수 없습니다. 비공개로 전환해 주세요."),
+    INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "PERFORMANCE_018",
+            "허용되지 않는 상태 전환입니다. UPCOMING → ONGOING → ENDED 순서로만 바꿀 수 있고, "
+                    + "종료·취소된 공연은 되돌릴 수 없습니다."),
+    IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "PERFORMANCE_019",
+            "업로드한 이미지가 용량 한도를 넘어 삭제했습니다. 업로드 URL 발급 응답의 maxFileSizeBytes 이하로 줄여서 다시 올려 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

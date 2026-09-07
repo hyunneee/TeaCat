@@ -35,10 +35,10 @@ public record ConcertCreateRequest(
         @NotNull(message = "노출 시작일을 입력해 주세요.")
         LocalDate visibleFrom,
 
-        @Schema(description = "포스터 이미지 (jpg/png/webp/gif, 10MB 이하)")
+        @Schema(description = "포스터 이미지 (jpg/png/webp/gif, 5MB 이하)")
         MultipartFile poster,
 
-        @Schema(description = "상세 페이지 이미지 (jpg/png/webp/gif, 10MB 이하)")
+        @Schema(description = "상세 페이지 이미지 (jpg/png/webp/gif, 20MB 이하)")
         MultipartFile detailImage
 ) {
 }

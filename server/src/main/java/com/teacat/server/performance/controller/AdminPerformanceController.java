@@ -2,11 +2,13 @@ package com.teacat.server.performance.controller;
 
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
+import com.teacat.server.performance.dto.request.ConcertStatusRequest;
 import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
 import com.teacat.server.performance.dto.request.ConcertVisibilityRequest;
 import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertStatusResponse;
 import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
@@ -80,6 +82,17 @@ public class AdminPerformanceController {
             @Valid @RequestBody PerformanceAreaSaveRequest request) {
         return ResponseEntity.ok(BaseResponse.success("공연 구역 설정이 저장되었습니다.",
                 adminPerformanceService.saveAreas(concertId, request)));
+    }
+
+    @Operation(summary = "공연 상태 전환",
+            description = "공연 진행 상태를 바꿉니다. UPCOMING → ONGOING → ENDED 순서로만 나아갈 수 있고, "
+                    + "UPCOMING·ONGOING 은 CANCELLED 로 바꿀 수 있습니다. 종료·취소된 공연은 되돌릴 수 없습니다.")
+    @PatchMapping("/{concertId}/status")
+    public ResponseEntity<BaseResponse<ConcertStatusResponse>> changeStatus(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
+            @Valid @RequestBody ConcertStatusRequest request) {
+        return ResponseEntity.ok(BaseResponse.success("공연 상태가 변경되었습니다.",
+                adminPerformanceService.changeStatus(concertId, request.status())));
     }
 
     @Operation(summary = "공연 노출 전환",
