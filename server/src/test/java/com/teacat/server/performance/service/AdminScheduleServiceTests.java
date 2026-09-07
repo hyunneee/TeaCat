@@ -6,7 +6,7 @@ import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
-import com.teacat.server.performance.repository.PerformanceSeatRepository;
+import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.stadium.repository.SeatRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

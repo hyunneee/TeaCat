@@ -5,11 +5,11 @@ import com.teacat.server.performance.dto.request.ScheduleUpdateRequest;
 import com.teacat.server.performance.dto.response.SeatGenerateResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
-import com.teacat.server.performance.entity.PerformanceSeat;
+import com.teacat.server.booking.entity.PerformanceSeat;
+import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
-import com.teacat.server.performance.repository.PerformanceSeatRepository;
 import com.teacat.server.stadium.entity.Area;
 import com.teacat.server.stadium.entity.Seat;
 import com.teacat.server.stadium.repository.SeatRepository;
@@ -114,8 +114,9 @@ public class AdminScheduleService {
             throw new BusinessException(PerformanceErrorCode.NO_SEATS_TO_GENERATE);
         }
 
+        // 좌석 행 엔티티는 예매 도메인(booking)의 것을 쓴다. 한 테이블에 엔티티는 하나다
         List<PerformanceSeat> performanceSeats = seats.stream()
-                .map(seat -> PerformanceSeat.create(detail, seat))
+                .map(seat -> PerformanceSeat.available(detail.getId(), seat.getId()))
                 .toList();
 
         performanceSeatRepository.saveAll(performanceSeats);
