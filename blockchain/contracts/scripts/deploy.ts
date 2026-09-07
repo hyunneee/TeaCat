@@ -42,61 +42,118 @@ async function main(): Promise<void> {
     }
   }
 
-  /* 공용 체인에 이미 배포돼 있으면 **멈춥니다.**
+  const force = process.env.FORCE_REDEPLOY === 'true';
+
+  /* 공용 체인에서는 **이미 배포된 것을 건드리지 않습니다.**
+
      다시 배포하면 새 주소가 생기고, 먼저 있던 컨트랙트에 남은 잔액과 티켓은
      아무도 안 보는 상태가 됩니다. 되돌릴 방법이 없습니다.
-     경고만 찍고 진행하면 실수 한 번으로 그 일이 벌어집니다. */
-  if (!isLocal) {
-    const previous = readDeployment(network.name);
-    const previousCount = Object.keys(previous?.contracts ?? {}).length;
 
-    if (previous && previousCount > 0 && process.env.FORCE_REDEPLOY !== 'true') {
-      throw new Error(
-        `${network.name}.json 에 이미 컨트랙트 ${previousCount}개가 있습니다.\n` +
-          `  ${previous.deployedAt} · ${previous.deployer} 가 배포\n` +
-          `  ${Object.entries(previous.contracts)
-            .map(([name, addr]) => `${name} ${addr}`)
-            .join('\n  ')}\n\n` +
-          `다시 배포하면 주소가 새로 생기고, 옛 컨트랙트에 남은 잔액은 되찾을 수 없습니다.\n` +
-          `그래도 배포하려면:  FORCE_REDEPLOY=true npm run deploy:ssafy`,
-      );
-    }
+     그래서 있는 것은 주소를 그대로 이어받고 **없는 것만** 배포합니다.
+     컨트랙트를 새로 추가할 때 기존 것까지 갈아엎지 않아도 됩니다 —
+     예전처럼 전부 아니면 전무로 막아두면, 티켓 하나 올리려고 캣머니를
+     재배포해서 유저 잔액을 통째로 버리게 됩니다.
+
+     로컬 체인은 재시작하면 상태가 사라지므로 주소 파일도 무효입니다. 항상 새로 배포합니다. */
+  const previous = isLocal ? null : readDeployment(network.name);
+
+  if (previous && force) {
+    console.log('');
+    console.log('경고: FORCE_REDEPLOY=true — 이미 배포된 컨트랙트까지 전부 새로 배포합니다.');
+    console.log('      옛 컨트랙트에 남은 캣머니 잔액과 발행된 티켓은 되찾을 수 없습니다.');
+    Object.entries(previous.contracts).forEach(([name, address]) => {
+      console.log(`      버려짐  ${name} ${address}`);
+    });
+    console.log('');
   }
 
-  const contracts: Record<string, string> = {};
+  if (previous && previous.deployer !== deployer.address.toLowerCase()) {
+    // 공용 체인에서는 배포한 계정이 그 컨트랙트의 admin 입니다. (DESIGN.md 8장)
+    console.log('');
+    console.log(`주의: 기존 컨트랙트는 ${previous.deployer} 가 배포했습니다.`);
+    console.log(`      지금 계정(${deployer.address})은 그것들의 admin 이 아닙니다.`);
+    console.log('');
+  }
+
+  const contracts: Record<string, string> = force ? {} : { ...(previous?.contracts ?? {}) };
+  const deployedNow: string[] = [];
+
+  /* 아래 함수들은 호이스팅돼서 tsc 가 위쪽의 `if (!deployer)` 검사를 못 믿습니다.
+     여기서 한 번 꺼내둡니다. */
+  const deployerAddress = deployer.address;
+
+  /**
+   * 역할 셋을 정합니다. 한 키가 전부 쥐고 있으면 그 키가 털렸을 때
+   * 무제한 발행 + 권한 조작 + 정지 해제가 한꺼번에 가능합니다. (DESIGN.md 6장)
+   *
+   *   admin    권한을 주고 뺏는 키. **API 프로세스에 올리지 마세요.**
+   *   minter   발행 키. api 가 이 키로 서명하므로 오퍼레이터와 같아야 합니다.
+   *   operator 정지·해제와 입장 처리. 사고 대응용이라 admin 과 같이 두는 편이 낫습니다.
+   *
+   * 컨트랙트별 변수(`TICKET_ADMIN_ADDRESS`)가 있으면 그걸 쓰고, 없으면 공용
+   * 변수(`CONTRACT_ADMIN_ADDRESS`)를, 그것도 없으면 배포 계정을 씁니다.
+   */
+  function rolesFor(prefix: string): { admin: string; minter: string; operator: string } {
+    const admin =
+      process.env[`${prefix}_ADMIN_ADDRESS`] ??
+      process.env.CONTRACT_ADMIN_ADDRESS ??
+      deployerAddress;
+    const operator =
+      process.env[`${prefix}_OPERATOR_ADDRESS`] ?? process.env.CONTRACT_OPERATOR_ADDRESS ?? admin;
+    return { admin, minter: deployerAddress, operator };
+  }
+
+  /** 아직 없는 것만 배포합니다. 이미 있으면 주소를 그대로 씁니다. */
+  async function deployOnce(
+    name: string,
+    roles: { admin: string; minter: string; operator: string },
+  ): Promise<void> {
+    const existing = contracts[name];
+    if (existing) {
+      console.log(`${name} : ${existing}  (이미 배포됨 — 건너뜁니다)`);
+      return;
+    }
+
+    if (roles.admin.toLowerCase() === roles.minter.toLowerCase()) {
+      console.log('');
+      console.log(`주의: ${name} 의 admin 과 minter 가 같은 키입니다.`);
+      console.log('      이 키가 털리면 무제한 발행·권한 조작·정지 해제가 전부 가능합니다.');
+      console.log('      운영에서는 CONTRACT_ADMIN_ADDRESS 로 분리하세요.');
+      console.log('');
+    }
+
+    const deployed = await ethers.deployContract(name, [roles.admin, roles.minter, roles.operator]);
+    await deployed.waitForDeployment();
+
+    contracts[name] = await deployed.getAddress();
+    deployedNow.push(name);
+
+    console.log(`${name} : ${contracts[name]}`);
+    console.log(`  admin    ${roles.admin}`);
+    console.log(`  minter   ${roles.minter}`);
+    console.log(`  operator ${roles.operator}`);
+  }
+
+  console.log('');
+
+  // ── TicketSBT (양도불가 티켓) ──────────────────────────────
+  // "암표를 막는다" 가 코드로 증명되는 자리입니다. (DESIGN.md 6장 ①)
+  // operator 는 정지 스위치만이 아니라 **입장·취소 처리**도 합니다 —
+  // API 가 이 키로 서명하므로 오퍼레이터와 같아야 합니다.
+  await deployOnce('TicketSBT', rolesFor('TICKET'));
 
   // ── CatMoney (캣머니) ──────────────────────────────────────
   // 프론트의 PayMethod='POINT' 가 이 토큰입니다. (DESIGN.md 6장 ②)
-  //
-  // 역할을 셋으로 나눠 넘깁니다. 한 키가 전부 쥐고 있으면 그 키가 털렸을 때
-  // 무제한 발행 + 권한 조작 + 정지 해제가 한꺼번에 가능합니다.
-  //
-  //   admin    권한을 주고 뺏는 키. **API 프로세스에 올리지 마세요.**
-  //   minter   발행 키. api 가 이 키로 서명하므로 오퍼레이터와 같아야 합니다.
-  //   operator 정지·해제. 사고 대응용이라 admin 과 같이 두는 편이 낫습니다.
-  const admin = process.env.CATMONEY_ADMIN_ADDRESS ?? deployer.address;
-  const minter = deployer.address;
-  const operator = process.env.CATMONEY_OPERATOR_ADDRESS ?? admin;
-
-  if (admin.toLowerCase() === minter.toLowerCase()) {
-    console.log('');
-    console.log('주의: admin 과 minter 가 같은 키입니다.');
-    console.log('      이 키가 털리면 무제한 발행·권한 조작·정지 해제가 전부 가능합니다.');
-    console.log('      운영에서는 CATMONEY_ADMIN_ADDRESS 로 분리하세요.');
-    console.log('');
-  }
-
-  const catMoney = await ethers.deployContract('CatMoney', [admin, minter, operator]);
-  await catMoney.waitForDeployment();
-  contracts.CatMoney = await catMoney.getAddress();
-  console.log(`CatMoney  : ${contracts.CatMoney}`);
-  console.log(`  admin    ${admin}`);
-  console.log(`  minter   ${minter}`);
-  console.log(`  operator ${operator}`);
+  await deployOnce('CatMoney', rolesFor('CATMONEY'));
 
   // ── 여기에 추가 ────────────────────────────────────────────
-  // 컨트랙트가 늘어나면 위와 같은 모양으로 한 덩어리씩 붙입니다.
+  // 컨트랙트가 늘어나면 위와 같이 deployOnce 를 한 줄씩 붙입니다.
   // ───────────────────────────────────────────────────────────
+
+  if (deployedNow.length === 0) {
+    console.log('\n새로 배포한 컨트랙트가 없습니다. 주소 파일을 건드리지 않습니다.');
+    return;
+  }
 
   const deployment: Deployment = {
     chainId,
@@ -108,7 +165,7 @@ async function main(): Promise<void> {
 
   const saved = saveDeployment(deployment);
   console.log(`\n배포 주소 저장 → ${saved}`);
-  console.log(`컨트랙트 ${Object.keys(contracts).length}개`);
+  console.log(`이번에 배포: ${deployedNow.join(', ')} · 전체 ${Object.keys(contracts).length}개`);
 
   if (!isLocal) {
     console.log('공용 체인입니다. deployments/ssafy.json 을 커밋하세요.');
