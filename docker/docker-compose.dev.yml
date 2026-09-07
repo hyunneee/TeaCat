@@ -1,0 +1,7 @@
+# 개발 환경 서비스. 아직 비어 있다.
+# nginx/certbot 은 운영·개발이 함께 쓰므로 docker-compose.prod.yml 쪽에만 있다.
+services: {}
+
+networks:
+  teacat-net:
+    external: true
