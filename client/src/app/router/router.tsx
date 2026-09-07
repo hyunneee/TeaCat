@@ -23,6 +23,8 @@ const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
 const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
+const ConcertCreatePage = page(() => import('@/pages/ConcertCreatePage'), 'ConcertCreatePage');
+const ConcertEditPage = page(() => import('@/pages/ConcertEditPage'), 'ConcertEditPage');
 
 const BookingVerifyPage = page(
   () => import('@/pages/BookingVerifyPage'),
@@ -130,6 +132,14 @@ const routes: RouteObject[] = [
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
+      /* 공연 등록·수정 — 관리자만. 서버 /admin/** 도 ADMIN 만 받습니다 */
+      {
+        element: <RequireRole roles={['ADMIN']} />,
+        children: [
+          { path: ROUTES.CONCERT_CREATE, element: withBoundary(<ConcertCreatePage />) },
+          { path: ROUTES.CONCERT_EDIT(':concertId'), element: withBoundary(<ConcertEditPage />) },
+        ],
+      },
       { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
       { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
 

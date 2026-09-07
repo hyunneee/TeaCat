@@ -27,8 +27,8 @@ spring:
 
   servlet:
     multipart:
-      # 업로드 파일 크기 제한. minio.max-file-size 보다 넉넉해야 우리 에러 메시지가 먼저 나온다
-      max-file-size: 20MB
+      # 업로드 파일 크기 제한. performance.image.* 의 가장 큰 한도보다 넉넉해야 우리 에러 메시지가 먼저 나온다
+      max-file-size: 25MB
       max-request-size: 100MB
 
   data:
@@ -72,7 +72,13 @@ minio:
   bucket: ${MINIO_BUCKET:teacat}
   # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
   presigned-url-validity: 10m
-  max-file-size: 10MB
+
+performance:
+  image:
+    # 공연 이미지 용량 한도. 직접 업로드(API-261)와 업로드 URL 방식(API-262) 모두에 걸린다.
+    #   포스터는 목록에서 여러 장이 한 화면에 뜨므로 가볍게, 상세 이미지는 세로로 긴 한 장이라 넉넉하게.
+    poster-max-size: 5MB
+    detail-max-size: 20MB
 
 cors:
   # allowCredentials 를 켜야 해서 와일드카드를 못 쓴다. 허용할 프론트 주소를 명시한다

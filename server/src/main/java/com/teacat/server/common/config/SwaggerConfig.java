@@ -96,4 +96,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".booking")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi stadiumApi() {
+        return GroupedOpenApi.builder()
+                .group("07-stadium")
+                .displayName("공연장")
+                .packagesToScan(BASE_PACKAGE + ".stadium")
+                .build();
+    }
 }

@@ -103,10 +103,10 @@ export function SearchPage() {
               </SectionTitle>
               <ul className="space-y-2">
                 {concertHits.slice(0, LIMIT).map((concert) => (
-                  <li key={concert.id}>
+                  <li key={concert.concertId}>
                     <ConcertCard
                       concert={concert}
-                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(concert.id))}
+                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
                     />
                   </li>
                 ))}

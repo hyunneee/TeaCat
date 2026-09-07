@@ -2,6 +2,7 @@ import { CalendarDays, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Badge, LiveDot, PosterImage } from '@/shared/components/ui';
 import { formatDateTime } from '@/shared/lib';
+import { isTicketingOpen, posterSeedOf } from '../model/concert.model';
 import type { ConcertSummary } from '../model/concert.types';
 
 interface Props {
@@ -23,11 +24,14 @@ interface Props {
  * 무관하게 **모든 카드에서 같은 자리**에 옵니다 — 목록을 훑을 때 눈이 한 줄로 내려갑니다.
  * 글 안에 두면 카드마다 위치가 미세하게 달라져 스캔이 끊깁니다.
  *
- * 제목·아티스트 줄에는 칩 폭만큼 오른쪽 여백을 둡니다. 안 그러면 긴 제목이
+ * 제목 줄에는 칩 폭만큼 오른쪽 여백을 둡니다. 안 그러면 긴 제목이
  * 칩 아래로 파고들어 글자가 겹쳐 보입니다.
+ *
+ * 둘째 줄은 공연장, 셋째 줄은 티켓 오픈 시각입니다. 목록 응답에 공연 일시는 없고
+ * (회차마다 다르니 상세에서 봅니다), 목록에서 가장 궁금한 건 "언제 열리나" 입니다.
  */
 export function ConcertCard({ concert, onClick }: Props) {
-  const open = !concert.upcoming;
+  const open = isTicketingOpen(concert);
 
   return (
     <motion.button
@@ -49,7 +53,7 @@ export function ConcertCard({ concert, onClick }: Props) {
 
       <PosterImage
         src={concert.posterUrl}
-        seed={concert.posterSeed}
+        seed={posterSeedOf(concert)}
         alt={`${concert.title} 포스터`}
         className="w-[5rem] shrink-0"
       />
@@ -57,19 +61,19 @@ export function ConcertCard({ concert, onClick }: Props) {
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-0.5">
         {/* pr-20 = 우상단 칩이 앉는 자리. 제목이 칩 밑으로 들어가지 않게 비워 둡니다. */}
         <h3 className="min-w-0 truncate pr-20 text-[0.9375rem] font-bold">{concert.title}</h3>
-        <p className="text-ink-muted truncate pr-20 text-sm">{concert.artist}</p>
 
         <div className="text-subtle space-y-0.5 text-[0.8125rem]">
           <p className="flex items-center gap-1 truncate">
             <MapPin size={13} className="shrink-0" />
-            <span className="truncate">{concert.venueName}</span>
+            <span className="truncate">{concert.stadiumName}</span>
           </p>
-          {concert.firstShowAt && (
-            <p className="flex items-center gap-1 truncate">
-              <CalendarDays size={13} className="shrink-0" />
-              <span className="truncate">{formatDateTime(concert.firstShowAt)}</span>
-            </p>
-          )}
+          <p className="flex items-center gap-1 truncate">
+            <CalendarDays size={13} className="shrink-0" />
+            <span className="truncate">
+              {open ? '예매 오픈 ' : '오픈 예정 '}
+              {formatDateTime(concert.ticketingStartAt)}
+            </span>
+          </p>
         </div>
       </div>
     </motion.button>

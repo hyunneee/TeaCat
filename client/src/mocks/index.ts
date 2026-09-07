@@ -19,8 +19,8 @@ import { createMockAdapter } from './router';
 export async function setupMocks() {
   // 핸들러 파일들은 import 되는 순간 스스로 라우트를 등록합니다.
   await Promise.all([
-    import('./handlers/auth'), // 캡차만 남아 있습니다 (로그인·내 정보·얼굴·잔액은 실서버)
-    import('./handlers/concert'),
+    import('./handlers/auth'), // 캡차만 남아 있습니다 (로그인·내 정보·얼굴·잔액·공연은 실서버)
+    // 공연 목록·상세·회차(/concerts, /schedules)는 실서버로 나갑니다
     import('./handlers/booking'),
     import('./handlers/ticket'),
     import('./handlers/resale'),

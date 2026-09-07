@@ -17,7 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
@@ -30,13 +29,16 @@ import java.time.LocalDateTime;
  * 포스터·상세 이미지는 파일 자체가 아니라 MinIO 의 key 만 저장한다.
  * 조회 URL 은 만료되므로 응답을 만들 때마다 새로 발급한다.
  *
- * 비공개(API-263)는 deleted_at 으로 처리하며, {@link SQLRestriction} 덕분에 조회에서 자동 제외된다.
+ * 비공개는 hidden_at 으로 표시한다 (API-271). 삭제(API-263)는 행을 실제로 지우는 하드 삭제라
+ * 비공개와는 다른 동작이고, 그래서 컬럼도 따로 둔다. 소프트 삭제가 필요해지면 deleted_at 을 새로 추가한다.
+ *
+ * 조회에서 자동으로 빼주지 않는다 — 관리자는 비공개 공연도 봐야 하기 때문이다.
+ * 클라이언트용 조회 쿼리가 hidden_at is null 조건을 직접 건다.
  */
 @Entity
 @Table(name = "performance_general")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLRestriction("deleted_at is null")
 public class PerformanceGeneral {
 
     @Id
@@ -77,24 +79,45 @@ public class PerformanceGeneral {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    /** 비공개로 바꾼 시각. null 이면 공개 상태다 */
+    @Column(name = "hidden_at")
+    private LocalDateTime hiddenAt;
+
+    /**
+     * 등록한 관리자(users.id). 관리자 API 는 등록자 본인만 쓸 수 있다.
+     * 회원 엔티티를 연관관계로 걸지 않고 id 만 둔다 — 여기서 회원 정보를 읽을 일이 없고,
+     * 공연 조회마다 회원 테이블을 끌고 오지 않기 위함이다.
+     */
+    @Column(name = "created_by")
+    private Long createdById;
 
     private PerformanceGeneral(Stadium stadium, String title, LocalDateTime ticketingStartAt,
-                               LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
+                               LocalDate visibleFrom, String posterImageKey, String detailImageKey,
+                               Long createdById) {
         this.stadium = stadium;
         this.title = title;
         this.ticketingStartAt = ticketingStartAt;
         this.visibleFrom = visibleFrom;
         this.posterImageKey = posterImageKey;
         this.detailImageKey = detailImageKey;
+        this.createdById = createdById;
         this.status = PerformanceStatus.UPCOMING;
     }
 
     /** 공연 등록 (API-261) */
     public static PerformanceGeneral create(Stadium stadium, String title, LocalDateTime ticketingStartAt,
-                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
-        return new PerformanceGeneral(stadium, title, ticketingStartAt, visibleFrom, posterImageKey, detailImageKey);
+                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey,
+                                            Long createdById) {
+        return new PerformanceGeneral(
+                stadium, title, ticketingStartAt, visibleFrom, posterImageKey, detailImageKey, createdById);
+    }
+
+    /**
+     * 이 사용자가 등록한 공연인지. 등록자가 없는(NULL) 공연은 누구의 것도 아니다.
+     * 마이그레이션 이전 데이터가 그렇고, 실수로 다른 관리자의 공연을 건드리는 것보다 거절이 안전하다.
+     */
+    public boolean isOwnedBy(Long userId) {
+        return this.createdById != null && this.createdById.equals(userId);
     }
 
     /**
@@ -121,8 +144,37 @@ public class PerformanceGeneral {
         }
     }
 
-    /** 공연 비공개 (API-263). 예매 이력이 있어 물리 삭제할 수 없을 때 쓴다 */
+    /** 이미지 교체 (API-262). null 인 쪽은 그대로 둔다 */
+    public void replaceImages(String posterImageKey, String detailImageKey) {
+        if (posterImageKey != null) {
+            this.posterImageKey = posterImageKey;
+        }
+        if (detailImageKey != null) {
+            this.detailImageKey = detailImageKey;
+        }
+    }
+
+    /**
+     * 공연 상태 전환 (API-264).
+     *
+     * 허용되지 않는 전이인지는 호출 쪽에서 {@link PerformanceStatus#canTransitionTo} 로 먼저 걸러야 한다.
+     * 여기서는 규칙을 다시 검사하지 않고 그대로 바꾼다.
+     */
+    public void changeStatus(PerformanceStatus status) {
+        this.status = status;
+    }
+
+    /** 공연 비공개 (API-271). 목록·상세에서 감추되 데이터는 남긴다 */
     public void hide(LocalDateTime hiddenAt) {
-        this.deletedAt = hiddenAt;
+        this.hiddenAt = hiddenAt;
+    }
+
+    /** 공연 공개 (API-271). 비공개를 되돌린다 */
+    public void show() {
+        this.hiddenAt = null;
+    }
+
+    public boolean isHidden() {
+        return this.hiddenAt != null;
     }
 }

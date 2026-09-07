@@ -14,6 +14,12 @@ import java.util.Optional;
 public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat, PerformanceSeatId> {
 
     /**
+     * 이 회차에 좌석 행이 이미 만들어져 있는지 (공연 도메인의 회차 좌석 생성 API-269 가 중복 생성을 막는 데 쓴다).
+     * performance_seats 엔티티·저장소는 이 하나만 둔다 — 같은 테이블을 두 엔티티로 매핑하면 빈·엔티티 이름이 충돌한다.
+     */
+    boolean existsByIdPerformanceDetailId(Long performanceDetailId);
+
+    /**
      * 같은 회차에서 이 유저가 쥐고 있던 <b>만료된</b> 선점을 해제한다. 새 좌석을 선점하기 직전에 호출한다.
      *
      * <p>필요한 이유: {@code uq_performance_seats_held_by} 는 물리 {@code status} 만 보므로,
