@@ -40,7 +40,7 @@ public interface PerformanceDetailRepository extends JpaRepository<PerformanceDe
             SELECT d FROM PerformanceDetail d
             JOIN FETCH d.performance p
             JOIN FETCH p.stadium
-            WHERE d.id = :scheduleId AND p.deletedAt IS NULL
+            WHERE d.id = :scheduleId AND p.hiddenAt IS NULL
             """)
     Optional<PerformanceDetail> findVisibleWithPerformanceById(@Param("scheduleId") Long scheduleId);
 

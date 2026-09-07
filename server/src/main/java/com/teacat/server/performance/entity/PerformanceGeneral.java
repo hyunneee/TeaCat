@@ -29,10 +29,11 @@ import java.time.LocalDateTime;
  * 포스터·상세 이미지는 파일 자체가 아니라 MinIO 의 key 만 저장한다.
  * 조회 URL 은 만료되므로 응답을 만들 때마다 새로 발급한다.
  *
- * 비공개는 deleted_at 으로 표시한다 (API-271).
+ * 비공개는 hidden_at 으로 표시한다 (API-271). 삭제(API-263)는 행을 실제로 지우는 하드 삭제라
+ * 비공개와는 다른 동작이고, 그래서 컬럼도 따로 둔다. 소프트 삭제가 필요해지면 deleted_at 을 새로 추가한다.
  *
  * 조회에서 자동으로 빼주지 않는다 — 관리자는 비공개 공연도 봐야 하기 때문이다.
- * 클라이언트용 조회 쿼리가 deleted_at is null 조건을 직접 건다.
+ * 클라이언트용 조회 쿼리가 hidden_at is null 조건을 직접 건다.
  */
 @Entity
 @Table(name = "performance_general")
@@ -78,8 +79,9 @@ public class PerformanceGeneral {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    /** 비공개로 바꾼 시각. null 이면 공개 상태다 */
+    @Column(name = "hidden_at")
+    private LocalDateTime hiddenAt;
 
     private PerformanceGeneral(Stadium stadium, String title, LocalDateTime ticketingStartAt,
                                LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
@@ -132,17 +134,27 @@ public class PerformanceGeneral {
         }
     }
 
+    /**
+     * 공연 상태 전환 (API-264).
+     *
+     * 허용되지 않는 전이인지는 호출 쪽에서 {@link PerformanceStatus#canTransitionTo} 로 먼저 걸러야 한다.
+     * 여기서는 규칙을 다시 검사하지 않고 그대로 바꾼다.
+     */
+    public void changeStatus(PerformanceStatus status) {
+        this.status = status;
+    }
+
     /** 공연 비공개 (API-271). 목록·상세에서 감추되 데이터는 남긴다 */
     public void hide(LocalDateTime hiddenAt) {
-        this.deletedAt = hiddenAt;
+        this.hiddenAt = hiddenAt;
     }
 
     /** 공연 공개 (API-271). 비공개를 되돌린다 */
     public void show() {
-        this.deletedAt = null;
+        this.hiddenAt = null;
     }
 
     public boolean isHidden() {
-        return this.deletedAt != null;
+        return this.hiddenAt != null;
     }
 }

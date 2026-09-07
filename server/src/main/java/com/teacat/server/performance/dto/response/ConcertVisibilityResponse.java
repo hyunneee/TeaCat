@@ -25,7 +25,7 @@ public record ConcertVisibilityResponse(
         return new ConcertVisibilityResponse(
                 performance.getId(),
                 !performance.isHidden(),
-                performance.getDeletedAt()
+                performance.getHiddenAt()
         );
     }
 }

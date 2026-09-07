@@ -18,7 +18,7 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
      * 공연 목록 조회 (API-201).
      *
      * 커서는 마지막으로 받은 공연 ID 다. id 내림차순이라 그보다 작은 id 를 이어서 준다.
-     * cursor 가 null 이면 첫 페이지다. 비공개(deleted_at) 공연은 여기서 직접 제외한다.
+     * cursor 가 null 이면 첫 페이지다. 비공개(hidden_at) 공연은 여기서 직접 제외한다.
      *
      * titlePattern 은 LIKE 패턴을 그대로 받는다. 검색어가 없으면 '%' 를 넘긴다.
      * 여기서 null 을 넘기면 PostgreSQL 이 파라미터 타입을 bytea 로 추론해
@@ -27,7 +27,7 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     @Query("""
             SELECT p FROM PerformanceGeneral p
             JOIN FETCH p.stadium
-            WHERE p.deletedAt IS NULL
+            WHERE p.hiddenAt IS NULL
               AND p.visibleFrom <= :today
               AND (:cursor IS NULL OR p.id < :cursor)
               AND LOWER(p.title) LIKE LOWER(:titlePattern) ESCAPE '\\'
@@ -47,7 +47,7 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     @Query("""
             SELECT p FROM PerformanceGeneral p
             JOIN FETCH p.stadium
-            WHERE p.deletedAt IS NULL
+            WHERE p.hiddenAt IS NULL
               AND p.visibleFrom <= :today
               AND p.ticketingStartAt > :now
             ORDER BY p.ticketingStartAt ASC
@@ -60,12 +60,12 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     @Query("""
             SELECT p FROM PerformanceGeneral p
             JOIN FETCH p.stadium
-            WHERE p.id = :concertId AND p.deletedAt IS NULL
+            WHERE p.id = :concertId AND p.hiddenAt IS NULL
             """)
     Optional<PerformanceGeneral> findVisibleById(@Param("concertId") Long concertId);
 
     /** 공개 상태인 공연이 존재하는지 (API-204, API-205) */
-    boolean existsByIdAndDeletedAtIsNull(Long concertId);
+    boolean existsByIdAndHiddenAtIsNull(Long concertId);
 
     /**
      * 이 공연에 예매 이력이 있는지 (API-263).
