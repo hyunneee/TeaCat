@@ -233,7 +233,7 @@ Hardhat 이라는 도구를 씁니다. Solidity 컴파일·테스트·배포를 
 ```
 contracts/
 ├─ contracts/          .sol 파일. 실제로 체인에 올라가는 코드
-│                      CatMoney.sol (캣머니). M1 에서 TicketSBT.sol 이 들어옵니다
+│                      TicketSBT.sol (양도불가 티켓) · CatMoney.sol (캣머니)
 ├─ test/               컨트랙트 테스트. 컨트랙트 테스트는 여기에만 씁니다
 ├─ scripts/
 │   ├─ deploy.ts       배포 스크립트. 배포하고 주소를 파일로 남깁니다
@@ -362,9 +362,9 @@ SSAFY 체인에서는 10초쯤 걸려 무너집니다. 통합 테스트할 때 �
 | | 상태 |
 |---|---|
 | **M0** 뼈대 · SSAFY 체인 연결 · `/health` | 완료 |
-| **M1** `TicketSBT` + 릴레이어 + 발행/사용/취소 | |
-| **M2** 대사·복구 (드롭된 tx 재전송, 가스 상향) | |
-| **M3** `CatMoney`(캣머니) | 컨트랙트·API(잔액·발행·소각)·가입 시드 완료. SSAFY 체인 배포는 아직 |
+| **M1** `TicketSBT` + 릴레이어 + 발행/취소 | 컨트랙트·API 4개·tx 조회 연동 완료. 로컬 체인 E2E 통과. **SSAFY 체인 배포는 아직** |
+| **M2** 대사·복구 (드롭된 tx 재전송, 가스 상향) | 확정 기록·훑기 완료. 가스 상향은 아직 (이 체인은 가스 무료) |
+| **M3** `CatMoney`(캣머니) | 컨트랙트·API(잔액·발행·소각)·가입 시드 완료. SSAFY 체인 배포됨 |
 | | (캣머니는 발행/소각으로만 움직입니다 — 트레저리 없음. [DESIGN.md 6장](DESIGN.md#6-컨트랙트-설계)) |
 | **M4** ERC-4337 | **이 체인에서는 불가** (아래) |
 
@@ -381,6 +381,12 @@ SSAFY 체인에서는 10초쯤 걸려 무너집니다. 통합 테스트할 때 �
 GET  /health                      인증 없음. 체인 연결·오퍼레이터 잔고·배포 상태
 POST /internal/wallets            { "derivationIndex": 7, "seedAmount": "1500" }
                                   → 주소 + 가입 시드 발행 (202 + txHash)
+
+POST /internal/tickets/issue      { "ticketKey": "…", "to": "0x…" }
+                                  → 202 + txHash + tokenId (즉시. 확정은 아직)
+GET  /internal/tickets/by-key?key=…   응답을 못 받았을 때 발행 결과 복구
+GET  /internal/tickets/{tokenId}      소유자 · 소각 여부
+POST /internal/tickets/{tokenId}/burn 예매 취소. tokenId 가 영구 소멸합니다
 
 GET  /internal/tokens/catmoney/balance?address=0x…    잔액 조회
 POST /internal/tokens/catmoney/mint    발행 (입금·보상·환급)
@@ -399,14 +405,41 @@ Swagger 에는 **아직 안 만든 것도 계약만 먼저** 올려뒀습니다.
 | 태그 | | |
 |---|---|---|
 | 캣머니 (예정) | `transfer` — 포카 마켓 정산 | M6 |
-| 티켓 (예정) | `issue` · 조회 · `by-key` · `use` · `void` | M1~M2 |
 
 구현하면 `api/src/docs/planned.ts` 에서 지우고 `openapi.ts` 로 옮깁니다.
 거기서는 컨트롤러의 zod 스키마를 그대로 쓰고 응답도 타입과 대조합니다.
 
+### 확정은 Spring 이 폴링하지 않습니다
+
+쓰기는 `202` 로 먼저 끝나고 블록은 약 10초 뒤에 옵니다. **그 10초를 이 서비스가 기다렸다가
+Spring DB 의 `tickets` 행을 직접 갱신합니다.** 결제 직후 발행이 유저에게 실패로 보이면
+안 된다는 요구에서 나온 구조입니다 ([DESIGN.md 1장](DESIGN.md#1-이-서비스의-경계) "예외 하나").
+
+그래서 이 서비스는 **`DATABASE_URL` 이 필요합니다.**
+
+```bash
+docker compose -f ../docker/docker-compose.yml up -d postgres
+```
+
+없어도 서버는 뜹니다 — 체인만으로 개발할 때를 위해서입니다. 대신 확정 기록이 꺼지고
+`/health` 가 경고합니다. 운영에서 빠뜨리면 **티켓이 영원히 PENDING 으로 남습니다.**
+
+우리가 쓰는 컬럼은 `transfer_status` · `token_id` · `mint_tx_hash` · `burn_tx_hash`
+넷뿐입니다. 나머지는 Spring 이 씁니다. 기동할 때 컬럼이 다 있는지 확인하고, 없으면
+그 자리에서 죽습니다 — 첫 티켓 발행 때 조용히 깨지는 것보다 낫습니다.
+
 `/internal/**` 는 `x-internal-key` 헤더가 필요합니다. 값은 `.env` 의 `INTERNAL_API_KEY` 입니다.
 
-**컨트랙트는 아직 하나도 없습니다.** 티켓 발행 같은 도메인 기능은 M1에서 붙습니다.
+티켓은 **양도할 수 없습니다.** `transferFrom` 도 `safeTransferFrom` 도 `approve` 도
+컨트랙트가 거부합니다 — 약관이 아니라 EVM 이 막습니다.
+
+온체인에 있는 것은 **`tokenId` 와 `owner` 뿐**입니다. 좌석·공연·입장 여부는 Spring 의
+티켓 DB 가 소유합니다 — 같은 값을 체인에 또 두면 두 벌이 되고, 어긋나는 순간 어느 쪽이
+맞는지 판단할 근거가 사라집니다.
+
+`tokenId` 는 순번이 아니라 **`uint256(keccak256(ticketKey))`** 입니다. 번호가 트랜잭션보다
+먼저 정해져서, 확정을 기다리지 않고 발행 응답에 담아 줄 수 있습니다.
+([DESIGN.md 6장 ①](DESIGN.md#6-컨트랙트-설계))
 
 ---
 

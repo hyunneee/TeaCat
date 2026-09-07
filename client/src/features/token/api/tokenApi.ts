@@ -2,7 +2,7 @@ import { http } from '@/shared/api';
 import type { TokenBalance } from '../model/token.types';
 
 export const tokenApi = {
-  balance: () => http.get<TokenBalance>('/me/token'),
+  balance: () => http.get<TokenBalance>('/users/me/balance'),
 };
 
 export const tokenKeys = {

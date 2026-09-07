@@ -41,6 +41,28 @@ export const errors = {
   contractUnavailable: (name: string) =>
     new AppError('CONTRACT_UNAVAILABLE', `${name} 이 아직 배포되지 않았습니다`, 503),
 
+  /**
+   * 운영자가 정지 스위치를 켜뒀습니다.
+   *
+   * 보내기 전에 막습니다. 그냥 보내면 202 를 돌려준 뒤 10초쯤 지나 tx 조회에서야
+   * 실패가 드러나고, 그동안 Spring 은 정상 처리로 알고 있습니다.
+   */
+  contractPaused: (what: string) =>
+    new AppError('CONTRACT_PAUSED', `${what} 기능이 정지돼 있습니다. 운영자에게 문의하세요`, 503),
+
+  /** 체인에 없는 tokenId 입니다. */
+  ticketNotFound: (tokenId: string) =>
+    new AppError('TICKET_NOT_FOUND', `티켓 ${tokenId} 이 체인에 없습니다`, 404),
+
+  /**
+   * 허용되지 않는 상태 전이. **재시도로 풀리지 않습니다.**
+   *
+   * "이미 처리됨"(재시도가 성공으로 바뀌는 경우)과 구분해야 합니다 —
+   * 그쪽은 200 + `ALREADY_DONE` 으로 내려갑니다.
+   */
+  invalidTicketState: (tokenId: string, message: string, detail?: unknown) =>
+    new AppError('INVALID_TICKET_STATE', `티켓 ${tokenId}: ${message}`, 409, detail),
+
   internal: (message = '알 수 없는 오류') => new AppError('INTERNAL', message, 500),
 };
 
