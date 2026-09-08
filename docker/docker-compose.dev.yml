@@ -14,6 +14,10 @@ services:
     image: pgvector/pgvector:pg18
     container_name: dev-postgres
     restart: unless-stopped
+    # 🔴 앱은 KST(LocalDateTime)를 timestamp 컬럼에 그대로 넣고, SQL 은 DB 의 now() 와
+    #    비교한다. DB 가 UTC 면 그 비교가 9시간 밀려 좌석 선점 만료 같은 것이 동작하지 않는다.
+    #    command 로 GUC 를 직접 지정한다 — TZ 환경변수는 이미 초기화된 볼륨에는 반영되지 않는다.
+    command: ['postgres', '-c', 'timezone=Asia/Seoul']
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-teacat}
       POSTGRES_USER: ${POSTGRES_USER:-teacat}
@@ -70,6 +74,8 @@ services:
     env_file:
       - .env.dev.chain
     environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
       NODE_ENV: production
       # 설정이 몇 개 안 되어 여기 적는다. INTERNAL_API_KEY 는 .env.dev 에 한 번만 두고
       # server 와 나눠 쓴다 (값이 갈라지면 가입이 401 로 실패한다).
@@ -94,6 +100,8 @@ services:
     env_file:
       - .env.dev
     environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
       # 아래는 .env 에 둘 수 없는 것들이다.
       #   - 컨테이너 주소: compose 구조에서 나오는 값이라 파일에 둘 이유가 없다
       #   - 이름이 다른 값: 파일의 이름과 스프링이 읽는 이름이 달라 여기서 옮긴다

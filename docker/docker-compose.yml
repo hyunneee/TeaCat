@@ -3,6 +3,10 @@ services:
     image: pgvector/pgvector:pg18
     container_name: teacat-postgres
     restart: unless-stopped
+    # 🔴 앱은 KST(LocalDateTime)를 timestamp 컬럼에 그대로 넣고, SQL 은 DB 의 now() 와
+    #    비교한다. DB 가 UTC 면 그 비교가 9시간 밀려 좌석 선점 만료 같은 것이 동작하지 않는다.
+    #    command 로 GUC 를 직접 지정한다 — TZ 환경변수는 이미 초기화된 볼륨에는 반영되지 않는다.
+    command: ['postgres', '-c', 'timezone=Asia/Seoul']
     environment:
       POSTGRES_DB: teacat
       POSTGRES_USER: teacat
