@@ -28,7 +28,24 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_APPROVAL_FAILED(HttpStatus.BAD_REQUEST, "PAYMENT_007",
             "결제 승인에 실패했습니다."),
     TOKEN_CHARGE_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_008",
-            "충전 내역을 찾을 수 없습니다.");
+            "충전 내역을 찾을 수 없습니다."),
+
+    /** 구역에 가격이 설정되지 않았다. 운영 데이터 문제라 사용자가 할 수 있는 일이 없다 */
+    AREA_PRICE_NOT_SET(HttpStatus.CONFLICT, "PAYMENT_009",
+            "이 구역의 가격이 아직 설정되지 않았습니다."),
+    /** 1인 최대 매수 초과 (booking.policy.max-tickets-per-user) */
+    TICKET_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "PAYMENT_010",
+            "이 회차에서 구매할 수 있는 매수를 초과했습니다."),
+    TICKET_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_011",
+            "주문 정보를 찾을 수 없습니다."),
+    /**
+     * 승인 직전/직후에 좌석 선점을 잃었다.
+     *
+     * 승인 전이면 그냥 거절이지만, 승인 후라면 돈은 빠졌는데 좌석이 없는 상태다.
+     * 그때는 사람이 봐야 하므로 로그를 크게 남긴다.
+     */
+    SEAT_NO_LONGER_HELD(HttpStatus.CONFLICT, "PAYMENT_012",
+            "좌석 선점이 유지되지 않아 발권할 수 없습니다. 좌석을 다시 선택해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;
