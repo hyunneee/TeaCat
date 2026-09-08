@@ -164,7 +164,7 @@ const routes: RouteObject[] = [
       /* SSAFY 로그인 복귀 지점. 아직 세션이 없는 상태로 들어오므로 가드 밖에 둡니다. */
       { path: ROUTES.OAUTH_CALLBACK, element: withBoundary(<OauthCallbackPage />) },
       { path: ROUTES.OAUTH_SIGNUP, element: withBoundary(<OauthSignupPage />) },
-      { path: ROUTES.NFT_DETAIL(':nftId'), element: withBoundary(<NftDetailPage />) },
+      { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
 
       /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
       { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },

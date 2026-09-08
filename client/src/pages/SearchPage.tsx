@@ -31,7 +31,7 @@ export function SearchPage() {
   const enabled = query.length > 0;
 
   const { data: concerts, isPending: concertsPending } = useConcerts(query || undefined);
-  const { data: pocas, isPending: pocasPending } = useNftMarket(query || undefined);
+  const { data: pocas, isPending: pocasPending } = useNftMarket({ keyword: query || undefined });
 
   /* 키워드가 없을 때는 조회 결과를 쓰지 않습니다 (전체 목록이 내려옵니다) */
   const concertHits = enabled ? (concerts ?? []) : [];
@@ -132,9 +132,16 @@ export function SearchPage() {
                 포토카드
               </SectionTitle>
               <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
-                {pocaHits.slice(0, LIMIT).map((nft) => (
-                  <li key={nft.id}>
-                    <NftCard nft={nft} onClick={() => navigate(ROUTES.NFT_DETAIL(nft.id))} />
+                {pocaHits.slice(0, LIMIT).map((card) => (
+                  <li key={card.photocardId}>
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle}
+                      price={card.price}
+                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                    />
                   </li>
                 ))}
               </ul>

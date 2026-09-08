@@ -58,7 +58,8 @@ export const ROUTES = {
 
   /* ── 포토카드 NFT ── */
   NFT_MARKET: '/nft',
-  NFT_DETAIL: (nftId: string) => `/nft/${nftId}`,
+  /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
+  NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
