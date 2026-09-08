@@ -70,6 +70,15 @@ const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSign
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
+/* 어드민 대시보드. 껍데기까지 lazy 로 쪼갭니다 —
+   일반 사용자는 평생 이 코드를 받지 않습니다. */
+const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
+const AdminDashboardPage = page(
+  () => import('@/pages/AdminDashboardPage'),
+  'AdminDashboardPage',
+);
+const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+
 /**
  * 첫 화면이 그려진 뒤 **한가할 때** 미리 받아 두는 화면들.
  *
@@ -126,6 +135,46 @@ const devRoutes: RouteObject[] = IS_DEV_BUILD
   : [];
 
 const routes: RouteObject[] = [
+  /* ══ 어드민 대시보드 (데스크톱 전용) ═══════════════════════
+     🔴 앱 레이아웃(AppLayout / PlainLayout)을 쓰지 않습니다. `.app-width`
+        한 기둥이 아니라 화면을 꽉 쓰는 사이드바 + 본문 구조입니다.
+        (client/CLAUDE.md 8장)
+
+     가드가 두 겹입니다.
+       RequireAuth  — 비로그인은 로그인 화면으로 (원래 가려던 곳을 기억)
+       RequireRole  — 일반 회원(USER)은 홈으로 되돌려보냄
+     회원 관리는 서버가 ADMIN 전용이라 한 겹 더 좁힙니다.
+
+     🔴 메뉴를 추가할 때는 여기 자식 라우트 + AdminSidebar 의 ADMIN_MENU
+        두 곳만 손대면 됩니다. */
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        element: <RequireRole roles={['ADMIN', 'STADIUM', 'PERFORMANCE']} />,
+        children: [
+          {
+            path: ROUTES.ADMIN,
+            element: <AdminLayout />,
+            children: [
+              { index: true, element: withBoundary(<AdminDashboardPage />) },
+              {
+                /* 회원 관리는 서버가 ADMIN 전용이다. STADIUM·PERFORMANCE 는
+                   대시보드까지만 들어오고 여기서 홈으로 되돌려보낸다. */
+                element: <RequireRole roles={['ADMIN']} />,
+                children: [
+                  { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                ],
+              },
+              /* 모니터링(/admin/monitoring)은 아직 앱(모바일) 레이아웃에 있습니다.
+                 이 콘솔로 옮길 때 위 자식으로 내리고 AdminSidebar 에 메뉴를 넣으세요. */
+            ],
+          },
+        ],
+      },
+    ],
+  },
+
   /* ══ 하단 탭이 보이는 화면 ═══════════════════════════════ */
   {
     element: <AppLayout />,
