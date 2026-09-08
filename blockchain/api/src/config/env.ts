@@ -33,10 +33,48 @@ const schema = z.object({
   MASTER_MNEMONIC: z.string().min(1, 'MASTER_MNEMONIC 이 비어 있습니다'),
   USER_ACCOUNT_PATH: z.string().default("m/44'/60'/1'/0"),
 
-  // 주의: 가스 지불 지갑
+  // 주의: 가스 지불 지갑. 배포 계정이자 **`MINTER_ROLE` 을 쥔 키**입니다.
   OPERATOR_PRIVATE_KEY: z
     .string()
     .regex(HEX_PRIVATE_KEY, 'OPERATOR_PRIVATE_KEY 는 0x + 64자리 hex 여야 합니다'),
+
+  /**
+   * **`OPERATOR_ROLE` 을 쥔 키.** 위의 발행 키와 다른 지갑입니다.
+   *
+   * 배포 스크립트의 `CONTRACT_OPERATOR_ADDRESS` 와 **짝**입니다 — 그 주소에
+   * `OPERATOR_ROLE` 이 부여되므로, 여기 그 주소의 개인키를 넣어야 합니다.
+   *
+   * 없으면 `OPERATOR_PRIVATE_KEY` 로 떨어집니다. 역할을 나누지 않은 개발 환경의
+   * 기존 동작 그대로입니다.
+   *
+   * 이게 필요해진 이유: 도안 등록·정지·추첨이 전부 `OPERATOR_ROLE` 인데,
+   * **추첨 공개에는 약 42분 시한이 있어서**(블록해시 256개) 사람이 수동으로
+   * 처리할 수 없습니다. API 가 직접 서명할 수 있어야 합니다.
+   * (PHOTOCARD_PLAN.md 4-8)
+   */
+  CONTRACT_OPERATOR_PRIVATE_KEY: z
+    .string()
+    .regex(HEX_PRIVATE_KEY, 'CONTRACT_OPERATOR_PRIVATE_KEY 는 0x + 64자리 hex 여야 합니다')
+    .optional(),
+
+  /**
+   * 추첨 시드를 파생하는 비밀. **저장하지 않고 매번 파생합니다.**
+   *
+   *   seed = keccak256(keccak256(DRAW_SEED_SECRET), drawId)
+   *
+   * 니모닉과 같은 원리입니다 (DESIGN.md 4-6) — 재시작해도 같은 시드가 나와서
+   * 커밋과 리빌 사이에 상태를 들고 있지 않아도 됩니다.
+   *
+   * 주의: 이 값이 새면 **리빌 전에 결과를 미리 아는 사람**이 생깁니다. 결과를
+   * 바꾸지는 못하지만(블록해시가 남아 있습니다) 공정성 문제는 됩니다.
+   * 니모닉과 같은 급으로 다루세요.
+   *
+   * 없으면 서버는 뜨지만 추첨 경로가 돌지 않습니다 — `DATABASE_URL` 과 같은 취급입니다.
+   */
+  DRAW_SEED_SECRET: z
+    .string()
+    .min(32, 'DRAW_SEED_SECRET 은 32자 이상이어야 합니다')
+    .optional(),
 
   INTERNAL_API_KEY: z.string().min(16, 'INTERNAL_API_KEY 는 16자 이상이어야 합니다'),
 
@@ -97,6 +135,12 @@ if (env.NODE_ENV === 'production') {
   }
   if (PUBLIC_TEST_KEYS.has(env.OPERATOR_PRIVATE_KEY.toLowerCase())) {
     leaked.push('OPERATOR_PRIVATE_KEY 가 Hardhat 공개 테스트 키입니다');
+  }
+  if (
+    env.CONTRACT_OPERATOR_PRIVATE_KEY &&
+    PUBLIC_TEST_KEYS.has(env.CONTRACT_OPERATOR_PRIVATE_KEY.toLowerCase())
+  ) {
+    leaked.push('CONTRACT_OPERATOR_PRIVATE_KEY 가 Hardhat 공개 테스트 키입니다');
   }
   if (env.CHAIN_ID === 31337) {
     leaked.push('CHAIN_ID 가 31337(로컬 Hardhat)입니다');
