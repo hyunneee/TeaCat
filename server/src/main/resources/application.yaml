@@ -110,6 +110,22 @@ cors:
   # 콤마로 구분해 환경변수 CORS_ALLOWED_ORIGINS 하나로 덮어쓸 수 있다.
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,https://dev.teacat.site,https://teacat.site}
 
+admin:
+  # 서버가 뜰 때 관리자 계정이 하나도 없으면 이 값으로 만든다.
+  #   역할을 지정해 회원을 만들 수 있는 건 관리자뿐이고 일반 가입은 항상 USER 라,
+  #   관리자가 0명이면 대시보드에 들어갈 방법이 없다. 그 닫힌 고리를 끊는 장치다.
+  #   ADMIN 이 이미 하나라도 있으면 아무것도 하지 않는다 (멱등).
+  #
+  # 🔴 운영에서는 ADMIN_SEED_PASSWORD 로 덮어쓰거나 ADMIN_SEED_ENABLED=false 로 끄세요.
+  #    기본 비밀번호는 이 파일에 적혀 있어 저장소를 볼 수 있는 누구나 압니다.
+  seed:
+    enabled: ${ADMIN_SEED_ENABLED:true}
+    email: ${ADMIN_SEED_EMAIL:admin@teacat.site}
+    password: ${ADMIN_SEED_PASSWORD:6789}
+    name: ${ADMIN_SEED_NAME:관리자}
+    nickname: ${ADMIN_SEED_NICKNAME:관리자}
+    phone: ${ADMIN_SEED_PHONE:010-0000-0000}
+
 app:
   # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { queryClient } from '@/shared/api';
 import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
+import { can } from '../model/permission';
 import { authApi, authKeys } from '../api/authApi';
 import { useAuthStore } from '../store/authStore';
 import type { LoginRequest } from '../model/auth.types';
@@ -31,12 +32,17 @@ export function useLogin() {
       // 🔴 외부에서 넘어온 값이라 pathname 만 씁니다. state.from 을 그대로 믿고
       //    절대 URL 을 넣으면 로그인 후 외부 사이트로 보내는 통로가 됩니다.
       const from = (location.state as LoginLocationState | null)?.from;
-      const next =
+      const wanted =
         from?.pathname && from.pathname.startsWith('/') && !from.pathname.startsWith('//')
           ? `${from.pathname}${from.search ?? ''}`
-          : ROUTES.HOME;
+          : null;
 
-      navigate(next, { replace: true });
+      /* 가려던 곳이 있으면 그게 우선입니다 — 가드에 막혀 로그인한 사람을
+         엉뚱한 데로 보내면 안 됩니다.
+         그게 없으면 운영 역할은 콘솔로, 일반 회원은 홈으로 보냅니다. */
+      navigate(wanted ?? (can.accessAdmin(res.user) ? ROUTES.ADMIN : ROUTES.HOME), {
+        replace: true,
+      });
     },
     onError: () => toast.error('이메일 또는 비밀번호를 확인해 주세요.'),
   });
