@@ -17,6 +17,9 @@ public record AreaCreateRequest(
         @Schema(description = "구역 코드", example = "A")
         @NotBlank @Size(max = 20) String areaCode,
 
+        @Schema(description = "층 코드", example = "2F")
+        @Size(max = 20) String levelCode,
+
         @Schema(description = "구역 유형", example = "SEATED")
         @NotNull AreaType type,
 
@@ -38,6 +41,16 @@ public record AreaCreateRequest(
         @Schema(description = "함께 생성할 초기 좌석 목록")
         List<@Valid SeatCreateRequest> seats
 ) {
+    public AreaCreateRequest(String areaCode, AreaType type, Integer maxSeat,
+                             BigDecimal areaX, BigDecimal areaY, BigDecimal width,
+                             BigDecimal height, List<SeatCreateRequest> seats) {
+        this(areaCode, "1F", type, maxSeat, areaX, areaY, width, height, seats);
+    }
+
+    public String levelCodeOrDefault() {
+        return levelCode == null || levelCode.isBlank() ? "1F" : levelCode.strip();
+    }
+
     public List<SeatCreateRequest> seatsOrEmpty() {
         return seats == null ? List.of() : seats;
     }

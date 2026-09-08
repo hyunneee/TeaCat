@@ -10,6 +10,7 @@ public record AreaDetailResponse(
         @Schema(description = "구역 ID", example = "10") Long areaId,
         @Schema(description = "공연장 ID", example = "1") Long stadiumId,
         @Schema(description = "공연장 이름", example = "고척스카이돔") String stadiumName,
+        @Schema(description = "층 코드", example = "2F") String levelCode,
         @Schema(description = "구역 코드", example = "A") String areaCode,
         @Schema(description = "구역 유형", example = "SEATED") AreaType type,
         @Schema(description = "최대 수용 인원", example = "100") int maxSeat,

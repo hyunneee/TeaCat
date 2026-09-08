@@ -15,6 +15,10 @@ public record AreaUpdateRequest(
         @Pattern(regexp = ".*\\S.*", message = "구역 코드는 공백일 수 없습니다.")
         @Size(max = 20) String areaCode,
 
+        @Schema(description = "층 코드", example = "2F")
+        @Pattern(regexp = ".*\\S.*", message = "층 코드는 공백일 수 없습니다.")
+        @Size(max = 20) String levelCode,
+
         @Schema(description = "구역 유형", example = "SEATED")
         AreaType type,
 
@@ -34,11 +38,11 @@ public record AreaUpdateRequest(
         @DecimalMin(value = "0", inclusive = false) BigDecimal height
 ) {
     public boolean isEmpty() {
-        return areaCode == null && type == null && maxSeat == null && areaX == null
+        return areaCode == null && levelCode == null && type == null && maxSeat == null && areaX == null
                 && areaY == null && width == null && height == null;
     }
 
     public boolean changesStructure() {
-        return areaCode != null || type != null || maxSeat != null;
+        return areaCode != null || levelCode != null || type != null || maxSeat != null;
     }
 }
