@@ -71,6 +71,20 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     boolean existsByIdAndHiddenAtIsNull(Long concertId);
 
     /**
+     * 이 관리자가 등록한 공연 전부 — **비공개 포함**.
+     *
+     * 관리자가 비공개로 돌린 공연을 다시 찾아 공개로 되돌리려면 어딘가에는 보여야 한다.
+     * 클라이언트 목록(findPage)은 비공개를 숨기므로 여기서 따로 준다. 최근 등록순.
+     */
+    @Query("""
+            SELECT p FROM PerformanceGeneral p
+            JOIN FETCH p.stadium
+            WHERE p.createdById = :userId
+            ORDER BY p.id DESC
+            """)
+    List<PerformanceGeneral> findAllByCreatedById(@Param("userId") Long userId);
+
+    /**
      * 이 공연에 예매 이력이 있는지 (API-263).
      *
      * 티켓 도메인 엔티티가 아직 없어서 네이티브 쿼리로 확인한다.

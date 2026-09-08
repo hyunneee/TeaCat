@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Hourglass, Info } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Card, Segmented } from '@/shared/components/ui';
-import { PageLoader } from '@/shared/components/common';
+import { EmptyState, PageLoader } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { env } from '@/shared/config';
+import { canWaitlist, useSchedule } from '@/features/concert';
 import { ResaleSectionList, useApplyResale, useResaleSections } from '@/features/resale';
 
 /**
@@ -13,6 +14,10 @@ import { ResaleSectionList, useApplyResale, useResaleSections } from '@/features
  *
  * 플로우: 구역 → 취소표 대기 신청 → (서버가 추첨) → 당첨 알림 → 12시간 내 예매
  * 선착순이 아니라 추첨이라 새로고침 경쟁이 의미가 없습니다. 그게 이 기능의 목적입니다.
+ *
+ * 대기는 **매진된 뒤, 매진된 구역에만** 걸 수 있습니다.
+ * - 회차가 아직 오픈 전이면 이 화면 자체를 막습니다 (URL 로 직접 들어와도).
+ * - 자리가 남은 구역은 목록에서 고를 수 없습니다 — 그건 예매하면 되는 자리입니다.
  */
 export function ResalePage() {
   const navigate = useNavigate();
@@ -21,6 +26,7 @@ export function ResalePage() {
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('1');
 
+  const { data: schedule, isPending: schedulePending } = useSchedule(scheduleId);
   const { data: sections, isPending } = useResaleSections(scheduleId);
   const apply = useApplyResale(scheduleId);
 
@@ -30,6 +36,30 @@ export function ResalePage() {
     value: String(i + 1),
     label: `${i + 1}매`,
   }));
+
+  /* 회차 정보가 먼저 옵니다. 대기를 받을 수 없는 회차면 구역 목록을 기다리지 않고 바로 안내합니다 */
+  if (schedulePending) return <PageLoader />;
+
+  /* 상세 화면의 대기 버튼은 매진일 때만 보이지만, 주소로 바로 들어오는 경우까지 여기서 다시 막습니다 */
+  if (schedule && !canWaitlist(schedule)) {
+    const beforeOpen = schedule.bookingStatus === 'BEFORE';
+    return (
+      <>
+        <Header title="취소표 추첨 대기" showBack />
+        <EmptyState
+          icon={Hourglass}
+          title={beforeOpen ? '아직 티켓팅이 열리지 않았어요' : '지금은 대기를 받지 않아요'}
+          description={
+            beforeOpen
+              ? '취소표 대기는 티켓팅이 시작되고 구역이 매진된 뒤에 열립니다. 먼저 예매에 참여해 주세요.'
+              : schedule.bookingStatus === 'OPEN'
+                ? '아직 자리가 남아 있어요. 예매로 바로 구매할 수 있습니다.'
+                : '마감된 회차는 취소표가 다시 판매되지 않습니다.'
+          }
+        />
+      </>
+    );
+  }
 
   if (isPending) return <PageLoader />;
 
@@ -51,6 +81,10 @@ export function ResalePage() {
 
         <section className="space-y-2">
           <h2 className="font-bold">구역 선택</h2>
+          <p className="text-subtle flex items-start gap-1.5 text-xs">
+            <Info size={13} className="mt-0.5 shrink-0" />
+            매진된 구역에만 대기를 걸 수 있어요. 자리가 남은 구역은 예매로 바로 구매하세요.
+          </p>
           {sections && (
             <ResaleSectionList
               sections={sections}
@@ -60,14 +94,17 @@ export function ResalePage() {
           )}
         </section>
 
-        <section className="space-y-2">
-          <h2 className="font-bold">신청 매수</h2>
-          <Segmented options={quantityOptions} value={quantity} onChange={setQuantity} />
-          <p className="text-subtle flex items-start gap-1.5 text-xs">
-            <Info size={13} className="mt-0.5 shrink-0" />
-            2매 이상이면 연석이 아닐 수 있습니다. 매수만 맞으면 배정됩니다.
-          </p>
-        </section>
+        {/* 1인 1매 정책이면 고를 게 없어 매수 선택을 통째로 숨깁니다. 정책이 늘어나면 자동으로 다시 보입니다 */}
+        {maxPerUser > 1 && (
+          <section className="space-y-2">
+            <h2 className="font-bold">신청 매수</h2>
+            <Segmented options={quantityOptions} value={quantity} onChange={setQuantity} />
+            <p className="text-subtle flex items-start gap-1.5 text-xs">
+              <Info size={13} className="mt-0.5 shrink-0" />
+              2매 이상이면 연석이 아닐 수 있습니다. 매수만 맞으면 배정됩니다.
+            </p>
+          </section>
+        )}
 
         <BottomBar.Spacer />
       </div>

@@ -5,6 +5,7 @@ import {
   iso,
   now,
   resaleEntries,
+  seats,
   sections,
   type MockResaleEntry,
 } from '../db';
@@ -61,6 +62,8 @@ mock('GET', '/schedules/:scheduleId/resale/sections', (ctx) => {
         resaleEntries.filter((e) => e.sectionId === section.id && e.status === 'WAITING').length +
         // 대기 인원이 0명이면 화면이 심심해서 시드값을 섞습니다 (목업 전용)
         ((section.name.length * 17) % 40),
+      // 남은 자리가 하나도 없을 때만 매진. 매진된 구역에만 대기를 걸 수 있다
+      soldOut: !seats.some((s) => s.sectionId === section.id && s.status === 'AVAILABLE'),
     }));
 });
 

@@ -23,6 +23,8 @@ export interface ConcertSummary {
   ticketingStartAt: string;
   status: ConcertStatus;
   posterUrl: string | null;
+  /** 비공개 상태. 클라이언트 목록에서는 항상 false, 등록자용 목록(/admin/concerts/mine)에서만 true 가 옵니다 */
+  hidden: boolean;
 }
 
 /** 공연 목록 페이지 (API-201). 공용 CursorPage 와 달리 배열 키가 `concerts` 입니다 */
@@ -65,6 +67,8 @@ export interface ConcertDetail {
   schedules: ScheduleSummary[];
   /** 등록한 관리자의 userId. 서버는 이 사람에게만 수정·삭제를 허용합니다. 옛 데이터는 null */
   createdBy: number | null;
+  /** 비공개 상태. 클라이언트 상세에서는 항상 false, 등록자용 상세(/admin/concerts/{id})에서만 true 가 옵니다 */
+  hidden: boolean;
 }
 
 /** 회차 단건 (API-203) — 예매 플로우 헤더용 */

@@ -75,9 +75,15 @@ public class SecurityConfig {
                                 "/nft-market/auctions", "/auctions/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
+                        // 공연 관리(등록·수정·회차·구역·이미지)는 공연 주최자(PERFORMANCE)도 쓴다.
+                        // 등록자 본인 것만 다룰 수 있는 건 서비스가 따로 검사한다(PERFORMANCE_020).
+                        .requestMatchers("/admin/concerts/**", "/admin/schedules/**", "/admin/uploads/**")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        // 공연장·구역·좌석 배치 관리는 공연장 운영자(STADIUM)도 쓴다
                         .requestMatchers("/admin/stadiums", "/admin/stadiums/**",
                                 "/admin/stadium-layouts/**", "/admin/areas/**", "/admin/seats/**")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.STADIUM.name())
+                        // 나머지 /admin/** (포토카드 발급·회원 관리 등)은 그대로 ADMIN 전용이다
                         // 매처를 빠뜨린 관리자 API 도 잠기도록 마지막에 포괄 규칙을 둔다
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().authenticated())

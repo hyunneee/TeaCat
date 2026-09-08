@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { TriangleAlert } from 'lucide-react';
+import { Eye, EyeOff, Trash2, TriangleAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { SectionTitle } from '@/shared/components/ui';
+import { Badge, Button, SectionTitle } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
-import { useConcertDetail, type ConcertDetail } from '@/features/concert';
+import type { ConcertDetail } from '@/features/concert';
 import {
   ConcertForm,
   ScheduleEditor,
@@ -14,7 +14,10 @@ import {
   isConcertFormDirty,
   isTicketingStarted,
   useAddSchedule,
+  useDeleteConcert,
   useDeleteSchedule,
+  useMyConcert,
+  useSetVisibility,
   useStadiums,
   useUnsavedChangesGuard,
   useUpdateConcert,
@@ -25,17 +28,21 @@ import {
 } from '@/features/organizer';
 
 /**
- * 공연 수정 (관리자).
+ * 공연 수정 (관리자·주최자).
  *
- * 두 부분으로 나뉩니다.
+ * 세 부분으로 나뉩니다.
  * - **회차**: 추가·삭제가 누르는 즉시 서버에 반영됩니다.
  * - **공연 정보**: 폼을 고쳐 "저장하기" 를 눌러야 반영되고, **바뀐 필드만** 보냅니다.
  *   저장 전에 한 번 확인하고, 저장하지 않고 나가려 하면 경고합니다.
  *   티켓팅이 시작된 공연은 제목·이미지만 바꿀 수 있습니다 (API-262 규칙, 폼이 나머지를 잠급니다).
+ * - **공연 관리**: 공개·비공개 전환과 삭제. 되돌릴 수 있는 것(비공개)과 없는 것(삭제)을 구분해 그립니다.
+ *
+ * 공연 정보는 등록자용 상세(/admin/concerts/{id})로 읽습니다. 클라이언트 상세는 비공개 공연이 404 라
+ * 비공개로 돌린 공연을 다시 공개하러 들어올 수 없기 때문입니다.
  */
 export function ConcertEditPage() {
   const { concertId = '' } = useParams();
-  const { data: concert, isPending, isError } = useConcertDetail(concertId);
+  const { data: concert, isPending, isError } = useMyConcert(concertId);
   const { data: stadiums, isPending: stadiumsPending, isError: stadiumsError } = useStadiums();
 
   if (isPending || stadiumsPending) {
@@ -51,14 +58,28 @@ export function ConcertEditPage() {
     return (
       <>
         <Header title="공연 수정" showBack />
-        <EmptyState icon={TriangleAlert} title="공연 정보를 불러오지 못했어요" />
+        <EmptyState
+          icon={TriangleAlert}
+          title="공연 정보를 불러오지 못했어요"
+          description="본인이 등록한 공연만 수정할 수 있어요."
+        />
       </>
     );
   }
 
   return (
     <>
-      <Header title="공연 수정" showBack />
+      <Header
+        title="공연 수정"
+        showBack
+        right={
+          concert.hidden ? (
+            <Badge tone="neutral" size="lg">
+              비공개
+            </Badge>
+          ) : undefined
+        }
+      />
 
       <section className="p-4 pb-2">
         <SectionTitle>회차</SectionTitle>
@@ -70,6 +91,11 @@ export function ConcertEditPage() {
           <SectionTitle>공연 정보</SectionTitle>
         </div>
         <EditForm concert={concert} stadiums={stadiums} />
+      </section>
+
+      <section className="p-4 pt-2">
+        <SectionTitle>공연 관리</SectionTitle>
+        <Management concert={concert} />
       </section>
     </>
   );
@@ -165,5 +191,76 @@ function EditForm({ concert, stadiums }: { concert: ConcertDetail; stadiums: Sta
       onBlur={(name) => setTouched((prev) => ({ ...prev, [name]: true }))}
       onSubmit={handleSubmit}
     />
+  );
+}
+
+/**
+ * 공개·비공개 전환과 삭제.
+ *
+ * 비공개는 되돌릴 수 있어 일반 버튼 + 일반 확인 모달이고, 삭제는 되돌릴 수 없어
+ * 붉은 버튼 + 붉은 확인 모달입니다 (CLAUDE.md 4-7). 둘이 같아 보이면 사고가 납니다.
+ * 예매 이력이 있는 공연은 서버가 삭제를 거절하므로(PERFORMANCE_017) 그럴 땐 비공개로 감추라고 안내합니다.
+ */
+function Management({ concert }: { concert: ConcertDetail }) {
+  const { open } = useModal();
+  const id = String(concert.concertId);
+  const visibility = useSetVisibility(id);
+  const remove = useDeleteConcert();
+
+  const confirmVisibility = () => {
+    const toHidden = !concert.hidden;
+    open('common/confirm', {
+      title: toHidden ? '공연을 비공개로 바꿀까요?' : '공연을 다시 공개할까요?',
+      message: toHidden
+        ? '목록과 상세에서 보이지 않게 됩니다. 데이터는 그대로 남아 언제든 다시 공개할 수 있어요.'
+        : '목록과 상세에 다시 보이고 예매도 가능해집니다.',
+      confirmText: toHidden ? '비공개로 바꾸기' : '공개하기',
+      onConfirm: () => visibility.mutate(!toHidden ? true : false),
+    });
+  };
+
+  const confirmDelete = () =>
+    open('common/confirm', {
+      title: '이 공연을 삭제할까요?',
+      message:
+        '회차·구역·좌석 설정과 이미지가 함께 지워지고 되돌릴 수 없습니다. 예매 이력이 있는 공연은 삭제되지 않으니, 그럴 땐 비공개로 감춰 주세요.',
+      confirmText: '삭제',
+      danger: true,
+      onConfirm: () => remove.mutate(id),
+    });
+
+  return (
+    <div className="space-y-2">
+      <div className="surface-2 flex items-center gap-3 rounded-2xl p-3.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{concert.hidden ? '지금 비공개 상태예요' : '지금 공개 상태예요'}</p>
+          <p className="text-subtle mt-0.5 text-xs">
+            {concert.hidden
+              ? '목록과 상세에서 보이지 않아요. 정보를 고친 뒤 다시 공개하세요.'
+              : '정보가 틀렸거나 잠깐 내려야 하면 비공개로 감출 수 있어요. 되돌릴 수 있습니다.'}
+          </p>
+        </div>
+        <Button
+          variant="soft"
+          size="md"
+          leftIcon={concert.hidden ? <Eye size={16} /> : <EyeOff size={16} />}
+          loading={visibility.isPending}
+          onClick={confirmVisibility}
+        >
+          {concert.hidden ? '공개하기' : '비공개'}
+        </Button>
+      </div>
+
+      <Button
+        variant="danger-ghost"
+        size="md"
+        fullWidth
+        leftIcon={<Trash2 size={16} />}
+        loading={remove.isPending}
+        onClick={confirmDelete}
+      >
+        공연 삭제
+      </Button>
+    </div>
   );
 }

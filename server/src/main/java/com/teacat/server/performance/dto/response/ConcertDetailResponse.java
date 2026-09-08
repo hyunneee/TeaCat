@@ -46,7 +46,11 @@ public record ConcertDetailResponse(
 
         @Schema(description = "등록한 관리자 ID. 이 사람만 수정·삭제할 수 있다. 등록자를 알 수 없는 옛 데이터는 null",
                 example = "6")
-        Long createdBy
+        Long createdBy,
+
+        @Schema(description = "비공개 상태인가. 클라이언트 조회에서는 항상 false 다 — 비공개 공연은 거기서 404 라서. "
+                + "등록자용 조회(/admin/concerts/{id})에서만 true 가 올 수 있다", example = "false")
+        boolean hidden
 ) {
 
     @Schema(description = "공연장 정보")
@@ -89,7 +93,8 @@ public record ConcertDetailResponse(
                 detailImageUrl,
                 StadiumResponse.from(performance.getStadium()),
                 schedules,
-                performance.getCreatedById()
+                performance.getCreatedById(),
+                performance.isHidden()
         );
     }
 }

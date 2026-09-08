@@ -9,7 +9,9 @@ import com.teacat.server.performance.dto.request.ConcertVisibilityRequest;
 import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertStatusResponse;
+import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
 import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
@@ -25,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -58,6 +61,25 @@ public class AdminPerformanceController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success("공연이 등록되었습니다.",
                         adminPerformanceService.create(request, authUser.id())));
+    }
+
+    @Operation(summary = "내가 등록한 공연 목록",
+            description = "비공개 공연도 포함합니다. 클라이언트 목록(API-201)은 비공개를 숨기므로, "
+                    + "비공개로 돌린 공연을 다시 공개하려면 여기서 찾습니다. 최근 등록순.")
+    @GetMapping("/mine")
+    public ResponseEntity<BaseResponse<List<ConcertSummaryResponse>>> getMyConcerts(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.ok(BaseResponse.success(adminPerformanceService.getMyConcerts(authUser.id())));
+    }
+
+    @Operation(summary = "내가 등록한 공연 상세",
+            description = "비공개 공연도 조회됩니다. 등록자 본인만 볼 수 있습니다.")
+    @GetMapping("/{concertId}")
+    public ResponseEntity<BaseResponse<ConcertDetailResponse>> getMyConcert(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
+        return ResponseEntity.ok(BaseResponse.success(
+                adminPerformanceService.getMyConcert(concertId, authUser.id())));
     }
 
     @Operation(summary = "공연 수정",

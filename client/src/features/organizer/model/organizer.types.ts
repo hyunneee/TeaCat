@@ -36,6 +36,14 @@ export interface ScheduleCreateResponse {
   performanceNum: number;
 }
 
+/** 공연 노출 전환 응답 (API-271) */
+export interface ConcertVisibilityResponse {
+  concertId: number;
+  visible: boolean;
+  /** 비공개로 바뀐 시각. 공개 상태면 null */
+  hiddenAt: string | null;
+}
+
 /**
  * 공연 수정 요청 (API-262). 보내는 필드만 바뀝니다.
  * 이미지는 파일이 아니라 업로드 URL 로 올린 뒤 받은 key 를 넘깁니다.
