@@ -41,7 +41,10 @@ public class SecurityConfig {
     private static final String[] PUBLIC_GET_ENDPOINTS = {
             "/concerts",
             "/concerts/**",
-            "/schedules/**"
+            "/schedules/**",
+            "/stadiums",
+            "/stadiums/**",
+            "/areas/**"
     };
 
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;
@@ -68,6 +71,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
+                        .requestMatchers("/admin/stadiums", "/admin/stadiums/**",
+                                "/admin/areas/**", "/admin/seats/**")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.STADIUM.name())
                         // 매처를 빠뜨린 관리자 API 도 잠기도록 마지막에 포괄 규칙을 둔다
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())
                         .anyRequest().authenticated())
