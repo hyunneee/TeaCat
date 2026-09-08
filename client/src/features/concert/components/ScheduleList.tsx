@@ -2,7 +2,7 @@ import { Hourglass, ScanFace, Ticket } from 'lucide-react';
 import { Badge, Button } from '@/shared/components/ui';
 import { Stagger } from '@/shared/components/common';
 import { cn, formatDateTime } from '@/shared/lib';
-import { isBookable, scheduleStatusLabel, scheduleTone } from '../model/schedule.model';
+import { canWaitlist, isBookable, scheduleStatusLabel, scheduleTone } from '../model/schedule.model';
 import type { ScheduleSummary } from '../model/concert.types';
 
 interface Props {
@@ -71,7 +71,12 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
 
                 <Badge tone={scheduleTone(schedule)}>{scheduleStatusLabel(schedule)}</Badge>
 
-                {bookable ? (
+                {/* 버튼은 상태별로 딱 하나만.
+                    - 예매 가능(OPEN): 예매
+                    - 매진(SOLDOUT): 취소표 추첨 대기 — 매진된 뒤에만 열립니다
+                    - 오픈 전(BEFORE)·마감(CLOSED): 버튼 없음. 오픈 전에 대기를 열면 "미리 줄 서기" 가 되어
+                      추첨의 의미가 사라지고, 마감된 회차는 표가 다시 나올 일이 없습니다 */}
+                {bookable && (
                   <Button
                     size="sm"
                     /* 막혀 있을 땐 강조색을 위 안내의 버튼 하나에만 둡니다.
@@ -83,7 +88,8 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
                   >
                     예매
                   </Button>
-                ) : (
+                )}
+                {canWaitlist(schedule) && (
                   <Button
                     size="sm"
                     variant="soft"

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { CalendarDays, MapPin, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
+import { CalendarDays, MapPin, Pencil, ShieldAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import {
   Card,
@@ -16,7 +16,6 @@ import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
 import { ScheduleList, isConcertOwner, posterSeedOf, useConcertDetail } from '@/features/concert';
-import { useDeleteConcert } from '@/features/organizer';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -25,23 +24,12 @@ export function ConcertDetailPage() {
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
   const { data: concert, isPending, isError } = useConcertDetail(concertId);
-  const remove = useDeleteConcert();
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
-  /** 헤더 오른쪽의 수정·삭제는 **이 공연을 등록한 관리자**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020). */
+  /** 헤더 오른쪽의 수정 버튼은 **이 공연을 등록한 사람**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020).
+      비공개 전환·삭제는 수정 화면 안의 "공연 관리" 에 있습니다 — 상세는 관람객이 보는 화면이라 관리 버튼을 늘리지 않습니다. */
   const canManage = can.manageConcert(user) && !!concert && isConcertOwner(concert, user?.userId);
-
-  /* 삭제는 되돌릴 수 없습니다 — 붉은 확인 모달을 거칩니다 (CLAUDE.md 4-7).
-     예매 이력이 있으면 서버가 거절하고 훅이 그 메시지를 토스트로 보여줍니다. */
-  const confirmDelete = () =>
-    open('common/confirm', {
-      title: '이 공연을 삭제할까요?',
-      message: '회차·구역·좌석 설정과 이미지가 함께 지워지고 되돌릴 수 없습니다. 예매 이력이 있는 공연은 삭제되지 않아요.',
-      confirmText: '삭제',
-      danger: true,
-      onConfirm: () => remove.mutate(concertId),
-    });
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
@@ -97,19 +85,9 @@ export function ConcertDetailPage() {
         showBack
         right={
           canManage ? (
-            <span className="flex items-center">
-              <IconButton label="공연 수정" onClick={() => navigate(ROUTES.CONCERT_EDIT(concertId))}>
-                <Pencil size={19} />
-              </IconButton>
-              <IconButton
-                label="공연 삭제"
-                variant="danger-ghost"
-                disabled={remove.isPending}
-                onClick={confirmDelete}
-              >
-                <Trash2 size={19} />
-              </IconButton>
-            </span>
+            <IconButton label="공연 수정" onClick={() => navigate(ROUTES.CONCERT_EDIT(concertId))}>
+              <Pencil size={19} />
+            </IconButton>
           ) : undefined
         }
       />

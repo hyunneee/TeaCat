@@ -11,6 +11,7 @@ export {
   useStadiums,
 } from './hooks/useCreateConcert';
 export { useAddSchedule, useDeleteSchedule } from './hooks/useManageSchedules';
+export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
 export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 // View
@@ -32,5 +33,6 @@ export {
   type ConcertFormMode,
   type ConcertCreateResponse,
   type ConcertUpdateRequest,
+  type ConcertVisibilityResponse,
   type StadiumSummary,
 } from './model/organizer.types';

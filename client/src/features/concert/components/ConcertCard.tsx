@@ -40,8 +40,12 @@ export function ConcertCard({ concert, onClick }: Props) {
       whileTap={{ scale: 0.985 }}
       className="surface shadow-list hover:bg-surface-2 relative flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
     >
-      {/* 상태 칩 — 카드 우상단 고정 */}
-      {open ? (
+      {/* 상태 칩 — 카드 우상단 고정. 비공개는 등록자용 목록에서만 오고, 열림 여부보다 먼저 알려야 합니다 */}
+      {concert.hidden ? (
+        <Badge tone="neutral" size="lg" className="absolute top-2.5 right-2.5">
+          비공개
+        </Badge>
+      ) : open ? (
         <Badge tone="live" size="lg" icon={<LiveDot />} className="absolute top-2.5 right-2.5">
           예매중
         </Badge>
