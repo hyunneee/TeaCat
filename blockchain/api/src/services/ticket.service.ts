@@ -9,7 +9,7 @@ import {
   ticketSbtAddress,
 } from '../chain/contracts/ticketSbt';
 import { normalizeAddress } from '../chain/address';
-import { recordAlreadyIssued, watchIssue } from './confirm.service';
+import { recordAlreadyIssued, recordBurn, watchIssue } from './confirm.service';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
 
@@ -190,5 +190,10 @@ export async function burnTicketById(tokenId: bigint): Promise<BurnResult> {
 
   const txHash = await burnTicket(tokenId);
   logger.info(`티켓 소각 #${id} tx=${short(txHash)}`);
+
+  /* 어느 트랜잭션으로 태웠는지만 남깁니다. 상태 전이는 Spring 이 소유합니다 —
+     취소를 트리거한 쪽이 Spring 이라 우리가 상태를 옮기면 두 주인이 생깁니다. */
+  await recordBurn(id, txHash);
+
   return { status: 'PENDING', txHash, tokenId: id };
 }
