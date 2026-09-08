@@ -7,4 +7,6 @@ docker/certbot/
 
 # 배포 시크릿
 docker/.env.dev
+docker/.env.dev.chain
 docker/.env.prod
+docker/.env.prod.chain
