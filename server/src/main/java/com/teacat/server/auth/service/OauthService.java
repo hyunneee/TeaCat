@@ -167,9 +167,19 @@ public class OauthService {
         return byEmail;
     }
 
+    /**
+     * 회원과 SSAFY 계정을 연결한다.
+     *
+     * 🔴 무조건 INSERT 하면 안 된다. 회원당 제공자 하나만 연결할 수 있어서
+     *    (uq_user_oauth_accounts_user_provider) 이미 다른 식별자로 연결된 회원이
+     *    다시 로그인하면 제약 위반으로 500 이 난다. 있으면 갈아끼운다.
+     */
     private void link(User user, OauthProfile profile) {
-        oauthAccountRepository.save(
-                OauthAccount.link(user, PROVIDER, profile.providerUserId(), profile.email()));
+        oauthAccountRepository.findByUserAndProvider(user, PROVIDER)
+                .ifPresentOrElse(
+                        account -> account.relink(profile.providerUserId(), profile.email()),
+                        () -> oauthAccountRepository.save(
+                                OauthAccount.link(user, PROVIDER, profile.providerUserId(), profile.email())));
     }
 
     private String issueSignupTicket(OauthProfile profile) {

@@ -109,6 +109,19 @@ public class AuthService {
         }
     }
 
+    /**
+     * 이 회원의 모든 세션을 끊는다 (비밀번호 변경 · 탈퇴).
+     *
+     * 리프레시 토큰을 전부 지우므로 다른 기기는 재발급을 못 하고 튕긴다.
+     *
+     * ⚠️ 이미 발급된 액세스 토큰은 만료(기본 1시간)까지 살아 있다. 무상태 검증이라
+     *    서버가 개별 토큰을 막을 방법이 없다. 즉시 차단까지 필요해지면
+     *    블랙리스트나 토큰 버전 클레임을 도입해야 한다.
+     */
+    public void revokeAllSessions(Long userId) {
+        refreshTokenProvider.revokeAll(userId);
+    }
+
     private TokenPair issueTokens(User user) {
         return new TokenPair(
                 jwtTokenProvider.createAccessToken(user.getId(), user.getRole()),
