@@ -8,6 +8,13 @@ import type { TxReport } from '../services/tx.service';
 import { txParams } from '../controllers/tx.controller';
 import { balanceQuery, burnBody, mintBody } from '../controllers/catMoney.controller';
 import type { BalanceResult, WriteResult } from '../services/catMoney.service';
+import { issueBody, ticketKeyQuery, ticketParams } from '../controllers/ticket.controller';
+import type {
+  BurnResult,
+  IssueResult,
+  TicketLookupResult,
+  TicketResult,
+} from '../services/ticket.service';
 import { registerPlannedPaths } from './planned';
 
 // `.openapi()` 를 쓰려면 zod 를 먼저 확장해야 합니다. 스키마 정의보다 앞서야 합니다.
@@ -84,6 +91,17 @@ const healthResponse = registry.register(
           'SSAFY 체인은 가스가 무료라 `true` 입니다. 이때 잔고 0 은 정상이고 경고하지 않습니다.',
       }),
     }),
+    db: z
+      .object({
+        enabled: z.boolean().openapi({
+          description: '`DATABASE_URL` 이 설정돼 있는지. false 면 티켓이 계속 PENDING 입니다',
+        }),
+        connected: z.boolean(),
+      })
+      .openapi({
+        description:
+          'Spring DB 연결 상태. 확정 결과를 여기에 기록합니다 (DESIGN.md 1장 예외)',
+      }),
     contracts: z.record(z.string()).openapi({
       description: '배포된 컨트랙트 이름 → 주소. 배포 전이면 비어 있습니다',
       example: {},
@@ -351,6 +369,266 @@ registry.registerPath({
   },
 });
 
+/* ── /internal/tickets ─────────────────────────────────────────── */
+
+/* 온체인에 있는 것은 tokenId 와 owner 뿐입니다. 그리고 tokenId 는 순번이 아니라
+   `uint256(keccak256(ticketKey))` 라, ticketKey 자체가 번호 안에 들어 있습니다.
+   좌석·공연·입장 여부는 Spring 의 티켓 DB 가 소유합니다. */
+
+const TOKEN_ID_EXAMPLE =
+  '68305854838909086441253217158707152467914205174056545964033358727224496790241';
+
+const ticketResponse = registry.register(
+  'Ticket',
+  z.object({
+    tokenId: z.string().openapi({ example: TOKEN_ID_EXAMPLE }),
+    owner: z
+      .string()
+      .nullable()
+      .openapi({
+        example: '0x82b00adc4bb58753d25b860204f378065172a950',
+        description: '**소각(예매 취소)됐으면 null** 입니다',
+      }),
+    burned: z.boolean().openapi({ description: '취소되어 소각됐는지. `owner === null` 과 같습니다' }),
+  }),
+);
+
+type _TicketMatches = Assert<Exact<z.infer<typeof ticketResponse>, TicketResult>>;
+
+const ticketLookupResponse = registry.register(
+  'TicketLookup',
+  z.object({
+    issued: z.boolean().openapi({
+      description: '이 `ticketKey` 로 발행된 적이 있는지. **false 면 나머지 필드는 의미가 없습니다**',
+    }),
+    tokenId: z.string().nullable().openapi({ example: TOKEN_ID_EXAMPLE }),
+    owner: z.string().nullable().openapi({ description: '소각됐으면 null' }),
+    burned: z.boolean(),
+  }),
+);
+
+type _TicketLookupMatches = Assert<Exact<z.infer<typeof ticketLookupResponse>, TicketLookupResult>>;
+
+const issueResponse = registry.register(
+  'TicketIssueResult',
+  z.object({
+    status: z.enum(['PENDING', 'ALREADY_ISSUED']).openapi({
+      description:
+        '`PENDING` 방금 전송했습니다. `ALREADY_ISSUED` 같은 `ticketKey` 가 이미 발행돼 ' +
+        '새 트랜잭션을 보내지 않았습니다 — 재시도가 안전한 이유입니다.',
+    }),
+    txHash: z
+      .string()
+      .nullable()
+      .openapi({ description: '`ALREADY_ISSUED` 면 보낸 트랜잭션이 없어 null 입니다' }),
+    tokenId: z.string().openapi({
+      example: TOKEN_ID_EXAMPLE,
+      description:
+        '`ticketKey` 에서 계산한 번호라 **두 응답 모두 채워집니다.** 발행 전에도 정해집니다.\n\n' +
+        '⚠️ `PENDING` 이면 이 번호는 **아직 체인에 없습니다.** 그 티켓이 갖게 될 번호일 뿐이라, ' +
+        '발행이 실패하면 그런 토큰은 생기지 않습니다. 입장 판정 전에 ' +
+        '`GET /internal/tx/{txHash}` 로 확정을 확인하세요.',
+    }),
+  }),
+);
+
+type _IssueMatches = Assert<Exact<z.infer<typeof issueResponse>, IssueResult>>;
+
+const burnResponse = registry.register(
+  'TicketBurnResult',
+  z.object({
+    status: z.enum(['PENDING', 'ALREADY_DONE']).openapi({
+      description: '`ALREADY_DONE` 이미 소각된 티켓입니다. 새 트랜잭션을 보내지 않았습니다',
+    }),
+    txHash: z.string().nullable(),
+    tokenId: z.string().openapi({ example: TOKEN_ID_EXAMPLE }),
+  }),
+);
+
+type _BurnMatches = Assert<Exact<z.infer<typeof burnResponse>, BurnResult>>;
+
+const TICKET_PENDING =
+  '블록 확정을 기다리지 않고 즉시 돌려줍니다. Spring 은 `txHash` 를 저장하고 ' +
+  '`GET /internal/tx/{txHash}` 로 확정을 확인합니다. (DESIGN.md 4-2)';
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/tickets/issue',
+  tags: ['티켓'],
+  summary: '티켓 SBT 발행',
+  description:
+    '**결제가 완료된 뒤** 부릅니다. 티켓은 발행되는 순간부터 양도할 수 없습니다.\n\n' +
+    '### 온체인에는 두 가지만 올라갑니다\n\n' +
+    '`tokenId` 와 `owner`. **좌석·공연·입장 여부는 보내지 마세요** — ' +
+    '그건 Spring 의 티켓 DB 가 소유합니다. 같은 값을 체인에 또 두면 두 벌이 되고, ' +
+    '어긋나는 순간 어느 쪽이 맞는지 판단할 근거가 사라집니다.\n' +
+    '**얼굴 벡터는 이 서비스로 보내지 마세요.**\n\n' +
+    '### `ticketKey` 가 티켓 두 장을 막습니다\n\n' +
+    '이 서비스에는 DB 가 없습니다. tx 를 보낸 직후 응답 전에 프로세스가 죽으면 ' +
+    'Spring 은 실패로 보고 재시도하는데, 그때 중복 발행을 막을 수 있는 건 체인뿐입니다 — ' +
+    '"tx 가 나갔는지" 는 보낸 쪽만 아는데 그 쪽이 죽었기 때문입니다. (DESIGN.md 4-3)\n\n' +
+    '같은 `ticketKey` 로 재시도하면 `200` + `ALREADY_ISSUED` 에 기존 `tokenId` 가 담겨 옵니다.\n\n' +
+    '### 캣머니 결제와의 순서\n\n' +
+    '**캣머니 소각(결제)을 먼저 확정하고, 그 다음 발행하세요.**\n\n' +
+    '발행이 실패하면 별도 `operationKey` 로 `mint`(`reason: REFUND`) 해서 되돌립니다 — ' +
+    '환급 경로는 발행이 정지된 중에도 살아 있어 항상 복구됩니다.\n\n' +
+    '### tokenId 는 즉시 나옵니다. 다만 아직 체인에는 없습니다\n\n' +
+    '`tokenId = uint256(keccak256(ticketKey))` 라 트랜잭션을 보내기 전에 정해집니다. ' +
+    '그래서 확정을 기다리지 않고도 응답에 담아 드립니다 — DB 에 미리 기록하셔도 됩니다.\n\n' +
+    '**다만 번호를 받았다고 티켓이 있는 건 아닙니다.** 발행이 실패하면(정지 중이거나 ' +
+    'tx 가 드롭되면) 그런 토큰은 생기지 않습니다. **입장 판정 전에는** ' +
+    '`GET /internal/tx/{txHash}` 로 `CONFIRMED` 를 확인하세요.\n\n' +
+    '77자리 숫자입니다. `BIGINT` 에 안 들어가니 `VARCHAR(78)` 이나 `NUMERIC(78,0)` 을 쓰세요.\n\n' +
+    '응답을 아예 잃어버렸다면 `GET /internal/tickets/by-key` 로 찾으세요.\n\n' +
+    '주의: `to` 는 **`POST /internal/wallets` 가 만들어준 파생 지갑**이어야 합니다. ' +
+    '티켓은 양도할 수 없어서, 엉뚱한 주소로 나가면 옮길 방법이 아예 없습니다.\n\n' +
+    TICKET_PENDING,
+  security: [{ [internalKey.name]: [] }],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': { schema: registry.register('TicketIssueRequest', issueBody) },
+      },
+    },
+  },
+  responses: {
+    202: {
+      description: '전송했습니다. 확정은 `GET /internal/tx/{txHash}`',
+      content: { 'application/json': { schema: issueResponse } },
+    },
+    200: {
+      description:
+        '이미 발행된 `ticketKey` 입니다. 새 트랜잭션을 보내지 않았습니다. ' +
+        '**취소(소각)된 예매도 여기 해당합니다** — 그 키는 이미 소비됐습니다',
+      content: { 'application/json': { schema: issueResponse } },
+    },
+    400: { description: '본문 형식 오류', content: { 'application/json': { schema: errorResponse } } },
+    503: {
+      description:
+        'TicketSBT 미배포(`CONTRACT_UNAVAILABLE`), 또는 운영자가 발행을 정지시켰습니다 ' +
+        '(`CONTRACT_PAUSED`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/internal/tickets/by-key',
+  tags: ['티켓'],
+  summary: 'ticketKey 로 발행 결과 조회',
+  description:
+    '발행 요청을 보냈는데 **응답을 못 받았을 때 결과를 복구**하는 용도입니다.\n\n' +
+    '이게 없으면 남는 선택지가 "재시도해서 두 장 발행되거나, 재시도 안 해서 결제만 되고 ' +
+    '티켓이 없거나" 뿐입니다 — 온체인의 `tokenId`·`owner` 만으로는 같은 지갑의 여러 티켓 중 ' +
+    '어느 것이 어느 예매 건인지 구분되지 않습니다.\n\n' +
+    '발행되지 않았어도 `200` 에 `{ "issued": false }` 로 내려갑니다. 404 가 아닙니다 — ' +
+    '404 로 만들면 "아직 안 됨" 과 "경로가 틀림" 을 구분할 수 없습니다.\n\n' +
+    '취소(소각)된 티켓도 `issued: true` 이고 `burned: true` 입니다.\n\n' +
+    '`ticketKey` 는 자유 문자열이므로 **URL 인코딩해서** 보내세요.',
+  security: [{ [internalKey.name]: [] }],
+  request: { query: registry.register('TicketKeyQuery', ticketKeyQuery) },
+  responses: {
+    200: {
+      description: '발행 여부. 발행됐으면 tokenId·owner·burned 가 함께 옵니다',
+      content: { 'application/json': { schema: ticketLookupResponse } },
+    },
+    400: { description: '`key` 가 비었습니다', content: { 'application/json': { schema: errorResponse } } },
+    503: {
+      description: 'TicketSBT 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'get',
+  path: '/internal/tickets/{tokenId}',
+  tags: ['티켓'],
+  summary: '티켓 온체인 데이터 조회',
+  description:
+    '소유권 확인과 대사(reconciliation)에 씁니다.\n\n' +
+    '**얼굴 벡터·좌석·공연 정보는 여기 없습니다.** 체인이 아는 것은 ' +
+    '"이 번호를 지금 누가 갖고 있는가" 뿐이고, 나머지는 Spring 의 티켓 DB 에 있습니다.\n\n' +
+    '발행 응답이 `ALREADY_ISSUED` 라 `txHash` 가 없을 때, 확정 확인을 여기서 합니다 — ' +
+    '`owner` 가 있으면 확정된 것이고, `404` 면 앞선 트랜잭션이 아직 안 실린 것입니다.\n\n' +
+    '### 소각된 티켓과 없는 번호는 다릅니다\n\n' +
+    '| | |\n' +
+    '|---|---|\n' +
+    '| `200` `burned: false` | 살아 있는 티켓 |\n' +
+    '| `200` `burned: true` · `owner: null` | 발행됐다가 취소되어 소각됨 |\n' +
+    '| `404` | 발행된 적 없는 번호 |\n\n' +
+    '`ownerOf` 는 뒤의 둘을 똑같이 거부하기 때문에, 컨트랙트가 `ticketKeyHash` 를 ' +
+    '소각 후에도 남겨 둘을 갈라줍니다.\n\n' +
+    '**화면용 조회로 쓰지 마세요.** "내 티켓 목록" 은 Spring 이 자기 DB 에서 내려줍니다. ' +
+    '체인은 그게 진짜임을 증명하는 레이어지 조회 소스가 아닙니다 (DESIGN.md 4-5).',
+  security: [{ [internalKey.name]: [] }],
+  request: { params: registry.register('TicketIdParam', ticketParams) },
+  responses: {
+    200: {
+      description: '티켓 상태 (소각된 티켓 포함)',
+      content: { 'application/json': { schema: ticketResponse } },
+    },
+    400: {
+      description: '`tokenId` 가 1 이상의 정수 문자열이 아닙니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    404: {
+      description: '발행된 적 없는 번호입니다 (`TICKET_NOT_FOUND`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'TicketSBT 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/tickets/{tokenId}/burn',
+  tags: ['티켓'],
+  summary: '티켓 소각 (예매 취소)',
+  description:
+    '**토큰을 파괴합니다. 되돌릴 수 없습니다.** 요청 본문은 없습니다.\n\n' +
+    '소각하면 `ownerOf` 가 실패하므로 **존재 자체가 유효성**이 됩니다.\n\n' +
+    '### tokenId 는 재사용되지 않습니다\n\n' +
+    '취소표가 다른 사람에게 갈 때는 **새 `ticketKey` 로 새 `tokenId`** 가 나갑니다. ' +
+    '같은 `ticketKey` 로 다시 부르면 `ALREADY_ISSUED` 로 막힙니다 — 취소된 예매가 ' +
+    '되살아나면 안 되기 때문입니다.\n\n' +
+    '### 소각 이력\n\n' +
+    '조회 가능한 상태에서는 사라지지만 `Transfer(owner → 0x0)` **이벤트 로그**에는 ' +
+    '영구히 남습니다. 다만 로그는 상태가 아니라, 꺼내려면 블록 범위를 훑는 인덱서가 ' +
+    '필요합니다.\n\n' +
+    '### 정지 스위치가 걸리지 않는 유일한 쓰기입니다\n\n' +
+    '사고로 발행을 멈춰도 환불 경로는 살아 있어야 합니다 ' +
+    '(DESIGN.md 결정 이력 2026-09-02).\n\n' +
+    '소각이 확정된 뒤 캣머니를 환급하세요. 순서가 반대면 환급만 나가고 티켓이 ' +
+    '살아 있는 상태가 생깁니다.\n\n' +
+    TICKET_PENDING,
+  security: [{ [internalKey.name]: [] }],
+  request: { params: registry.register('TicketBurnParam', ticketParams) },
+  responses: {
+    202: {
+      description: '전송했습니다',
+      content: { 'application/json': { schema: burnResponse } },
+    },
+    200: {
+      description: '이미 소각된 티켓입니다. 새 트랜잭션을 보내지 않았습니다',
+      content: { 'application/json': { schema: burnResponse } },
+    },
+    404: {
+      description: '발행된 적 없는 번호입니다 (`TICKET_NOT_FOUND`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'TicketSBT 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
 /* ── /internal/tx/{txHash} ─────────────────────────────────────── */
 
 const txResponse = registry.register(
@@ -367,15 +645,24 @@ const txResponse = registry.register(
     result: z
       .object({
         operation: z
-          .enum(['CATMONEY_MINT', 'CATMONEY_BURN', 'CATMONEY_TRANSFER', 'UNKNOWN'])
+          .enum([
+            'CATMONEY_MINT',
+            'CATMONEY_BURN',
+            'CATMONEY_TRANSFER',
+            'TICKET_ISSUE',
+            'TICKET_BURN',
+            'UNKNOWN',
+          ])
           .openapi({
             description:
               '영수증 로그로 알아낸 작업. 우리 컨트랙트가 아니면 `UNKNOWN` 입니다',
           }),
-        tokenId: z
-          .string()
-          .nullable()
-          .openapi({ description: '티켓(M1)이 붙으면 채워집니다. 캣머니는 항상 null' }),
+        tokenId: z.string().nullable().openapi({
+          description:
+            '티켓 작업이면 채워집니다. 캣머니는 항상 null 입니다.\n\n' +
+            '**발행한 티켓의 번호를 여기서 받습니다.** `POST /internal/tickets/issue` 는 ' +
+            '확정을 기다리지 않으므로 응답에 tokenId 가 없습니다.',
+        }),
       })
       .nullable()
       .openapi({ description: 'CONFIRMED 일 때만 채워집니다' }),
@@ -460,9 +747,9 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateD
     tags: [
       { name: '상태', description: '인증 없이 열려 있습니다' },
       { name: '회원', description: '지갑 파생' },
+      { name: '티켓', description: '양도할 수 없습니다. 취소는 소각이 아니라 상태 전이입니다' },
       { name: '캣머니', description: '발행·소각으로만 움직입니다 (트레저리 없음)' },
       { name: '캣머니 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
-      { name: '티켓 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
       { name: '트랜잭션', description: '모든 쓰기의 확정 확인' },
     ],
   });

@@ -8,6 +8,12 @@ import {
   postCatMoneyBurn,
   postCatMoneyMint,
 } from '../controllers/catMoney.controller';
+import {
+  getTicket,
+  getTicketByKey,
+  postTicketBurn,
+  postTicketIssue,
+} from '../controllers/ticket.controller';
 import { asyncHandler } from '../shared/http';
 
 /**
@@ -30,11 +36,17 @@ internal.get('/tokens/catmoney/balance', asyncHandler(getCatMoneyBalance));
 internal.post('/tokens/catmoney/mint', asyncHandler(postCatMoneyMint));
 internal.post('/tokens/catmoney/burn', asyncHandler(postCatMoneyBurn));
 
+/* 티켓 SBT. 양도할 수 없고, 취소하면 소각됩니다. (DESIGN.md 6장 ①)
+   좌석·공연·입장 여부는 Spring 의 티켓 DB 가 소유합니다 — 여기엔 없습니다.
+
+   주의: `/tickets/by-key` 를 `/tickets/:tokenId` **앞에** 둡니다.
+         뒤에 두면 :tokenId 가 "by-key" 를 먼저 삼켜서 400 이 납니다. */
+internal.post('/tickets/issue', asyncHandler(postTicketIssue));
+internal.get('/tickets/by-key', asyncHandler(getTicketByKey));
+internal.get('/tickets/:tokenId', asyncHandler(getTicket));
+internal.post('/tickets/:tokenId/burn', asyncHandler(postTicketBurn));
+
 // 모든 쓰기의 최종 성공 여부를 확인하는 곳입니다. (DESIGN.md 4-2, 7장)
 internal.get('/tx/:txHash', asyncHandler(getTx));
-
-// 티켓은 M1 에서 붙습니다.
-//
-//   internal.post('/tickets/issue', …)
 
 router.use('/internal', internal);

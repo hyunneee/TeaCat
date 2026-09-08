@@ -13,8 +13,6 @@ export interface User {
   role: UserRole;
   /** 얼굴 등록 완료 여부 — 티켓 사용(입장)의 전제 조건 */
   faceRegistered: boolean;
-  /** 캣머니 잔액. 지갑 연동 전에는 서버가 null 을 줍니다 */
-  catBalance: number | null;
   createdAt: string;
 }
 

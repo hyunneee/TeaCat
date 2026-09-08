@@ -277,8 +277,12 @@ export function Card({ className, ...rest }: CardProps) {
 | 회원가입·로그인·내 정보·비밀번호·닉네임·탈퇴 | **실서버** (`/auth/*`, `/users/me*`) |
 | 자동 로그인(토큰 재발급)·SSAFY 계정 로그인 | **실서버** |
 | 얼굴 등록·삭제 | **실서버** (`/users/me/face`) |
+| 공연 목록·상세·회차, 공연 등록(관리자) | **실서버** (`/concerts/*`, `/schedules/*`, `/admin/concerts`, `/stadiums`) |
 | 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
-| 공연·예매·티켓·취소표·포카·캣머니·결제·배너·앱정보 | 목업 |
+| 예매·티켓·취소표·포카·캣머니·결제·배너·앱정보 | 목업 |
+
+⚠️ 공연은 실서버, 예매는 목업인 과도기입니다. 목업 예매 핸들러는 `mocks/db.ts` 의 회차 ID(`s-1` …)만 알아서,
+실서버 회차 ID 로 예매 플로우에 들어가면 목업이 404 를 줍니다. 예매가 실서버로 바뀌면 함께 풀립니다.
 
 - 켜고 끄기: `.env.development` 의 `VITE_USE_MOCK`
 - 동작: `shared/api/client.ts` 의 axios 어댑터를 가로챕니다.
@@ -560,3 +564,5 @@ npm run typecheck && npm run lint
 - 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
   배포·8장 갱신. SSAFY 계정 로그인 화면(`/oauth/callback`, `/oauth/signup`) 추가
 | 2026-09-03 | 하단 탭 하이라이트를 알약 → **원**(`size-10`)으로, 탭 사이를 미끄러져 이동 (원 하나만 두고 `인덱스 × 100%` 이동) | 사용자 요청 |
+- 2026-09-07 공연 목록·상세·회차 실서버 연동에 맞춰 5장(목업 현황) 갱신. `features/concert` 타입을 서버 응답으로 교체,
+  `features/organizer` 에 공연 등록(관리자) 추가, `can.createConcert` 를 서버와 같은 ADMIN 전용으로 조정

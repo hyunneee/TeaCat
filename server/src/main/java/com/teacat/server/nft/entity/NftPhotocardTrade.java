@@ -28,9 +28,15 @@ public class NftPhotocardTrade {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "listing_id", nullable = false, updatable = false)
+    /** 고정가 거래의 출처. 경매 거래면 null */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "listing_id", updatable = false)
     private NftPhotocardListing listing;
+
+    /** 경매 거래의 출처. 고정가 거래면 null. DB CHECK 가 둘 중 정확히 하나만 허용한다 */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "auction_id", updatable = false)
+    private NftAuction auction;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "photocard_id", nullable = false, updatable = false)
@@ -54,16 +60,26 @@ public class NftPhotocardTrade {
     @Column(name = "traded_at", nullable = false, updatable = false)
     private LocalDateTime tradedAt;
 
-    private NftPhotocardTrade(NftPhotocardListing listing, User buyer, UUID idempotencyKey) {
+    private NftPhotocardTrade(NftPhotocardListing listing, NftAuction auction, NftPhotocard photocard,
+                              User seller, User buyer, Long price, UUID idempotencyKey) {
         this.listing = listing;
-        this.photocard = listing.getPhotocard();
-        this.seller = listing.getSeller();
+        this.auction = auction;
+        this.photocard = photocard;
+        this.seller = seller;
         this.buyer = buyer;
-        this.price = listing.getPrice();
+        this.price = price;
         this.idempotencyKey = idempotencyKey;
     }
 
+    /** 고정가 구매 체결 */
     public static NftPhotocardTrade complete(NftPhotocardListing listing, User buyer, UUID idempotencyKey) {
-        return new NftPhotocardTrade(listing, buyer, idempotencyKey);
+        return new NftPhotocardTrade(listing, null, listing.getPhotocard(), listing.getSeller(), buyer,
+                listing.getPrice(), idempotencyKey);
+    }
+
+    /** 경매 체결 (낙찰 또는 즉시구매). price 는 체결가 */
+    public static NftPhotocardTrade fromAuction(NftAuction auction, User buyer, Long price, UUID idempotencyKey) {
+        return new NftPhotocardTrade(null, auction, auction.getPhotocard(), auction.getSeller(), buyer,
+                price, idempotencyKey);
     }
 }

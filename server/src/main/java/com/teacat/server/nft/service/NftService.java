@@ -15,12 +15,15 @@ import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardListing;
 import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.exception.NftErrorCode;
+import com.teacat.server.nft.repository.NftAuctionQueryRepository;
+import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
 import com.teacat.server.nft.repository.NftPhotocardListingRepository;
@@ -49,8 +52,6 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class NftService {
 
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
     private static final String MARKET_SCOPE_PREFIX = "market:";
     private static final String PURCHASE_SCOPE = "purchases";
     private static final String SALE_SCOPE = "sales";
@@ -59,6 +60,8 @@ public class NftService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final NftPhotocardRepository photocardRepository;
+    private final NftAuctionRepository auctionRepository;
+    private final NftAuctionQueryRepository auctionQueryRepository;
     private final NftPhotocardDesignRepository designRepository;
     private final NftPhotocardListingRepository listingRepository;
     private final NftPhotocardTradeRepository tradeRepository;
@@ -93,11 +96,17 @@ public class NftService {
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
                 : new NftPhotocardDetailResponse.Listing(
                         row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+        // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
+        NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
+                .map(summary -> new NftPhotocardDetailResponse.Auction(
+                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.bidCount(), summary.endsAt()))
+                .orElse(null);
         NftPhotocardDetailResponse.Origin origin = new NftPhotocardDetailResponse.Origin(
                 row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber());
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing);
+                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction);
     }
 
     @Transactional
@@ -110,6 +119,10 @@ public class NftService {
         }
         if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
+        }
+        // 경매 등록도 포카 행 락을 먼저 잡으므로, 여기서 본 결과는 커밋까지 유효하다
+        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+            throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
         NftPhotocardListing listing = listingRepository.save(
@@ -327,11 +340,7 @@ public class NftService {
     }
 
     private UUID parseIdempotencyKey(String header) {
-        try {
-            return UUID.fromString(header);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            throw new BusinessException(NftErrorCode.INVALID_IDEMPOTENCY_KEY);
-        }
+        return NftRequestSupport.parseIdempotencyKey(header);
     }
 
     private void validateIdempotentTarget(NftPhotocardTrade trade, Long photocardId) {
@@ -341,11 +350,7 @@ public class NftService {
     }
 
     private int validateSize(Integer requestedSize) {
-        int size = requestedSize == null ? DEFAULT_PAGE_SIZE : requestedSize;
-        if (size < 1 || size > MAX_PAGE_SIZE) {
-            throw new BusinessException(NftErrorCode.INVALID_PAGE_SIZE);
-        }
-        return size;
+        return NftRequestSupport.validateSize(requestedSize);
     }
 
     private String normalizeKeyword(String keyword) {

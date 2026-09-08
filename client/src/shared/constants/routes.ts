@@ -25,7 +25,11 @@ export const ROUTES = {
 
   /* ── 공연 ── */
   CONCERTS: '/concerts',
+  /** 공연 등록 (관리자). 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 */
+  CONCERT_CREATE: '/concerts/new',
   CONCERT_DETAIL: (concertId: string) => `/concerts/${concertId}`,
+  /** 공연 수정 (관리자) */
+  CONCERT_EDIT: (concertId: string) => `/concerts/${concertId}/edit`,
 
   /* ── 예매 플로우 ──
      공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */

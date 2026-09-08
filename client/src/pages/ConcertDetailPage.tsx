@@ -1,13 +1,22 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Clock, MapPin, ShieldAlert, Users } from 'lucide-react';
+import { CalendarDays, MapPin, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Card, Lightbox, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
+import {
+  Card,
+  IconButton,
+  Lightbox,
+  PosterImage,
+  SectionTitle,
+  Skeleton,
+} from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
+import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
-import { useAuth } from '@/features/auth';
-import { ScheduleList, useConcertDetail } from '@/features/concert';
+import { can, useAuth } from '@/features/auth';
+import { ScheduleList, isConcertOwner, posterSeedOf, useConcertDetail } from '@/features/concert';
+import { useDeleteConcert } from '@/features/organizer';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -16,8 +25,23 @@ export function ConcertDetailPage() {
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
   const { data: concert, isPending, isError } = useConcertDetail(concertId);
+  const remove = useDeleteConcert();
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
+
+  /** 헤더 오른쪽의 수정·삭제는 **이 공연을 등록한 관리자**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020). */
+  const canManage = can.manageConcert(user) && !!concert && isConcertOwner(concert, user?.userId);
+
+  /* 삭제는 되돌릴 수 없습니다 — 붉은 확인 모달을 거칩니다 (CLAUDE.md 4-7).
+     예매 이력이 있으면 서버가 거절하고 훅이 그 메시지를 토스트로 보여줍니다. */
+  const confirmDelete = () =>
+    open('common/confirm', {
+      title: '이 공연을 삭제할까요?',
+      message: '회차·구역·좌석 설정과 이미지가 함께 지워지고 되돌릴 수 없습니다. 예매 이력이 있는 공연은 삭제되지 않아요.',
+      confirmText: '삭제',
+      danger: true,
+      onConfirm: () => remove.mutate(concertId),
+    });
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
@@ -64,9 +88,31 @@ export function ConcertDetailPage() {
     );
   }
 
+  const seed = posterSeedOf(concert);
+
   return (
     <>
-      <Header title={concert.title} showBack />
+      <Header
+        title={concert.title}
+        showBack
+        right={
+          canManage ? (
+            <span className="flex items-center">
+              <IconButton label="공연 수정" onClick={() => navigate(ROUTES.CONCERT_EDIT(concertId))}>
+                <Pencil size={19} />
+              </IconButton>
+              <IconButton
+                label="공연 삭제"
+                variant="danger-ghost"
+                disabled={remove.isPending}
+                onClick={confirmDelete}
+              >
+                <Trash2 size={19} />
+              </IconButton>
+            </span>
+          ) : undefined
+        }
+      />
 
       <Lightbox
         open={posterZoomed}
@@ -75,55 +121,42 @@ export function ConcertDetailPage() {
         caption={
           <>
             <p className="text-base font-bold text-white">{concert.title}</p>
-            <p className="text-sm text-white/60">{concert.artist}</p>
+            <p className="text-sm text-white/60">{concert.stadium.name}</p>
           </>
         }
       >
-        <PosterImage
-          src={concert.posterUrl}
-          seed={concert.posterSeed}
-          alt={`${concert.title} 포스터`}
-        />
+        <PosterImage src={concert.posterUrl} seed={seed} alt={`${concert.title} 포스터`} />
       </Lightbox>
 
       <div className="space-y-6 p-4">
-        {/* 헤드 — 제목은 포스터 위쪽에, 장소·시간·연령은 **포스터 아래쪽에** 맞춥니다.
-            제목 바로 밑에 붙이면 셋이 한 덩어리로 뭉쳐 제목이 묻히고,
+        {/* 헤드 — 제목은 포스터 위쪽에, 장소·오픈 시각은 **포스터 아래쪽에** 맞춥니다.
+            제목 바로 밑에 붙이면 한 덩어리로 뭉쳐 제목이 묻히고,
             포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다. */}
         <section className="flex gap-4">
           {/* 눌러서 크게 봅니다 (포토카드와 같은 방식 — Lightbox).
-              포스터는 정보가 아니라 그림이라, 작게 보고 넘어가면 다시 못 봅니다.
-              기울이기·빛 반사는 없습니다 — 그건 "소유한 카드" 의 연출입니다. */}
+              포스터는 정보가 아니라 그림이라, 작게 보고 넘어가면 다시 못 봅니다. */}
           <button
             type="button"
             onClick={() => setPosterZoomed(true)}
             aria-label="포스터 크게 보기"
             className="w-28 shrink-0 rounded-xl transition-opacity active:opacity-80"
           >
-            <PosterImage
-              src={concert.posterUrl}
-              seed={concert.posterSeed}
-              alt={`${concert.title} 포스터`}
-            />
+            <PosterImage src={concert.posterUrl} seed={seed} alt={`${concert.title} 포스터`} />
           </button>
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-            <div>
-              <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
-              <p className="text-muted mt-0.5 text-sm">{concert.artist}</p>
-            </div>
+            <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
 
             <ul className="text-muted space-y-1 text-[0.8125rem]">
-              <li className="flex items-center gap-1.5">
-                <MapPin size={13} className="shrink-0" />
-                <span className="truncate">{concert.venue?.name}</span>
+              <li className="flex items-start gap-1.5">
+                <MapPin size={13} className="mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block truncate">{concert.stadium.name}</span>
+                  <span className="text-subtle block truncate text-xs">{concert.stadium.address}</span>
+                </span>
               </li>
               <li className="flex items-center gap-1.5">
-                <Clock size={13} className="shrink-0" />
-                {concert.runningMinutes}분
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Users size={13} className="shrink-0" />
-                {concert.ageLimit}
+                <CalendarDays size={13} className="shrink-0" />
+                <span className="truncate">티켓 오픈 {formatDateTime(concert.ticketingStartAt)}</span>
               </li>
             </ul>
           </div>
@@ -131,33 +164,44 @@ export function ConcertDetailPage() {
 
         {/* 소개 — 회차보다 **먼저** 옵니다.
             "이게 무슨 공연인지" 를 판단하기 전에 날짜를 고르라고 하면
-            위아래로 오가며 다시 읽게 됩니다. 읽고 나서 고르는 순서입니다. */}
-        <section>
-          <SectionTitle>공연 소개</SectionTitle>
-          <p className="text-muted text-sm leading-relaxed whitespace-pre-line">
-            {concert.description}
-          </p>
-        </section>
+            위아래로 오가며 다시 읽게 됩니다. 읽고 나서 고르는 순서입니다.
+            소개는 글이 아니라 **세로로 긴 이미지 한 장**입니다 (관리자가 올린 상세 이미지). */}
+        {concert.detailImageUrl && (
+          <section>
+            <SectionTitle>공연 소개</SectionTitle>
+            <img
+              src={concert.detailImageUrl}
+              alt={`${concert.title} 상세 안내`}
+              loading="lazy"
+              draggable={false}
+              className="border-line w-full rounded-xl border"
+            />
+          </section>
+        )}
 
         {/* 회차 */}
         <section>
           <SectionTitle>회차 선택</SectionTitle>
-          <ScheduleList
-            schedules={concert.schedules}
-            onBook={(scheduleId) => startBooking(scheduleId)}
-            onWaitlist={(scheduleId) => navigate(ROUTES.RESALE(scheduleId))}
-            blocked={
-              needsFace
-                ? {
-                    title: '얼굴 등록이 필요해요',
-                    description:
-                      '마이페이지에서 한 번만 등록하면 예매한 티켓에 자동으로 매칭돼요.',
-                    actionLabel: '등록하러 가기',
-                    onAction: goFaceRegister,
-                  }
-                : undefined
-            }
-          />
+          {concert.schedules.length === 0 ? (
+            <p className="text-subtle py-6 text-center text-sm">아직 등록된 회차가 없어요.</p>
+          ) : (
+            <ScheduleList
+              schedules={concert.schedules}
+              onBook={(scheduleId) => startBooking(scheduleId)}
+              onWaitlist={(scheduleId) => navigate(ROUTES.RESALE(scheduleId))}
+              blocked={
+                needsFace
+                  ? {
+                      title: '얼굴 등록이 필요해요',
+                      description:
+                        '마이페이지에서 한 번만 등록하면 예매한 티켓에 자동으로 매칭돼요.',
+                      actionLabel: '등록하러 가기',
+                      onAction: goFaceRegister,
+                    }
+                  : undefined
+              }
+            />
+          )}
         </section>
 
         {/* 안내 */}

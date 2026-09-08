@@ -15,6 +15,7 @@ import com.teacat.server.wallet.entity.CatTxStatus;
 import com.teacat.server.wallet.entity.Wallet;
 import com.teacat.server.wallet.entity.WalletOwner;
 import com.teacat.server.wallet.exception.WalletErrorCode;
+import com.teacat.server.wallet.repository.CatMoneyHoldRepository;
 import com.teacat.server.wallet.repository.CatTransactionRepository;
 import com.teacat.server.wallet.repository.WalletOwnerRepository;
 import com.teacat.server.wallet.repository.WalletRepository;
@@ -34,6 +35,10 @@ import java.util.Optional;
  * 결제처럼 서버 안에서 잔액을 봐야 하는 도메인도 HTTP 가 아니라 이 서비스를 직접 부릅니다.
  * 그래야 "지갑 주소를 어떻게 찾는가" 가 한 곳에만 있습니다.
  *
+ * 지출 가능 여부는 {@link CatMoneyHoldService#availableBalance} 로 판정합니다. 체인 잔액에는
+ * 입찰로 묶인 돈과 아직 확정되지 않은 소각이 그대로 남아 있어, 그대로 쓰면 같은 돈을 두 번 쓰게
+ * 됩니다. 화면에 보여줄 잔액도 balance 가 아니라 available 입니다.
+ *
  * 잔액은 저장하지 않습니다. 체인이 진실이고 캐시하면 반드시 어긋납니다
  * (blockchain/DESIGN.md 5-3).
  */
@@ -49,27 +54,35 @@ public class CatMoneyService {
     private final CatTransactionRepository catTransactionRepository;
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyClient catMoneyClient;
+    private final CatMoneyHoldRepository holdRepository;
 
     public BalanceResponse getBalance(Long userId) {
-        return BalanceResponse.from(catMoneyClient.getBalance(resolveWallet(userId).getAddress()));
+        return BalanceResponse.of(
+                catMoneyClient.getBalance(resolveAddress(userId)),
+                holdRepository.sumActiveAmount(userId));
     }
 
     /**
-     * 지금 실제로 쓸 수 있는 캣머니.
+     * 체인이 말하는 잔액. 묶인 돈도 미확정 소각도 빼지 않은 원시값이다.
      *
-     * <p>체인 잔액을 그대로 쓰면 안 됩니다. 소각을 보내고 확정되기까지 블록 하나(10초)가 걸리는데
-     * 그 동안 체인 잔액은 예전 값이라, 포카 마켓 구매와 티켓 결제가 <b>같은 잔액을 두 번</b> 쓸 수
-     * 있습니다. 아직 확정되지 않은 소각은 이미 나간 돈으로 보고 빼줍니다.
-     *
-     * <p>반대로 아직 확정되지 않은 <b>발행</b>은 더하지 않습니다. 실패할 수 있는 돈을 미리 쓰게
-     * 하면 안 됩니다 — 충전 직후 잠깐 잔액에 안 잡히는 편이 낫습니다.
+     * 지출 판정에 이 값을 직접 쓰지 말고 {@link CatMoneyHoldService#availableBalance} 를 쓴다.
      */
-    public BigInteger getSpendableBalance(Long userId) {
-        BigInteger onChain = new BigInteger(
-                catMoneyClient.getBalance(resolveWallet(userId).getAddress()).balance());
-        BigInteger pendingBurns = catTransactionRepository.sumPendingBurns(userId);
+    public long chainBalance(Long userId) {
+        return new BigInteger(catMoneyClient.getBalance(resolveAddress(userId)).balance()).longValueExact();
+    }
 
-        return onChain.subtract(pendingBurns).max(BigInteger.ZERO);
+    /**
+     * 보냈지만 아직 확정되지 않은 소각 합계.
+     *
+     * <p>체인 잔액에는 아직 안 빠져 있지만 <b>이미 나간 돈</b>이다. 소각을 보내고 확정되기까지
+     * 블록 하나(10초)가 걸리는데, 그 사이 체인 잔액은 예전 값이라 빼주지 않으면 같은 돈을 두 번
+     * 쓸 수 있다. {@link CatMoneyHoldService#availableBalance} 가 이 값을 쓴다.
+     *
+     * <p>반대로 아직 확정되지 않은 <b>발행</b>은 더하지 않는다. 실패할 수 있는 돈을 미리 쓰게 하면
+     * 안 된다 — 충전 직후 잠깐 잔액에 안 잡히는 편이 낫다.
+     */
+    public long pendingBurns(Long userId) {
+        return catTransactionRepository.sumPendingBurns(userId).longValueExact();
     }
 
     /**
@@ -147,6 +160,10 @@ public class CatMoneyService {
      * 지갑이 없으면 조용히 0 으로 넘기지 않는다. "잔액 0" 과 "지갑이 없음" 은 다른 상태이고,
      * 후자는 가입이 반쪽으로 끝났다는 뜻이라 드러나야 한다.
      */
+    private String resolveAddress(Long userId) {
+        return resolveWallet(userId).getAddress();
+    }
+
     private Wallet resolveWallet(Long userId) {
         WalletOwner owner = walletOwnerRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));

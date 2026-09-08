@@ -9,7 +9,7 @@ import {
 } from '../chain/contracts/catMoney';
 import { deriveUserAddress } from '../chain/keys/hdWallet';
 import { errors } from '../shared/errors';
-import { logger } from '../shared/logger';
+import { logger, short } from '../shared/logger';
 
 /**
  * 캣머니 유스케이스.
@@ -47,18 +47,6 @@ export interface WriteResult {
      1. 온체인 이벤트의 topic 과 같은 값이라 대사할 때 바로 맞춰볼 수 있습니다
      2. 그 자리에 무엇이 들어올지 우리가 정하지 못합니다. 실제로 개인키를 붙여넣은
         사고가 있었습니다 — 원문을 찍었다면 로그에 남았을 것입니다 (DESIGN.md 5-1) */
-
-/**
- * 로그용으로 앞부분만 남깁니다.
- *
- * 해시·txHash 는 개인키와 모양이 같아서(0x + 64 hex) 로거가 통째로 [REDACTED] 로
- * 가립니다. 마스킹이 잘못된 게 아니라 **모양만으로는 구분할 수 없기 때문**입니다.
- * 줄여서 남기면 대사에 쓸 만큼은 식별되고, 혹시 비밀값이 흘러와도 의미 있는 양이
- * 새지 않습니다. 전체 값이 필요하면 API 응답과 온체인에 있습니다.
- */
-function short(hex: string): string {
-  return `${hex.slice(0, 18)}…`;
-}
 
 /** 컨트랙트가 배포돼 있는지. 없으면 여기서 멈춥니다 — 조용히 넘기면 안 됩니다. */
 function requireDeployed(): void {

@@ -14,11 +14,10 @@ import {
 } from '@/shared/components/ui';
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { formatDateTime } from '@/shared/lib';
 import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
-import { useConcerts } from '@/features/concert';
+import { isTicketingOpen, posterSeedOf, useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
@@ -70,7 +69,7 @@ export function HomePage() {
   /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
   const { data: newPocas } = useNftMarket();
 
-  const open = concerts?.filter((c) => !c.upcoming).slice(0, RAIL_LIMIT) ?? [];
+  const open = concerts?.filter((c) => isTicketingOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
      두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
@@ -232,17 +231,17 @@ export function HomePage() {
             <div ref={concertRail} className="-mx-4 overflow-x-auto">
               <ul className="flex w-max gap-3 px-4 pt-1 pb-2">
                 {open.map((concert) => (
-                  <li key={concert.id} className="w-[8.5rem] shrink-0">
+                  <li key={concert.concertId} className="w-[8.5rem] shrink-0">
                     <motion.button
                       type="button"
-                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(concert.id))}
+                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
                       whileTap={{ scale: 0.97 }}
                       className="w-full text-left"
                     >
                       <div className="relative">
                         <PosterImage
                           src={concert.posterUrl}
-                          seed={concert.posterSeed}
+                          seed={posterSeedOf(concert)}
                           alt={`${concert.title} 포스터`}
                           className="w-full"
                         />
@@ -254,12 +253,7 @@ export function HomePage() {
                       </div>
 
                       <p className="mt-2 truncate text-[0.875rem] font-bold">{concert.title}</p>
-                      <p className="text-ink-muted truncate text-[0.8125rem]">{concert.artist}</p>
-                      {concert.firstShowAt && (
-                        <p className="text-subtle mt-0.5 truncate text-[0.75rem]">
-                          {formatDateTime(concert.firstShowAt)}
-                        </p>
-                      )}
+                      <p className="text-ink-muted truncate text-[0.8125rem]">{concert.stadiumName}</p>
                     </motion.button>
                   </li>
                 ))}

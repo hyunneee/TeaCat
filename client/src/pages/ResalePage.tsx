@@ -7,7 +7,6 @@ import { PageLoader } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { env } from '@/shared/config';
 import { ResaleSectionList, useApplyResale, useResaleSections } from '@/features/resale';
-import { useSchedule } from '@/features/concert';
 
 /**
  * 취소표 추첨 대기 신청.
@@ -22,11 +21,11 @@ export function ResalePage() {
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('1');
 
-  const { data: schedule } = useSchedule(scheduleId);
   const { data: sections, isPending } = useResaleSections(scheduleId);
   const apply = useApplyResale(scheduleId);
 
-  const maxPerUser = schedule?.maxPerUser ?? env.maxTicketsPerUser;
+  /* 회차 응답에는 매수 제한이 없습니다. 공연 예매 정책(API-205)이 붙으면 그 값을 먼저 쓰세요. */
+  const maxPerUser = env.maxTicketsPerUser;
   const quantityOptions = Array.from({ length: maxPerUser }, (_, i) => ({
     value: String(i + 1),
     label: `${i + 1}매`,

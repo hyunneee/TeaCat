@@ -30,6 +30,9 @@ interface Props {
  *    안내를 개발자도구로 지워도 예매가 되면 안 되므로
  *    버튼 자체를 `disabled` 로 잠그고, 그마저 우회해도
  *    `onBook` 핸들러와 라우트 가드(RequireFace)가 다시 막습니다. (3중 방어)
+ *
+ * 잔여 좌석 수는 여기 없습니다. 회차 응답에 없고, 좌석 현황은 예매 플로우의
+ * 좌석 조회(API-302)가 실시간으로 내려줍니다.
  */
 export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) {
   return (
@@ -52,50 +55,49 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked }: Props) 
       )}
 
       <Stagger as="ul" className={cn('space-y-2', blocked && 'opacity-60')}>
-      {schedules.map((schedule) => {
-        const bookable = isBookable(schedule);
+        {schedules.map((schedule) => {
+          const bookable = isBookable(schedule);
+          const id = String(schedule.scheduleId);
 
-        return (
-          <Stagger.Item as="li" key={schedule.id}>
-            <div className="surface-2 flex items-center gap-3 rounded-2xl p-3.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{formatDateTime(schedule.startAt)}</p>
-                <p className="text-subtle mt-0.5 text-xs">
-                  잔여 {schedule.availableSeats.toLocaleString()}석 · 1인 {schedule.maxPerUser}매
-                </p>
+          return (
+            <Stagger.Item as="li" key={schedule.scheduleId}>
+              <div className="surface-2 flex items-center gap-3 rounded-2xl p-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {formatDateTime(schedule.performanceDate)}
+                  </p>
+                  <p className="text-subtle mt-0.5 text-xs">{schedule.performanceNum}회차</p>
+                </div>
+
+                <Badge tone={scheduleTone(schedule)}>{scheduleStatusLabel(schedule)}</Badge>
+
+                {bookable ? (
+                  <Button
+                    size="sm"
+                    /* 막혀 있을 땐 강조색을 위 안내의 버튼 하나에만 둡니다.
+                       초록이 여러 개면 어디를 눌러야 할지 알 수 없습니다. (DESIGN.md 1장) */
+                    variant={blocked ? 'secondary' : 'primary'}
+                    leftIcon={<Ticket size={14} />}
+                    disabled={!!blocked}
+                    onClick={() => onBook(id)}
+                  >
+                    예매
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    leftIcon={<Hourglass size={14} />}
+                    disabled={!!blocked}
+                    onClick={() => onWaitlist(id)}
+                  >
+                    대기
+                  </Button>
+                )}
               </div>
-
-              <Badge tone={scheduleTone(schedule)}>
-                {scheduleStatusLabel(schedule)}
-              </Badge>
-
-              {bookable ? (
-                <Button
-                  size="sm"
-                  /* 막혀 있을 땐 강조색을 위 안내의 버튼 하나에만 둡니다.
-                     초록이 여러 개면 어디를 눌러야 할지 알 수 없습니다. (DESIGN.md 1장) */
-                  variant={blocked ? 'secondary' : 'primary'}
-                  leftIcon={<Ticket size={14} />}
-                  disabled={!!blocked}
-                  onClick={() => onBook(schedule.id)}
-                >
-                  예매
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="soft"
-                  leftIcon={<Hourglass size={14} />}
-                  disabled={!!blocked}
-                  onClick={() => onWaitlist(schedule.id)}
-                >
-                  대기
-                </Button>
-              )}
-            </div>
-          </Stagger.Item>
-        );
-      })}
+            </Stagger.Item>
+          );
+        })}
       </Stagger>
     </div>
   );

@@ -806,16 +806,24 @@ class NftServiceIntegrationTests {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, fixture.areaId(), seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status)
-                VALUES (?, ?, ?, ?, 'CONFIRMED') RETURNING id
-                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId);
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, insertFace());
     }
 
     private Long insertStandingTicket(Long userId, Fixture fixture) {
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status)
-                VALUES (?, ?, ?, NULL, 'CONFIRMED') RETURNING id
-                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId());
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
+                VALUES (?, ?, ?, NULL, 'CONFIRMED', ?) RETURNING id
+                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), insertFace());
+    }
+
+    /** tickets.face_id 가 NOT NULL 이라 (V20260904_1430) 티켓마다 얼굴 행이 하나 필요하다 */
+    private Long insertFace() {
+        String zeros = "[" + "0,".repeat(127) + "0]";
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO faces (embedding, model_version) VALUES (?::vector, 'test') RETURNING id
+                """, Long.class, zeros);
     }
 
     private Long insertDesign(Long performanceId, String name, int totalSupply) {

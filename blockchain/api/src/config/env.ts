@@ -39,6 +39,16 @@ const schema = z.object({
     .regex(HEX_PRIVATE_KEY, 'OPERATOR_PRIVATE_KEY 는 0x + 64자리 hex 여야 합니다'),
 
   INTERNAL_API_KEY: z.string().min(16, 'INTERNAL_API_KEY 는 16자 이상이어야 합니다'),
+
+  /**
+   * Spring DB (PostgreSQL). **우리 DB 가 아닙니다** — 확정 결과 컬럼만 갱신합니다.
+   * (DESIGN.md 1장 "예외 하나")
+   *
+   * 없으면 서버는 뜨지만 확정 기록이 돌지 않습니다. 체인만 있으면 개발할 수 있게
+   * 하기 위해서인데, 운영에서 빠뜨리면 티켓이 영원히 PENDING 으로 남으므로
+   * `/health` 가 경고합니다.
+   */
+  DATABASE_URL: z.string().url().optional(),
 });
 
 function fail(reason: string, hint: string): never {
