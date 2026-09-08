@@ -65,13 +65,16 @@ services:
     image: teacat-blockchain:dev
     container_name: dev-blockchain
     restart: unless-stopped
+    # 🔴 니모닉과 오퍼레이터 키는 이 파일에만 있다. server 는 이 파일을 안 읽는다.
+    #    니모닉이 새면 전 유저 지갑이 털리므로 이 프로세스 밖으로 내보내지 않는다.
+    env_file:
+      - .env.dev.chain
     environment:
       NODE_ENV: production
+      # 설정이 몇 개 안 되어 여기 적는다. INTERNAL_API_KEY 는 .env.dev 에 한 번만 두고
+      # server 와 나눠 쓴다 (값이 갈라지면 가입이 401 로 실패한다).
       CHAIN_ID: ${CHAIN_ID:-31221}
       RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
-      # 🔴 시크릿. .env.dev 에만 두고 절대 커밋하지 않는다.
-      MASTER_MNEMONIC: ${MASTER_MNEMONIC:?.env.dev 에 넣으세요}
-      OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:?0x + 64자리 hex}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
     mem_limit: 512m
     networks: [teacat-net]
@@ -86,9 +89,14 @@ services:
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
       blockchain: { condition: service_healthy }
+    # .env.dev 에 적은 값이 그대로 들어간다. 스프링이 쓰는 이름으로 적으면
+    # compose 를 안 고쳐도 된다 (JWT_SECRET, SSAFY_*, REFRESH_COOKIE_* 등).
+    env_file:
+      - .env.dev
     environment:
-      # application.yaml 의 localhost 기본값을 컨테이너 주소로 덮어쓴다.
-      # 스프링이 SCREAMING_SNAKE_CASE 환경변수를 yaml 키에 매핑해준다.
+      # 아래는 .env 에 둘 수 없는 것들이다.
+      #   - 컨테이너 주소: compose 구조에서 나오는 값이라 파일에 둘 이유가 없다
+      #   - 이름이 다른 값: 파일의 이름과 스프링이 읽는 이름이 달라 여기서 옮긴다
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-teacat}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -96,16 +104,13 @@ services:
       SPRING_DATA_REDIS_PORT: '6379'
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
 
-      JWT_SECRET: ${JWT_SECRET:?32바이트 이상}
-
-      # ⚠️ 지금은 컨테이너 내부 주소다. 이 주소로 presigned URL 이 만들어지면
-      #    브라우저가 못 연다. 이미지 업로드를 붙일 때 다시 손봐야 한다.
+      # ⚠️ 컨테이너 내부 주소다. 이 주소로 presigned URL 이 만들어지면 브라우저가
+      #    못 연다. 이미지 업로드를 붙일 때 다시 손봐야 한다.
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
 
       BLOCKCHAIN_API_URL: http://blockchain:4000
-      # blockchain 의 INTERNAL_API_KEY 와 같은 값이어야 한다. 틀리면 가입이 401 로 실패한다.
       BLOCKCHAIN_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       BLOCKCHAIN_CHAIN_ID: ${CHAIN_ID:-31221}
 

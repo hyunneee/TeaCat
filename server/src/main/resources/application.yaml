@@ -73,6 +73,18 @@ booking:
     face-verification-required: true
     # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
 
+nft:
+  auction:
+    # 판매자가 고를 수 있는 경매 진행 시간 범위
+    min-duration: ${NFT_AUCTION_MIN_DURATION:1h}
+    max-duration: ${NFT_AUCTION_MAX_DURATION:7d}
+    # 만료 경매를 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
+    # 경매 상세 조회도 만료를 확인해 닫으므로 이 값이 커도 사용자는 마감 직후 결과를 본다.
+    # 입찰·즉시구매는 닫지 않고 DB 시각으로 거절만 한다 (NftAuctionCloser 주석 참고)
+    sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
+    sweep-batch-size: 100
+    sweep-enabled: true
+
 minio:
   # 코드가 붙는 포트는 9000 이다. 브라우저로 보는 관리 콘솔(9001)이 아니다.
   #   계정 정보는 로컬 도커 기본값이라 여기 두고, 배포 환경에서는 .env / 환경변수로 덮어쓴다.

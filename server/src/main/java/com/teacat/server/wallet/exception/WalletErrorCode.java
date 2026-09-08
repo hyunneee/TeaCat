@@ -21,7 +21,10 @@ public enum WalletErrorCode implements ErrorCode {
             "지갑이 없습니다. 고객센터에 문의해 주세요."),
     /** 체인 조회 실패. 잠시 후 다시 시도하면 된다 */
     BALANCE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "WALLET_004",
-            "잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            "잔액을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    /** 가용 잔액(체인 잔액 − 유효 홀드)이 요청 금액보다 적다 */
+    INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "WALLET_005",
+            "캣머니 가용 잔액이 부족합니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

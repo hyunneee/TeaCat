@@ -1,0 +1,194 @@
+package com.teacat.server.support;
+
+import com.teacat.server.wallet.client.BlockchainProperties;
+import com.teacat.server.wallet.client.CatMoneyBalanceResult;
+import com.teacat.server.wallet.client.CatMoneyClient;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+import java.time.Duration;
+
+import static org.mockito.BDDMockito.given;
+
+/**
+ * PostgreSQL 컨테이너 위에서 도는 통합 테스트의 공통 기반.
+ *
+ * 체인은 붙이지 않는다 — {@link CatMoneyClient} 를 스텁으로 바꿔 잔액을 주입한다.
+ * 스위퍼는 꺼 둔다. 마감은 테스트가 직접 {@code close} 를 불러 검증한다.
+ *
+ * <p>컨테이너는 {@code @Container} 가 아니라 <b>static 초기화로 한 번만</b> 띄운다(싱글턴 컨테이너).
+ * 이 클래스를 상속하는 테스트 클래스들은 설정이 같아 Spring 컨텍스트를 공유하는데, {@code @Container} 는
+ * 첫 클래스가 끝나면 컨테이너를 내려 버린다 — 캐시된 컨텍스트의 DataSource 가 죽은 포트를 가리키게 되고
+ * 다음 클래스는 전부 {@code Failed to obtain JDBC Connection} 으로 실패한다. 정리는 Ryuk 가 JVM 종료 후 한다.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+public abstract class PostgresIntegrationTest {
+
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("pgvector/pgvector:pg18")
+            .withDatabaseName("teacat_test")
+            .withUsername("teacat")
+            .withPassword("teacat_test_pw")
+            .withStartupTimeout(Duration.ofMinutes(2));
+
+    static {
+        POSTGRES.start();
+    }
+
+    @DynamicPropertySource
+    static void properties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("nft.auction.sweep-enabled", () -> "false");
+    }
+
+    @Autowired
+    protected JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    protected BlockchainProperties blockchainProperties;
+
+    @MockitoBean
+    protected CatMoneyClient catMoneyClient;
+
+    @BeforeEach
+    void cleanDatabase() {
+        jdbcTemplate.execute("TRUNCATE TABLE users, faces, stadiums RESTART IDENTITY CASCADE");
+    }
+
+    protected Long insertUser(String email, String nickname) {
+        return insertUser(email, nickname, "USER");
+    }
+
+    protected Long insertUser(String email, String nickname, String role) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO users (email, password, name, nickname, phone, role)
+                VALUES (?, 'encoded-password', '테스트 사용자', ?, '010-0000-0000', ?::user_role)
+                RETURNING id
+                """, Long.class, email, nickname, role);
+    }
+
+    protected Long insertFace() {
+        String zeros = "[" + "0,".repeat(127) + "0]";
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO faces (embedding, model_version) VALUES (?::vector, 'test') RETURNING id
+                """, Long.class, zeros);
+    }
+
+    /** 유저에게 지갑을 만들어 준다. 주소는 유저 id 로 결정되므로 {@link #addressOf} 로 되찾을 수 있다 */
+    protected String insertWallet(Long userId) {
+        String address = addressOf(userId);
+        Long ownerId = jdbcTemplate.queryForObject("""
+                INSERT INTO wallet_owners (user_id, derivation_index, owner_address, key_version)
+                VALUES (?, ?, ?, 1) RETURNING id
+                """, Long.class, userId, userId.intValue(), address);
+        jdbcTemplate.update("""
+                INSERT INTO wallets (owner_id, chain_id, type, address, status)
+                VALUES (?, ?, 'RELAYER_EOA', ?, 'ACTIVE')
+                """, ownerId, blockchainProperties.chainId(), address);
+        return address;
+    }
+
+    protected String addressOf(Long userId) {
+        return "0x" + String.format("%040x", userId);
+    }
+
+    protected void givenChainBalance(Long userId, long balance) {
+        given(catMoneyClient.getBalance(addressOf(userId)))
+                .willReturn(new CatMoneyBalanceResult(addressOf(userId), String.valueOf(balance), 0, "CAT"));
+    }
+
+    /** 지갑 + 체인 잔액까지 갖춘 유저 */
+    protected Long insertFundedUser(String email, String nickname, long balance) {
+        Long userId = insertUser(email, nickname);
+        insertWallet(userId);
+        givenChainBalance(userId, balance);
+        return userId;
+    }
+
+    protected Fixture insertPerformanceFixture() {
+        Long stadiumId = jdbcTemplate.queryForObject("""
+                INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id
+                """, Long.class);
+        Long areaId = jdbcTemplate.queryForObject("""
+                INSERT INTO areas (stadium_id, area_code, type, max_seat)
+                VALUES (?, 'A', 'SEATED', 1000) RETURNING id
+                """, Long.class, stadiumId);
+        Long performanceId = jdbcTemplate.queryForObject("""
+                INSERT INTO performance_general
+                    (stadium_id, visible_from, title, ticketing_start_at, status)
+                VALUES (?, CURRENT_DATE, '테스트 공연', now(), 'UPCOMING') RETURNING id
+                """, Long.class, stadiumId);
+        Long performanceDetailId = jdbcTemplate.queryForObject("""
+                INSERT INTO performance_details
+                    (performance_general_id, performance_num, performance_date, status)
+                VALUES (?, 1, CURRENT_DATE, 'SCHEDULED') RETURNING id
+                """, Long.class, performanceId);
+        jdbcTemplate.update("""
+                INSERT INTO performance_areas
+                    (performance_general_id, area_id, grade, price, max_cnt, sold_cnt)
+                VALUES (?, ?, 'VIP', 100000, 1000, 0)
+                """, performanceId, areaId);
+        return new Fixture(performanceId, performanceDetailId, areaId);
+    }
+
+    protected Long insertTicket(Long userId, Fixture fixture) {
+        Integer seatNumber = jdbcTemplate.queryForObject(
+                "SELECT count(*)::int + 1 FROM seats WHERE area_id = ?", Integer.class, fixture.areaId());
+        Long seatId = jdbcTemplate.queryForObject("""
+                INSERT INTO seats (area_id, row_label, seat_number)
+                VALUES (?, '3', ?) RETURNING id
+                """, Long.class, fixture.areaId(), seatNumber);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, insertFace());
+    }
+
+    protected Long insertDesign(Long performanceId, String name, int totalSupply) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_designs
+                    (performance_general_id, name, image_url, total_supply)
+                VALUES (?, ?, '/test.png', ?) RETURNING id
+                """, Long.class, performanceId, name, totalSupply);
+    }
+
+    protected Long insertPhotocard(Long designId, Long ticketId, Long ownerId) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
+                VALUES (?, ?, ?, 'PENDING') RETURNING id
+                """, Long.class, designId, ticketId, ownerId);
+    }
+
+    protected Long insertPhotocardOwnedBy(Long ownerId) {
+        Fixture fixture = insertPerformanceFixture();
+        Long ticketId = insertTicket(ownerId, fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 1);
+        return insertPhotocard(designId, ticketId, ownerId);
+    }
+
+    /**
+     * 경매 행을 직접 넣는다. 서비스 규칙을 우회하므로 마감·조회 테스트처럼 "이미 있는 경매" 가 필요할 때만 쓴다.
+     *
+     * @param endsAtSql SQL 식. 예: {@code "now() + interval '1 day'"}, {@code "now() - interval '1 minute'"}
+     */
+    protected Long insertAuction(Long photocardId, Long sellerId, long startPrice, Long buyNowPrice,
+                                 String endsAtSql) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_auctions
+                    (photocard_id, seller_id, start_price, buy_now_price, current_price, ends_at)
+                VALUES (?, ?, ?, ?, ?, %s) RETURNING id
+                """.formatted(endsAtSql), Long.class, photocardId, sellerId, startPrice, buyNowPrice, startPrice);
+    }
+
+    protected record Fixture(Long performanceId, Long performanceDetailId, Long areaId) {
+    }
+}
