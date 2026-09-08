@@ -734,6 +734,13 @@ class NftServiceIntegrationTests {
                 .andExpect(status().isNotFound());
     }
 
+    private Long insertStadiumLayout(Long stadiumId) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO stadium_layouts (stadium_id, name, width, height, is_default, status)
+                VALUES (?, '기본 배치', 1000, 1000, true, 'ACTIVE') RETURNING id
+                """, Long.class, stadiumId);
+    }
+
     private Long insertUser(String email, String nickname) {
         return insertUser(email, nickname, "USER");
     }
@@ -750,15 +757,16 @@ class NftServiceIntegrationTests {
         Long stadiumId = jdbcTemplate.queryForObject("""
                 INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id
                 """, Long.class);
+        Long layoutId = insertStadiumLayout(stadiumId);
         Long areaId = jdbcTemplate.queryForObject("""
-                INSERT INTO areas (stadium_id, area_code, type, max_seat)
-                VALUES (?, 'A', 'SEATED', 1000) RETURNING id
-                """, Long.class, stadiumId);
+                INSERT INTO areas (stadium_id, stadium_layout_id, area_code, type, max_seat)
+                VALUES (?, ?, 'A', 'SEATED', 1000) RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_general
-                    (stadium_id, visible_from, title, ticketing_start_at, status)
-                VALUES (?, CURRENT_DATE, '테스트 공연', now(), 'UPCOMING') RETURNING id
-                """, Long.class, stadiumId);
+                    (stadium_id, stadium_layout_id, visible_from, title, ticketing_start_at, status)
+                VALUES (?, ?, CURRENT_DATE, '테스트 공연', now(), 'UPCOMING') RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceDetailId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_details
                     (performance_general_id, performance_num, performance_date, status)
@@ -776,15 +784,16 @@ class NftServiceIntegrationTests {
         Long stadiumId = jdbcTemplate.queryForObject("""
                 INSERT INTO stadiums (name, address) VALUES ('스탠딩 공연장', '서울') RETURNING id
                 """, Long.class);
+        Long layoutId = insertStadiumLayout(stadiumId);
         Long areaId = jdbcTemplate.queryForObject("""
-                INSERT INTO areas (stadium_id, area_code, type, max_seat)
-                VALUES (?, 'S', 'STANDING', 1000) RETURNING id
-                """, Long.class, stadiumId);
+                INSERT INTO areas (stadium_id, stadium_layout_id, area_code, type, max_seat)
+                VALUES (?, ?, 'S', 'STANDING', 1000) RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_general
-                    (stadium_id, visible_from, title, ticketing_start_at, status)
-                VALUES (?, CURRENT_DATE, '스탠딩 공연', now(), 'UPCOMING') RETURNING id
-                """, Long.class, stadiumId);
+                    (stadium_id, stadium_layout_id, visible_from, title, ticketing_start_at, status)
+                VALUES (?, ?, CURRENT_DATE, '스탠딩 공연', now(), 'UPCOMING') RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceDetailId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_details
                     (performance_general_id, performance_num, performance_date, status)
@@ -799,6 +808,7 @@ class NftServiceIntegrationTests {
     }
 
     private Long insertTicket(Long userId, Fixture fixture) {
+        Long faceId = insertFace();
         Integer seatNumber = jdbcTemplate.queryForObject(
                 "SELECT count(*)::int + 1 FROM seats WHERE area_id = ?", Integer.class, fixture.areaId());
         Long seatId = jdbcTemplate.queryForObject("""
@@ -808,14 +818,15 @@ class NftServiceIntegrationTests {
         return jdbcTemplate.queryForObject("""
                 INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
                 VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
-                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, insertFace());
+                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, faceId);
     }
 
     private Long insertStandingTicket(Long userId, Fixture fixture) {
+        Long faceId = insertFace();
         return jdbcTemplate.queryForObject("""
                 INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
                 VALUES (?, ?, ?, NULL, 'CONFIRMED', ?) RETURNING id
-                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), insertFace());
+                """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), faceId);
     }
 
     /** tickets.face_id 가 NOT NULL 이라 (V20260904_1430) 티켓마다 얼굴 행이 하나 필요하다 */

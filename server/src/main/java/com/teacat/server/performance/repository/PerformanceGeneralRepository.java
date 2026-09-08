@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface PerformanceGeneralRepository extends JpaRepository<PerformanceGeneral, Long> {
 
+    @Query("SELECT p FROM PerformanceGeneral p JOIN FETCH p.stadium JOIN FETCH p.stadiumLayout WHERE p.id = :performanceId")
+    Optional<PerformanceGeneral> findByIdWithStadiumAndLayout(Long performanceId);
+
     /**
      * 공연 목록 조회 (API-201).
      *

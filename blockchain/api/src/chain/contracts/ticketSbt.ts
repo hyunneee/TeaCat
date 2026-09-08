@@ -1,8 +1,15 @@
-import { keccak256, toUtf8Bytes, ZeroAddress } from 'ethers';
+import { ZeroAddress } from 'ethers';
 import { TicketSBT__factory, readDeployment, type TicketSBT } from '@teacat/contracts';
 import { env, networkNameOf } from '../../config';
-import { operatorAddress, operatorSigner } from '../provider';
+import {
+  contractOperatorAddress,
+  contractOperatorSigner,
+  operatorAddress,
+  operatorSigner,
+} from '../provider';
+import { ensureLocalGas } from '../localGas';
 import { sendSerialized } from '../nonce';
+import { hashOf } from '../hash';
 
 /**
  * 티켓 SBT 컨트랙트 접근.
@@ -32,24 +39,39 @@ export function ticketSbtAddress(): string | null {
   return deployment?.contracts[CONTRACT_NAME] ?? null;
 }
 
-function contract(): TicketSBT {
+function requireAddress(): string {
   const address = ticketSbtAddress();
   if (address === null) {
     // 여기까지 오면 부르는 쪽이 배포 여부를 안 봤다는 뜻입니다.
     throw new Error(`${CONTRACT_NAME} 이 ${networkNameOf(env.CHAIN_ID)} 에 배포되지 않았습니다`);
   }
-  return TicketSBT__factory.connect(address, operatorSigner());
+  return address;
+}
+
+/** 조회와 `MINTER_ROLE` 경로(발행). */
+function contract(): TicketSBT {
+  return TicketSBT__factory.connect(requireAddress(), operatorSigner());
+}
+
+/**
+ * `OPERATOR_ROLE` 경로(소각·정지).
+ *
+ * 발행 키로 부르면 안 됩니다. 배포 스크립트가 `OPERATOR_ROLE` 을
+ * `CONTRACT_OPERATOR_ADDRESS` 에 주기 때문에, 역할을 나눈 환경에서 발행 키로
+ * `burnTicket` 을 부르면 `AccessControlUnauthorizedAccount` 로 전부 실패합니다.
+ * 두 키가 같은 개발 환경에서는 드러나지 않아 **운영에서 처음 터지는 종류**입니다.
+ */
+function asOperator(): TicketSBT {
+  return TicketSBT__factory.connect(requireAddress(), contractOperatorSigner());
 }
 
 /**
  * Spring 이 보낸 `ticketKey` 를 온체인 키로 바꿉니다.
  *
- * Spring 에 keccak256 의존성을 만들지 않기 위해 서버가 해싱합니다.
- * (DESIGN.md 결정 이력 2026-09-02)
+ * 정의는 `chain/hash.ts` 에 하나만 둡니다 — 포카·추첨이 같은 식을 쓰는데
+ * 모듈마다 적어두면 한쪽이 바뀌는 순간 조용히 어긋납니다.
  */
-export function hashOf(value: string): string {
-  return keccak256(toUtf8Bytes(value));
-}
+export { hashOf };
 
 /**
  * `ticketKey` → tokenId. **컨트랙트의 `tokenIdOf` 와 같은 식이어야 합니다.**
@@ -116,10 +138,18 @@ export async function issue(to: string, ticketKeyHash: string): Promise<string> 
   });
 }
 
-/** 소각 — 예매 취소. tokenId 는 영구 소멸합니다. */
+/**
+ * 소각 — 예매 취소. tokenId 는 영구 소멸합니다.
+ *
+ * **`OPERATOR_ROLE` 키로 서명합니다.** 발행 키와 다른 지갑일 수 있으므로 논스도
+ * 그 주소로 셉니다 — 한 큐에 섞어 세면 주소마다 다른 논스가 뒤엉킵니다.
+ */
 export async function burnTicket(tokenId: bigint): Promise<string> {
-  return sendSerialized(operatorAddress, async (nonce) => {
-    const tx = await contract().burnTicket(tokenId, { nonce });
+  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
+  await ensureLocalGas(contractOperatorAddress);
+
+  return sendSerialized(contractOperatorAddress, async (nonce) => {
+    const tx = await asOperator().burnTicket(tokenId, { nonce });
     return tx.hash;
   });
 }

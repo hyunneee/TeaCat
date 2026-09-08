@@ -5,17 +5,25 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Card, Input, Textarea } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
+import { newIdempotencyKey } from '@/shared/api';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
   PocaFullscreen,
   PocaShowcase,
-  useListNft,
-  useNftDetail,
-  usePurchaseNft,
-  useUnlistNft,
+  formatOrigin,
+  isOwner,
+  mintStatusLabel,
+  pocaSeed,
+  useListPhotocard,
+  usePhotocardDetail,
+  usePurchasePhotocard,
+  useUnlistPhotocard,
 } from '@/features/nft';
 import { useTokenBalance } from '@/features/token';
+
+/** 서버가 받는 판매자 설명 최대 길이 */
+const DESCRIPTION_MAX = 500;
 
 /**
  * 포토카드 상세.
@@ -27,22 +35,26 @@ import { useTokenBalance } from '@/features/token';
  * 실물 카드를 매대에서 집어 든 느낌을 냅니다.
  */
 export function NftDetailPage() {
-  const { nftId = '' } = useParams();
+  const { photocardId: raw = '' } = useParams();
+  const photocardId = Number(raw);
   const { open } = useModal();
   const { user } = useAuth();
 
-  const { data: nft, isPending, isError } = useNftDetail(nftId);
+  const { data: card, isPending, isError } = usePhotocardDetail(photocardId);
   const { data: token } = useTokenBalance();
-  const purchase = usePurchaseNft();
-  const list = useListNft();
-  const unlist = useUnlistNft();
+  const purchase = usePurchasePhotocard();
+  const list = useListPhotocard();
+  const unlist = useUnlistPhotocard();
 
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [zoomed, setZoomed] = useState(false);
 
-  if (isPending) return <PageLoader />;
-  if (isError || !nft) {
+  /* 숫자가 아닌 id(`/nft/abc`)는 쿼리가 돌지 않아 isPending 이 영원히 true 입니다 — 먼저 걸러냅니다. */
+  const invalidId = !Number.isInteger(photocardId) || photocardId <= 0;
+
+  if (!invalidId && isPending) return <PageLoader />;
+  if (invalidId || isError || !card) {
     return (
       <>
         <Header title="포토카드" showBack />
@@ -51,9 +63,12 @@ export function NftDetailPage() {
     );
   }
 
-  const mine = !!user && nft.ownerId === String(user.userId);
+  const mine = isOwner(card, user?.nickname);
+  const listing = card.listing ?? null;
   const balance = token?.balance ?? 0;
-  const affordable = nft.listPrice !== null && balance >= nft.listPrice;
+  const affordable = listing !== null && balance >= listing.price;
+  const mintLabel = mintStatusLabel(card.status);
+  const canSubmitListing = Number(price) > 0 && description.trim().length > 0;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -62,33 +77,31 @@ export function NftDetailPage() {
       <div className="flex-1">
         {/* 카드 무대 — 회색 바닥 위에 카드 하나 */}
         <div className="surface-2 border-line border-b px-6 py-8">
-          
-
           {/* 들어올 때 사선으로 빛이 한 번 스칩니다.
               **내 카드만** 눌러서 전체화면으로 볼 수 있습니다 — 사러 온 화면에서는
               누를 것이 "구매" 하나여야 하고, 확대는 그 결정을 미루게 만듭니다. */}
           <PocaShowcase
             className="mx-auto w-48"
-            seed={nft.artSeed}
-            imageUrl={nft.imageUrl}
-            alt={`${nft.name} 포토카드`}
+            seed={pocaSeed(card.photocardId)}
+            imageUrl={card.imageUrl}
+            alt={`${card.designName} 포토카드`}
             onOpen={mine ? () => setZoomed(true) : undefined}
           />
         </div>
 
         <div className="space-y-4 p-4">
           <div className="space-y-1">
-            <p className="text-subtle text-[0.9375rem]">{nft.concertTitle}</p>
-            <h1 className="text-xl leading-snug font-extrabold">{nft.name}</h1>
+            <p className="text-subtle text-[0.9375rem]">{card.performanceTitle}</p>
+            <h1 className="text-xl leading-snug font-extrabold">{card.designName}</h1>
           </div>
 
           {/* 가격 — 이 화면에서 가장 먼저 읽혀야 하는 값 */}
           <div className="surface-2 rounded-2xl p-4">
             <p className="text-subtle text-sm">판매가</p>
-            {nft.listPrice !== null ? (
+            {listing ? (
               <p className="mt-1 flex items-baseline gap-1">
                 <span className="text-2xl font-extrabold tabular-nums">
-                  {nft.listPrice.toLocaleString()}
+                  {listing.price.toLocaleString()}
                 </span>
                 <span className="text-ink-muted text-base font-bold">캣머니</span>
               </p>
@@ -105,18 +118,17 @@ export function NftDetailPage() {
           {/* 판매자가 남긴 설명 — 있을 때만.
               **가격 바로 아래**입니다. 값을 보고 "왜 이 값인지" 를 읽는 순서라,
               출처 안내(아래)보다 먼저 와야 합니다. */}
-          {nft.description && (
+          {listing?.sellerDescription && (
             <div className="surface-2 space-y-1.5 rounded-2xl p-4">
               <p className="text-subtle text-sm font-semibold">판매자 설명</p>
               <p className="text-[0.9375rem] leading-relaxed whitespace-pre-wrap">
-                {nft.description}
+                {listing.sellerDescription}
               </p>
             </div>
           )}
 
           {/* 출처 — 남의 물건을 사는 화면이라 신뢰 신호가 필요합니다.
               한 문장 + 그 근거(어느 좌석에서 언제)를 **한 덩어리**로 둡니다.
-              표로 나누면 "좌석 / 발행일" 이 각각 무슨 뜻인지 다시 읽게 됩니다.
               소유자는 보여주지 않습니다 — 살지 말지에 영향을 주지 않는 값입니다. */}
           <div className="surface-2 flex gap-2.5 rounded-2xl p-4">
             <BadgeCheck size={19} className="text-ink-muted mt-0.5 shrink-0" />
@@ -125,13 +137,15 @@ export function NftDetailPage() {
               <p className="text-muted mt-1 flex items-center gap-1.5 text-sm">
                 <Armchair size={15} className="shrink-0" />
                 <span className="truncate">
-                  {nft.seatLabel} · {formatDate(nft.mintedAt)} 발행
+                  {formatOrigin(card.origin)} · {formatDate(card.issuedAt)} 발행
                 </span>
               </p>
+              {/* 발행이 끝나지 않은 카드에만 한 줄 (MINTED 면 null) */}
+              {mintLabel && <p className="text-subtle mt-1 text-sm">{mintLabel}</p>}
             </div>
           </div>
 
-          {mine && nft.listPrice === null && (
+          {mine && !listing && (
             <Card className="space-y-3">
               <p className="text-sm font-bold">판매 등록</p>
               <Input
@@ -145,26 +159,27 @@ export function NftDetailPage() {
                 leftIcon={<Coins size={16} />}
                 hint={`보유 캣머니 ${balance.toLocaleString()}개`}
               />
-              {/* 설명은 선택입니다. 없으면 카드 상태를 물어보는 문의가 늘 뿐입니다. */}
+              {/* 설명은 서버가 **필수**로 받습니다. 없으면 카드 상태를 물어보는 문의가 늘 뿐입니다. */}
               <Textarea
                 label="설명"
                 showRequirement
+                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="카드 상태나 거래 시 참고할 내용을 적어주세요."
-                maxLength={200}
+                maxLength={DESCRIPTION_MAX}
                 showCount
                 rows={3}
               />
               <Button
                 fullWidth
-                disabled={!price || Number(price) <= 0}
+                disabled={!canSubmitListing}
                 loading={list.isPending}
                 onClick={() =>
                   list.mutate({
-                    nftId: nft.id,
+                    photocardId: card.photocardId,
                     price: Number(price),
-                    description: description.trim() || undefined,
+                    description: description.trim(),
                   })
                 }
               >
@@ -179,7 +194,7 @@ export function NftDetailPage() {
 
       <BottomBar>
         {mine ? (
-          nft.listPrice !== null ? (
+          listing ? (
             <Button
               variant="danger-ghost"
               size="lg"
@@ -191,33 +206,37 @@ export function NftDetailPage() {
                   message: '마켓에서 사라지고, 다시 올리려면 가격을 새로 정해야 합니다.',
                   confirmText: '판매 내리기',
                   danger: true,
-                  onConfirm: () => unlist.mutate(nft.id),
+                  onConfirm: () => unlist.mutate(card.photocardId),
                 })
               }
             >
-              판매 내리기 ({nft.listPrice.toLocaleString()} 캣머니)
+              판매 내리기 ({listing.price.toLocaleString()} 캣머니)
             </Button>
           ) : (
             <p className="text-subtle text-center text-sm">내가 보유한 포토카드입니다.</p>
           )
-        ) : nft.listPrice !== null ? (
+        ) : listing ? (
           <Button
             size="lg"
             fullWidth
             disabled={!affordable}
             loading={purchase.isPending}
             leftIcon={<Coins size={18} />}
-            onClick={() =>
+            onClick={() => {
+              /* 멱등키는 **모달을 열 때** 한 번 만듭니다. 확인을 두 번 누르거나 네트워크가
+                 끊겨 재시도돼도 같은 키가 가서 서버가 한 번만 체결합니다. */
+              const idempotencyKey = newIdempotencyKey();
               open('common/confirm', {
                 title: '이 포토카드를 구매할까요?',
-                message: `${nft.listPrice?.toLocaleString()} 캣머니가 차감됩니다.`,
+                message: `${listing.price.toLocaleString()} 캣머니가 차감됩니다.`,
                 confirmText: '구매',
-                onConfirm: () => purchase.mutate(nft.id),
-              })
-            }
+                onConfirm: () =>
+                  purchase.mutate({ photocardId: card.photocardId, idempotencyKey }),
+              });
+            }}
           >
             {affordable
-              ? `${nft.listPrice.toLocaleString()} 캣머니로 바로 구매`
+              ? `${listing.price.toLocaleString()} 캣머니로 바로 구매`
               : '캣머니가 부족해요'}
           </Button>
         ) : (
@@ -228,10 +247,10 @@ export function NftDetailPage() {
       <PocaFullscreen
         open={zoomed}
         onClose={() => setZoomed(false)}
-        seed={nft.artSeed}
-        imageUrl={nft.imageUrl}
-        name={nft.name}
-        concertTitle={nft.concertTitle}
+        seed={pocaSeed(card.photocardId)}
+        imageUrl={card.imageUrl}
+        name={card.designName}
+        concertTitle={card.performanceTitle}
       />
     </div>
   );

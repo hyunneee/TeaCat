@@ -8,7 +8,8 @@ import {
   tokenIdOf,
   ticketSbtAddress,
 } from '../chain/contracts/ticketSbt';
-import { recordAlreadyIssued, watchIssue } from './confirm.service';
+import { normalizeAddress } from '../chain/address';
+import { recordAlreadyIssued, recordBurn, watchIssue } from './confirm.service';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
 
@@ -129,6 +130,11 @@ export async function findTicketByKey(ticketKey: string): Promise<TicketLookupRe
 export async function issueTicket(ticketKey: string, to: string): Promise<IssueResult> {
   requireDeployed();
 
+  /* 정규식은 모양만 봅니다. 체크섬이 틀린 주소를 그대로 넘기면 ethers 가 던지고
+     500 이 됩니다 — 잘못된 건 입력이므로 여기서 400 으로 돌려보냅니다. (chain/address) */
+  const owner = normalizeAddress(to);
+  if (owner === null) throw errors.invalidAddress('to', to);
+
   /* 번호가 키에서 나오므로 **보내기 전에** 정해집니다. 순번이었다면 블록이
      확정될 때까지(약 10초) 알 수 없어 응답에 담을 수 없었습니다. */
   const keyHash = hashOf(ticketKey);
@@ -151,13 +157,13 @@ export async function issueTicket(ticketKey: string, to: string): Promise<IssueR
 
   if (await isIssuePaused()) throw errors.contractPaused('티켓 발행');
 
-  const txHash = await issue(to, keyHash);
+  const txHash = await issue(owner, keyHash);
 
   /* 확정을 기다리는 건 **우리**입니다. Spring 은 202 를 받고 끝냅니다.
      블록에 실리면 confirm.service 가 tickets 행을 SUCCESS 로 올립니다. */
   await watchIssue(ticketKey, tokenId, txHash);
 
-  logger.info(`티켓 발행 → ${to} key=${short(keyHash)} tx=${short(txHash)}`);
+  logger.info(`티켓 발행 → ${owner} key=${short(keyHash)} tx=${short(txHash)}`);
   return { status: 'PENDING', txHash, tokenId };
 }
 
@@ -184,5 +190,10 @@ export async function burnTicketById(tokenId: bigint): Promise<BurnResult> {
 
   const txHash = await burnTicket(tokenId);
   logger.info(`티켓 소각 #${id} tx=${short(txHash)}`);
+
+  /* 어느 트랜잭션으로 태웠는지만 남깁니다. 상태 전이는 Spring 이 소유합니다 —
+     취소를 트리거한 쪽이 Spring 이라 우리가 상태를 옮기면 두 주인이 생깁니다. */
+  await recordBurn(id, txHash);
+
   return { status: 'PENDING', txHash, tokenId: id };
 }

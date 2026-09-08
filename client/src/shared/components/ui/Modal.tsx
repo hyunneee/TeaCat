@@ -13,6 +13,17 @@ export interface ModalProps {
   footer?: ReactNode;
   /** 모바일에서 바텀시트처럼, 데스크톱에서는 가운데 다이얼로그로 */
   variant?: 'sheet' | 'center';
+  /**
+   * 패널 폭.
+   *
+   * `app`  기본. 폰 폭(`app-width`) 한 기둥 — 앱 화면의 모든 모달이 이걸 씁니다.
+   * `wide` 데스크톱 전용 화면(어드민 콘솔)에서만. 입력이 여러 개인 폼을 336px 에
+   *        넣으면 라벨과 값이 세로로 길게 늘어져 한 화면에 안 들어옵니다.
+   *
+   * 🔴 앱(모바일) 화면에서는 `wide` 를 쓰지 마세요 — 폰에서 프레임을 넘습니다.
+   *    (`app-width` 한 기둥 규칙: DESIGN.md 5장 / client/CLAUDE.md 4-4)
+   */
+  width?: 'app' | 'wide';
   /** 결제 진행 중처럼 사용자가 닫으면 안 되는 상황 */
   dismissible?: boolean;
   /**
@@ -37,6 +48,7 @@ export function Modal({
   children,
   footer,
   variant = 'sheet',
+  width = 'app',
   dismissible = true,
 }: ModalProps) {
   const reduced = useReducedMotion();
@@ -99,8 +111,10 @@ export function Modal({
               /* 폭은 앱 기둥과 같습니다 — 데스크톱에서 모달만 넓으면
                  프레임 밖으로 삐져나와 화면이 두 겹으로 보입니다. */
               variant === 'sheet'
-                ? 'app-width rounded-t-2xl sm:rounded-2xl'
-                : 'app-width rounded-2xl',
+                ? 'rounded-t-2xl sm:rounded-2xl'
+                : 'rounded-2xl',
+              /* 폭은 variant 와 독립입니다. wide 는 데스크톱 전용 화면에서만 씁니다 */
+              width === 'wide' ? 'w-full max-w-xl' : 'app-width',
             )}
           >
             {/* 바텀시트 손잡이 */}

@@ -13,6 +13,38 @@ import java.util.Optional;
 
 public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat, PerformanceSeatId> {
 
+    @Query(value = """
+            SELECT COUNT(*) FROM performance_seats ps
+            JOIN performance_details pd ON pd.id = ps.performance_detail_id
+            WHERE pd.performance_general_id = :performanceId
+              AND ps.seat_id IN (:seatIds)
+              AND ps.status IN ('HELD', 'SOLD')
+            """, nativeQuery = true)
+    long countHeldOrSold(Long performanceId, List<Long> seatIds);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats ps
+               SET status = 'AVAILABLE', held_by = NULL, held_until = NULL, updated_at = now()
+              FROM performance_details pd
+             WHERE pd.id = ps.performance_detail_id
+               AND pd.performance_general_id = :performanceId
+               AND ps.status = 'BLOCKED'
+            """, nativeQuery = true)
+    int unblockAll(Long performanceId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats ps
+               SET status = 'BLOCKED', held_by = NULL, held_until = NULL, updated_at = now()
+              FROM performance_details pd
+             WHERE pd.id = ps.performance_detail_id
+               AND pd.performance_general_id = :performanceId
+               AND ps.seat_id IN (:seatIds)
+               AND ps.status = 'AVAILABLE'
+            """, nativeQuery = true)
+    int blockAvailable(Long performanceId, List<Long> seatIds);
+
     /**
      * 이 회차에 좌석 행이 이미 만들어져 있는지 (공연 도메인의 회차 좌석 생성 API-269 가 중복 생성을 막는 데 쓴다).
      * performance_seats 엔티티·저장소는 이 하나만 둔다 — 같은 테이블을 두 엔티티로 매핑하면 빈·엔티티 이름이 충돌한다.

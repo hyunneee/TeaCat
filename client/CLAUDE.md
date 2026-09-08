@@ -216,6 +216,9 @@ export function Card({ className, ...rest }: CardProps) {
 - 터치 타겟 최소 44px → `Button` 은 `md` 이상
 - 노치 대응: 상단 `pt-safe`, 하단 고정 요소 `pb-safe`
 - 고정 하단 버튼이 있으면 본문에 그만큼 `padding-bottom` 을 줘서 안 가리게
+- **승인된 예외:** `/admin/stadium` 좌석 배치 편집 화면은 대형 캔버스 작업이 필요하므로
+  `AdminWorkspaceLayout`의 `max-w-7xl` 데스크톱 작업 폭을 사용합니다. 일반 사용자 화면과
+  기존 `AppLayout`·`PlainLayout`의 `.app-width` 규칙은 변경하지 않습니다.
 
 ### 4-5. 애니메이션
 
@@ -279,7 +282,8 @@ export function Card({ className, ...rest }: CardProps) {
 | 얼굴 등록·삭제 | **실서버** (`/users/me/face`) |
 | 공연 목록·상세·회차, 공연 등록(관리자) | **실서버** (`/concerts/*`, `/schedules/*`, `/admin/concerts`, `/stadiums`) |
 | 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
-| 예매·티켓·취소표·포카·캣머니·결제·배너·앱정보 | 목업 |
+| 예매·티켓·취소표·캣머니·결제·배너·앱정보 | 목업 |
+| 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
 
 ⚠️ 공연은 실서버, 예매는 목업인 과도기입니다. 목업 예매 핸들러는 `mocks/db.ts` 의 회차 ID(`s-1` …)만 알아서,
 실서버 회차 ID 로 예매 플로우에 들어가면 목업이 404 를 줍니다. 예매가 실서버로 바뀌면 함께 풀립니다.
@@ -518,6 +522,31 @@ npm run typecheck && npm run lint
 서비스워커가 **API 응답을 캐싱하지 않도록** `NetworkOnly` 로 막아뒀습니다.
 캐시된 좌석 잔여를 보여주면 대형 사고입니다. 이 설정을 풀지 마세요(0번 절차).
 
+### 어드민 콘솔 (`/admin`) — 4-4 모바일 우선의 **유일한 예외**
+
+`/admin` 아래는 **데스크톱 전용**입니다. 앱 화면과 레이아웃 규칙이 다릅니다.
+
+| | 앱 화면 (`/`, `/concerts` …) | 어드민 콘솔 (`/admin/**`) |
+|---|---|---|
+| 폭 | `.app-width` 한 기둥 (21rem) | 화면 꽉 (사이드바 + 본문) |
+| 레이아웃 | `AppLayout` / `PlainLayout` | `features/admin` 의 `AdminLayout` |
+| 좁은 화면 | 폰이 기준 | `lg` 미만에서 **안내 문구만** 띄웁니다 |
+| 모달 폭 | `Modal width="app"` (기본) | `Modal width="wide"` |
+
+- 반응형으로 접지 않습니다. 어설프게 접으면 폰에서 쓸 수 있는 것처럼 보이는데
+  실제로는 표가 안 읽힙니다. **안 되는 걸 안 된다고 알려주는 쪽**이 낫습니다.
+- 껍데기는 `shared/components/layout` 이 아니라 `features/admin/components` 에 있습니다.
+  사이드바가 역할로 메뉴를 걸러야 해서 도메인(`features/auth`)을 알아야 하고,
+  `shared` 는 도메인을 모릅니다(3-2).
+- **메뉴 추가는 세 곳**입니다: `shared/constants/routes.ts` 경로 →
+  `AdminSidebar` 의 `ADMIN_MENU` 한 줄 → `app/router/router.tsx` 의 admin 자식 라우트.
+- 사이드바의 어두운 면은 70:25:5 의 **25(구조)** 입니다. `brand` 는 채도 0 이라
+  초록(강조 5%)을 잡아먹지 않습니다. **선택된 메뉴 하나만** 초록입니다.
+- 접근 권한은 `features/auth` 의 `can.accessAdmin`(콘솔 진입) /
+  `can.manageUsers`(회원 관리)에 있습니다. 🔴 서버 권한과 **같아야** 합니다 —
+  서버가 403 을 주는 메뉴를 보여주면 눌렀을 때 실패하는 화면이 됩니다.
+  지금 서버의 `/admin/**` 은 전부 ADMIN 전용입니다.
+
 ---
 
 ## 8. 아직 확정 안 된 것 (백엔드/기획과 합의 필요)
@@ -561,8 +590,16 @@ npm run typecheck && npm run lint
 
 ## [규칙 변경 이력]
 
+- 2026-09-07 `/admin/stadium` 좌석 배치 편집 화면에 한해 `AdminWorkspaceLayout` 데스크톱 작업 폭 허용 (사용자 승인)
 - 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
   배포·8장 갱신. SSAFY 계정 로그인 화면(`/oauth/callback`, `/oauth/signup`) 추가
 | 2026-09-03 | 하단 탭 하이라이트를 알약 → **원**(`size-10`)으로, 탭 사이를 미끄러져 이동 (원 하나만 두고 `인덱스 × 100%` 이동) | 사용자 요청 |
 - 2026-09-07 공연 목록·상세·회차 실서버 연동에 맞춰 5장(목업 현황) 갱신. `features/concert` 타입을 서버 응답으로 교체,
   `features/organizer` 에 공연 등록(관리자) 추가, `can.createConcert` 를 서버와 같은 ADMIN 전용으로 조정
+- 2026-09-08 포카 목업을 서버 `NftController` 계약으로 재작성(5장 현황표 갱신). `features/nft` 타입·경로 교체,
+  화면 6곳 필드 정렬, `shared/hooks/useInfiniteScroll` 추가. 경매는 다음 브랜치
+- 2026-09-08 **어드민 콘솔(`/admin`) 추가** — 7장에 "어드민 콘솔" 절 신설.
+  4-4(모바일 우선)의 유일한 예외로 데스크톱 전용 레이아웃을 도입했고
+  (`features/admin` 의 `AdminLayout`, `lg` 미만은 안내만),
+  `Modal` 에 `width="wide"` 변형을 한 줄 추가했습니다.
+  `can.accessAdmin` / `can.manageUsers` 권한 판단을 `permission.ts` 에 추가. 사용자 요청
