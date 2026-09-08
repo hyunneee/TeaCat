@@ -1,5 +1,5 @@
-import { cn, formatPrice } from '@/shared/lib';
-import { isSectionSoldOut, sectionRemainRatio } from '../model/seat.model';
+import { cn } from '@/shared/lib';
+import { isSectionSoldOut, priceLabel, sectionRemainRatio } from '../model/seat.model';
 import type { Section } from '../model/booking.types';
 
 interface Props {
@@ -70,7 +70,7 @@ export function VenueMap({ sections, selectedId, onSelect, className }: Props) {
               role="button"
               tabIndex={soldOut ? -1 : 0}
               aria-pressed={selected}
-              aria-label={`${section.name} ${formatPrice(section.price)} ${soldOut ? '매진' : `잔여 ${section.availableSeats}석`}`}
+              aria-label={`${section.name} ${priceLabel(section.price)} ${soldOut ? '매진' : `잔여 ${section.availableSeats}석`}`}
               onClick={() => !soldOut && onSelect(section)}
               onKeyDown={(event) => {
                 if (soldOut) return;

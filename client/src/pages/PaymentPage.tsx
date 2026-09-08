@@ -6,7 +6,14 @@ import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/co
 import { BOOKING_STEPS, ROUTES, toPoints } from '@/shared/constants';
 import { env } from '@/shared/config';
 import { cn, formatPoints, formatPrice } from '@/shared/lib';
-import { HoldTimer, seatLabel, useBookingStore, useSeatHold, useSeatMap } from '@/features/booking';
+import {
+  HoldTimer,
+  priceLabel,
+  seatLabel,
+  useBookingStore,
+  useSeatHold,
+  useSeatMap,
+} from '@/features/booking';
 import { useTokenBalance } from '@/features/token';
 import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment';
 
@@ -39,14 +46,14 @@ export function PaymentPage() {
   const hold = useBookingStore((s) => s.hold);
   const sectionId = useBookingStore((s) => s.sectionId);
   const { remainSeconds } = useSeatHold(scheduleId);
-  const { data: seatMap } = useSeatMap(scheduleId, sectionId ?? undefined);
+  const { data: seatMap } = useSeatMap(scheduleId);
   const { pay, stage, isPaying } = usePayment(scheduleId);
   const { data: token } = useTokenBalance();
 
   const section = seatMap?.sections.find((s) => s.id === sectionId);
   const heldSeatIds = hold?.seatIds ?? [];
   const seats = seatMap?.seats.filter((s) => heldSeatIds.includes(s.id)) ?? [];
-  const total = seats.reduce((sum, s) => sum + s.price, 0);
+  const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
   const fee = 2000 * seats.length;
 
   /* 캣머니 표시용 어림값입니다. 실제 차감량은 서버가 다시 계산합니다.
@@ -83,7 +90,7 @@ export function PaymentPage() {
             {seats.map((seat) => (
               <div key={seat.id} className="flex items-center justify-between text-sm">
                 <span className="text-muted truncate">{seatLabel(seat, section?.name ?? '')}</span>
-                <span>{formatPrice(seat.price)}</span>
+                <span>{priceLabel(seat.price)}</span>
               </div>
             ))}
           </Card>
