@@ -14,7 +14,11 @@ services:
       - ./certbot/www:/var/www/certbot:ro
       # 프론트 정적 파일. 여기에 dist/ 내용을 넣으면 nginx 가 바로 읽는다
       # (컨테이너 재시작 불필요 — 설정을 바꿀 때만 reload 하면 된다)
+      #
+      # 🔴 두 폴더가 EC2 에 **미리 있어야** 한다. 없으면 도커가 빈 디렉터리를 만들고
+      #    nginx 는 404 만 낸다.  mkdir -p ~/teacat/frontend/{dev,prod}
       - ./frontend/dev:/usr/share/nginx/html/dev:ro
+      - ./frontend/prod:/usr/share/nginx/html/prod:ro
     networks:
       - teacat-net
     restart: unless-stopped

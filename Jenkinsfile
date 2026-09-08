@@ -72,8 +72,18 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    # 운영에서는 목업을 끈다. 개발은 백엔드 연동이 끝날 때까지 켜둔다.
-                    if [ "$DEPLOY_ENV" = "prod" ]; then MOCK=false; else MOCK=true; fi
+                    # 목업 스위치. 양쪽 환경 모두 아직 켜 둔다.
+                    #
+                    # 🔴 운영만 false 로 두면 배포본이 홈 화면부터 빈다.
+                    #    서버에 아직 컨트롤러가 없는 경로가 남아 있기 때문이다
+                    #    (/banners, /app/version, /schedules/*/seats, /me/tickets,
+                    #     /me/nfts, /nfts, /payments/*, /holds/*, /resale/*).
+                    #
+                    #    지금 목업이 잡는 건 위 경로와 캡차뿐이다. 회원·인증·얼굴·공연 조회는
+                    #    목업을 켜 둬도 실서버로 나간다 (client/src/mocks/index.ts).
+                    #    위 경로의 백엔드가 붙는 대로 handlers 에서 지우고, 다 지워지면
+                    #    이 줄을 MOCK=false 로 바꾼다.
+                    MOCK=true
 
                     docker build -t teacat-client:$DEPLOY_ENV-$TAG \
                         --build-arg VITE_USE_MOCK=$MOCK ./client

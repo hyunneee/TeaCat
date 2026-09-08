@@ -41,6 +41,15 @@ public class RefreshTokenProvider {
         refreshTokenRepository.delete(token);
     }
 
+    /**
+     * 한 사용자의 리프레시 토큰을 전부 폐기한다.
+     *
+     * 비밀번호 변경·탈퇴처럼 "지금 붙어 있는 다른 기기를 끊어야" 하는 경우에 쓴다.
+     */
+    public void revokeAll(Long userId) {
+        refreshTokenRepository.deleteAllByUser(userId);
+    }
+
     private String generate() {
         byte[] bytes = new byte[TOKEN_BYTE_LENGTH];
         secureRandom.nextBytes(bytes);

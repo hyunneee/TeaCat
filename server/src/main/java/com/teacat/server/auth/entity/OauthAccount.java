@@ -66,4 +66,15 @@ public class OauthAccount {
     public static OauthAccount link(User user, OauthProvider provider, String providerUserId, String email) {
         return new OauthAccount(user, provider, providerUserId, email);
     }
+
+    /**
+     * 같은 회원·같은 제공자의 연결을 새 식별자로 갈아끼운다.
+     *
+     * 회원당 제공자 하나만 연결할 수 있으므로(uq_user_oauth_accounts_user_provider)
+     * 제공자 쪽 식별자가 바뀌었을 때 새 행을 넣는 대신 기존 행을 고친다.
+     */
+    public void relink(String providerUserId, String email) {
+        this.providerUserId = providerUserId;
+        this.email = email;
+    }
 }
