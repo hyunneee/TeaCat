@@ -15,11 +15,6 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
-/**
- * 공연장 좌석 (seats).
- *
- * 공연장 배치도 그 자체다. 회차별 판매 상태는 performance_seats 가 따로 들고 있다.
- */
 @Entity
 @Table(name = "seats")
 @Getter
@@ -45,4 +40,19 @@ public class Seat {
 
     @Column(name = "seat_number", nullable = false)
     private int seatNumber;
+
+    public void update(String rowLabel, Integer seatNumber, BigDecimal seatX, BigDecimal seatY) {
+        if (rowLabel != null) {
+            this.rowLabel = rowLabel;
+        }
+        if (seatNumber != null) {
+            this.seatNumber = seatNumber;
+        }
+        if (seatX != null) {
+            this.seatX = seatX;
+        }
+        if (seatY != null) {
+            this.seatY = seatY;
+        }
+    }
 }

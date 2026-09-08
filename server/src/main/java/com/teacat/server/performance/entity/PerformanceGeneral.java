@@ -1,6 +1,7 @@
 package com.teacat.server.performance.entity;
 
 import com.teacat.server.stadium.entity.Stadium;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,6 +23,9 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 공연 (performance_general).
@@ -48,6 +52,14 @@ public class PerformanceGeneral {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stadium_id", nullable = false)
     private Stadium stadium;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stadium_layout_id", nullable = false)
+    private StadiumLayout stadiumLayout;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "layout_elements", nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> layoutElements = emptyLayoutElements();
 
     /** 이 날짜부터 목록에 노출된다 */
     @Column(name = "visible_from", nullable = false)
@@ -91,10 +103,12 @@ public class PerformanceGeneral {
     @Column(name = "created_by")
     private Long createdById;
 
-    private PerformanceGeneral(Stadium stadium, String title, LocalDateTime ticketingStartAt,
+    private PerformanceGeneral(Stadium stadium, StadiumLayout stadiumLayout,
+                               String title, LocalDateTime ticketingStartAt,
                                LocalDate visibleFrom, String posterImageKey, String detailImageKey,
                                Long createdById) {
         this.stadium = stadium;
+        this.stadiumLayout = stadiumLayout;
         this.title = title;
         this.ticketingStartAt = ticketingStartAt;
         this.visibleFrom = visibleFrom;
@@ -105,11 +119,28 @@ public class PerformanceGeneral {
     }
 
     /** 공연 등록 (API-261) */
+    public static PerformanceGeneral create(Stadium stadium, StadiumLayout stadiumLayout,
+                                            String title, LocalDateTime ticketingStartAt,
+                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey,
+                                            Long createdById) {
+        return new PerformanceGeneral(stadium, stadiumLayout, title, ticketingStartAt,
+                visibleFrom, posterImageKey, detailImageKey, createdById);
+    }
+
+    /** Unit-test/legacy fixture compatibility. New persisted performances must use the layout-aware factory. */
     public static PerformanceGeneral create(Stadium stadium, String title, LocalDateTime ticketingStartAt,
                                             LocalDate visibleFrom, String posterImageKey, String detailImageKey,
                                             Long createdById) {
-        return new PerformanceGeneral(
-                stadium, title, ticketingStartAt, visibleFrom, posterImageKey, detailImageKey, createdById);
+        return create(stadium, null, title, ticketingStartAt, visibleFrom,
+                posterImageKey, detailImageKey, createdById);
+    }
+
+    /** Layout-domain fixture compatibility. */
+    public static PerformanceGeneral create(Stadium stadium, StadiumLayout stadiumLayout,
+                                            String title, LocalDateTime ticketingStartAt,
+                                            LocalDate visibleFrom, String posterImageKey, String detailImageKey) {
+        return create(stadium, stadiumLayout, title, ticketingStartAt, visibleFrom,
+                posterImageKey, detailImageKey, null);
     }
 
     /**
@@ -176,5 +207,21 @@ public class PerformanceGeneral {
 
     public boolean isHidden() {
         return this.hiddenAt != null;
+    }
+
+    public void updateLayout(StadiumLayout stadiumLayout, List<Map<String, Object>> elements,
+                             List<Long> blockedSeatIds) {
+        this.stadiumLayout = stadiumLayout;
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("elements", elements == null ? List.of() : elements);
+        value.put("blockedSeatIds", blockedSeatIds == null ? List.of() : blockedSeatIds);
+        this.layoutElements = value;
+    }
+
+    private static Map<String, Object> emptyLayoutElements() {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("elements", List.of());
+        value.put("blockedSeatIds", List.of());
+        return value;
     }
 }

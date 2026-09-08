@@ -41,6 +41,10 @@ export const can = {
    * STADIUM·PERFORMANCE 에게 열어두면 메뉴는 보이는데 403 이 나는 화면이 됩니다.
    */
   manageUsers: (user: User | null): boolean => user?.role === 'ADMIN',
+
+  /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
+  manageStadiumLayouts: (user: User | null): boolean =>
+    hasRole(user, 'ADMIN', 'STADIUM'),
 };
 
 export function hasRole(user: User | null, ...roles: UserRole[]): boolean {

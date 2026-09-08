@@ -68,6 +68,7 @@ const OauthCallbackPage = page(
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
+const AdminStadiumPage = page(() => import('@/pages/AdminStadiumPage'), 'AdminStadiumPage');
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
 /* 어드민 대시보드. 껍데기까지 lazy 로 쪼갭니다 —
@@ -158,6 +159,12 @@ const routes: RouteObject[] = [
             element: <AdminLayout />,
             children: [
               { index: true, element: withBoundary(<AdminDashboardPage />) },
+              {
+                element: <RequireRole roles={['ADMIN', 'STADIUM']} />,
+                children: [
+                  { path: ROUTES.ADMIN_STADIUM, element: withBoundary(<AdminStadiumPage />) },
+                ],
+              },
               {
                 /* 회원 관리는 서버가 ADMIN 전용이다. STADIUM·PERFORMANCE 는
                    대시보드까지만 들어오고 여기서 홈으로 되돌려보낸다. */
@@ -299,6 +306,7 @@ const routes: RouteObject[] = [
       { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
     ],
   },
+
 ];
 
 export const router = createBrowserRouter(routes);

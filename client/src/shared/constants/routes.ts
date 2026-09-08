@@ -82,6 +82,7 @@ export const ROUTES = {
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
   MONITORING: '/admin/monitoring',
+  ADMIN_STADIUM: '/admin/stadium',
 
   /**
    * 개발용 얼굴 인식 검증 화면.

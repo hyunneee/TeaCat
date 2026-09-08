@@ -13,7 +13,10 @@ import {
 
 export const organizerApi = {
   /** 공연장 목록 (API-251) — 등록 폼의 공연장 선택용 */
-  listStadiums: () => http.get<StadiumSummary[]>('/stadiums'),
+  listStadiums: async () => {
+    const response = await http.get<{ stadiums: StadiumSummary[] }>('/stadiums');
+    return response.stadiums;
+  },
 
   /**
    * 공연 등록 (API-261). ADMIN 전용.

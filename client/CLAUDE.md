@@ -216,6 +216,9 @@ export function Card({ className, ...rest }: CardProps) {
 - 터치 타겟 최소 44px → `Button` 은 `md` 이상
 - 노치 대응: 상단 `pt-safe`, 하단 고정 요소 `pb-safe`
 - 고정 하단 버튼이 있으면 본문에 그만큼 `padding-bottom` 을 줘서 안 가리게
+- **승인된 예외:** `/admin/stadium` 좌석 배치 편집 화면은 대형 캔버스 작업이 필요하므로
+  `AdminWorkspaceLayout`의 `max-w-7xl` 데스크톱 작업 폭을 사용합니다. 일반 사용자 화면과
+  기존 `AppLayout`·`PlainLayout`의 `.app-width` 규칙은 변경하지 않습니다.
 
 ### 4-5. 애니메이션
 
@@ -587,6 +590,7 @@ npm run typecheck && npm run lint
 
 ## [규칙 변경 이력]
 
+- 2026-09-07 `/admin/stadium` 좌석 배치 편집 화면에 한해 `AdminWorkspaceLayout` 데스크톱 작업 폭 허용 (사용자 승인)
 - 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
   배포·8장 갱신. SSAFY 계정 로그인 화면(`/oauth/callback`, `/oauth/signup`) 추가
 | 2026-09-03 | 하단 탭 하이라이트를 알약 → **원**(`size-10`)으로, 탭 사이를 미끄러져 이동 (원 하나만 두고 `인덱스 × 100%` 이동) | 사용자 요청 |

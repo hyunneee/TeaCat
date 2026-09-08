@@ -26,6 +26,8 @@ import com.teacat.server.stadium.entity.Area;
 import com.teacat.server.stadium.entity.Stadium;
 import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
+import com.teacat.server.stadium.repository.StadiumLayoutRepository;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -64,6 +66,7 @@ public class AdminPerformanceService {
     private final PerformanceAreaRepository performanceAreaRepository;
     private final AreaRepository areaRepository;
     private final StadiumRepository stadiumRepository;
+    private final StadiumLayoutRepository stadiumLayoutRepository;
     private final FileStorageService fileStorageService;
     private final PerformanceImageProperties imageProperties;
 
@@ -80,6 +83,9 @@ public class AdminPerformanceService {
         List<LocalDateTime> performanceDates = normalizePerformanceDates(
                 request.performanceDatesOrEmpty(), request.ticketingStartAt());
 
+        StadiumLayout stadiumLayout = stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
+                .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+
         String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY, imageProperties.posterMaxSize());
         String detailImageKey = uploadIfPresent(
                 request.detailImage(), DETAIL_IMAGE_DIRECTORY, imageProperties.detailMaxSize());
@@ -87,6 +93,7 @@ public class AdminPerformanceService {
         PerformanceGeneral performance = performanceGeneralRepository.save(
                 PerformanceGeneral.create(
                         stadium,
+                        stadiumLayout,
                         request.title(),
                         request.ticketingStartAt(),
                         request.visibleFrom(),
@@ -150,7 +157,16 @@ public class AdminPerformanceService {
             throw new BusinessException(PerformanceErrorCode.INVALID_VISIBLE_FROM);
         }
 
+        StadiumLayout defaultLayout = null;
+        if (stadium != null) {
+            defaultLayout = stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
+                    .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+        }
+
         performance.update(request.title(), stadium, request.ticketingStartAt(), request.visibleFrom());
+        if (defaultLayout != null) {
+            performance.updateLayout(defaultLayout, java.util.List.of(), java.util.List.of());
+        }
 
         replaceImagesIfPresent(performance, request.posterImageKey(), request.detailImageKey());
     }
@@ -348,7 +364,9 @@ public class AdminPerformanceService {
         }
 
         // 남의 공연장 구역을 붙이면 배치도와 좌석이 어긋난다
-        Map<Long, Area> stadiumAreas = areaRepository.findByStadiumId(performance.getStadium().getId()).stream()
+        Map<Long, Area> stadiumAreas = areaRepository
+                .findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(performance.getStadiumLayout().getId())
+                .stream()
                 .collect(Collectors.toMap(Area::getId, Function.identity()));
 
         if (!stadiumAreas.keySet().containsAll(requestedAreaIds)) {
