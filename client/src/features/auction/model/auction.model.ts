@@ -19,19 +19,24 @@ export type AuctionSort = (typeof AUCTION_SORTS)[number]['value'];
 export const DEFAULT_AUCTION_SORT: AuctionSort = 'ENDING_SOON';
 
 /**
- * 판매자가 고를 수 있는 진행 시간.
+ * 판매자가 고를 수 있는 진행 시간(시간 단위).
  * 서버 허용 범위는 1시간~7일이고, 그 안에서 고르기 쉬운 값만 추립니다.
+ *
+ * 값이 문자열인 이유 — 공용 `Select` 가 문자열 값만 받습니다.
+ * 요청에 실을 때 `Number()` 로 되돌립니다.
  */
 export const DURATION_OPTIONS = [
-  { value: 6, label: '6시간' },
-  { value: 12, label: '12시간' },
-  { value: 24, label: '1일' },
-  { value: 48, label: '2일' },
-  { value: 72, label: '3일' },
-  { value: 168, label: '7일' },
+  { value: '6', label: '6시간' },
+  { value: '12', label: '12시간' },
+  { value: '24', label: '1일' },
+  { value: '48', label: '2일' },
+  { value: '72', label: '3일' },
+  { value: '168', label: '7일' },
 ] as const;
 
-export const DEFAULT_DURATION_HOURS = 48;
+export type DurationOption = (typeof DURATION_OPTIONS)[number]['value'];
+
+export const DEFAULT_DURATION_HOURS: DurationOption = '48';
 
 /** 마감까지 남은 밀리초. 0 이면 이미 지났습니다 */
 export function msUntilEnd(endsAt: string): number {

@@ -5,6 +5,7 @@ import {
   catMoneyHolds,
   findUser,
   iso,
+  nextAuctionId,
   nextBidId,
   nextTradeId,
   now,
@@ -105,6 +106,15 @@ function closeAuction(auction: MockAuction) {
 
   auction.status = 'SOLD';
   auction.winnerId = top.bidderId;
+}
+
+/**
+ * 이 포카에 걸려 있는 진행 중 경매. 없으면 undefined.
+ * 포카 상세(`handlers/nft.ts`)와 등록 가드가 함께 씁니다 —
+ * 포카 한 장은 고정가와 경매 중 하나에만 올라갑니다.
+ */
+export function findActiveAuction(photocardId: number): MockAuction | undefined {
+  return auctions.find((a) => a.photocardId === photocardId && a.status === 'ACTIVE');
 }
 
 /** 만료된 ACTIVE 경매를 모두 닫습니다. 조회 핸들러가 먼저 부릅니다 */
@@ -427,4 +437,83 @@ mock('DELETE', '/auctions/:auctionId', (ctx) => {
   auction.status = 'CANCELLED';
   auction.closedAt = iso(now());
   return null;
+});
+
+/* ── B1 경매 등록 ── */
+
+/** 서버 설정(`nft.auction.min-duration` ~ `max-duration`)의 기본값과 같습니다 */
+const MIN_DURATION_HOURS = 1;
+const MAX_DURATION_HOURS = 168; // 7일
+
+mock('POST', '/photocards/:photocardId/auction', (ctx) => {
+  const user = requireUser(ctx.headers);
+
+  const photocardId = Number(ctx.params.photocardId);
+  const card = photocards.find((p) => p.photocardId === photocardId);
+  if (!card) throw mockError(404, 'NFT_001', '존재하지 않는 포토카드입니다.');
+  if (card.ownerId !== user.id) {
+    throw mockError(403, 'NFT_003', '본인이 소유한 포토카드가 아닙니다.');
+  }
+
+  // 고정가와 경매는 동시에 올라갈 수 없습니다. 둘 다 확인합니다.
+  if (card.listing) throw mockError(409, 'NFT_004', '이미 판매 등록된 포토카드입니다.');
+  if (findActiveAuction(photocardId)) {
+    throw mockError(409, 'NFT_021', '이미 경매가 진행 중인 포토카드입니다.');
+  }
+
+  const { startPrice, buyNowPrice, durationHours } = ctx.body as {
+    startPrice?: unknown;
+    buyNowPrice?: unknown;
+    durationHours?: unknown;
+  };
+
+  // 서버 @Valid 와 같은 모양 — code 없이 400 + 메시지
+  if (typeof startPrice !== 'number' || !Number.isInteger(startPrice) || startPrice < 1) {
+    throw mockError(400, '', '시작가를 1 이상으로 입력해 주세요.');
+  }
+  if (typeof durationHours !== 'number' || !Number.isInteger(durationHours)) {
+    throw mockError(400, '', '진행 시간을 입력해 주세요.');
+  }
+  if (durationHours < MIN_DURATION_HOURS || durationHours > MAX_DURATION_HOURS) {
+    throw mockError(400, 'NFT_030', '경매 기간이 허용 범위를 벗어났습니다.');
+  }
+
+  const buyNow = buyNowPrice === undefined || buyNowPrice === null ? null : Number(buyNowPrice);
+  if (buyNow !== null) {
+    if (!Number.isInteger(buyNow) || buyNow < 1) {
+      throw mockError(400, '', '즉시구매가를 1 이상으로 입력해 주세요.');
+    }
+    if (buyNow <= startPrice) {
+      throw mockError(400, 'NFT_031', '즉시구매가는 시작가보다 높아야 합니다.');
+    }
+  }
+
+  const auction: MockAuction = {
+    auctionId: nextAuctionId(),
+    photocardId,
+    sellerId: user.id,
+    startPrice,
+    buyNowPrice: buyNow,
+    // 아직 입찰이 없으므로 현재가는 시작가입니다.
+    currentPrice: startPrice,
+    topBidId: null,
+    bidCount: 0,
+    endsAt: iso(now() + durationHours * 3600_000),
+    status: 'ACTIVE',
+    winnerId: null,
+    createdAt: iso(now()),
+    closedAt: null,
+  };
+  auctions.push(auction);
+
+  return {
+    auctionId: auction.auctionId,
+    photocardId: auction.photocardId,
+    status: auction.status,
+    startPrice: auction.startPrice,
+    buyNowPrice: auction.buyNowPrice,
+    currentPrice: auction.currentPrice,
+    endsAt: auction.endsAt,
+    createdAt: auction.createdAt,
+  };
 });

@@ -201,3 +201,27 @@ export function useCancelAuction(auctionId: number) {
     },
   });
 }
+
+/**
+ * 경매 등록.
+ *
+ * 성공하면 만들어진 경매의 상세로 보냅니다 — 올려놓고 "어디로 갔지" 를
+ * 찾게 하지 않습니다. 이동은 화면이 `onSuccess` 로 합니다.
+ *
+ * 포카 한 장은 고정가와 경매 중 하나에만 올라갑니다.
+ * 이미 올라가 있으면 서버가 NFT_004(고정가) 또는 NFT_021(경매)로 거절합니다.
+ */
+export function useCreateAuction(photocardId: number) {
+  return useMutation({
+    mutationFn: (body: { startPrice: number; buyNowPrice?: number; durationHours: number }) =>
+      auctionApi.create(photocardId, body),
+    retry: false,
+    onSuccess: () => {
+      // 카드가 경매로 넘어가면 포카 상세·내 포카·마켓이 모두 달라집니다.
+      void queryClient.invalidateQueries({ queryKey: auctionKeys.all });
+      void queryClient.invalidateQueries({ queryKey: nftKeys.all });
+      toast.success('경매를 시작했어요.');
+    },
+    onError: (error) => toast.error(messageOf(error, '경매 등록에 실패했어요.')),
+  });
+}
