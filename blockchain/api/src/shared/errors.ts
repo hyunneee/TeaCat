@@ -78,6 +78,84 @@ export const errors = {
   invalidTicketState: (tokenId: string, message: string, detail?: unknown) =>
     new AppError('INVALID_TICKET_STATE', `티켓 ${tokenId}: ${message}`, 409, detail),
 
+  /* ── 포토카드 ──────────────────────────────────────────────── */
+
+  /** 도안이 체인에 등록되지 않았습니다. 발행보다 `registerDesign` 이 먼저입니다. */
+  designNotRegistered: (designId: string) =>
+    new AppError('DESIGN_NOT_REGISTERED', `도안 ${designId} 이 체인에 등록되지 않았습니다`, 400, {
+      designId,
+    }),
+
+  /** 한정 수량을 넘깁니다. **재시도로 풀리지 않습니다.** */
+  designSoldOut: (designId: string, detail?: unknown) =>
+    new AppError('DESIGN_SOLD_OUT', `도안 ${designId} 의 한정 수량을 넘깁니다`, 422, detail),
+
+  /**
+   * 이미 카드가 나간 도안이라 수량·메타데이터가 잠겼습니다.
+   *
+   * 첫 장을 받은 사람에게 "이 그림, 이 수량" 을 약속한 뒤이므로 되돌릴 수 없습니다.
+   * 바꿔야 하면 새 도안으로 만듭니다.
+   */
+  designFrozen: (designId: string) =>
+    new AppError(
+      'DESIGN_FROZEN',
+      `도안 ${designId} 은 이미 발행이 시작돼 수량·이미지를 바꿀 수 없습니다`,
+      409,
+      { designId },
+    ),
+
+  /* ── 추첨 ──────────────────────────────────────────────────── */
+
+  drawNotFound: (drawKey: string) =>
+    new AppError('DRAW_NOT_FOUND', `추첨 ${drawKey} 이 열린 적이 없습니다`, 404),
+
+  /** 취소된 추첨의 키도 풀리지 않습니다. 다시 뽑으려면 새 키로 엽니다. */
+  drawAlreadyExists: (drawKey: string) =>
+    new AppError('DRAW_ALREADY_EXISTS', `추첨 키 ${drawKey} 은 이미 사용됐습니다`, 409),
+
+  /**
+   * 대상 블록이 아직 없습니다. **재시도로 풀립니다** — 조금 뒤에 다시 부르면 됩니다.
+   *
+   * 아래 `drawExpired` 와 반드시 구분해야 합니다. 하나는 기다리면 되고 하나는 끝입니다.
+   */
+  drawTooEarly: (targetBlock: number) =>
+    new AppError('TOO_EARLY', `아직 ${targetBlock} 블록이 생기지 않았습니다`, 409, {
+      targetBlock,
+    }),
+
+  drawAlreadyRevealed: (drawKey: string) =>
+    new AppError('ALREADY_REVEALED', `추첨 ${drawKey} 은 이미 공개됐습니다`, 409),
+
+  drawNotRevealed: (drawKey: string) =>
+    new AppError('NOT_REVEALED', `추첨 ${drawKey} 이 아직 공개되지 않았습니다`, 409),
+
+  drawCanceled: (drawKey: string) =>
+    new AppError('DRAW_CANCELED', `추첨 ${drawKey} 은 취소됐습니다`, 409),
+
+  /**
+   * 블록해시가 사라져 되살릴 수 없습니다. **재시도로 풀리지 않습니다.**
+   * 새 `drawKey` 로 다시 열어야 합니다.
+   */
+  drawExpired: (drawKey: string) =>
+    new AppError(
+      'BLOCKHASH_EXPIRED',
+      `추첨 ${drawKey} 은 블록해시 창(256블록)을 넘겨 공개할 수 없습니다. 새 키로 다시 여세요`,
+      410,
+    ),
+
+  /**
+   * 보낸 입력이 커밋할 때와 다릅니다.
+   *
+   * **이 검사가 곧 증명입니다** — 커밋 이후 참여자 목록이 바뀌지 않았다는 것을
+   * 여기서 확인합니다. 정렬 순서 하나만 달라도 해시가 달라집니다.
+   */
+  inputsMismatch: (detail?: unknown) =>
+    new AppError('INPUTS_MISMATCH', '보낸 입력이 추첨에 커밋된 것과 다릅니다', 400, detail),
+
+  /** 추첨 시드를 파생할 비밀이 없습니다. 서버 설정 문제입니다. */
+  drawNotConfigured: () =>
+    new AppError('DRAW_NOT_CONFIGURED', 'DRAW_SEED_SECRET 이 설정되지 않았습니다', 503),
+
   internal: (message = '알 수 없는 오류') => new AppError('INTERNAL', message, 500),
 };
 
