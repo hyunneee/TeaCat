@@ -9,6 +9,7 @@ import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.TicketingWindow;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,11 +31,14 @@ public class BookingService {
     private static final String TICKETING_STATUS_OPEN = "OPEN";
 
     private final PerformanceSeatRepository performanceSeatRepository;
+    private final UserRepository userRepository;
     private final Duration holdDuration;
 
     public BookingService(PerformanceSeatRepository performanceSeatRepository,
+            UserRepository userRepository,
             @Value("${booking.hold.duration}") Duration holdDuration) {
         this.performanceSeatRepository = performanceSeatRepository;
+        this.userRepository = userRepository;
         this.holdDuration = holdDuration;
     }
 
@@ -56,6 +60,12 @@ public class BookingService {
     /** 좌석 선점 */
     @Transactional
     public SeatHoldResponse holdSeat(Long performanceDetailId, Long seatId, Long userId) {
+        // 얼굴이 없으면 티켓을 발급할 수 없다(tickets.face_id 가 NOT NULL). 결제까지 받은 뒤
+        // 발급에서 막히면 되돌리기 가장 비싼 실패가 되므로, 좌석을 묶기 전에 거절한다.
+        //   정책 플래그(booking.policy.face-verification-required)로 끄지 않는다 —
+        //   스키마가 강제하는 제약이라 꺼도 발급이 되지 않는다.
+        requireFaceRegistered(userId);
+
         TicketingWindow ticketingWindow = performanceSeatRepository
                 .findTicketingWindow(performanceDetailId)
                 .orElseThrow(() -> new BusinessException(
@@ -116,6 +126,13 @@ public class BookingService {
         if (updated == 0) {
             throw new BusinessException(resolveReleaseFailure(
                     new PerformanceSeatId(performanceDetailId, seatId), userId));
+        }
+    }
+
+    /** 얼굴 미등록이면 선점을 거절한다 */
+    private void requireFaceRegistered(Long userId) {
+        if (!userRepository.existsByIdAndFaceIsNotNull(userId)) {
+            throw new BusinessException(BookingErrorCode.FACE_NOT_REGISTERED);
         }
     }
 

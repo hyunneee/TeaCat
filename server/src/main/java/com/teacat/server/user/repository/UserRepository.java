@@ -21,6 +21,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByNickname(String nickname);
 
+    /**
+     * 얼굴이 등록된 회원인가.
+     *
+     * 회원 전체를 읽지 않고 존재 여부만 본다. 탈퇴 회원은 {@code @SQLRestriction} 이 걸러낸다.
+     */
+    boolean existsByIdAndFaceIsNotNull(Long id);
+
     /* ── 관리자 회원 목록 ─────────────────────────────────────
        탈퇴 회원은 User 의 @SQLRestriction 이 알아서 걸러준다.
 
