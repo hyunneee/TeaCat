@@ -60,6 +60,10 @@ export const ROUTES = {
   NFT_MARKET: '/nft',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
+  /** 경매 상세. 비로그인도 구경할 수 있어야 해서 가드 밖에 둡니다 */
+  AUCTION_DETAIL: (auctionId: string) => `/auctions/${auctionId}`,
+  MY_AUCTIONS: '/my/auctions',
+  MY_BIDS: '/my/bids',
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
