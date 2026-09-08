@@ -46,6 +46,8 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
 const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
+const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
+const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -232,6 +234,8 @@ const routes: RouteObject[] = [
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },

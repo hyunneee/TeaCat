@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
   Coins,
+  Gavel,
+  HandCoins,
   Hourglass,
   LogOut,
   Receipt,
@@ -164,6 +166,16 @@ export function MyPage() {
               icon={<Sparkles size={18} />}
               title="내 포토카드"
               onClick={() => navigate(ROUTES.MY_NFTS)}
+            />
+            <ListRow
+              icon={<Gavel size={18} />}
+              title="내 경매"
+              onClick={() => navigate(ROUTES.MY_AUCTIONS)}
+            />
+            <ListRow
+              icon={<HandCoins size={18} />}
+              title="내 입찰"
+              onClick={() => navigate(ROUTES.MY_BIDS)}
             />
             <ListRow
               icon={<Receipt size={18} />}

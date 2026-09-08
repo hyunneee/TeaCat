@@ -517,3 +517,83 @@ mock('POST', '/photocards/:photocardId/auction', (ctx) => {
     createdAt: auction.createdAt,
   };
 });
+
+/* ── B5 내가 올린 경매 ── */
+mock('GET', '/users/me/auctions', (ctx) => {
+  closeExpiredAuctions();
+
+  const user = requireUser(ctx.headers);
+  const status = ctx.query.status ? String(ctx.query.status) : undefined;
+
+  const rows = auctions
+    .filter((a) => a.sellerId === user.id)
+    .filter((a) => !status || a.status === status)
+    // 최근에 올린 것부터. id 가 증가 순서라 그대로 시간 순서입니다.
+    .sort((a, b) => b.auctionId - a.auctionId)
+    .map(toSummary);
+
+  return page(rows, ctx.query);
+});
+
+/* ── B6 내가 입찰한 경매 ──
+   여러 번 입찰했어도 **경매 단위로 한 줄**입니다. 같은 카드가 목록에
+   세 번 나오면 무엇을 보고 있는지 알 수 없습니다. */
+mock('GET', '/users/me/bids', (ctx) => {
+  closeExpiredAuctions();
+
+  const user = requireUser(ctx.headers);
+  const myBids = auctionBids.filter((b) => b.bidderId === user.id);
+
+  // 경매별로 내 입찰을 모읍니다.
+  const byAuction = new Map<number, { highest: number; lastBidId: number }>();
+  for (const bid of myBids) {
+    const prev = byAuction.get(bid.auctionId);
+    byAuction.set(bid.auctionId, {
+      highest: Math.max(prev?.highest ?? 0, bid.amount),
+      lastBidId: Math.max(prev?.lastBidId ?? 0, bid.bidId),
+    });
+  }
+
+  const rows = [...byAuction.entries()]
+    // 내가 마지막으로 입찰한 순서대로 — 방금 넣은 경매가 맨 위입니다.
+    .sort((a, b) => b[1].lastBidId - a[1].lastBidId)
+    .flatMap(([auctionId, mine]) => {
+      const auction = auctions.find((a) => a.auctionId === auctionId);
+      if (!auction) return [];
+
+      const card = photocards.find((p) => p.photocardId === auction.photocardId);
+      const top =
+        auction.topBidId === null
+          ? undefined
+          : auctionBids.find((b) => b.bidId === auction.topBidId);
+      const isTopBidder = !!top && top.bidderId === user.id;
+
+      /* 진행 중이면 지금 내가 이기고 있는지, 끝났으면 가져갔는지.
+         입찰이 있는 경매는 취소가 불가능하므로 "취소됨" 은 나오지 않습니다. */
+      const result =
+        auction.status === 'ACTIVE'
+          ? isTopBidder
+            ? 'BIDDING'
+            : 'OUTBID'
+          : auction.winnerId === user.id
+            ? 'WON'
+            : 'LOST';
+
+      return [
+        {
+          auctionId: auction.auctionId,
+          photocardId: auction.photocardId,
+          designName: card?.designName ?? '알 수 없는 카드',
+          imageUrl: card?.imageUrl ?? null,
+          myHighestBid: mine.highest,
+          currentPrice: auction.currentPrice,
+          isTopBidder,
+          status: auction.status,
+          endsAt: auction.endsAt,
+          result,
+        },
+      ];
+    });
+
+  return page(rows, ctx.query);
+});

@@ -1,6 +1,8 @@
 import { parseServerTime } from '@/shared/lib';
 import type { AuctionDetail, AuctionStatus, MyBidResult } from './auction.types';
 
+// (타입만 쓰는 import 라 런타임 의존이 없습니다 — model 은 React 를 모릅니다)
+
 /**
  * 경매 정렬.
  *
@@ -126,6 +128,28 @@ export function auctionResultText(auction: AuctionDetail): string | null {
   if (auction.status === 'CANCELLED') return '판매자가 취소한 경매입니다';
   return null;
 }
+
+/**
+ * 내 경매 목록의 상태 필터.
+ * 값이 빈 문자열인 "전체" 가 기본입니다 — 서버에 `status` 를 안 보내는 것과 같습니다.
+ */
+export const MY_AUCTION_FILTERS = [
+  { value: '', label: '전체' },
+  { value: 'ACTIVE', label: '진행 중' },
+  { value: 'SOLD', label: '낙찰' },
+  { value: 'EXPIRED', label: '유찰' },
+  { value: 'CANCELLED', label: '취소' },
+] as const;
+
+export type MyAuctionFilter = (typeof MY_AUCTION_FILTERS)[number]['value'];
+
+/** 경매 상태를 화면에 쓰는 말로. 진행 중은 카운트다운이 대신하므로 뱃지를 달지 않습니다 */
+export const AUCTION_STATUS_LABEL: Record<AuctionStatus, string> = {
+  ACTIVE: '진행 중',
+  SOLD: '낙찰',
+  EXPIRED: '유찰',
+  CANCELLED: '취소함',
+};
 
 /** 내 입찰 결과 뱃지 문구와 톤. 붉은색은 쓰지 않습니다 — 되돌릴 수 없는 동작이 아닙니다 */
 export const MY_BID_RESULT: Record<MyBidResult, { label: string; tone: 'neutral' | 'success' | 'warning' }> = {

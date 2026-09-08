@@ -13,6 +13,8 @@ export {
   useBuyNow,
   useCancelAuction,
   useCreateAuction,
+  useMyAuctions,
+  useMyBids,
 } from './hooks/useAuction';
 export { AuctionCreateForm } from './components/AuctionCreateForm';
 export { BidModal, type BidModalProps } from './components/BidModal';
@@ -27,6 +29,9 @@ export {
   DEFAULT_DURATION_HOURS,
   type DurationOption,
   MY_BID_RESULT,
+  MY_AUCTION_FILTERS,
+  AUCTION_STATUS_LABEL,
+  type MyAuctionFilter,
   msUntilEnd,
   isRunning,
   formatTimeLeft,

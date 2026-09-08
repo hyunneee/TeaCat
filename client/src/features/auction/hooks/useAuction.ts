@@ -4,10 +4,12 @@ import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
+import { useIsLoggedIn } from '@/features/auth';
 import { nftKeys } from '@/features/nft';
 import { tokenKeys } from '@/features/token';
 import { auctionApi, auctionKeys } from '../api/auctionApi';
 import { DEFAULT_AUCTION_SORT, type AuctionSort } from '../model/auction.model';
+import type { AuctionStatus } from '../model/auction.types';
 
 const PAGE_SIZE = 20;
 
@@ -223,5 +225,44 @@ export function useCreateAuction(photocardId: number) {
       toast.success('경매를 시작했어요.');
     },
     onError: (error) => toast.error(messageOf(error, '경매 등록에 실패했어요.')),
+  });
+}
+
+/**
+ * 내가 올린 경매.
+ * 상태로 거를 수 있습니다 — 진행 중인 것만 보고 싶은 경우가 대부분입니다.
+ */
+export function useMyAuctions(status?: AuctionStatus) {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useInfiniteQuery({
+    queryKey: auctionKeys.mine(status),
+    queryFn: ({ pageParam }) =>
+      auctionApi.myAuctions({ status, cursor: pageParam, size: PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    select: (data) => data.pages.flatMap((page) => page.items),
+  });
+}
+
+/**
+ * 내가 입찰한 경매. 여러 번 넣었어도 경매당 한 줄입니다.
+ *
+ * 여기서는 폴링하지 않습니다 — 목록에서 몇 초 늦어도 문제가 없고,
+ * 밀렸는지 확인하러 들어가면 상세가 4초마다 갱신합니다.
+ */
+export function useMyBids() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useInfiniteQuery({
+    queryKey: auctionKeys.myBids(),
+    queryFn: ({ pageParam }) => auctionApi.myBids({ cursor: pageParam, size: PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    select: (data) => data.pages.flatMap((page) => page.items),
   });
 }
