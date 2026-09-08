@@ -108,12 +108,22 @@ export function MyPage() {
             >
               <Coins size={17} className="text-ink-muted shrink-0" />
               <span className="text-ink-muted text-sm font-medium">캣머니</span>
+              {/* 보여주는 건 **쓸 수 있는 금액**입니다 (token.types.ts 주석) */}
               <AnimatedNumber
-                value={token?.balance ?? 0}
+                value={token?.available ?? 0}
                 className="ml-auto text-[0.9375rem] font-extrabold"
               />
               <ChevronRight size={17} className="text-subtle shrink-0" />
             </button>
+
+            {/* 묶인 돈이 있을 때만 한 줄. 이게 없으면 총액과의 차액이 어디로 갔는지
+                알 수 없어 "돈이 사라졌다" 가 됩니다. 어느 경매에 묶였는지는
+                내 입찰 화면이 보여줍니다. */}
+            {!!token?.held && (
+              <p className="text-subtle mt-1.5 text-xs">
+                경매 입찰로 {token.held.toLocaleString()}캣머니 묶임
+              </p>
+            )}
           </div>
         </div>
       </div>

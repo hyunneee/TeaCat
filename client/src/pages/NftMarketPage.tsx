@@ -112,7 +112,8 @@ export function NftMarketPage() {
               className="hover:text-ink flex min-w-0 items-center gap-1.5 text-sm font-semibold transition-colors"
             >
               <Coins size={16} className="text-ink-muted shrink-0" />
-              <span className="tabular-nums">{(token?.balance ?? 0).toLocaleString()}</span>
+              {/* 쓸 수 있는 금액입니다 (features/token 의 token.types.ts 주석) */}
+              <span className="tabular-nums">{(token?.available ?? 0).toLocaleString()}</span>
             </button>
           ) : (
             <span />

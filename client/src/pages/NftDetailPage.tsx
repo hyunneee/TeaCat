@@ -65,7 +65,9 @@ export function NftDetailPage() {
 
   const mine = isOwner(card, user?.nickname);
   const listing = card.listing ?? null;
-  const balance = token?.balance ?? 0;
+  /* 살 수 있는지 판단하는 기준도 **쓸 수 있는 금액**입니다.
+     총액으로 판단하면 경매에 묶인 돈까지 셈에 넣어 "살 수 있다" 고 해놓고 서버가 거절합니다. */
+  const balance = token?.available ?? 0;
   const affordable = listing !== null && balance >= listing.price;
   const mintLabel = mintStatusLabel(card.status);
   const canSubmitListing = Number(price) > 0 && description.trim().length > 0;
