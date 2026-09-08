@@ -105,6 +105,17 @@ public class User {
         return new User(email, null, name, nickname, phone, UserRole.USER);
     }
 
+    /**
+     * 관리자가 직접 만드는 회원. 역할을 지정할 수 있다.
+     *
+     * 일반 가입({@link #create})은 항상 USER 다 — 역할을 요청 본문으로 받으면
+     * 누구나 스스로 ADMIN 으로 가입할 수 있게 된다.
+     */
+    public static User createWithRole(String email, String encodedPassword, String name,
+                                      String nickname, String phone, UserRole role) {
+        return new User(email, encodedPassword, name, nickname, phone, role);
+    }
+
     /** 비밀번호 변경 (API-104) */
     public void changePassword(String encodedPassword) {
         this.password = encodedPassword;
@@ -113,6 +124,26 @@ public class User {
     /** 닉네임 변경 (API-105) */
     public void changeNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    /** 이름 변경 — 관리자만 바꾼다. 입장 시 신분 확인에 쓰는 값이라 본인은 수정할 수 없다 */
+    public void changeName(String name) {
+        this.name = name;
+    }
+
+    /** 휴대폰 번호 변경 */
+    public void changePhone(String phone) {
+        this.phone = phone;
+    }
+
+    /**
+     * 역할 변경 — 관리자만.
+     *
+     * ⚠️ 액세스 토큰에 역할이 담겨 있다. 바꾼 뒤에는 그 회원의 세션을 끊어야
+     *    옛 역할로 만든 토큰이 남지 않는다 (AdminUserService 가 처리한다).
+     */
+    public void changeRole(UserRole role) {
+        this.role = role;
     }
 
     /** 얼굴 정보 등록 (API-109) */

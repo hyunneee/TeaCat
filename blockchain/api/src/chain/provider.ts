@@ -25,6 +25,36 @@ export function operatorSigner(): Wallet {
   return operatorWallet;
 }
 
+/**
+ * **`OPERATOR_ROLE` 을 쥔 지갑.** 위의 발행 지갑과 다릅니다.
+ *
+ * ── 이름이 헷갈리기 쉬워서 정리해 둡니다 ──────────────────────────
+ *
+ *   operatorWallet          가스를 내고 트랜잭션을 보내는 릴레이어.
+ *                           배포 계정이라 온체인에서는 **`MINTER_ROLE`** 입니다
+ *   contractOperatorWallet  컨트랙트의 **`OPERATOR_ROLE`**.
+ *                           도안 등록 · 정지 스위치 · 추첨을 서명합니다
+ *
+ * 배포 스크립트가 `CONTRACT_OPERATOR_ADDRESS` 에 `OPERATOR_ROLE` 을 주므로,
+ * `CONTRACT_OPERATOR_PRIVATE_KEY` 는 **그 주소의 키**여야 합니다. 어긋나면
+ * 도안 등록과 추첨이 전부 `AccessControlUnauthorizedAccount` 로 실패합니다.
+ *
+ * 변수를 안 주면 발행 키로 떨어집니다 — 역할을 나누지 않은 개발 환경의 기존
+ * 동작 그대로라, 이 변경으로 지금 돌아가는 것이 깨지지 않습니다.
+ */
+const contractOperatorWallet = env.CONTRACT_OPERATOR_PRIVATE_KEY
+  ? new Wallet(env.CONTRACT_OPERATOR_PRIVATE_KEY, provider)
+  : operatorWallet;
+
+export const contractOperatorAddress = contractOperatorWallet.address.toLowerCase();
+
+/** 두 키가 실제로 갈려 있는지. `/health` 와 로그가 씁니다. */
+export const operatorRoleIsSeparate = contractOperatorAddress !== operatorAddress;
+
+export function contractOperatorSigner(): Wallet {
+  return contractOperatorWallet;
+}
+
 export interface ChainStatus {
   connected: boolean;
   chainId: number | null;

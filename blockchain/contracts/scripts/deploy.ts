@@ -103,26 +103,40 @@ async function main(): Promise<void> {
     return { admin, minter: deployerAddress, operator };
   }
 
-  /** 아직 없는 것만 배포합니다. 이미 있으면 주소를 그대로 씁니다. */
+  /**
+   * 아직 없는 것만 배포합니다. 이미 있으면 주소를 그대로 씁니다.
+   *
+   * `withMinter: false` 는 **발행이 없는 컨트랙트**용입니다 (`VerifiableDraw`).
+   * 생성자가 `(admin, operator)` 둘만 받습니다 — 없는 역할을 형식만 맞추려고
+   * 넘기면, 그 주소가 무슨 권한을 갖는지 배포 로그가 거짓말을 하게 됩니다.
+   */
   async function deployOnce(
     name: string,
     roles: { admin: string; minter: string; operator: string },
+    options: { withMinter?: boolean } = {},
   ): Promise<void> {
+    const withMinter = options.withMinter ?? true;
+
     const existing = contracts[name];
     if (existing) {
       console.log(`${name} : ${existing}  (이미 배포됨 — 건너뜁니다)`);
       return;
     }
 
-    if (roles.admin.toLowerCase() === roles.minter.toLowerCase()) {
+    const shared = withMinter ? roles.minter : roles.operator;
+    if (roles.admin.toLowerCase() === shared.toLowerCase()) {
       console.log('');
-      console.log(`주의: ${name} 의 admin 과 minter 가 같은 키입니다.`);
-      console.log('      이 키가 털리면 무제한 발행·권한 조작·정지 해제가 전부 가능합니다.');
+      console.log(`주의: ${name} 의 admin 과 ${withMinter ? 'minter' : 'operator'} 가 같은 키입니다.`);
+      console.log('      이 키가 털리면 권한 조작까지 한꺼번에 가능합니다.');
       console.log('      운영에서는 CONTRACT_ADMIN_ADDRESS 로 분리하세요.');
       console.log('');
     }
 
-    const deployed = await ethers.deployContract(name, [roles.admin, roles.minter, roles.operator]);
+    const args = withMinter
+      ? [roles.admin, roles.minter, roles.operator]
+      : [roles.admin, roles.operator];
+
+    const deployed = await ethers.deployContract(name, args);
     await deployed.waitForDeployment();
 
     contracts[name] = await deployed.getAddress();
@@ -130,7 +144,7 @@ async function main(): Promise<void> {
 
     console.log(`${name} : ${contracts[name]}`);
     console.log(`  admin    ${roles.admin}`);
-    console.log(`  minter   ${roles.minter}`);
+    if (withMinter) console.log(`  minter   ${roles.minter}`);
     console.log(`  operator ${roles.operator}`);
   }
 
@@ -145,6 +159,22 @@ async function main(): Promise<void> {
   // ── CatMoney (캣머니) ──────────────────────────────────────
   // 프론트의 PayMethod='POINT' 가 이 토큰입니다. (DESIGN.md 6장 ②)
   await deployOnce('CatMoney', rolesFor('CATMONEY'));
+
+  // ── PhotocardNFT (포토카드) ────────────────────────────────
+  // 티켓과 반대로 **팔라고 만든 물건**입니다. (PHOTOCARD_PLAN.md)
+  // operator 가 도안 등록(한정 수량·IPFS URI)과 정지를, minter 가 발행을 맡습니다.
+  // 도안 등록을 operator 로 둔 이유: 발행 키가 털려도 한정 수량과 그림은
+  // 못 바꾸게 하기 위해서입니다.
+  await deployOnce('PhotocardNFT', rolesFor('PHOTOCARD'));
+
+  // ── VerifiableDraw (검증 가능한 추첨) ──────────────────────
+  // 토큰을 모릅니다. 난수 하나만 만듭니다. (PHOTOCARD_PLAN.md 4장)
+  // 발행이 없어서 minter 도 없습니다 — admin 과 operator 둘뿐입니다.
+  //
+  // 주의: 리빌에 **약 42분 시한**이 있습니다(블록해시 256개). API 프로세스가
+  //       자동으로 부를 수 있어야 하므로 이 operator 키를 API 가 쥐어야 합니다.
+  //       (PHOTOCARD_PLAN.md 10장의 미결 항목)
+  await deployOnce('VerifiableDraw', rolesFor('DRAW'), { withMinter: false });
 
   // ── 여기에 추가 ────────────────────────────────────────────
   // 컨트랙트가 늘어나면 위와 같이 deployOnce 를 한 줄씩 붙입니다.

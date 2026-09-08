@@ -27,3 +27,9 @@ export type { CatMoney } from './typechain-types/contracts/CatMoney';
 
 export { TicketSBT__factory } from './typechain-types/factories/contracts/TicketSBT__factory';
 export type { TicketSBT } from './typechain-types/contracts/TicketSBT';
+
+export { PhotocardNFT__factory } from './typechain-types/factories/contracts/PhotocardNFT__factory';
+export type { PhotocardNFT } from './typechain-types/contracts/PhotocardNFT';
+
+export { VerifiableDraw__factory } from './typechain-types/factories/contracts/VerifiableDraw__factory';
+export type { VerifiableDraw } from './typechain-types/contracts/VerifiableDraw';
