@@ -2,6 +2,7 @@ package com.teacat.server.payment.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.payment.client.TossPaymentResult;
+import com.teacat.server.payment.client.TossPaymentsClient;
 import com.teacat.server.payment.dto.response.TokenChargeResponse;
 import com.teacat.server.payment.entity.Payment;
 import com.teacat.server.payment.entity.PaymentPurpose;
@@ -185,13 +186,20 @@ public class TokenChargeRecorder {
      * @return 승인으로 확정됐으면 충전 ID (발행을 이어서 보내야 한다)
      */
     @Transactional
-    public Optional<Long> reconcile(Long paymentId, TossPaymentResult result) {
+    public Optional<Long> reconcile(Long paymentId, TossPaymentsClient.Lookup lookup) {
         Payment payment = paymentRepository.findById(paymentId).orElse(null);
         if (payment == null || !payment.getStatus().isUnsettled()) {
             return Optional.empty();
         }
 
+        TossPaymentResult result = lookup.payment();
+
         if (result == null) {
+            if (!lookup.absent()) {
+                // 조회를 못 했다. 승인됐는지 모르는 상태이므로 아무것도 하지 않는다 —
+                // 여기서 실패로 확정하면 이미 낸 돈의 기록을 지우게 된다
+                return Optional.empty();
+            }
             // 토스가 이 주문번호를 모른다 = 결제창까지 가지 않았다. 되살릴 것이 없다
             payment.abort("NOT_FOUND", "결제가 진행되지 않았습니다.");
             return Optional.empty();

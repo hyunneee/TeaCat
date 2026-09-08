@@ -230,7 +230,7 @@ class TokenChargeIntegrationTests {
         jdbcTemplate.update("UPDATE payments SET status = 'IN_PROGRESS', created_at = now() - interval '1 hour'"
                 + " WHERE order_id = ?", prepared.orderId());
         given(tossPaymentsClient.findByOrderId(prepared.orderId()))
-                .willReturn(Optional.of(approvedResult(prepared.orderId())));
+                .willReturn(TossPaymentsClient.Lookup.of(approvedResult(prepared.orderId())));
         givenMintAccepted();
 
         tokenChargeScheduler.recoverUnsettledPayments();
@@ -245,11 +245,29 @@ class TokenChargeIntegrationTests {
         TokenChargePrepareResponse prepared = tokenChargeService.prepare(userId, CHARGE_AMOUNT);
         jdbcTemplate.update("UPDATE payments SET created_at = now() - interval '1 hour' WHERE order_id = ?",
                 prepared.orderId());
-        given(tossPaymentsClient.findByOrderId(prepared.orderId())).willReturn(Optional.empty());
+        // 토스가 "그런 주문번호는 없다" 고 명시적으로 답한 경우
+        given(tossPaymentsClient.findByOrderId(prepared.orderId()))
+                .willReturn(TossPaymentsClient.Lookup.notFound());
 
         tokenChargeScheduler.recoverUnsettledPayments();
 
         assertThat(paymentStatus(prepared.orderId())).isEqualTo("ABORTED");
+        assertThat(countTokenCharges()).isZero();
+    }
+
+    @Test
+    void 조회를_못_하면_결제를_실패로_지우지_않는다() {
+        TokenChargePrepareResponse prepared = tokenChargeService.prepare(userId, CHARGE_AMOUNT);
+        jdbcTemplate.update("UPDATE payments SET status = 'IN_PROGRESS',"
+                + " created_at = now() - interval '1 hour' WHERE order_id = ?", prepared.orderId());
+        // 상점 설정 문제 등으로 조회가 실패한 경우. 승인됐는지 알 수 없다
+        given(tossPaymentsClient.findByOrderId(prepared.orderId()))
+                .willReturn(TossPaymentsClient.Lookup.undetermined());
+
+        tokenChargeScheduler.recoverUnsettledPayments();
+
+        // 여기서 ABORTED 로 확정하면 이미 낸 돈의 기록이 사라진다. 판단을 미뤄야 한다
+        assertThat(paymentStatus(prepared.orderId())).isEqualTo("IN_PROGRESS");
         assertThat(countTokenCharges()).isZero();
     }
 

@@ -1,8 +1,8 @@
 package com.teacat.server.payment.service;
 
-import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.client.TossPaymentsClient;
 import com.teacat.server.payment.entity.Payment;
+import com.teacat.server.payment.entity.PaymentPurpose;
 import com.teacat.server.payment.entity.PaymentStatus;
 import com.teacat.server.payment.entity.TokenCharge;
 import com.teacat.server.payment.repository.PaymentRepository;
@@ -59,16 +59,15 @@ public class TokenChargeScheduler {
             fixedDelayString = "${payment.recovery.interval}",
             initialDelayString = "${payment.recovery.initial-delay}")
     public void recoverUnsettledPayments() {
-        List<Payment> unsettled = paymentRepository.findByStatusInAndCreatedAtBeforeOrderByIdAsc(
-                UNSETTLED, LocalDateTime.now().minus(settleAfter), BATCH_SIZE);
+        // 충전 결제만 본다. 티켓 결제는 TicketOrderScheduler 가 자기 방식으로 되살린다
+        List<Payment> unsettled = paymentRepository.findByPurposeAndStatusInAndCreatedAtBeforeOrderByIdAsc(
+                PaymentPurpose.TOKEN_CHARGE, UNSETTLED, LocalDateTime.now().minus(settleAfter), BATCH_SIZE);
 
         for (Payment payment : unsettled) {
             try {
-                TossPaymentResult result = tossPaymentsClient.findByOrderId(payment.getOrderId())
-                        .orElse(null);
-
                 // 승인으로 확정됐다면 충전 건이 만들어졌으니 발행까지 이어서 보낸다
-                Optional<Long> chargeId = recorder.reconcile(payment.getId(), result);
+                Optional<Long> chargeId = recorder.reconcile(
+                        payment.getId(), tossPaymentsClient.findByOrderId(payment.getOrderId()));
                 chargeId.ifPresent(tokenChargeService::sendMint);
             } catch (RuntimeException e) {
                 log.warn("결제 상태 복구에 실패했습니다. paymentId={}", payment.getId(), e);

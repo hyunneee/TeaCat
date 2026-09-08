@@ -33,6 +33,8 @@ public class TossPaymentsClient {
     private static final String CONFIRM_PATH = "/v1/payments/confirm";
     private static final String ORDER_PATH = "/v1/payments/orders/";
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    /** 토스가 "그런 주문번호가 없다" 고 답할 때의 코드 */
+    private static final String NOT_FOUND_PAYMENT = "NOT_FOUND_PAYMENT";
 
     private final TossPaymentsProperties properties;
     private final RestClient restClient;
@@ -95,23 +97,60 @@ public class TossPaymentsClient {
      * <p>승인 결과를 못 받은 채 끊긴 결제를 되짚을 때 씁니다 — 우리가 모르는 사이에 승인이
      * 끝나 있을 수 있고, 그 경우 사용자는 돈만 낸 상태가 됩니다.
      *
-     * @return 토스가 모르는 주문번호면 비어 있다 (결제창까지 가지 않았다는 뜻)
+     * <p>🔴 <b>"그런 주문이 없다" 와 "조회를 못 했다" 를 구분합니다.</b> 404 를 전부 전자로 보면,
+     * 상점 설정처럼 다른 이유로 404 가 날 때 <b>이미 승인된 결제를 실패로 지웁니다.</b>
+     * 실제로 위젯 키에서 {@code NOT_FOUND_MERCHANT} 가 돌아오는 것을 실결제 검증에서 잡았습니다.
+     * 확실할 때만 {@link Lookup#notFound()} 이고, 나머지는 {@link Lookup#undetermined()} 입니다.
      */
-    public Optional<TossPaymentResult> findByOrderId(String orderId) {
+    public Lookup findByOrderId(String orderId) {
         requireConfigured();
 
         try {
-            return Optional.ofNullable(restClient.get()
+            TossPaymentResult found = restClient.get()
                     .uri(ORDER_PATH + orderId)
                     .header(HttpHeaders.AUTHORIZATION, basicAuth())
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
-                    .body(TossPaymentResult.class));
+                    .body(TossPaymentResult.class);
+
+            return found == null ? Lookup.undetermined() : Lookup.of(found);
         } catch (RestClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
-                return Optional.empty();
+            TossErrorBody error = readErrorBody(e);
+
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND && NOT_FOUND_PAYMENT.equals(error.code())) {
+                // 토스가 "그런 주문번호는 없다" 고 답한 경우에만 없는 것으로 본다
+                return Lookup.notFound();
             }
-            throw toTossException(e, orderId);
+
+            log.warn("토스 결제 조회에 실패했습니다. 판단을 미룹니다. orderId={} status={} code={}",
+                    orderId, e.getStatusCode(), error.code());
+            return Lookup.undetermined();
+        } catch (RuntimeException e) {
+            log.warn("토스 결제 조회에 실패했습니다. 판단을 미룹니다. orderId={}", orderId, e);
+            return Lookup.undetermined();
+        }
+    }
+
+    /**
+     * 조회 결과. <b>"없다" 와 "모르겠다" 는 다릅니다.</b>
+     *
+     * @param payment 찾았으면 그 결제, 아니면 null
+     * @param absent  토스가 명시적으로 "없는 주문번호" 라고 답했는가
+     */
+    public record Lookup(TossPaymentResult payment, boolean absent) {
+
+        public static Lookup of(TossPaymentResult payment) {
+            return new Lookup(payment, false);
+        }
+
+        /** 토스가 그런 주문번호를 모른다 — 결제창까지 가지 않았다 */
+        public static Lookup notFound() {
+            return new Lookup(null, true);
+        }
+
+        /** 조회를 못 했다. 아무 결론도 내리면 안 된다 */
+        public static Lookup undetermined() {
+            return new Lookup(null, false);
         }
     }
 
