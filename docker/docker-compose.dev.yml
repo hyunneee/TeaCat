@@ -73,6 +73,7 @@ services:
       MASTER_MNEMONIC: ${MASTER_MNEMONIC:?.env.dev 에 넣으세요}
       OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:?0x + 64자리 hex}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+    mem_limit: 512m
     networks: [teacat-net]
     # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
 
@@ -110,6 +111,10 @@ services:
 
       FRONTEND_BASE_URL: https://dev.teacat.site
       SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}
+    # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
+    #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
+    #    운영까지 올리면 JVM 두 개가 각각 12G 를 노리게 된다.
+    mem_limit: 2g
     networks: [teacat-net]
     # 포트를 열지 않는다. nginx 가 /api 를 프록시한다.
 
