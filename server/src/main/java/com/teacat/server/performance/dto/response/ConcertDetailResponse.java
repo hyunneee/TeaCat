@@ -42,7 +42,11 @@ public record ConcertDetailResponse(
         StadiumResponse stadium,
 
         @Schema(description = "회차 목록")
-        List<ScheduleSummaryResponse> schedules
+        List<ScheduleSummaryResponse> schedules,
+
+        @Schema(description = "등록한 관리자 ID. 이 사람만 수정·삭제할 수 있다. 등록자를 알 수 없는 옛 데이터는 null",
+                example = "6")
+        Long createdBy
 ) {
 
     @Schema(description = "공연장 정보")
@@ -84,7 +88,8 @@ public record ConcertDetailResponse(
                 posterUrl,
                 detailImageUrl,
                 StadiumResponse.from(performance.getStadium()),
-                schedules
+                schedules,
+                performance.getCreatedById()
         );
     }
 }

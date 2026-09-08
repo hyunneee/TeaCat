@@ -11,10 +11,13 @@ import java.util.Optional;
 
 public interface AreaRepository extends JpaRepository<Area, Long> {
 
+    List<Area> findByStadiumId(Long stadiumId);
+
     @Query(value = """
             SELECT a.id AS "areaId",
                    a.stadium_id AS "stadiumId",
                    a.area_code AS "areaCode",
+                   a.level_code AS "levelCode",
                    CAST(a.type AS text) AS "type",
                    a.max_seat AS "maxSeat",
                    a.area_x AS "areaX",
@@ -27,9 +30,9 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
               JOIN stadium_layouts sl ON sl.id = a.stadium_layout_id
              WHERE a.stadium_id = :stadiumId
                AND sl.is_default = true
-             GROUP BY a.id, a.stadium_id, a.area_code, a.type, a.max_seat,
+             GROUP BY a.id, a.stadium_id, a.area_code, a.level_code, a.type, a.max_seat,
                       a.area_x, a.area_y, a.height, a.width
-             ORDER BY a.area_code, a.id
+             ORDER BY a.level_code, a.area_code, a.id
             """, nativeQuery = true)
     List<AreaStats> findAllWithStatsByStadiumId(Long stadiumId);
 
@@ -37,6 +40,7 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
             SELECT a.id AS "areaId",
                    a.stadium_id AS "stadiumId",
                    a.area_code AS "areaCode",
+                   a.level_code AS "levelCode",
                    CAST(a.type AS text) AS "type",
                    a.max_seat AS "maxSeat",
                    a.area_x AS "areaX",
@@ -47,9 +51,9 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
               FROM areas a
               LEFT JOIN seats s ON s.area_id = a.id
              WHERE a.stadium_layout_id = :layoutId
-             GROUP BY a.id, a.stadium_id, a.area_code, a.type, a.max_seat,
+             GROUP BY a.id, a.stadium_id, a.area_code, a.level_code, a.type, a.max_seat,
                       a.area_x, a.area_y, a.height, a.width
-             ORDER BY a.area_code, a.id
+             ORDER BY a.level_code, a.area_code, a.id
             """, nativeQuery = true)
     List<AreaStats> findAllWithStatsByLayoutId(Long layoutId);
 
@@ -57,6 +61,7 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
             SELECT a.id AS "areaId",
                    a.stadium_id AS "stadiumId",
                    a.area_code AS "areaCode",
+                   a.level_code AS "levelCode",
                    CAST(a.type AS text) AS "type",
                    a.max_seat AS "maxSeat",
                    a.area_x AS "areaX",
@@ -67,7 +72,7 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
               FROM areas a
               LEFT JOIN seats s ON s.area_id = a.id
              WHERE a.id = :areaId
-             GROUP BY a.id, a.stadium_id, a.area_code, a.type, a.max_seat,
+             GROUP BY a.id, a.stadium_id, a.area_code, a.level_code, a.type, a.max_seat,
                       a.area_x, a.area_y, a.height, a.width
             """, nativeQuery = true)
     Optional<AreaStats> findWithStatsById(Long areaId);
@@ -79,11 +84,14 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
 
     boolean existsByStadiumIdAndAreaCodeAndIdNot(Long stadiumId, String areaCode, Long areaId);
 
-    boolean existsByStadiumLayoutIdAndAreaCode(Long layoutId, String areaCode);
+    boolean existsByStadiumLayoutIdAndLevelCodeAndAreaCode(Long layoutId, String levelCode, String areaCode);
 
-    boolean existsByStadiumLayoutIdAndAreaCodeAndIdNot(Long layoutId, String areaCode, Long areaId);
+    boolean existsByStadiumLayoutIdAndLevelCodeAndAreaCodeAndIdNot(
+            Long layoutId, String levelCode, String areaCode, Long areaId);
 
     long countByStadiumLayoutId(Long layoutId);
+
+    List<Area> findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(Long layoutId);
 
     @Modifying
     void deleteAllByStadiumLayoutId(Long layoutId);
@@ -114,6 +122,8 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
         Long getStadiumId();
 
         String getAreaCode();
+
+        String getLevelCode();
 
         String getType();
 

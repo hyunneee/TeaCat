@@ -25,7 +25,8 @@ import java.util.List;
 /**
  * 공연 조회 (API-201, 202, 204, 205, 207).
  *
- * 비공개 처리된 공연은 엔티티의 @SQLRestriction 이 걸러내므로 여기서 따로 챙기지 않는다.
+ * 비공개(hidden_at) 공연은 클라이언트에게 보이면 안 되므로
+ * 조회 쿼리마다 공개 조건을 직접 건다.
  */
 @Service
 @RequiredArgsConstructor
@@ -90,7 +91,7 @@ public class PerformanceService {
     /** 공연 회차 목록 조회 (API-204) */
     public List<ScheduleSummaryResponse> getSchedules(Long concertId) {
         // 없는 공연에 빈 배열을 주면 클라이언트가 "회차가 없는 공연"으로 오해한다
-        if (!performanceGeneralRepository.existsById(concertId)) {
+        if (!performanceGeneralRepository.existsByIdAndHiddenAtIsNull(concertId)) {
             throw new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND);
         }
 
@@ -99,7 +100,7 @@ public class PerformanceService {
 
     /** 공연 예매 정책 조회 (API-205) */
     public BookingPolicyResponse getBookingPolicy(Long concertId) {
-        if (!performanceGeneralRepository.existsById(concertId)) {
+        if (!performanceGeneralRepository.existsByIdAndHiddenAtIsNull(concertId)) {
             throw new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND);
         }
 
@@ -124,8 +125,9 @@ public class PerformanceService {
                 .toList();
     }
 
+    /** 클라이언트 조회는 공개 상태인 공연만 본다 */
     private PerformanceGeneral getPerformance(Long concertId) {
-        return performanceGeneralRepository.findById(concertId)
+        return performanceGeneralRepository.findVisibleById(concertId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND));
     }
 }

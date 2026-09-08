@@ -1,4 +1,5 @@
-import { CatMoney__factory } from '@teacat/contracts';
+import type { LogDescription } from 'ethers';
+import { CatMoney__factory, TicketSBT__factory } from '@teacat/contracts';
 import { provider } from './provider';
 
 /**
@@ -8,16 +9,30 @@ import { provider } from './provider';
  */
 
 /** 영수증의 로그를 보고 알아낸 작업 종류. 우리가 모르는 컨트랙트면 `UNKNOWN`. */
-export type TxOperation = 'CATMONEY_MINT' | 'CATMONEY_BURN' | 'CATMONEY_TRANSFER' | 'UNKNOWN';
+export type TxOperation =
+  | 'CATMONEY_MINT'
+  | 'CATMONEY_BURN'
+  | 'CATMONEY_TRANSFER'
+  | 'TICKET_ISSUE'
+  | 'TICKET_BURN'
+  | 'UNKNOWN';
 
 /** 이벤트 이름 → 작업 종류. 컨트랙트가 늘면 여기에 한 줄씩 붙입니다. */
 const OPERATION_BY_EVENT: Record<string, TxOperation> = {
   Minted: 'CATMONEY_MINT',
   Burned: 'CATMONEY_BURN',
   TransferredWithKey: 'CATMONEY_TRANSFER',
+  TicketIssued: 'TICKET_ISSUE',
+  TicketBurned: 'TICKET_BURN',
 };
 
-const catMoney = CatMoney__factory.createInterface();
+/**
+ * 우리 컨트랙트들의 인터페이스.
+ *
+ * 로그와 커스텀 에러를 풀 때 **전부** 시도합니다. 하나만 물려두면 다른 컨트랙트의
+ * revert 가 "unknown custom error" 로만 나와서 Spring 이 원인을 구분하지 못합니다.
+ */
+const INTERFACES = [CatMoney__factory.createInterface(), TicketSBT__factory.createInterface()];
 
 export interface ChainTxStatus {
   /** 체인이 이 해시를 모르면 false. 드롭됐거나 애초에 없는 해시입니다 */
@@ -28,6 +43,13 @@ export interface ChainTxStatus {
   success: boolean;
   blockNumber: number | null;
   operation: TxOperation | null;
+  /**
+   * 이벤트에서 꺼낸 tokenId. 티켓 작업이 아니면 null 입니다.
+   *
+   * **Spring 이 이 값으로 예매와 얼굴 벡터를 잇습니다.** 발행은 202 로 끝나므로
+   * 응답 시점에는 tokenId 가 없습니다 — 확정을 확인할 때 여기서 받습니다.
+   */
+  tokenId: string | null;
   /** revert 사유. 알아내지 못하면 null */
   revertReason: string | null;
   /**
@@ -39,20 +61,33 @@ export interface ChainTxStatus {
   revertErrorName: string | null;
 }
 
-/** 영수증 로그에서 무슨 작업이었는지 알아냅니다. */
-function operationOf(logs: readonly { topics: readonly string[]; data: string }[]): TxOperation {
+/**
+ * 영수증 로그에서 무슨 작업이었는지, 티켓이라면 몇 번인지 알아냅니다.
+ *
+ * tokenId 는 인자 이름으로 찾습니다. 자리 번호로 세면 이벤트에 인자가 하나
+ * 끼어드는 순간 엉뚱한 값이 조용히 내려갑니다.
+ */
+function decodeLogs(
+  logs: readonly { topics: readonly string[]; data: string }[],
+): { operation: TxOperation; tokenId: string | null } {
   for (const log of logs) {
-    let parsed;
-    try {
-      // 우리 컨트랙트가 아니면 파싱에 실패합니다. 정상입니다.
-      parsed = catMoney.parseLog({ topics: [...log.topics], data: log.data });
-    } catch {
-      continue;
+    for (const iface of INTERFACES) {
+      let parsed: LogDescription | null;
+      try {
+        // 우리 컨트랙트가 아니면 파싱에 실패합니다. 정상입니다.
+        parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+      } catch {
+        continue;
+      }
+
+      const operation = parsed && OPERATION_BY_EVENT[parsed.name];
+      if (!parsed || !operation) continue;
+
+      const index = parsed.fragment.inputs.findIndex((input) => input.name === 'tokenId');
+      return { operation, tokenId: index === -1 ? null : String(parsed.args[index]) };
     }
-    const operation = parsed && OPERATION_BY_EVENT[parsed.name];
-    if (operation) return operation;
   }
-  return 'UNKNOWN';
+  return { operation: 'UNKNOWN', tokenId: null };
 }
 
 /**
@@ -82,18 +117,23 @@ async function revertReasonOf(
     const e = error as { data?: string; shortMessage?: string; reason?: string; message?: string };
 
     /* 커스텀 에러를 풀어봅니다.
-       우리 컨트랙트는 `OperationAlreadyExecuted` 처럼 커스텀 에러를 쓰고, OZ 도
-       `ERC20InsufficientBalance` 를 씁니다. ABI 없이 읽으면 전부
-       "unknown custom error" 로만 나와서 Spring 이 원인을 구분할 수 없습니다. */
+       우리 컨트랙트는 `OperationAlreadyExecuted`·`AlreadyIssued` 처럼 커스텀
+       에러를 쓰고, OZ 도 `ERC20InsufficientBalance` 를 씁니다. ABI 없이 읽으면
+       전부 "unknown custom error" 로만 나와서 Spring 이 원인을 구분할 수 없습니다.
+
+       티켓은 특히 이름이 중요합니다 — 같은 "이미 사용됨" 이라도 입장 재시도면
+       성공이고 취소 시도면 실패입니다. 이름으로만 갈립니다. (TicketSBT.sol) */
     if (typeof e.data === 'string' && e.data.length > 2) {
-      try {
-        const parsed = catMoney.parseError(e.data);
-        if (parsed) {
-          const args = parsed.args.length > 0 ? `(${parsed.args.join(', ')})` : '';
-          return { reason: `${parsed.name}${args}`, name: parsed.name };
+      for (const iface of INTERFACES) {
+        try {
+          const parsed = iface.parseError(e.data);
+          if (parsed) {
+            const args = parsed.args.length > 0 ? `(${parsed.args.join(', ')})` : '';
+            return { reason: `${parsed.name}${args}`, name: parsed.name };
+          }
+        } catch {
+          // 이 컨트랙트의 에러가 아닙니다. 다음 것을 시도합니다.
         }
-      } catch {
-        // 우리가 모르는 에러입니다. 아래 일반 메시지로 넘어갑니다.
       }
     }
 
@@ -108,6 +148,7 @@ export async function getTxStatus(hash: string): Promise<ChainTxStatus> {
     success: false,
     blockNumber: null,
     operation: null,
+    tokenId: null,
     revertReason: null,
     revertErrorName: null,
   };
@@ -127,12 +168,17 @@ export async function getTxStatus(hash: string): Promise<ChainTxStatus> {
     ? { reason: null, name: null }
     : await revertReasonOf(hash, receipt.blockNumber);
 
+  /* revert 된 트랜잭션은 이벤트를 남기지 않습니다. 그래서 실패한 tx 는 무슨
+     작업이었는지도, tokenId 도 알 수 없습니다 — 에러 이름만 남습니다. */
+  const decoded = success ? decodeLogs(receipt.logs) : { operation: null, tokenId: null };
+
   return {
     found: true,
     mined: true,
     success,
     blockNumber: receipt.blockNumber,
-    operation: success ? operationOf(receipt.logs) : null,
+    operation: decoded.operation,
+    tokenId: decoded.tokenId,
     revertReason: revert.reason,
     revertErrorName: revert.name,
   };

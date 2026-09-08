@@ -7,7 +7,7 @@ export function useConcerts(keyword?: string) {
     queryKey: concertKeys.list(keyword),
     queryFn: () => concertApi.list(keyword),
     staleTime: STALE_TIME.LONG,
-    select: (page) => page.items,
+    select: (page) => page.concerts,
   });
 }
 

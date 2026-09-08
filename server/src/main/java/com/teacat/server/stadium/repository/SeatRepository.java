@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface SeatRepository extends JpaRepository<Seat, Long> {
 
+    List<Seat> findByAreaIdIn(List<Long> areaIds);
+
     List<Seat> findAllByAreaIdOrderByRowLabelAscSeatNumberAsc(Long areaId);
 
     @Query("SELECT s FROM Seat s JOIN FETCH s.area a JOIN FETCH a.stadium JOIN FETCH a.stadiumLayout WHERE s.id = :seatId")

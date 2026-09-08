@@ -7,11 +7,14 @@ import com.teacat.server.wallet.dto.response.BalanceResponse;
 import com.teacat.server.wallet.entity.Wallet;
 import com.teacat.server.wallet.entity.WalletOwner;
 import com.teacat.server.wallet.exception.WalletErrorCode;
+import com.teacat.server.wallet.repository.CatMoneyHoldRepository;
 import com.teacat.server.wallet.repository.WalletOwnerRepository;
 import com.teacat.server.wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigInteger;
 
 /**
  * 캣머니 조회.
@@ -19,6 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>잔액이 필요한 곳은 전부 여기를 부릅니다.</b> 화면(마이페이지·포카 마켓)뿐 아니라
  * 결제처럼 서버 안에서 잔액을 봐야 하는 도메인도 HTTP 가 아니라 이 서비스를 직접 부릅니다.
  * 그래야 "지갑 주소를 어떻게 찾는가" 가 한 곳에만 있습니다.
+ *
+ * 지출 가능 여부는 {@link CatMoneyHoldService#availableBalance} 로 판정합니다. 체인 잔액에는
+ * 입찰로 묶인 돈이 포함되어 있어 그대로 쓰면 같은 돈을 두 번 쓰게 됩니다. 화면에 보여줄 잔액도
+ * balance 가 아니라 available 입니다.
  *
  * 잔액은 저장하지 않습니다. 체인이 진실이고 캐시하면 반드시 어긋납니다
  * (blockchain/DESIGN.md 5-3).
@@ -32,9 +39,21 @@ public class CatMoneyService {
     private final WalletRepository walletRepository;
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyClient catMoneyClient;
+    private final CatMoneyHoldRepository holdRepository;
 
     public BalanceResponse getBalance(Long userId) {
-        return BalanceResponse.from(catMoneyClient.getBalance(resolveAddress(userId)));
+        return BalanceResponse.of(
+                catMoneyClient.getBalance(resolveAddress(userId)),
+                holdRepository.sumActiveAmount(userId));
+    }
+
+    /**
+     * 체인이 말하는 잔액. 홀드를 빼지 않은 원시값이다.
+     *
+     * 지출 판정에 이 값을 직접 쓰지 말고 {@link CatMoneyHoldService#availableBalance} 를 쓴다.
+     */
+    public long chainBalance(Long userId) {
+        return new BigInteger(catMoneyClient.getBalance(resolveAddress(userId)).balance()).longValueExact();
     }
 
     /**

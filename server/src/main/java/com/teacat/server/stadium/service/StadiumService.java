@@ -49,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
@@ -70,6 +71,7 @@ import java.util.Set;
 public class StadiumService {
 
     private static final String LAYOUT_IMAGE_DIRECTORY = "stadium/layout";
+    private static final DataSize LAYOUT_IMAGE_MAX_SIZE = DataSize.ofMegabytes(10);
     private static final Set<String> LAYOUT_IMAGE_CONTENT_TYPES = Set.of("image/jpeg", "image/png");
     private static final Set<String> LAYOUT_IMAGE_FORMATS = Set.of("JPEG", "JPG", "PNG");
 
@@ -108,7 +110,7 @@ public class StadiumService {
                 .orElseThrow(() -> new BusinessException(StadiumErrorCode.AREA_NOT_FOUND));
         Stadium stadium = getStadiumEntity(area.getStadiumId());
         return new AreaDetailResponse(
-                area.getAreaId(), area.getStadiumId(), stadium.getName(), area.getAreaCode(),
+                area.getAreaId(), area.getStadiumId(), stadium.getName(), area.getLevelCode(), area.getAreaCode(),
                 AreaType.valueOf(area.getType()), area.getMaxSeat(), area.getSeatCount(),
                 area.getAreaX(), area.getAreaY(), area.getWidth(), area.getHeight());
     }
@@ -182,7 +184,7 @@ public class StadiumService {
         }
 
         String oldKey = stadium.getLayoutImageKey();
-        String newKey = fileStorageService.uploadImage(image, LAYOUT_IMAGE_DIRECTORY);
+        String newKey = fileStorageService.uploadImage(image, LAYOUT_IMAGE_DIRECTORY, LAYOUT_IMAGE_MAX_SIZE);
         replaceImageAfterTransaction(newKey, oldKey);
 
         stadium.updateLayoutImage(newKey, dimensions.width(), dimensions.height());
@@ -228,7 +230,8 @@ public class StadiumService {
         try {
             for (AreaCreateRequest areaRequest : request.areas()) {
                 Area area = areaRepository.saveAndFlush(Area.create(
-                        stadium, layout, areaRequest.areaCode(), areaRequest.type(), areaRequest.maxSeat(),
+                        stadium, layout, areaRequest.levelCodeOrDefault(),
+                        areaRequest.areaCode(), areaRequest.type(), areaRequest.maxSeat(),
                         areaRequest.areaX(), areaRequest.areaY(), areaRequest.height(), areaRequest.width()));
                 List<SeatCreateRequest> seats = areaRequest.seatsOrEmpty();
                 seatsToInsert.addAll(toBatchRows(area.getId(), seats));
@@ -255,9 +258,11 @@ public class StadiumService {
         if (changesStructure(area, request) && areaRepository.isInUse(areaId)) {
             throw new BusinessException(StadiumErrorCode.AREA_STRUCTURE_LOCKED);
         }
-        if (request.areaCode() != null && !request.areaCode().equals(area.getAreaCode())
-                && areaRepository.existsByStadiumLayoutIdAndAreaCodeAndIdNot(
-                area.getStadiumLayout().getId(), request.areaCode(), areaId)) {
+        String updatedLevelCode = request.levelCode() == null ? area.getLevelCode() : request.levelCode().strip();
+        String updatedAreaCode = request.areaCode() == null ? area.getAreaCode() : request.areaCode();
+        if ((!updatedAreaCode.equals(area.getAreaCode()) || !updatedLevelCode.equals(area.getLevelCode()))
+                && areaRepository.existsByStadiumLayoutIdAndLevelCodeAndAreaCodeAndIdNot(
+                area.getStadiumLayout().getId(), updatedLevelCode, updatedAreaCode, areaId)) {
             throw new BusinessException(StadiumErrorCode.DUPLICATE_AREA_CODE);
         }
         if (request.maxSeat() != null && request.maxSeat() < currentSeatCount) {
@@ -274,7 +279,8 @@ public class StadiumService {
                     new LayoutPoint(seat.getSeatX(), seat.getSeatY()));
         }
 
-        area.update(request.areaCode(), request.type(), request.maxSeat(), request.areaX(), request.areaY(),
+        area.update(request.areaCode(), request.levelCode() == null ? null : request.levelCode().strip(),
+                request.type(), request.maxSeat(), request.areaX(), request.areaY(),
                 request.height(), request.width());
     }
 
@@ -353,8 +359,10 @@ public class StadiumService {
     private void validateAreaBatch(Stadium stadium, StadiumLayout layout, List<AreaCreateRequest> areas) {
         Set<String> areaCodes = new HashSet<>();
         for (AreaCreateRequest area : areas) {
-            if (!areaCodes.add(area.areaCode())
-                    || areaRepository.existsByStadiumLayoutIdAndAreaCode(layout.getId(), area.areaCode())) {
+            String scopedAreaCode = area.levelCodeOrDefault() + '#' + area.areaCode();
+            if (!areaCodes.add(scopedAreaCode)
+                    || areaRepository.existsByStadiumLayoutIdAndLevelCodeAndAreaCode(
+                    layout.getId(), area.levelCodeOrDefault(), area.areaCode())) {
                 throw new BusinessException(StadiumErrorCode.DUPLICATE_AREA_CODE);
             }
             LayoutRect areaLayout = new LayoutRect(
@@ -528,6 +536,7 @@ public class StadiumService {
 
     private boolean changesStructure(Area area, AreaUpdateRequest request) {
         return request.areaCode() != null && !request.areaCode().equals(area.getAreaCode())
+                || request.levelCode() != null && !request.levelCode().strip().equals(area.getLevelCode())
                 || request.type() != null && request.type() != area.getType()
                 || request.maxSeat() != null && request.maxSeat() != area.getMaxSeat();
     }
@@ -570,7 +579,8 @@ public class StadiumService {
     }
 
     private AreaSummaryResponse toAreaSummaryResponse(AreaRepository.AreaStats area) {
-        return new AreaSummaryResponse(area.getAreaId(), area.getAreaCode(), AreaType.valueOf(area.getType()),
+        return new AreaSummaryResponse(area.getAreaId(), area.getLevelCode(), area.getAreaCode(),
+                AreaType.valueOf(area.getType()),
                 area.getMaxSeat(), area.getSeatCount(), area.getAreaX(), area.getAreaY(),
                 area.getWidth(), area.getHeight());
     }

@@ -7,17 +7,23 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -73,8 +79,8 @@ public class FileStorageService {
      * @param directory 용도별 상위 경로. 예: "performance/poster"
      * @return DB 에 저장할 key. 예: "performance/poster/2026/09/a1b2....png"
      */
-    public String uploadImage(MultipartFile file, String directory) {
-        validateImage(file);
+    public String uploadImage(MultipartFile file, String directory, DataSize maxSize) {
+        validateImage(file, maxSize);
 
         String key = generateKey(directory, ALLOWED_IMAGE_TYPES.get(file.getContentType()));
 
@@ -91,6 +97,66 @@ public class FileStorageService {
         }
 
         return key;
+    }
+
+    /**
+     * 클라이언트가 파일을 직접 올릴 수 있는 임시 업로드 URL 을 발급한다 (API-270).
+     *
+     * 파일 바이트가 서버를 거치지 않아 서버 메모리·대역폭을 쓰지 않는다.
+     * 클라이언트는 이 URL 로 PUT 한 뒤, 돌려받은 key 를 등록·수정 API 에 넘긴다.
+     *
+     * @param directory   용도별 상위 경로
+     * @param contentType 올릴 파일의 MIME 타입. 허용 목록에 없으면 거절한다
+     */
+    public PresignedUpload presignedUploadUrl(String directory, String contentType) {
+        String extension = ALLOWED_IMAGE_TYPES.get(contentType);
+
+        if (extension == null) {
+            throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
+        }
+
+        String key = generateKey(directory, extension);
+        Duration validity = properties.presignedUrlValidity();
+
+        try {
+            String url = minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.PUT)
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .expiry((int) validity.toSeconds(), TimeUnit.SECONDS)
+                    .build());
+
+            return new PresignedUpload(key, url, validity.toSeconds());
+        } catch (Exception e) {
+            log.error("업로드 URL 발급 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
+        }
+    }
+
+    /**
+     * key 에 해당하는 객체의 크기(바이트). 객체가 없으면 비어 있다.
+     *
+     * 업로드 URL 로 올린 파일은 서버를 거치지 않아 올릴 때 용량을 볼 수 없다.
+     * 그래서 key 를 등록하는 시점에 실제 크기를 확인해 한도를 넘었는지 판단한다.
+     * 파일을 올리지 않은 채 key 만 등록하는 것도 같은 호출로 걸러진다.
+     */
+    public OptionalLong objectSize(String key) {
+        try {
+            StatObjectResponse stat = minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .build());
+            return OptionalLong.of(stat.size());
+        } catch (ErrorResponseException e) {
+            return OptionalLong.empty();
+        } catch (Exception e) {
+            log.error("객체 확인 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
+        }
+    }
+
+    /** 발급된 업로드 URL 과 그때 정해진 저장 key */
+    public record PresignedUpload(String key, String uploadUrl, long expiresInSeconds) {
     }
 
     /**
@@ -132,7 +198,7 @@ public class FileStorageService {
         }
     }
 
-    private void validateImage(MultipartFile file) {
+    private void validateImage(MultipartFile file, DataSize maxSize) {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(StorageErrorCode.EMPTY_FILE);
         }
@@ -141,7 +207,7 @@ public class FileStorageService {
             throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
         }
 
-        if (file.getSize() > properties.maxFileSize().toBytes()) {
+        if (file.getSize() > maxSize.toBytes()) {
             throw new BusinessException(StorageErrorCode.FILE_TOO_LARGE);
         }
     }

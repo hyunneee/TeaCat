@@ -2,6 +2,8 @@ import { createApp } from './app';
 import { env } from './config';
 import { logger } from './shared/logger';
 import { buildHealthReport } from './services/health.service';
+import { startConfirmWatcher, stopConfirmWatcher } from './services/confirm.service';
+import { closePool } from './db/pool';
 
 async function main(): Promise<void> {
   const app = createApp();
@@ -27,9 +29,24 @@ async function main(): Promise<void> {
     logger.warn(warning);
   }
 
+  /* 확정 감시. 블록이 10초라, 쓰기는 202 로 끝내고 여기서 결과를 기다립니다.
+     Spring 은 폴링하지 않고 tickets 행이 갱신되는 걸로 압니다. (DESIGN.md 1장 예외) */
+  const missing = await startConfirmWatcher();
+  if (missing.length > 0) {
+    /* 컬럼이 없으면 첫 티켓 발행 때 조용히 깨집니다. 그때는 이미 유저가 결제를
+       끝낸 뒤라, 부팅에서 죽는 편이 낫습니다. */
+    logger.error('Spring DB 스키마가 맞지 않아 기동을 중단합니다');
+    server.close();
+    await closePool();
+    process.exit(1);
+  }
+
   const shutdown = (signal: string): void => {
     logger.info(`${signal} 수신 — 종료합니다`);
-    server.close(() => process.exit(0));
+    stopConfirmWatcher();
+    server.close(() => {
+      void closePool().finally(() => process.exit(0));
+    });
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));

@@ -1,0 +1,9 @@
+{
+  "chainId": 31221,
+  "network": "ssafy",
+  "deployer": "0xaeac79d81a407731ab8c43a8d5f5c3470e4089ee",
+  "deployedAt": "2026-09-03T05:17:52.682Z",
+  "contracts": {
+    "CatMoney": "0xd920ba6f79e2b8296d28e61d6cac114b12e46958"
+  }
+}

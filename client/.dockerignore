@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dev-dist/
+
+# 개인 시크릿. .env.development / .env.production 은 팀 공유값이라 빌드에 필요하다
+.env
+.env.local
+.env.*.local
+
+.git/
+.vscode/
+.idea/
+.claude/
+*.log
+*.tsbuildinfo
+.eslintcache
+vercel.json
+CLAUDE.md
+DESIGN.md

@@ -144,6 +144,7 @@ public class BookingService {
 
         return switch (seat.getStatus()) {
             case SOLD -> BookingErrorCode.SEAT_ALREADY_SOLD;
+            case BLOCKED -> BookingErrorCode.SEAT_ALREADY_SOLD;
             // ② 가 만료된 HELD 를 흡수하므로 여기 남는 HELD 는 원칙적으로 "유효한 선점" 뿐이다.
             // 다만 ② 와 이 재조회 사이에 만료 시각이 지나는 좁은 창이 있어, 그때는 연장 불가(010)가
             // 아니라 경합에서 진 것으로 본다 (재시도하면 ② 가 흡수한다)
@@ -171,6 +172,7 @@ public class BookingService {
         return switch (seat.getStatus()) {
             // 결제까지 끝난 좌석에는 해제할 선점이 없다
             case SOLD -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
+            case BLOCKED -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
             // 남의 선점이면 권한 없음, 내 선점인데 UPDATE 가 실패했다면 만료된 것이다
             case HELD -> !userId.equals(seat.getHeldBy())
                     ? BookingErrorCode.NOT_SEAT_HOLDER

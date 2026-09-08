@@ -44,7 +44,9 @@ public class SecurityConfig {
             "/schedules/**",
             "/stadiums",
             "/stadiums/**",
-            "/areas/**"
+            "/stadium-layouts/**",
+            "/areas/**",
+            "/performances/**"
     };
 
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;
@@ -68,11 +70,13 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**").permitAll()
+                        // NFT 마켓·경매 조회는 비로그인도 볼 수 있다. GET 만 열리므로 입찰·즉시구매·취소는 그대로 인증이 필요하다
+                        .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**",
+                                "/nft-market/auctions", "/auctions/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
                         .requestMatchers("/admin/stadiums", "/admin/stadiums/**",
-                                "/admin/areas/**", "/admin/seats/**")
+                                "/admin/stadium-layouts/**", "/admin/areas/**", "/admin/seats/**")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.STADIUM.name())
                         // 매처를 빠뜨린 관리자 API 도 잠기도록 마지막에 포괄 규칙을 둔다
                         .requestMatchers("/admin/**").hasRole(UserRole.ADMIN.name())

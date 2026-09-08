@@ -32,8 +32,20 @@ public record NftPhotocardDetailResponse(
         NftMintStatus status,
 
         @Schema(description = "활성 판매 정보. 판매 중이 아니면 null")
-        Listing listing
+        Listing listing,
+
+        @Schema(description = "진행 중인 경매 정보. 경매 중이 아니면 null. listing 과 동시에 값이 있는 일은 없다")
+        Auction auction
 ) {
+
+    public record Auction(
+            @Schema(description = "경매 ID", example = "12") Long auctionId,
+            @Schema(description = "현재가(CAT)", example = "1800") Long currentPrice,
+            @Schema(description = "즉시구매가(CAT). 없으면 생략", example = "5000") Long buyNowPrice,
+            @Schema(description = "입찰 수", example = "4") int bidCount,
+            @Schema(description = "마감 시각") LocalDateTime endsAt
+    ) {
+    }
 
     public record Listing(
             @Schema(description = "판매 등록 ID") Long listingId,

@@ -25,7 +25,11 @@ export const ROUTES = {
 
   /* ── 공연 ── */
   CONCERTS: '/concerts',
+  /** 공연 등록 (관리자). 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 */
+  CONCERT_CREATE: '/concerts/new',
   CONCERT_DETAIL: (concertId: string) => `/concerts/${concertId}`,
+  /** 공연 수정 (관리자) */
+  CONCERT_EDIT: (concertId: string) => `/concerts/${concertId}/edit`,
 
   /* ── 예매 플로우 ──
      공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */
@@ -54,7 +58,8 @@ export const ROUTES = {
 
   /* ── 포토카드 NFT ── */
   NFT_MARKET: '/nft',
-  NFT_DETAIL: (nftId: string) => `/nft/${nftId}`,
+  /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
+  NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
@@ -68,8 +73,16 @@ export const ROUTES = {
   SETTINGS_NICKNAME: '/my/settings/nickname',
   SETTINGS_ABOUT: '/my/settings/about',
 
-  /* ── 운영 ── */
+  /* ── 운영 (어드민 대시보드) ────────────────────────────────
+     `/admin` 아래는 **데스크톱 전용** 화면입니다. 앱(모바일)의 `.app-width`
+     한 기둥 레이아웃을 쓰지 않고 화면을 꽉 씁니다. (client/CLAUDE.md 8장)
+
+     🔴 사이드바 메뉴를 추가할 때는 여기에 경로를 넣고
+        `features/admin` 의 ADMIN_MENU 에 한 줄만 추가하면 됩니다. */
+  ADMIN: '/admin',
+  ADMIN_USERS: '/admin/users',
   MONITORING: '/admin/monitoring',
+  ADMIN_STADIUM: '/admin/stadium',
 
   /**
    * 개발용 얼굴 인식 검증 화면.

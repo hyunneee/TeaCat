@@ -40,6 +40,9 @@ public class Area {
     @Column(name = "area_code", nullable = false, length = 20)
     private String areaCode;
 
+    @Column(name = "level_code", nullable = false, length = 20)
+    private String levelCode;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "type", nullable = false, columnDefinition = "area_type")
@@ -60,10 +63,12 @@ public class Area {
     @Column(name = "width")
     private BigDecimal width;
 
-    private Area(Stadium stadium, StadiumLayout stadiumLayout, String areaCode, AreaType type, int maxSeat,
+    private Area(Stadium stadium, StadiumLayout stadiumLayout, String levelCode,
+                 String areaCode, AreaType type, int maxSeat,
                  BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
         this.stadium = stadium;
         this.stadiumLayout = stadiumLayout;
+        this.levelCode = levelCode;
         this.areaCode = areaCode;
         this.type = type;
         this.maxSeat = maxSeat;
@@ -75,13 +80,24 @@ public class Area {
 
     public static Area create(Stadium stadium, StadiumLayout stadiumLayout, String areaCode, AreaType type, int maxSeat,
                               BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
-        return new Area(stadium, stadiumLayout, areaCode, type, maxSeat, areaX, areaY, height, width);
+        return create(stadium, stadiumLayout, "1F", areaCode, type, maxSeat,
+                areaX, areaY, height, width);
     }
 
-    public void update(String areaCode, AreaType type, Integer maxSeat,
+    public static Area create(Stadium stadium, StadiumLayout stadiumLayout, String levelCode,
+                              String areaCode, AreaType type, int maxSeat,
+                              BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
+        return new Area(stadium, stadiumLayout, levelCode, areaCode, type, maxSeat,
+                areaX, areaY, height, width);
+    }
+
+    public void update(String areaCode, String levelCode, AreaType type, Integer maxSeat,
                        BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
         if (areaCode != null) {
             this.areaCode = areaCode;
+        }
+        if (levelCode != null) {
+            this.levelCode = levelCode;
         }
         if (type != null) {
             this.type = type;
@@ -101,5 +117,9 @@ public class Area {
         if (width != null) {
             this.width = width;
         }
+    }
+
+    public boolean isSeated() {
+        return this.type == AreaType.SEATED;
     }
 }

@@ -8,6 +8,7 @@ import {
   Receipt,
   ScanFace,
   Settings,
+  ShieldCheck,
   Sparkles,
   Ticket,
   UserRound,
@@ -17,7 +18,7 @@ import { AnimatedNumber, Badge, Button, Card, ListRow, SectionTitle } from '@/sh
 import { useModal } from '@/app/providers';
 import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
-import { useAuth, useLogout } from '@/features/auth';
+import { can, useAuth, useLogout } from '@/features/auth';
 import { useTokenBalance } from '@/features/token';
 
 /**
@@ -161,6 +162,22 @@ export function MyPage() {
             />
           </Card>
         </section>
+
+        {/* 운영 역할만 보입니다. 일반 회원에게는 이 줄이 아예 없습니다.
+            🔴 판단은 can.accessAdmin 한 곳입니다 — 서버 권한과 같아야 합니다. */}
+        {can.accessAdmin(user) && (
+          <section>
+            <SectionTitle>운영</SectionTitle>
+            <Card padded={false} className="overflow-hidden">
+              <ListRow
+                icon={<ShieldCheck size={18} />}
+                title="운영 콘솔"
+                description="데스크톱에서 열어주세요"
+                onClick={() => navigate(ROUTES.ADMIN)}
+              />
+            </Card>
+          </section>
+        )}
 
         <section>
           <SectionTitle>계정</SectionTitle>

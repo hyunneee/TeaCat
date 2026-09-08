@@ -1,6 +1,7 @@
 import { readDeployment } from '@teacat/contracts';
 import { env, networkNameOf } from '../config';
 import { getChainStatus, getOperatorBalanceEth, operatorAddress } from '../chain/provider';
+import { dbEnabled, pingDb } from '../db/pool';
 
 export interface HealthReport {
   status: 'ok' | 'degraded';
@@ -19,6 +20,16 @@ export interface HealthReport {
     /** 가스가 무료인 체인이면 잔고가 0 이어도 정상입니다 */
     gasIsFree: boolean | null;
   };
+  /**
+   * Spring DB 연결. 확정 결과를 기록하는 경로입니다 (DESIGN.md 1장 예외).
+   *
+   * `enabled: false` 는 `DATABASE_URL` 을 안 넣었다는 뜻입니다 — 서버는 돌지만
+   * 티켓이 계속 PENDING 으로 남습니다.
+   */
+  db: {
+    enabled: boolean;
+    connected: boolean;
+  };
   /** 배포된 컨트랙트 이름 → 주소. 배포 전이면 빈 객체입니다. */
   contracts: Record<string, string>;
   warnings: string[];
@@ -35,7 +46,20 @@ export async function buildHealthReport(): Promise<HealthReport> {
   const deployment = readDeployment(network);
   const contracts = deployment?.contracts ?? {};
 
+  const dbOn = dbEnabled();
+  const dbConnected = dbOn ? await pingDb() : false;
+
   const warnings: string[] = [];
+
+  /* 이게 꺼져 있으면 발행은 되는데 tickets 행이 영원히 PENDING 입니다.
+     유저 눈에는 "결제했는데 티켓이 안 나온" 상태라 조용히 넘기면 안 됩니다. */
+  if (!dbOn) {
+    warnings.push(
+      'DATABASE_URL 이 없어 확정 기록이 꺼져 있습니다. 티켓이 PENDING 으로 남습니다.',
+    );
+  } else if (!dbConnected) {
+    warnings.push('Spring DB 에 연결되지 않았습니다. 확정 기록이 밀립니다 (훑기가 따라잡습니다).');
+  }
 
   if (!chain.connected) {
     warnings.push(
@@ -82,6 +106,7 @@ export async function buildHealthReport(): Promise<HealthReport> {
       balanceEth,
       gasIsFree: chain.gasIsFree,
     },
+    db: { enabled: dbOn, connected: dbConnected },
     contracts,
     warnings,
   };

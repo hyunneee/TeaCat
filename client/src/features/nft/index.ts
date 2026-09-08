@@ -1,11 +1,11 @@
 export {
   useNftMarket,
-  useNftDetail,
-  useMyNfts,
-  useNftTrades,
-  usePurchaseNft,
-  useListNft,
-  useUnlistNft,
+  usePhotocardDetail,
+  useMyPhotocards,
+  useMyTrades,
+  usePurchasePhotocard,
+  useListPhotocard,
+  useUnlistPhotocard,
 } from './hooks/useNft';
 export { NftCard } from './components/NftCard';
 export { PocaArt } from './components/PocaArt';
@@ -16,7 +16,25 @@ export {
   NFT_SORTS,
   DEFAULT_SORT,
   isListed,
+  isOwner,
   canPurchase,
+  mergeTrades,
+  pocaSeed,
+  formatOrigin,
+  mintStatusLabel,
   type NftSort,
 } from './model/nft.model';
-export type { Nft, NftTrade } from './model/nft.types';
+export type {
+  MarketPhotocard,
+  MyPhotocard,
+  PhotocardDetail,
+  PhotocardOrigin,
+  PhotocardListing,
+  PurchaseResult,
+  PurchaseHistory,
+  SaleHistory,
+  PhotocardTradeHistory,
+  PhotocardTrade,
+  PhotocardMintStatus,
+  ListingStatus,
+} from './model/nft.types';

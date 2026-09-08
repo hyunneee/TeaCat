@@ -50,7 +50,7 @@ public class ScheduleService {
     }
 
     private PerformanceDetail getDetail(Long scheduleId) {
-        return performanceDetailRepository.findWithPerformanceById(scheduleId)
+        return performanceDetailRepository.findVisibleWithPerformanceById(scheduleId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.SCHEDULE_NOT_FOUND));
     }
 }

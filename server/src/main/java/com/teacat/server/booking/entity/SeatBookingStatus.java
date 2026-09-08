@@ -6,5 +6,6 @@ package com.teacat.server.booking.entity;
 public enum SeatBookingStatus {
     AVAILABLE,
     HELD,
-    SOLD
+    SOLD,
+    BLOCKED
 }
