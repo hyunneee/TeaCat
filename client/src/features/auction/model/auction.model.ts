@@ -64,6 +64,23 @@ export function formatTimeLeft(totalSeconds: number): string {
 }
 
 /**
+ * 입찰 시각 표시. '9월 8일 14:32'
+ *
+ * 입찰 이력은 한 줄에 닉네임·금액·시각이 함께 들어가서
+ * `formatDateTime`('2026. 9. 8. (화) 14:32')을 쓰면 시각이 줄을 다 먹습니다.
+ * 연도는 뺍니다 — 경매는 길어야 이레입니다.
+ */
+export function formatBidTime(value: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(parseServerTime(value)));
+}
+
+/**
  * 넣을 수 있는 입찰 금액의 범위.
  * 현재가보다 **높아야** 하고, 즉시구매가가 있으면 그보다 **낮아야** 합니다
  * (즉시구매가 이상은 서버가 NFT_028 로 거절하고 즉시구매를 안내합니다).
