@@ -1,4 +1,5 @@
 import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
+import { bridgeDemoNickname } from './db';
 
 /**
  * 아주 작은 목업 라우터.
@@ -104,8 +105,16 @@ export function createMockAdapter(fallback: AxiosAdapter): AxiosAdapter {
     const method = (config.method ?? 'get').toUpperCase();
     const matched = matchRoute(method, pathname);
 
-    // 등록 안 된 경로 → 진짜 서버로
-    if (!matched) return fallback(config);
+    // 등록 안 된 경로 → 진짜 서버로.
+    // 내 정보 응답만 살짝 읽어 시연용 사용자 닉네임을 맞춥니다 (db.bridgeDemoNickname 주석 참고).
+    if (!matched) {
+      const response = await fallback(config);
+      if (method === 'GET' && pathname.replace(/\/+$/, '').endsWith('/users/me')) {
+        const me = (response.data as { data?: { nickname?: string } } | undefined)?.data;
+        if (me?.nickname) bridgeDemoNickname(me.nickname);
+      }
+      return response;
+    }
 
     await delay(LATENCY_MS);
 
