@@ -63,6 +63,26 @@ export async function isBurnExecuted(account: string, operationKey: string): Pro
   return contract().isBurnExecuted(account, operationKey);
 }
 
+/**
+ * 이미 전송됐는지. 전송도 소각처럼 **호출자별로** 기록되므로 주소가 필요합니다.
+ *
+ * 전역이었다면 캣머니 1개 가진 아무나 예정된 거래 키를 미리 태워 그 정산을
+ * 영구히 막을 수 있습니다. (CatMoney.sol `_slot`)
+ */
+export async function isTransferExecuted(account: string, operationKey: string): Promise<boolean> {
+  return contract().isTransferExecuted(account, operationKey);
+}
+
+/**
+ * 정지 스위치가 켜져 있는지.
+ *
+ * 켜져 있으면 `transferWithKey` 는 체인에서 revert 됩니다. 보내기 전에 봐야
+ * 202 를 돌려준 뒤 10초쯤 지나서야 실패가 드러나는 일을 막습니다.
+ */
+export async function isPaused(): Promise<boolean> {
+  return contract().paused();
+}
+
 export async function balanceOf(address: string): Promise<bigint> {
   return contract().balanceOf(address);
 }
@@ -107,6 +127,43 @@ export async function burnAs(
      Spring 은 202 로 받은 txHash 를 영원히 조회하지 못하게 됩니다. */
   return sendSerialized(address, async (nonce) => {
     const tx = await CatMoney__factory.connect(requireAddress(), signer).burn(
+      amount,
+      operationKey,
+      { nonce },
+    );
+    return tx.hash;
+  });
+}
+
+/**
+ * 멱등 전송. 포카 마켓 정산에서 구매자 → 판매자로 캣머니가 갑니다.
+ *
+ * **발행도 소각도 아닙니다** — `totalSupply` 는 그대로고 소유자만 바뀝니다.
+ *
+ * 표준 `transfer` 를 쓰지 않는 이유는 거기엔 `operationKey` 를 걸 자리가 없어서입니다.
+ * 응답을 못 받고 재시도하면 **구매자가 두 번 냅니다.**
+ *
+ * 소각과 마찬가지로 **보내는 유저 본인이 서명합니다.** 남의 잔액을 옮기는 경로
+ * (`transferFrom` + 사전 승인)를 서버가 쥐지 않습니다 — 키 하나가 털리면 전 유저의
+ * 캣머니가 쓸려 나갑니다.
+ */
+export async function transferAs(
+  derivationIndex: number,
+  to: string,
+  amount: bigint,
+  operationKey: string,
+): Promise<string> {
+  const signer = userSigner(derivationIndex);
+  const address = await signer.getAddress();
+
+  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
+  await ensureLocalGas(address);
+
+  /* 논스는 보내는 유저의 주소로 셉니다. 소각과 같은 이유입니다 — 같은 유저의 중복
+     요청이 겹치면 ethers 가 캐시된 논스를 재사용해 트랜잭션 하나가 사라집니다. */
+  return sendSerialized(address, async (nonce) => {
+    const tx = await CatMoney__factory.connect(requireAddress(), signer).transferWithKey(
+      to,
       amount,
       operationKey,
       { nonce },

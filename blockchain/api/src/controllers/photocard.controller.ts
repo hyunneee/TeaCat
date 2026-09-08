@@ -6,6 +6,7 @@ import {
   getPhotocardBalance,
   issuePhotocards,
   registerPhotocardDesign,
+  transferPhotocard,
 } from '../services/photocard.service';
 
 /**
@@ -17,6 +18,7 @@ import {
  */
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const MAX_DERIVATION_INDEX = 2 ** 31 - 1;
 
 const address = z.string().regex(ADDRESS, '0x + 40자리 hex 여야 합니다');
 
@@ -65,6 +67,27 @@ export const photocardKeyQuery = z.object({ key: photocardKey });
 
 export const balanceQuery = z.object({ address, designId });
 
+/**
+ * 마켓 정산 — 판매자 → 구매자.
+ *
+ * `operationKey` 는 거래 PK 등 Spring 이 만드는 영구 유일 키입니다. 발행 키와는
+ * 이름공간이 갈려 있어(`OP_ISSUE` / `OP_TRANSFER`) 서로를 막지 못합니다.
+ *
+ * 주의: **비밀값을 넣으면 안 됩니다.** 해시가 체인에 영구히 남습니다.
+ */
+export const transferBody = z.object({
+  operationKey: z.string().min(1).max(200),
+  from: address,
+  /** **판매자의** 파생 인덱스. 이 키로 서명합니다 */
+  derivationIndex: z.number().int().min(0).max(MAX_DERIVATION_INDEX),
+  to: address,
+  designId,
+  /** 마켓 거래는 항상 `"1"` 이지만 컨트랙트가 ERC-1155 라 수량을 받습니다 */
+  amount: positiveAmount,
+  /** `nft_photocard_trades.id`. 온체인에는 안 남고 로그 추적용입니다 */
+  tradeId: z.string().min(1).max(200),
+});
+
 export async function postPhotocardDesign(req: Request, res: Response): Promise<void> {
   const parsed = designBody.safeParse(req.body);
   if (!parsed.success) {
@@ -109,4 +132,24 @@ export async function getPhotocardBalanceOf(req: Request, res: Response): Promis
   res
     .status(200)
     .json(await getPhotocardBalance(parsed.data.address, BigInt(parsed.data.designId)));
+}
+
+export async function postPhotocardTransfer(req: Request, res: Response): Promise<void> {
+  const parsed = transferBody.safeParse(req.body);
+  if (!parsed.success) {
+    throw errors.badRequest('요청 본문이 올바르지 않습니다', parsed.error.flatten());
+  }
+
+  const { operationKey, from, derivationIndex, to, designId, amount, tradeId } = parsed.data;
+  const result = await transferPhotocard(
+    operationKey,
+    from,
+    derivationIndex,
+    to,
+    BigInt(designId),
+    BigInt(amount),
+    tradeId,
+  );
+
+  res.status(result.status === 'PENDING' ? 202 : 200).json(result);
 }

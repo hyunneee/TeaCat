@@ -104,6 +104,21 @@ export const errors = {
       { designId },
     ),
 
+  /**
+   * 판매자가 그 도안을 그만큼 갖고 있지 않습니다. **재시도로 풀리지 않습니다.**
+   *
+   * 코드는 캣머니와 같은 `INSUFFICIENT_BALANCE` 입니다. Spring 에서는 "잔고가 모자라
+   * 정산을 못 했다" 라는 같은 분기로 처리되고, 어느 쪽인지는 호출한 엔드포인트가
+   * 이미 알려줍니다.
+   */
+  photocardNotOwned: (address: string, designId: string, detail?: unknown) =>
+    new AppError(
+      'INSUFFICIENT_BALANCE',
+      `${address} 가 도안 ${designId} 을 그만큼 갖고 있지 않습니다`,
+      422,
+      detail,
+    ),
+
   /* ── 추첨 ──────────────────────────────────────────────────── */
 
   drawNotFound: (drawKey: string) =>
