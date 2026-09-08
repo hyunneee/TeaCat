@@ -52,7 +52,8 @@ export function PaymentPage() {
   /* 캣머니 표시용 어림값입니다. 실제 차감량은 서버가 다시 계산합니다.
      (프론트가 계산한 숫자를 그대로 결제에 쓰면 공짜 티켓이 나옵니다) */
   const pointsNeeded = toPoints(total + fee);
-  const pointBalance = token?.balance ?? 0;
+  /* 경매 입찰로 묶인 돈은 결제에 쓸 수 없습니다 — 보여주는 것도 판단하는 것도 available 입니다 */
+  const pointBalance = token?.available ?? 0;
   const payingWithPoints = payMethod === 'POINT';
   const shortOfPoints = payingWithPoints && pointBalance < pointsNeeded;
 

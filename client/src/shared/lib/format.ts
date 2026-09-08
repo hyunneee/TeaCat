@@ -61,6 +61,21 @@ export function formatRemaining(totalSeconds: number): string {
   return `${seconds}초`;
 }
 
+/**
+ * 서버 시각 문자열 → epoch ms.
+ *
+ * 서버(Spring `LocalDateTime`)는 `"2026-09-09T21:00:00"` 처럼 **타임존 없는 KST** 를 줍니다.
+ * 이걸 `new Date()` 에 그대로 넣으면 브라우저 시간대로 해석돼, 한국 밖에서 열면
+ * 마감 카운트다운이 몇 시간씩 어긋납니다. 타임존이 없으면 KST 로 읽습니다.
+ *
+ * 목업은 `toISOString()`(끝에 Z)을 쓰므로 두 형태가 모두 들어옵니다 —
+ * 이미 타임존이 붙어 있으면 손대지 않습니다.
+ */
+export function parseServerTime(value: string): number {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasZone ? value : `${value}+09:00`).getTime();
+}
+
 /** '홍길동' → '홍*동' (다른 사람에게 보이는 예매자명 마스킹) */
 export function maskName(name: string): string {
   if (name.length <= 1) return name;

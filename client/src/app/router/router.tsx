@@ -45,6 +45,9 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
 
 const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
+const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
+const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -221,6 +224,9 @@ const routes: RouteObject[] = [
       { path: ROUTES.OAUTH_CALLBACK, element: withBoundary(<OauthCallbackPage />) },
       { path: ROUTES.OAUTH_SIGNUP, element: withBoundary(<OauthSignupPage />) },
       { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
+      /* 경매 상세는 **가드 밖**입니다. 로그인해야 볼 수 있게 하면 경매가 열려 있는지조차
+         알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
+      { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
 
       /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
       { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
@@ -235,6 +241,8 @@ const routes: RouteObject[] = [
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },

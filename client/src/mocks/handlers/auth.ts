@@ -16,12 +16,22 @@ import { users, userFromToken, type MockUser } from '../db';
  * 남은 목업 도메인(예매·티켓·포카)이 실제 API 로 바뀌면 이 다리도 함께 사라집니다.
  */
 export function requireUser(headers: Record<string, string>): MockUser {
-  const raw = headers.authorization ?? headers.Authorization ?? '';
-  const token = raw.replace('Bearer ', '');
-
-  const user = userFromToken(token) ?? bridgeToDemoUser(token);
+  const user = optionalUser(headers);
   if (!user) throw mockError(401, 'UNAUTHORIZED', '로그인이 필요합니다.');
   return user;
+}
+
+/**
+ * 로그인했으면 사용자, 아니면 `undefined`.
+ *
+ * **공개 조회인데 로그인하면 내용이 달라지는** 경로에 씁니다 —
+ * 경매 상세가 그렇습니다(비로그인도 구경하고, 로그인하면 `viewer` 가 붙습니다).
+ * 여기서 401 을 던지면 구경조차 못 하게 됩니다.
+ */
+export function optionalUser(headers: Record<string, string>): MockUser | undefined {
+  const raw = headers.authorization ?? headers.Authorization ?? '';
+  const token = raw.replace('Bearer ', '');
+  return userFromToken(token) ?? bridgeToDemoUser(token);
 }
 
 /** 실서버 JWT(header.payload.signature) 로 로그인한 경우 — 시연용 사용자에 매핑 */
