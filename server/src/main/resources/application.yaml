@@ -85,6 +85,8 @@ cors:
   allowed-origins:
     - http://localhost:5173
     - http://localhost:4173
+    - https://dev.teacat.site
+    - https://teacat.site
 
 app:
   # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
