@@ -1,19 +1,29 @@
 import { useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ChevronRight, Gavel, TriangleAlert, Zap } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
-import { Badge, SectionTitle } from '@/shared/components/ui';
+import { BottomBar, Header } from '@/shared/components/layout';
+import { Badge, Button, SectionTitle } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
+import { useModal } from '@/app/providers';
+import { newIdempotencyKey } from '@/shared/api';
 import { ROUTES } from '@/shared/constants';
 import {
   AuctionCountdown,
   BidHistory,
   auctionResultText,
+  bidRange,
+  canBid,
+  canBuyNow,
+  canCancel,
   isRunning,
   useAuctionBids,
   useAuctionDetail,
+  useBuyNow,
+  useCancelAuction,
+  usePlaceBid,
 } from '@/features/auction';
 import { PocaShowcase, pocaSeed } from '@/features/nft';
+import { useTokenBalance } from '@/features/token';
 
 /**
  * 경매 상세.
@@ -37,8 +47,15 @@ export function AuctionDetailPage() {
   const auctionId = Number(raw);
   const navigate = useNavigate();
 
+  const location = useLocation();
+  const { open } = useModal();
+
   const { data: auction, isPending, isError, refetch } = useAuctionDetail(auctionId);
   const bids = useAuctionBids(auctionId);
+  const { data: token } = useTokenBalance();
+  const { placeBid, isPending: bidding } = usePlaceBid(auctionId);
+  const buyNow = useBuyNow(auctionId);
+  const cancel = useCancelAuction(auctionId);
 
   /* 카운트다운이 0 에 닿으면 서버에 결과를 물어봅니다.
      `refetch` 는 참조가 안정적이라 카운트다운이 매초 다시 부르지 않습니다. */
@@ -62,6 +79,8 @@ export function AuctionDetailPage() {
   const result = auctionResultText(auction);
   const viewer = auction.viewer ?? null;
   const card = auction.photocard;
+  const available = token?.available ?? 0;
+  const range = bidRange(auction);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -188,8 +207,97 @@ export function AuctionDetailPage() {
               onLoadMore={() => void bids.fetchNextPage()}
             />
           </section>
+
+          <BottomBar.Spacer />
         </div>
       </div>
+
+      {/* ── 하단 고정 ──
+          한 화면에 primary 는 **입찰 하나**입니다. 즉시구매를 초록으로 두면
+          경매가 아니라 상점이 됩니다 — 값을 겨루라고 만든 화면에서
+          "그냥 사기" 가 가장 눈에 띄면 아무도 입찰하지 않습니다.
+          끝난 경매에는 하단 바를 아예 두지 않습니다. 결과는 본문이 이미 말했습니다. */}
+      {running && (
+        <BottomBar>
+          {!viewer ? (
+            <Button
+              size="lg"
+              fullWidth
+              onClick={() =>
+                navigate(ROUTES.LOGIN, { state: { from: location.pathname }, replace: false })
+              }
+            >
+              로그인하고 입찰하기
+            </Button>
+          ) : viewer.isSeller ? (
+            canCancel(auction) ? (
+              /* 되돌릴 수 없는 동작이라 붉게, 그리고 한 번 되묻습니다 (DESIGN.md 1장) */
+              <Button
+                variant="danger-ghost"
+                size="lg"
+                fullWidth
+                loading={cancel.isPending}
+                onClick={() =>
+                  open('common/confirm', {
+                    title: '경매를 취소할까요?',
+                    message: '목록에서 사라지고, 다시 올리려면 조건을 새로 정해야 합니다.',
+                    confirmText: '경매 취소',
+                    danger: true,
+                    onConfirm: () => cancel.mutate(),
+                  })
+                }
+              >
+                경매 취소하기
+              </Button>
+            ) : (
+              <p className="text-subtle text-center text-sm">입찰이 있어 취소할 수 없습니다.</p>
+            )
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                size="lg"
+                fullWidth
+                disabled={!canBid(auction)}
+                loading={bidding}
+                leftIcon={<Gavel size={18} />}
+                onClick={() =>
+                  open('auction/bid', {
+                    min: range.min,
+                    max: range.max,
+                    available,
+                    onSubmit: placeBid,
+                  })
+                }
+              >
+                {viewer.isTopBidder ? '최고 입찰자예요' : '입찰하기'}
+              </Button>
+
+              {canBuyNow(auction) && auction.buyNowPrice != null && (
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="shrink-0"
+                  loading={buyNow.isPending}
+                  leftIcon={<Zap size={17} />}
+                  onClick={() => {
+                    /* 멱등키는 **모달을 열 때** 한 번 만듭니다. 확인을 두 번 누르거나
+                       네트워크가 끊겨 재시도돼도 같은 키가 가서 한 번만 체결됩니다. */
+                    const idempotencyKey = newIdempotencyKey();
+                    open('common/confirm', {
+                      title: '즉시구매할까요?',
+                      message: `${auction.buyNowPrice?.toLocaleString()}캣머니로 바로 가져오고 경매는 종료됩니다.`,
+                      confirmText: '즉시구매',
+                      onConfirm: () => buyNow.mutate(idempotencyKey),
+                    });
+                  }}
+                >
+                  즉시구매
+                </Button>
+              )}
+            </div>
+          )}
+        </BottomBar>
+      )}
     </div>
   );
 }

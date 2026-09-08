@@ -5,14 +5,16 @@ import {
   catMoneyHolds,
   findUser,
   iso,
+  nextBidId,
   nextTradeId,
   now,
   parseTime,
   photocardTrades,
   photocards,
+  purchaseKeys,
   type MockAuction,
 } from '../db';
-import { optionalUser } from './auth';
+import { optionalUser, requireUser } from './auth';
 
 /**
  * 경매 목업 — **서버 `NftAuctionController` 계약 그대로**.
@@ -230,4 +232,199 @@ mock('GET', '/auctions/:auctionId/bids', (ctx) => {
     }));
 
   return page(rows, ctx.query);
+});
+
+/* ── 쓰기 경로 공통 ────────────────────────────────────────
+   서버는 마감 시각이 지난 경매를 **쓰기 경로에서 닫지 않습니다.**
+   닫은 뒤 거절하면 그 롤백이 마감까지 되돌리기 때문입니다(server 설계 6-7).
+   대신 DB 시각으로 거절만 하고(NFT_023), 프론트가 상세를 다시 읽어 그 GET 이 닫습니다.
+   목업도 같은 순서를 지킵니다 — 쓰기 핸들러는 closeExpiredAuctions 를 부르지 않습니다. */
+
+/** 지금 쓸 수 있는 캣머니 = 잔액 − 묶여 있는 금액 */
+function availableBalance(userId: string): number {
+  const user = findUser(userId);
+  if (!user) return 0;
+  const held = catMoneyHolds
+    .filter((h) => h.userId === userId && h.status === 'ACTIVE')
+    .reduce((sum, h) => sum + h.amount, 0);
+  return user.tokenBalance - held;
+}
+
+/** 진행 중인 경매인지 확인하고, 아니면 서버와 같은 코드로 거절합니다 */
+function assertRunning(auction: MockAuction) {
+  if (auction.status !== 'ACTIVE') {
+    throw mockError(409, 'NFT_022', '종료되었거나 취소된 경매입니다.');
+  }
+  if (parseTime(auction.endsAt) <= Date.now()) {
+    throw mockError(409, 'NFT_023', '마감된 경매입니다.');
+  }
+}
+
+/* ── B3 입찰 ── */
+mock('POST', '/auctions/:auctionId/bids', (ctx) => {
+  const user = requireUser(ctx.headers);
+  const auction = findAuction(ctx.params.auctionId ?? '');
+  const { amount } = ctx.body as { amount?: unknown };
+
+  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 1) {
+    throw mockError(400, '', '입찰가를 1 이상으로 입력해 주세요.');
+  }
+
+  assertRunning(auction);
+
+  /* 검사 순서가 서버와 같아야 합니다 — 같은 상황에서 같은 코드가 나와야
+     화면의 분기가 목업과 실서버에서 똑같이 동작합니다. */
+  if (auction.sellerId === user.id) {
+    throw mockError(400, 'NFT_025', '본인이 올린 경매에는 입찰할 수 없습니다.');
+  }
+
+  const top =
+    auction.topBidId === null ? undefined : auctionBids.find((b) => b.bidId === auction.topBidId);
+  if (top && top.bidderId === user.id) {
+    throw mockError(409, 'NFT_026', '이미 최고 입찰자입니다.');
+  }
+  if (amount <= auction.currentPrice) {
+    throw mockError(409, 'NFT_027', '현재가보다 높은 금액으로 입찰해 주세요.');
+  }
+  if (auction.buyNowPrice !== null && amount >= auction.buyNowPrice) {
+    throw mockError(400, 'NFT_028', '즉시구매가 이상은 입찰할 수 없습니다. 즉시구매를 이용해 주세요.');
+  }
+  if (availableBalance(user.id) < amount) {
+    throw mockError(409, 'WALLET_005', '캣머니 가용 잔액이 부족합니다.');
+  }
+
+  const bid = {
+    bidId: nextBidId(),
+    auctionId: auction.auctionId,
+    bidderId: user.id,
+    amount,
+    bidAt: iso(now()),
+  };
+  auctionBids.push(bid);
+
+  // 내 돈을 묶고, 밀려난 직전 최고 입찰의 돈은 풀어 줍니다.
+  catMoneyHolds.push({
+    userId: user.id,
+    amount,
+    refType: 'AUCTION_BID',
+    refId: bid.bidId,
+    status: 'ACTIVE',
+  });
+  if (top) {
+    const previous = catMoneyHolds.find(
+      (h) => h.refType === 'AUCTION_BID' && h.refId === top.bidId && h.status === 'ACTIVE',
+    );
+    if (previous) previous.status = 'RELEASED';
+  }
+
+  auction.currentPrice = amount;
+  auction.topBidId = bid.bidId;
+  auction.bidCount += 1;
+
+  return {
+    bidId: bid.bidId,
+    auctionId: auction.auctionId,
+    amount,
+    currentPrice: auction.currentPrice,
+    bidCount: auction.bidCount,
+    endsAt: auction.endsAt,
+    isTopBidder: true,
+  };
+});
+
+/* ── B4 즉시구매 (Idempotency-Key 필수) ── */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+mock('POST', '/auctions/:auctionId/buy-now', (ctx) => {
+  const user = requireUser(ctx.headers);
+  const auction = findAuction(ctx.params.auctionId ?? '');
+
+  const key = ctx.headers['idempotency-key'] ?? ctx.headers['Idempotency-Key'] ?? '';
+  if (!UUID.test(key)) {
+    throw mockError(400, 'NFT_009', 'Idempotency-Key는 UUID 형식이어야 합니다.');
+  }
+
+  const stored = purchaseKeys.get(`${user.id}:${key}`);
+  if (stored) {
+    if (stored.photocardId !== auction.photocardId) {
+      throw mockError(409, 'NFT_010', '다른 요청에서 이미 사용한 Idempotency-Key입니다.');
+    }
+    return stored.response; // 재시도 — 같은 응답
+  }
+
+  assertRunning(auction);
+
+  if (auction.buyNowPrice === null) {
+    throw mockError(409, 'NFT_029', '즉시구매가 없는 경매입니다.');
+  }
+  if (auction.sellerId === user.id) {
+    throw mockError(400, 'NFT_007', '본인이 판매 중인 포토카드는 구매할 수 없습니다.');
+  }
+
+  const price = auction.buyNowPrice;
+  if (availableBalance(user.id) < price) {
+    throw mockError(409, 'WALLET_005', '캣머니 가용 잔액이 부족합니다.');
+  }
+
+  // 최고 입찰자가 있었다면 그 사람 돈을 풀어 줍니다 — 경매가 여기서 끝나기 때문입니다.
+  const top =
+    auction.topBidId === null ? undefined : auctionBids.find((b) => b.bidId === auction.topBidId);
+  if (top) {
+    const hold = catMoneyHolds.find(
+      (h) => h.refType === 'AUCTION_BID' && h.refId === top.bidId && h.status === 'ACTIVE',
+    );
+    if (hold) hold.status = 'RELEASED';
+  }
+
+  const seller = findUser(auction.sellerId);
+  user.tokenBalance -= price;
+  if (seller) seller.tokenBalance += price;
+
+  const card = photocards.find((p) => p.photocardId === auction.photocardId);
+  if (card) {
+    card.ownerId = user.id;
+    card.listing = null;
+  }
+
+  const trade = {
+    tradeId: nextTradeId(),
+    photocardId: auction.photocardId,
+    buyerId: user.id,
+    sellerId: auction.sellerId,
+    price,
+    tradedAt: iso(now()),
+  };
+  photocardTrades.push(trade);
+
+  auction.status = 'SOLD';
+  auction.winnerId = user.id;
+  auction.currentPrice = price;
+  auction.closedAt = iso(now());
+
+  const response = {
+    tradeId: trade.tradeId,
+    photocardId: trade.photocardId,
+    price: trade.price,
+    tradedAt: trade.tradedAt,
+  };
+  purchaseKeys.set(`${user.id}:${key}`, { photocardId: auction.photocardId, response });
+  return response;
+});
+
+/* ── B2 판매자 취소 (입찰 0건일 때만) ── */
+mock('DELETE', '/auctions/:auctionId', (ctx) => {
+  const user = requireUser(ctx.headers);
+  const auction = findAuction(ctx.params.auctionId ?? '');
+
+  if (auction.sellerId !== user.id) {
+    throw mockError(403, 'NFT_006', '본인의 판매 등록이 아닙니다.');
+  }
+  assertRunning(auction);
+  if (auction.bidCount > 0) {
+    throw mockError(409, 'NFT_024', '입찰이 있는 경매는 취소할 수 없습니다.');
+  }
+
+  auction.status = 'CANCELLED';
+  auction.closedAt = iso(now());
+  return null;
 });
