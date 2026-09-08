@@ -94,6 +94,11 @@ minio:
   bucket: ${MINIO_BUCKET:teacat}
   # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
   presigned-url-validity: 10m
+  # 브라우저가 MinIO 에 닿는 주소. endpoint 가 컨테이너 내부 주소(http://minio:9000)인 배포 환경에서
+  # presigned URL 을 그대로 내려주면 브라우저가 열 수 없어 이미지가 깨진다.
+  # 비어 있으면 endpoint 그대로 쓴다 (로컬은 http://localhost:9000 이 브라우저에서도 열린다).
+  # 배포: https://dev.teacat.site/storage — nginx 가 /storage/ 를 MinIO 로 넘긴다 (docker/nginx/conf.d).
+  public-base-url: ${MINIO_PUBLIC_BASE_URL:}
 
 performance:
   image:
