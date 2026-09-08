@@ -132,9 +132,9 @@ const routes: RouteObject[] = [
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
-      /* 공연 등록·수정 — 관리자만. 서버 /admin/** 도 ADMIN 만 받습니다 */
+      /* 공연 등록·수정 — 관리자와 공연 주최자. 서버 /admin/concerts/** 가 받는 역할과 같습니다 */
       {
-        element: <RequireRole roles={['ADMIN']} />,
+        element: <RequireRole roles={['ADMIN', 'PERFORMANCE']} />,
         children: [
           { path: ROUTES.CONCERT_CREATE, element: withBoundary(<ConcertCreatePage />) },
           { path: ROUTES.CONCERT_EDIT(':concertId'), element: withBoundary(<ConcertEditPage />) },

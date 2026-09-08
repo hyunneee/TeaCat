@@ -16,7 +16,7 @@ export function ConcertListPage() {
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
   const { data: concerts, isPending } = useConcerts(keyword || undefined);
 
-  /* 관리자에게만 등록 버튼이 보입니다. 서버(`/admin/**`)도 같은 역할만 받습니다. */
+  /* 관리자·공연 주최자에게만 등록 버튼이 보입니다. 서버(`/admin/concerts/**`)도 같은 역할만 받습니다. */
   const canCreate = can.createConcert(user);
 
   return (
