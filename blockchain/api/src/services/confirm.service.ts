@@ -1,11 +1,18 @@
 import { getTxStatus } from '../chain/tx';
-import { hashOf, issuedTicket } from '../chain/contracts/ticketSbt';
+import { hashOf, issuedTicket, ticketSbtAddress } from '../chain/contracts/ticketSbt';
+import { env } from '../config';
 import { dbEnabled } from '../db/pool';
-import { findPending, markIssueResult, markIssueSent, missingColumns } from '../db/ticketRepo';
+import {
+  findMinting,
+  markBurnTx,
+  markIssueResult,
+  markIssueSent,
+  missingColumns,
+} from '../db/ticketRepo';
 import { logger, short } from '../shared/logger';
 
 /**
- * 확정 감시 — 체인에 실린 걸 확인해서 Spring DB 에 기록합니다. (DESIGN.md 1장 예외)
+ * 티켓 확정 감시 — 체인에 실린 걸 확인해서 Spring DB 에 기록합니다. (DESIGN.md 1장 예외)
  *
  * 쓰기는 `202` 로 먼저 끝나고 블록은 10초 뒤에 옵니다. 그 10초를 **Spring 대신
  * 우리가 기다립니다.** 결제 직후 발행이 유저에게 실패로 보이면 안 되기 때문입니다.
@@ -13,10 +20,15 @@ import { logger, short } from '../shared/logger';
  * ── 두 갈래를 같이 돌립니다 ───────────────────────────────────────
  *
  *   ① 추적   방금 보낸 tx 를 메모리에 들고 영수증을 확인합니다. 빠릅니다
- *   ② 훑기   PENDING 인 행을 DB 에서 읽어 체인에 직접 물어봅니다. 느리지만 안 잃습니다
+ *   ② 훑기   `MINTING` 인 행을 DB 에서 읽어 체인에 직접 물어봅니다. 느리지만 안 잃습니다
  *
  * **①만 두면 안 됩니다.** 우리가 재시작하면 추적 목록이 통째로 사라지고, 그 티켓들은
- * 영원히 PENDING 으로 남습니다. ②가 그걸 걷어냅니다 — 드롭된 트랜잭션도 같이.
+ * 영원히 대기 상태로 남습니다. ②가 그걸 걷어냅니다 — 드롭된 트랜잭션도 같이.
+ *
+ * ── 대상은 `nft_tickets` 입니다 ───────────────────────────────────
+ * 2026-09-08 에 바로잡았습니다. 그전에는 `tickets` 를 보고 있었는데 그 테이블에는
+ * 체인 컬럼이 하나도 없었습니다. 상태도 `nft_mint_status` 로 바뀌어 포카 감시와
+ * 완전히 같은 모양이 됐습니다. (`db/ticketRepo.ts`)
  */
 
 /** 영수증 확인 주기. 블록이 10초라 이보다 촘촘하게 볼 이유가 없습니다. */
@@ -49,13 +61,17 @@ let sweepTimer: NodeJS.Timeout | null = null;
 let ticking = false;
 let sweeping = false;
 
+/** 배포 주소. 없으면 기록을 건너뜁니다 — 부르는 쪽이 이미 확인했어야 합니다. */
+function contractAddress(): string | null {
+  return ticketSbtAddress();
+}
+
 /**
- * 발행 트랜잭션을 추적 목록에 올리고, **DB 에도 바로 txHash 를 남깁니다.**
+ * 발행 트랜잭션을 추적 목록에 올리고, **DB 를 바로 `MINTING` 으로 옮깁니다.**
  *
- * 상태는 `PENDING` 그대로입니다 — 아직 체인에 안 실렸으니까요. 그래도 지금
- * 남겨야 우리가 재시작했을 때 훑기가 "어느 트랜잭션을 기다리던 행인지" 를 압니다.
+ * 지금 남겨야 우리가 재시작했을 때 훑기가 "어느 트랜잭션을 기다리던 행인지" 를 압니다.
  *
- * DB 쓰기가 실패해도 발행 자체는 성공입니다. 202 를 실패로 바꾸지 않고 넘어갑니다 —
+ * DB 쓰기가 실패해도 발행 자체는 성공입니다. `202` 를 실패로 바꾸지 않고 넘어갑니다 —
  * 훑기가 나중에 체인에서 직접 확인해 걷어냅니다.
  *
  * DB 가 꺼져 있으면 아무것도 하지 않습니다 — 체인만으로 개발할 때의 경로입니다.
@@ -69,8 +85,11 @@ export async function watchIssue(
 
   watching.set(txHash, { ticketKey, tokenId, since: Date.now() });
 
+  const address = contractAddress();
+  if (address === null) return;
+
   try {
-    await markIssueSent(ticketKey, tokenId, txHash);
+    await markIssueSent(ticketKey, tokenId, env.CHAIN_ID, address, txHash);
   } catch (error) {
     logger.error(`전송 기록 실패 ticket=${ticketKey} — 훑기가 따라잡습니다`, error);
   }
@@ -81,27 +100,51 @@ export async function watchIssue(
  *
  * `ALREADY_ISSUED` 경로입니다 — 새 트랜잭션이 없어 기다릴 것도 없습니다.
  * 큐가 메시지를 재전달하면(at-least-once 는 정상 동작입니다) 여기로 옵니다.
+ *
+ * `MINTING` 을 거치지 않고 `PENDING` 에서 바로 `MINTED` 가 됩니다.
  */
 export async function recordAlreadyIssued(ticketKey: string, tokenId: string): Promise<void> {
   if (!dbEnabled()) return;
-  await write(ticketKey, 'SUCCESS', tokenId, null);
+  await write(ticketKey, 'MINTED', tokenId, null);
+}
+
+/**
+ * 소각(예매 취소) 트랜잭션을 기록합니다.
+ *
+ * 상태는 건드리지 않습니다 — 취소의 상태 전이는 Spring 이 소유합니다.
+ * 우리는 어느 트랜잭션으로 태웠는지만 남깁니다.
+ */
+export async function recordBurn(tokenId: string, burnTxHash: string): Promise<void> {
+  if (!dbEnabled()) return;
+
+  const address = contractAddress();
+  if (address === null) return;
+
+  try {
+    await markBurnTx(tokenId, env.CHAIN_ID, address, burnTxHash);
+  } catch (error) {
+    logger.error(`소각 기록 실패 #${tokenId}`, error);
+  }
 }
 
 /** DB 쓰기는 실패해도 프로세스를 죽이지 않습니다. 훑기가 다음 번에 따라잡습니다. */
 async function write(
   ticketKey: string,
-  status: 'SUCCESS' | 'FAILED',
+  status: 'MINTED' | 'FAILED',
   tokenId: string,
   txHash: string | null,
 ): Promise<void> {
+  const address = contractAddress();
+  if (address === null) return;
+
   try {
-    const changed = await markIssueResult(ticketKey, status, tokenId, txHash);
+    const changed = await markIssueResult(ticketKey, status, tokenId, env.CHAIN_ID, address, txHash);
     if (changed) {
       logger.info(`확정 기록 ${status} ticket=${ticketKey}`);
     } else {
-      /* PENDING 이 아니어서 안 바뀌었습니다. 이미 기록됐거나 Spring 이 상태를
+      /* 대기 상태가 아니어서 안 바뀌었습니다. 이미 기록됐거나 Spring 이 상태를
          옮긴 것이라 정상입니다 — 조건부 UPDATE 가 덮어쓰기를 막은 자리입니다. */
-      logger.info(`확정 기록 건너뜀 (PENDING 아님) ticket=${ticketKey}`);
+      logger.info(`확정 기록 건너뜀 (대기 아님) ticket=${ticketKey}`);
     }
   } catch (error) {
     logger.error(`확정 기록 실패 ticket=${ticketKey} — 훑기가 다시 시도합니다`, error);
@@ -126,7 +169,9 @@ async function tick(): Promise<void> {
       if (!chain.mined) {
         // 너무 오래 안 실리면 손을 뗍니다. 이후는 훑기가 봅니다.
         if (Date.now() - item.since > DROP_AFTER_MS) {
-          logger.warn(`추적 포기 (${DROP_AFTER_MS / 1000}초 초과) tx=${short(txHash)} — 훑기로 넘깁니다`);
+          logger.warn(
+            `추적 포기 (${DROP_AFTER_MS / 1000}초 초과) tx=${short(txHash)} — 훑기로 넘깁니다`,
+          );
           watching.delete(txHash);
         }
         continue;
@@ -139,9 +184,11 @@ async function tick(): Promise<void> {
       const done = chain.success || chain.revertErrorName === 'AlreadyIssued';
 
       if (!done) {
-        logger.error(`발행 실패 ticket=${item.ticketKey} tx=${short(txHash)} — ${chain.revertReason ?? '사유 불명'}`);
+        logger.error(
+          `발행 실패 ticket=${item.ticketKey} tx=${short(txHash)} — ${chain.revertReason ?? '사유 불명'}`,
+        );
       }
-      await write(item.ticketKey, done ? 'SUCCESS' : 'FAILED', item.tokenId, txHash);
+      await write(item.ticketKey, done ? 'MINTED' : 'FAILED', item.tokenId, txHash);
     }
   } finally {
     ticking = false;
@@ -149,7 +196,7 @@ async function tick(): Promise<void> {
 }
 
 /**
- * ② PENDING 인 행을 체인에 직접 물어봅니다.
+ * ② `MINTING` 인 행을 체인에 직접 물어봅니다.
  *
  * 재시작으로 추적 목록을 잃었거나, 트랜잭션이 드롭됐거나, DB 쓰기가 실패했던
  * 건들이 전부 여기로 걷힙니다. **이 서비스의 안전망입니다.**
@@ -159,10 +206,10 @@ async function sweep(): Promise<void> {
   sweeping = true;
 
   try {
-    const rows = await findPending(SWEEP_AFTER_SECONDS, SWEEP_LIMIT);
+    const rows = await findMinting(SWEEP_AFTER_SECONDS, SWEEP_LIMIT);
     if (rows.length === 0) return;
 
-    logger.info(`훑기 — PENDING ${rows.length}건`);
+    logger.info(`훑기 — 대기 ${rows.length}건`);
 
     for (const row of rows) {
       // 추적 중이면 ①이 처리합니다.
@@ -170,7 +217,7 @@ async function sweep(): Promise<void> {
 
       const probe = await issuedTicket(hashOf(row.ticketKey));
       if (probe.issued) {
-        await write(row.ticketKey, 'SUCCESS', probe.tokenId.toString(), row.mintTxHash);
+        await write(row.ticketKey, 'MINTED', probe.tokenId.toString(), row.mintTxHash);
         continue;
       }
 
@@ -205,7 +252,7 @@ function tokenIdText(ticketKey: string): string {
  */
 export async function startConfirmWatcher(): Promise<string[]> {
   if (!dbEnabled()) {
-    logger.warn('DATABASE_URL 이 없습니다 — 확정 기록이 꺼진 채로 돕니다 (티켓이 PENDING 으로 남습니다)');
+    logger.warn('DATABASE_URL 이 없습니다 — 확정 기록이 꺼진 채로 돕니다 (티켓이 대기로 남습니다)');
     return [];
   }
 

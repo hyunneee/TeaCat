@@ -14,6 +14,18 @@ import {
   postTicketBurn,
   postTicketIssue,
 } from '../controllers/ticket.controller';
+import {
+  getPhotocardBalanceOf,
+  getPhotocardByKey,
+  postPhotocardDesign,
+  postPhotocardIssue,
+} from '../controllers/photocard.controller';
+import {
+  getDraw,
+  postDrawAssign,
+  postDrawOpen,
+  postDrawReveal,
+} from '../controllers/draw.controller';
 import { asyncHandler } from '../shared/http';
 
 /**
@@ -45,6 +57,29 @@ internal.post('/tickets/issue', asyncHandler(postTicketIssue));
 internal.get('/tickets/by-key', asyncHandler(getTicketByKey));
 internal.get('/tickets/:tokenId', asyncHandler(getTicket));
 internal.post('/tickets/:tokenId/burn', asyncHandler(postTicketBurn));
+
+/* 검증 가능한 추첨. 체인이 만드는 것은 **난수 하나**뿐이고, 배정은 그 난수로부터
+   계산되는 순수 함수라 누가 계산하든 같습니다. (PHOTOCARD_PLAN.md 4장)
+
+   `/reveal` 은 수동 개입용입니다 — 평소에는 `drawWatcher.service` 가 자동으로
+   부릅니다. 블록해시가 42분만 남아서 사람 손에 맡길 수 없습니다.
+
+   주의: `/draws/open` 을 `/draws/:drawKey` **앞에** 둡니다.
+         뒤에 두면 :drawKey 가 "open" 을 먼저 삼킵니다. */
+internal.post('/draws/open', asyncHandler(postDrawOpen));
+internal.get('/draws/:drawKey', asyncHandler(getDraw));
+internal.post('/draws/:drawKey/reveal', asyncHandler(postDrawReveal));
+internal.post('/draws/:drawKey/assign', asyncHandler(postDrawAssign));
+
+/* 포토카드 NFT (ERC-1155). **tokenId 는 카드 한 장이 아니라 도안입니다.**
+   좌석·공연·소유자는 Spring 의 DB 가 소유합니다 — 여기엔 없습니다.
+
+   주의: `/photocards/by-key` 와 `/photocards/balance` 는 경로 파라미터가 아니라
+         쿼리를 씁니다. 카드 키가 자유 문자열이라 경로에 넣으면 깨집니다. */
+internal.post('/photocards/designs', asyncHandler(postPhotocardDesign));
+internal.post('/photocards/issue', asyncHandler(postPhotocardIssue));
+internal.get('/photocards/by-key', asyncHandler(getPhotocardByKey));
+internal.get('/photocards/balance', asyncHandler(getPhotocardBalanceOf));
 
 // 모든 쓰기의 최종 성공 여부를 확인하는 곳입니다. (DESIGN.md 4-2, 7장)
 internal.get('/tx/:txHash', asyncHandler(getTx));
