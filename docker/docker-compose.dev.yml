@@ -1,0 +1,128 @@
+# 개발 환경 앱 스택. 앞단 nginx 는 docker-compose.proxy.yml 에 있다.
+#
+#   docker build -t teacat-server:dev     <저장소>/server
+#   docker build -t teacat-blockchain:dev <저장소>/blockchain
+#   docker compose -f docker-compose.dev.yml --env-file .env.dev up -d
+#
+# 이미지를 여기서 빌드하지 않고 태그로만 참조한다.
+# EC2 의 ~/teacat 에는 소스가 없고, 나중에 젠킨스도 "빌드 → 태그 → up" 순서로 돈다.
+
+name: teacat-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teacat}
+      POSTGRES_USER: ${POSTGRES_USER:-teacat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env.dev 에 넣으세요}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-teacat} -d ${POSTGRES_DB:-teacat}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+    # 포트를 열지 않는다. DB 접속이 필요하면 SSH 터널을 쓴다.
+
+  redis:
+    image: redis:8-alpine
+    container_name: dev-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?.env.dev 에 넣으세요}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [teacat-net]
+
+  minio:
+    image: minio/minio
+    container_name: dev-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9000/minio/health/live || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+
+  blockchain:
+    image: teacat-blockchain:dev
+    container_name: dev-blockchain
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      CHAIN_ID: ${CHAIN_ID:-31221}
+      RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
+      # 🔴 시크릿. .env.dev 에만 두고 절대 커밋하지 않는다.
+      MASTER_MNEMONIC: ${MASTER_MNEMONIC:?.env.dev 에 넣으세요}
+      OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:?0x + 64자리 hex}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+    mem_limit: 512m
+    networks: [teacat-net]
+    # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
+
+  server:
+    image: teacat-server:dev
+    container_name: dev-server
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      blockchain: { condition: service_healthy }
+    environment:
+      # application.yaml 의 localhost 기본값을 컨테이너 주소로 덮어쓴다.
+      # 스프링이 SCREAMING_SNAKE_CASE 환경변수를 yaml 키에 매핑해준다.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-teacat}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: '6379'
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      JWT_SECRET: ${JWT_SECRET:?32바이트 이상}
+
+      # ⚠️ 지금은 컨테이너 내부 주소다. 이 주소로 presigned URL 이 만들어지면
+      #    브라우저가 못 연다. 이미지 업로드를 붙일 때 다시 손봐야 한다.
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+      BLOCKCHAIN_API_URL: http://blockchain:4000
+      # blockchain 의 INTERNAL_API_KEY 와 같은 값이어야 한다. 틀리면 가입이 401 로 실패한다.
+      BLOCKCHAIN_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      BLOCKCHAIN_CHAIN_ID: ${CHAIN_ID:-31221}
+
+      FRONTEND_BASE_URL: https://dev.teacat.site
+      SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}
+    # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
+    #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
+    #    운영까지 올리면 JVM 두 개가 각각 12G 를 노리게 된다.
+    mem_limit: 2g
+    networks: [teacat-net]
+    # 포트를 열지 않는다. nginx 가 /api 를 프록시한다.
+
+networks:
+  teacat-net:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

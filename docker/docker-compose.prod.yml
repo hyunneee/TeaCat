@@ -1,0 +1,7 @@
+# 운영 앱 (server / blockchain / postgres / redis / minio). 아직 비어 있다.
+# 앞단 nginx 는 docker-compose.proxy.yml 에 있다.
+services: {}
+
+networks:
+  teacat-net:
+    external: true
