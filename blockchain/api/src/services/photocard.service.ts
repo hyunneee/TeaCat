@@ -4,12 +4,15 @@ import {
   isIssued,
   isIssuePaused,
   issueBatch,
+  isTransferExecuted,
   maxBatch,
   metadataUriOf,
   photocardNftAddress,
   registerDesign,
+  transferAs,
   type IssueItem,
 } from '../chain/contracts/photocardNft';
+import { deriveUserAddress } from '../chain/keys/hdWallet';
 import { normalizeAddress } from '../chain/address';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
@@ -54,6 +57,13 @@ export interface IssueRequestItem {
   photocardKey: string;
   designId: string;
   to: string;
+}
+
+export interface PhotocardTransferResult {
+  /** 방금 보냈으면 PENDING, 같은 키로 이미 옮겼으면 ALREADY_DONE */
+  status: 'PENDING' | 'ALREADY_DONE';
+  /** ALREADY_DONE 이면 새로 보낸 트랜잭션이 없어 null 입니다 */
+  txHash: string | null;
 }
 
 /** 컨트랙트가 배포돼 있는지. 없으면 여기서 멈춥니다 — 조용히 넘기면 안 됩니다. */
@@ -233,4 +243,83 @@ export async function getPhotocardBalance(
     // 0 이면 등록되지 않은 도안입니다. 404 로 만들지 않습니다 — 대사는 그것도 알아야 합니다.
     maxSupply: design.maxSupply.toString(),
   };
+}
+
+/**
+ * 소유권 이전 — 마켓 정산. **판매자 → 구매자**로 카드가 갑니다.
+ *
+ * 판매자 본인의 파생 키로 서명하므로, `derivationIndex` 로 만든 주소가 `from` 과
+ * 같은지 먼저 확인합니다. 다르면 **엉뚱한 사람의 카드가 나갑니다.** 오퍼레이터가
+ * 남의 카드를 옮기는 함수는 컨트랙트에 두지 않았습니다 (PHOTOCARD_PLAN.md 7장).
+ *
+ * ── 캣머니 전송과 순서가 있습니다 ─────────────────────────────────
+ *
+ * **둘은 원자적이지 않습니다.** 서로 다른 컨트랙트의 서로 다른 트랜잭션입니다.
+ *
+ * ```
+ * ① 캣머니 전송 (구매자 → 판매자)   확정까지 기다림
+ * ② 카드 이전   (판매자 → 구매자)   ← 여기
+ *    실패하면 → 캣머니를 되돌립니다 (판매자 → 구매자, 보상 키로)
+ * ```
+ *
+ * 반대로 하면 카드가 먼저 넘어간 뒤 결제가 실패했을 때 되돌릴 방법이 없습니다 —
+ * 구매자가 그 사이 다시 팔아버리면 끝입니다. **이 순서는 Spring 이 소유합니다.**
+ *
+ * 발행 정지는 이동에 걸리지 않아 여기서 보지 않습니다 — 유저가 자기 카드를 옮기는
+ * 것은 발행 사고와 무관합니다. (PhotocardNFT.sol)
+ */
+export async function transferPhotocard(
+  operationKey: string,
+  from: string,
+  derivationIndex: number,
+  to: string,
+  designId: bigint,
+  amount: bigint,
+  tradeId: string,
+): Promise<PhotocardTransferResult> {
+  requireDeployed();
+
+  // 체크섬이 틀린 주소는 ethers 가 던져 500 이 됩니다. 잘못된 건 입력이므로 400 입니다.
+  const buyer = normalizeAddress(to);
+  if (buyer === null) throw errors.invalidAddress('to', to);
+
+  const seller = deriveUserAddress(derivationIndex);
+  if (seller !== from.toLowerCase()) {
+    throw errors.badRequest(
+      `derivationIndex ${derivationIndex} 로 만든 주소가 from 과 다릅니다`,
+      { derived: seller, from: from.toLowerCase() },
+    );
+  }
+
+  /* 자기 자신에게 보내는 것은 막습니다. 컨트랙트는 통과시키지만 **키만 태우고
+     카드는 그대로입니다** — Spring 은 이전이 끝난 줄 알고, 그 거래는 키가 영구히
+     소비돼 다시 시도할 수도 없습니다. */
+  if (seller === buyer) {
+    throw errors.badRequest('from 과 to 가 같습니다', { address: seller, tradeId });
+  }
+
+  if (await isTransferExecuted(seller, operationKey)) {
+    logger.info(
+      `포토카드 이전 건너뜀 (이미 처리됨) design=${designId} ${amount}장 ` +
+        `${seller} → ${buyer} trade=${tradeId}`,
+    );
+    return { status: 'ALREADY_DONE', txHash: null };
+  }
+
+  /* 보유 장수를 미리 봅니다. 안 보면 체인에서 `ERC1155InsufficientBalance` 로
+     revert 되고, Spring 은 202 를 받은 뒤 한참 있다 tx 조회에서야 실패를 압니다.
+     주의: 진짜 방어는 컨트랙트가 합니다 — 확인과 전송 사이에 카드가 나갈 수 있습니다. */
+  if ((await balanceOf(seller, designId)) < amount) {
+    throw errors.photocardNotOwned(seller, designId.toString(), {
+      designId: designId.toString(),
+      requested: amount.toString(),
+    });
+  }
+
+  const txHash = await transferAs(derivationIndex, buyer, designId, amount, operationKey);
+  logger.info(
+    `포토카드 이전 design=${designId} ${amount}장 ${seller} → ${buyer} ` +
+      `trade=${tradeId} tx=${short(txHash)}`,
+  );
+  return { status: 'PENDING', txHash };
 }

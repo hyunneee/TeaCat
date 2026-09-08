@@ -7,6 +7,7 @@ import {
   getCatMoneyBalance,
   postCatMoneyBurn,
   postCatMoneyMint,
+  postCatMoneyTransfer,
 } from '../controllers/catMoney.controller';
 import {
   getTicket,
@@ -19,6 +20,7 @@ import {
   getPhotocardByKey,
   postPhotocardDesign,
   postPhotocardIssue,
+  postPhotocardTransfer,
 } from '../controllers/photocard.controller';
 import {
   getDraw,
@@ -47,6 +49,8 @@ internal.post('/wallets', asyncHandler(createWallet));
 internal.get('/tokens/catmoney/balance', asyncHandler(getCatMoneyBalance));
 internal.post('/tokens/catmoney/mint', asyncHandler(postCatMoneyMint));
 internal.post('/tokens/catmoney/burn', asyncHandler(postCatMoneyBurn));
+// 유저 간 전송. 포카 마켓 정산에서만 씁니다 — 발행도 소각도 아닙니다. (7장)
+internal.post('/tokens/catmoney/transfer', asyncHandler(postCatMoneyTransfer));
 
 /* 티켓 SBT. 양도할 수 없고, 취소하면 소각됩니다. (DESIGN.md 6장 ①)
    좌석·공연·입장 여부는 Spring 의 티켓 DB 가 소유합니다 — 여기엔 없습니다.
@@ -80,6 +84,11 @@ internal.post('/photocards/designs', asyncHandler(postPhotocardDesign));
 internal.post('/photocards/issue', asyncHandler(postPhotocardIssue));
 internal.get('/photocards/by-key', asyncHandler(getPhotocardByKey));
 internal.get('/photocards/balance', asyncHandler(getPhotocardBalanceOf));
+
+/* 마켓 정산. **판매자 본인의 파생 키로 서명합니다.** 캣머니 전송과 원자적이지
+   않아서 순서가 있습니다 — 캣머니 확정 → 카드 이전, 실패하면 캣머니를 되돌립니다.
+   그 순서는 Spring 이 소유합니다. (PHOTOCARD_PLAN.md 7장) */
+internal.post('/photocards/transfer', asyncHandler(postPhotocardTransfer));
 
 // 모든 쓰기의 최종 성공 여부를 확인하는 곳입니다. (DESIGN.md 4-2, 7장)
 internal.get('/tx/:txHash', asyncHandler(getTx));
