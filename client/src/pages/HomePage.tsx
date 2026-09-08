@@ -281,9 +281,16 @@ export function HomePage() {
 
             <div ref={pocaRail} className="-mx-4 overflow-x-auto">
               <ul className="flex w-max gap-3 px-4 pt-1 pb-2">
-                {newPocas.slice(0, RAIL_LIMIT).map((nft) => (
-                  <li key={nft.id} className="w-[8.5rem] shrink-0">
-                    <NftCard nft={nft} onClick={() => navigate(ROUTES.NFT_DETAIL(nft.id))} />
+                {newPocas.slice(0, RAIL_LIMIT).map((card) => (
+                  <li key={card.photocardId} className="w-[8.5rem] shrink-0">
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle}
+                      price={card.price}
+                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                    />
                   </li>
                 ))}
               </ul>

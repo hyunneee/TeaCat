@@ -24,6 +24,8 @@ export interface MockUser {
   loginId: string;
   password: string;
   name: string;
+  /** 표시 이름. 포카 소유 판정(ownerNickname 비교)에 쓰이므로 실서버 User.nickname 과 같은 뜻 */
+  nickname: string;
   phone: string;
   email: string;
   role: 'USER' | 'ORGANIZER' | 'ADMIN';
@@ -119,18 +121,45 @@ export interface MockResaleEntry {
   createdAt: string;
 }
 
-export interface MockNft {
-  id: string;
-  name: string;
-  concertId: string;
-  /** 어느 좌석에서 나온 포카인지 */
-  seatLabel: string;
+/**
+ * 포토카드 — **서버 nft_photocards 행 모양**입니다.
+ * 필드 이름은 서버 응답(`NftPhotocardDetailResponse`)과 같게 둡니다.
+ * 서버에 포카가 발행되면 이 타입과 handlers/nft.ts 를 함께 지웁니다.
+ */
+export interface MockPhotocard {
+  /** 서버처럼 숫자 id. 501 부터 */
+  photocardId: number;
+  designName: string;
+  /** 지금은 전부 null → 화면이 시드 그림을 그립니다 */
+  imageUrl: string | null;
+  performanceTitle: string;
   ownerId: string;
-  /** 마켓에 올라와 있으면 가격, 아니면 null */
-  listPrice: number | null;
-  description: string | null;
-  artSeed: string;
-  mintedAt: string;
+  issuedAt: string;
+  origin: {
+    seatGrade: string;
+    areaCode: string;
+    /** 스탠딩이면 null */
+    rowLabel: string | null;
+    seatNumber: number | null;
+  };
+  status: 'PENDING' | 'MINTING' | 'MINTED' | 'FAILED';
+  /** 판매 중이면 값, 아니면 null (서버 nft_photocard_listings 의 ACTIVE 행) */
+  listing: {
+    listingId: number;
+    price: number;
+    description: string;
+    listedAt: string;
+  } | null;
+}
+
+/** 포카 거래 한 건. 실서버에서는 nft_photocard_trades */
+export interface MockPhotocardTrade {
+  tradeId: number;
+  photocardId: number;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  tradedAt: string;
 }
 
 /* ─────────────────────────── 시드 ─────────────────────────── */
@@ -146,6 +175,7 @@ export const users: MockUser[] = [
     loginId: 'ssafy',
     password: 'ssafy1234',
     name: '김싸피',
+    nickname: '김싸피',
     phone: '010-1234-5678',
     email: 'ssafy@example.com',
     role: 'USER',
@@ -158,6 +188,7 @@ export const users: MockUser[] = [
     loginId: 'admin',
     password: 'admin1234',
     name: '관리자',
+    nickname: '관리자',
     phone: '010-0000-0000',
     email: 'admin@example.com',
     role: 'ADMIN',
@@ -170,6 +201,7 @@ export const users: MockUser[] = [
     loginId: 'friend',
     password: 'friend1234',
     name: '이친구',
+    nickname: '이친구',
     phone: '010-9999-8888',
     email: 'friend@example.com',
     role: 'USER',
@@ -406,40 +438,65 @@ const NFT_NAMES = [
   '마지막 인사',
 ];
 
-export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
+/* 목업 공연 제목. 서버는 performanceTitle 을 문자열로 내려주므로 여기서도 문자열로 심습니다. */
+const PERFORMANCE_TITLES = ['PURPLE WAVE 2026', '고척 캣머니 페스티벌'] as const;
+
+/** 증가 카운터 — 서버의 IDENTITY 컬럼 흉내 */
+let listingSeq = 200;
+let tradeSeq = 900;
+export const nextListingId = () => (listingSeq += 1);
+export const nextTradeId = () => (tradeSeq += 1);
+
+export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
   const listed = hash(`list-${i}`) > 0.25;
+  const standing = i % 5 === 4;
 
   return {
-    id: `n-${i + 1}`,
-    name,
-    concertId: i % 2 === 0 ? 'c-1' : 'c-3',
-    seatLabel: `${i % 2 === 0 ? 'VIP석' : 'S석'} ${(i % 6) + 1}열 ${i + 3}번`,
+    photocardId: 501 + i,
+    designName,
+    imageUrl: null,
+    performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
     ownerId: i < 2 ? 'u-1' : 'u-3',
-    // 해시는 값이 한쪽에 몰려서 가격이 다 비슷해집니다. 정렬이 눈에 보이도록 고르게 퍼뜨립니다.
-    listPrice: listed ? 80 + ((i * 173) % 920) : null,
-    description: listed ? '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.' : null,
-    artSeed: `poca-${i}`,
-    mintedAt: iso(now() - (i + 1) * DAY),
+    issuedAt: iso(now() - (i + 1) * DAY),
+    origin: {
+      seatGrade: i % 2 === 0 ? 'VIP' : 'S',
+      areaCode: String.fromCharCode(65 + (i % 4)), // A~D
+      rowLabel: standing ? null : String((i % 6) + 1),
+      seatNumber: standing ? null : i + 3,
+    },
+    status: 'MINTED',
+    listing: listed
+      ? {
+          listingId: nextListingId(),
+          // 해시는 값이 한쪽에 몰려서 가격이 다 비슷해집니다. 정렬이 눈에 보이도록 고르게 퍼뜨립니다.
+          price: 80 + ((i * 173) % 920),
+          description: '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.',
+          listedAt: iso(now() - i * DAY),
+        }
+      : null,
   };
 });
 
-/** 포카 거래 한 건. 실서버에서는 거래 테이블입니다. */
-export interface MockNftTrade {
-  id: string;
-  nftId: string;
-  buyerId: string;
-  sellerId: string;
-  price: number;
-  tradedAt: string;
-}
-
 /* 지난 거래 몇 건을 심어둡니다 — 빈 화면만 보면 이 화면이 뭘 하는지 알 수 없습니다. */
-export const nftTrades: MockNftTrade[] = [
-  { id: 'tr-1', nftId: 'n-3', buyerId: 'u-1', sellerId: 'u-3', price: 640, tradedAt: iso(now() - 3 * DAY) },
-  { id: 'tr-2', nftId: 'n-5', buyerId: 'u-3', sellerId: 'u-1', price: 320, tradedAt: iso(now() - 9 * DAY) },
-  { id: 'tr-3', nftId: 'n-8', buyerId: 'u-1', sellerId: 'u-3', price: 180, tradedAt: iso(now() - 14 * DAY) },
-  { id: 'tr-4', nftId: 'n-11', buyerId: 'u-1', sellerId: 'u-3', price: 910, tradedAt: iso(now() - 21 * DAY) },
+export const photocardTrades: MockPhotocardTrade[] = [
+  { tradeId: nextTradeId(), photocardId: 503, buyerId: 'u-1', sellerId: 'u-3', price: 640, tradedAt: iso(now() - 3 * DAY) },
+  { tradeId: nextTradeId(), photocardId: 505, buyerId: 'u-3', sellerId: 'u-1', price: 320, tradedAt: iso(now() - 9 * DAY) },
+  { tradeId: nextTradeId(), photocardId: 508, buyerId: 'u-1', sellerId: 'u-3', price: 180, tradedAt: iso(now() - 14 * DAY) },
+  { tradeId: nextTradeId(), photocardId: 511, buyerId: 'u-1', sellerId: 'u-3', price: 910, tradedAt: iso(now() - 21 * DAY) },
 ];
+
+/**
+ * 구매 멱등키 저장소. 키 = `${userId}:${Idempotency-Key}`.
+ * 같은 키가 같은 포카로 다시 오면 저장된 응답을 그대로 돌려주고(멱등),
+ * 다른 포카로 오면 NFT_010 을 냅니다 — 서버와 같은 규칙.
+ */
+export const purchaseKeys = new Map<
+  string,
+  {
+    photocardId: number;
+    response: { tradeId: number; photocardId: number; price: number; tradedAt: string };
+  }
+>();
 
 /* ── 세션 (목업용 아주 단순한 토큰 저장소) ── */
 export const sessions = new Map<string, string>(); // accessToken -> userId
@@ -450,6 +507,17 @@ export const findConcert = (id: string) => concerts.find((c) => c.id === id);
 export const findSchedule = (id: string) => schedules.find((s) => s.id === id);
 export const findVenue = (id: string) => venues.find((v) => v.id === id);
 export const findSeat = (id: string) => seats.find((s) => s.id === id);
+
+/**
+ * 실서버 로그인 사용자 → 시연용 사용자(u-1) 닉네임 동기화.
+ * JWT 에는 userId·role 만 있어서, `GET /users/me` 응답이 목업 어댑터를 지나갈 때
+ * 어댑터가 이 함수를 불러 닉네임을 이어 붙입니다. 상세의 `ownerNickname` 과
+ * 화면의 `user.nickname` 이 같아져 "내 카드" 판정이 맞습니다. (목업 전용)
+ */
+export const bridgeDemoNickname = (nickname: string) => {
+  const demo = users[0];
+  if (demo && nickname) demo.nickname = nickname;
+};
 
 export const userFromToken = (token: string | undefined) => {
   if (!token) return undefined;

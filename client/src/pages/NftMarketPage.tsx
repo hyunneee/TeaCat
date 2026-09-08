@@ -5,12 +5,13 @@ import { Header } from '@/shared/components/layout';
 import { Input, Segmented, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
+import { useInfiniteScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import {
   DEFAULT_SORT,
   NFT_SORTS,
   NftCard,
-  useMyNfts,
+  useMyPhotocards,
   useNftMarket,
   type NftSort,
 } from '@/features/nft';
@@ -32,9 +33,11 @@ const SIDES = [
  *
  * ── 구매 / 판매 ───────────────────────────────────────────
  * 같은 화면에서 방향만 바꿉니다.
- *   구매 — 남들이 올린 카드 (마켓)
+ *   구매 — 남들이 올린 카드 (마켓, 서버가 검색·정렬)
  *   판매 — 내가 가진 카드. 눌러 들어가면 상세에서 가격을 매겨 올립니다.
  * 화면을 둘로 나누면 "내 카드 팔려면 어디 가지?" 를 매번 찾게 됩니다.
+ *
+ * 목록은 커서 페이지입니다. 끝까지 내리면 다음 장을 받습니다(useInfiniteScroll).
  *
  * 등급(NORMAL/RARE/SPECIAL)은 없습니다. 카드의 가치는 등급표가 아니라
  * **어떤 공연의 어떤 순간인지**와 가격으로 정해집니다.
@@ -49,24 +52,33 @@ export function NftMarketPage() {
   const trimmed = keyword.trim();
   const buying = side === 'BUY';
 
-  const market = useNftMarket(buying ? trimmed || undefined : undefined, sort);
-  const mine = useMyNfts();
+  const market = useNftMarket({ keyword: buying ? trimmed : undefined, sort });
+  const mine = useMyPhotocards();
   const { data: token } = useTokenBalance();
 
-  /* 내 카드는 전부 받아 두고 화면에서 거릅니다 — 개수가 적어 서버를 또 부를 일이 아닙니다. */
+  /* 내 카드는 받아온 만큼 화면에서 거릅니다 — 개수가 적어 서버를 또 부를 일이 아닙니다. */
   const myFiltered = useMemo(() => {
     const list = mine.data ?? [];
     if (!trimmed) return list;
     const needle = trimmed.toLowerCase();
     return list.filter(
-      (nft) =>
-        nft.name.toLowerCase().includes(needle) ||
-        nft.concertTitle.toLowerCase().includes(needle),
+      (card) =>
+        card.designName.toLowerCase().includes(needle) ||
+        card.performanceTitle.toLowerCase().includes(needle),
     );
   }, [mine.data, trimmed]);
 
-  const items = buying ? (market.data ?? []) : myFiltered;
-  const isPending = buying ? market.isPending : mine.isPending;
+  const active = buying ? market : mine;
+  const isPending = active.isPending;
+  const itemCount = buying ? (market.data?.length ?? 0) : myFiltered.length;
+
+  const sentinel = useInfiniteScroll({
+    hasNext: !!active.hasNextPage,
+    isFetching: active.isFetchingNextPage,
+    onLoadMore: active.fetchNextPage,
+  });
+
+  const goDetail = (photocardId: number) => navigate(ROUTES.NFT_DETAIL(String(photocardId)));
 
   return (
     <>
@@ -84,7 +96,7 @@ export function NftMarketPage() {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onClear={() => setKeyword('')}
-          placeholder={buying ? '포카 이름, 공연명으로 검색' : '내 포카 검색'}
+          placeholder={buying ? '도안명, 공연명으로 검색' : '내 포카 검색'}
           leftIcon={<Search size={17} />}
           type="search"
           tone="contrast"
@@ -128,7 +140,7 @@ export function NftMarketPage() {
       <div className="px-4 pb-4">
         {isPending ? (
           <Loading label="포토카드를 불러오는 중" />
-        ) : items.length === 0 ? (
+        ) : itemCount === 0 ? (
           <EmptyState
             icon={trimmed ? Search : Sparkles}
             title={
@@ -148,18 +160,38 @@ export function NftMarketPage() {
           />
         ) : (
           <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
-            {items.map((nft) => (
-              <li key={nft.id}>
-                {/* 내 카드에는 소유자 대신 판매 상태가 뜹니다 */}
-                <NftCard
-                  nft={nft}
-                  showOwner={buying}
-                  onClick={() => navigate(ROUTES.NFT_DETAIL(nft.id))}
-                />
-              </li>
-            ))}
+            {buying
+              ? (market.data ?? []).map((card) => (
+                  <li key={card.photocardId}>
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle}
+                      price={card.price}
+                      onClick={() => goDetail(card.photocardId)}
+                    />
+                  </li>
+                ))
+              : myFiltered.map((card) => (
+                  <li key={card.photocardId}>
+                    {/* 내 카드에는 가격 대신 판매 상태가 뜹니다 (서버가 내 목록엔 가격을 주지 않습니다) */}
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle}
+                      caption={card.listed ? '판매 중' : '보관 중'}
+                      onClick={() => goDetail(card.photocardId)}
+                    />
+                  </li>
+                ))}
           </ul>
         )}
+
+        {/* 목록 끝 센티널 — 보이면 다음 페이지 */}
+        <div ref={sentinel} aria-hidden className="h-px" />
+        {active.isFetchingNextPage && <Loading label="더 불러오는 중" className="py-4" />}
       </div>
     </>
   );
