@@ -116,6 +116,41 @@ public class CatMoneyService {
     }
 
     /**
+     * 캣머니를 소각하고 그 요청을 원장에 남깁니다.
+     *
+     * <p>{@link #mint} 와 같은 이유로 <b>트랜잭션 밖에서</b> 돕니다.
+     *
+     * <p><b>쓸 수 있는지 먼저 확인하는 것은 부르는 쪽 책임입니다.</b> 여기서는 확인하지 않습니다 —
+     * 잔액 판정과 소각 사이에 다른 요청이 끼지 않으려면 호출자의 트랜잭션·락 안에서 판정이
+     * 끝나 있어야 하기 때문입니다 ({@link CatMoneyHoldService#availableBalance}).
+     * 체인도 잔액이 모자라면 거절하지만 그건 마지막 방어선이고, 거기까지 갔다면 우리 판정이
+     * 체인과 어긋났다는 뜻이라 사람이 봐야 합니다.
+     *
+     * @param operationKey 우리가 정하는 영구 유일 키. 같은 키로 다시 불러도 두 번 태우지 않습니다
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CatTransaction burn(Long userId, BigInteger amount, CatTxReason reason, String operationKey) {
+        // 재시도로 다시 들어온 경우. 체인은 멱등이지만 원장에 같은 키가 두 줄 생기면 안 된다
+        Optional<CatTransaction> recorded = catTransactionRepository.findByOperationKey(operationKey);
+        if (recorded.isPresent()) {
+            return recorded.get();
+        }
+
+        WalletRef ref = resolveWalletRef(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        CatMoneyWriteResult result = catMoneyClient.burn(operationKey, ref.wallet().getAddress(),
+                ref.owner().getDerivationIndex(), amount, reason);
+
+        CatTransaction transaction = result.isPending()
+                ? CatTransaction.sent(user, ref.wallet(), reason, amount, operationKey, result.txHash())
+                : CatTransaction.alreadyDone(user, ref.wallet(), reason, amount, operationKey);
+
+        return catTransactionRepository.save(transaction);
+    }
+
+    /**
      * 확정 여부를 체인에 물어 원장에 반영합니다. 확정 폴링이 건별로 부릅니다.
      *
      * @return 아직 확정되지 않았으면 false (다음 차례에 다시 봅니다)
@@ -155,20 +190,32 @@ public class CatMoneyService {
     }
 
     /**
-     * 유저 → 지갑.
+     * 유저 → 소유 키 + 지갑.
      *
      * 지갑이 없으면 조용히 0 으로 넘기지 않는다. "잔액 0" 과 "지갑이 없음" 은 다른 상태이고,
      * 후자는 가입이 반쪽으로 끝났다는 뜻이라 드러나야 한다.
+     *
+     * <p>소각은 유저 본인 키로 서명해야 해서 파생 인덱스({@link WalletOwner})까지 필요하다.
+     * 그래서 지갑만 따로 찾지 않고 둘을 함께 돌려준다.
      */
-    private String resolveAddress(Long userId) {
-        return resolveWallet(userId).getAddress();
-    }
-
-    private Wallet resolveWallet(Long userId) {
+    private WalletRef resolveWalletRef(Long userId) {
         WalletOwner owner = walletOwnerRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
 
-        return walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
+        Wallet wallet = walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+
+        return new WalletRef(owner, wallet);
+    }
+
+    private String resolveAddress(Long userId) {
+        return resolveWalletRef(userId).wallet().getAddress();
+    }
+
+    private Wallet resolveWallet(Long userId) {
+        return resolveWalletRef(userId).wallet();
+    }
+
+    private record WalletRef(WalletOwner owner, Wallet wallet) {
     }
 }

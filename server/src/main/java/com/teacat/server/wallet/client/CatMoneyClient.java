@@ -16,7 +16,7 @@ import java.util.Optional;
  * (blockchain/DESIGN.md 5-3 "저장하지 않는 것")
  *
  * <p>쓰기는 <b>절대 동기로 끝나지 않는다.</b> 보냈다는 응답(202)을 받고 확정은 따로 확인한다
- * (blockchain/DESIGN.md 4-2). 소각(burn)은 티켓 결제가 붙을 때 여기에 추가한다.
+ * (blockchain/DESIGN.md 4-2).
  */
 @Component
 @RequiredArgsConstructor
@@ -24,6 +24,7 @@ public class CatMoneyClient {
 
     private static final String BALANCE_PATH = "/internal/tokens/catmoney/balance";
     private static final String MINT_PATH = "/internal/tokens/catmoney/mint";
+    private static final String BURN_PATH = "/internal/tokens/catmoney/burn";
     private static final String TX_PATH = "/internal/tx/";
     private static final String ADDRESS_PARAM = "address";
 
@@ -54,6 +55,31 @@ public class CatMoneyClient {
 
         return blockchainRestClient.post(
                 MINT_PATH, body, CatMoneyWriteResult.class, WalletErrorCode.MINT_FAILED);
+    }
+
+    /**
+     * 소각. 티켓 결제와 원화 출금이 여기로 온다.
+     *
+     * <p><b>유저 본인의 키로 서명한다.</b> 컨트랙트에 {@code burnFrom} 이 없어서 admin 이라도 남의
+     * 잔액을 태울 수 없고, 그래서 파생 인덱스가 필요하다. 블록체인 서비스가 그 인덱스로 만든 주소가
+     * {@code from} 과 같은지 먼저 확인하므로, 둘이 어긋나면 태우기 전에 400 으로 막힌다.
+     *
+     * <p>멱등 키는 <b>호출자별</b>로 기록된다(mint 는 전역). 누구나 부를 수 있는 함수라 전역이면
+     * 아무나 남의 결제 키를 미리 태워 막을 수 있기 때문이다 (blockchain/DESIGN.md 6장 ②).
+     *
+     * @param derivationIndex {@code from} 주소를 만든 파생 인덱스 (wallet_owners.derivation_index)
+     */
+    public CatMoneyWriteResult burn(String operationKey, String from, int derivationIndex,
+            BigInteger amount, CatTxReason reason) {
+        Map<String, Object> body = Map.of(
+                "operationKey", operationKey,
+                "from", from,
+                "derivationIndex", derivationIndex,
+                "amount", amount.toString(),
+                "reason", reason.name());
+
+        return blockchainRestClient.post(
+                BURN_PATH, body, CatMoneyWriteResult.class, WalletErrorCode.BURN_FAILED);
     }
 
     /**

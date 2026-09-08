@@ -41,7 +41,16 @@ public enum WalletErrorCode implements ErrorCode {
             "캣머니를 발행하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     /** 트랜잭션 확정 조회 실패. 확정 폴링이 다음 차례에 다시 본다 */
     TX_REPORT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "WALLET_007",
-            "거래 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            "거래 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+
+    /**
+     * 캣머니 소각 요청이 나가지 못했다.
+     *
+     * 티켓 결제에서는 카드 승인이 이미 끝난 뒤라 사용자에게 실패로 보여선 안 된다.
+     * 부르는 쪽이 잡아서 재시도에 맡긴다 — 멱등 키가 있어 다시 보내도 두 번 태우지 않는다.
+     */
+    BURN_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "WALLET_008",
+            "캣머니를 사용하지 못했습니다. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;
