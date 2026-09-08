@@ -9,11 +9,14 @@ import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertStatusResponse;
+import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
 import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.PresignedUploadResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
+import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
@@ -281,6 +284,37 @@ public class AdminPerformanceService {
     private void renumberSchedulesByDate(Long concertId) {
         performanceDetailRepository.negatePerformanceNums(concertId);
         performanceDetailRepository.renumberByDate(concertId);
+    }
+
+    /**
+     * 내가 등록한 공연 목록 — 비공개 포함.
+     *
+     * 클라이언트 목록(API-201)은 비공개를 숨기므로, 비공개로 돌린 공연을 되돌릴 입구가 여기다.
+     */
+    public List<ConcertSummaryResponse> getMyConcerts(Long userId) {
+        return performanceGeneralRepository.findAllByCreatedById(userId).stream()
+                .map(p -> ConcertSummaryResponse.of(p, fileStorageService.presignedUrl(p.getPosterImageKey())))
+                .toList();
+    }
+
+    /**
+     * 내가 등록한 공연 상세 — 비공개여도 준다 (등록자 본인만).
+     * 수정 화면이 클라이언트 상세(API-202)를 쓰면 비공개 공연은 404 라 수정할 수 없어서 따로 둔다.
+     */
+    public ConcertDetailResponse getMyConcert(Long concertId, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+        LocalDateTime now = LocalDateTime.now();
+
+        List<ScheduleSummaryResponse> schedules = performanceDetailRepository
+                .findByPerformanceIdOrderByPerformanceNumAsc(concertId).stream()
+                .map(detail -> ScheduleSummaryResponse.of(detail, now))
+                .toList();
+
+        return ConcertDetailResponse.of(
+                performance,
+                schedules,
+                fileStorageService.presignedUrl(performance.getPosterImageKey()),
+                fileStorageService.presignedUrl(performance.getDetailImageKey()));
     }
 
     /**
