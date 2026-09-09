@@ -5,6 +5,8 @@ export type RowFormat = 'ALPHA' | 'HANGUL';
 export type SeatOrder = 'LEFT_TO_RIGHT' | 'RIGHT_TO_LEFT';
 export type StadiumLayoutEditorTool =
   | 'draw-area'
+  | 'resize-area'
+  | 'split-area'
   | 'pick-seats'
   | 'add-seat-range'
   | 'remove-seat-range'
@@ -101,6 +103,7 @@ export interface DraftLabelingRule {
 
 export interface DraftManualSeat {
   clientId: string;
+  sourceSheet: string;
   rowLabel: string;
   seatNumber: number;
   seatX: number;
@@ -130,6 +133,25 @@ export interface DraftLayoutElement {
   y: number;
   width: number;
   height: number;
+}
+
+export interface StadiumEditorDraftData {
+  step: number;
+  info: StadiumInfoDraft;
+  stadiumId: number | null;
+  analysis: ExcelAnalysis | null;
+  analysisExpiresAt: number | null;
+  selectedSheet: string | null;
+  layoutName: string;
+  isDefault: boolean;
+  layoutWidth: number;
+  layoutHeight: number;
+  tool: StadiumLayoutEditorTool;
+  areas: DraftArea[];
+  unassignedSeats: DraftManualSeat[];
+  selectedAreaId: string | null;
+  layoutElements: DraftLayoutElement[];
+  selectedElementId: string | null;
 }
 
 export interface CreatedSeat {

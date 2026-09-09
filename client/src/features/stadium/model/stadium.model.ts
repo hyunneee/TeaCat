@@ -7,7 +7,14 @@ import type {
   LayoutPoint,
   LayoutRect,
   StadiumInfoDraft,
+  StadiumLayoutStatusValue,
 } from './stadium.types';
+
+export const STADIUM_LAYOUT_STATUS_LABEL: Record<StadiumLayoutStatusValue, string> = {
+  DRAFT: '작성 중',
+  ACTIVE: '사용 가능',
+  ARCHIVED: '보관됨',
+};
 
 export function nextAreaCode(index: number): string {
   return `AREA-${index + 1}`;
@@ -27,7 +34,12 @@ export function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function normalizeRect(startX: number, startY: number, endX: number, endY: number): LayoutRect {
+export function normalizeRect(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): LayoutRect {
   return {
     x: roundCoordinate(Math.min(startX, endX)),
     y: roundCoordinate(Math.min(startY, endY)),
@@ -71,7 +83,8 @@ export function detectAutomaticSeatCandidateIds(candidates: ExcelCandidate[]): S
         if (hasText) return false;
         const repeated = (fingerprintCounts.get(candidate.styleFingerprint) ?? 0) >= 2;
         if (candidate.sourceType.toUpperCase() === 'CELL') {
-          const aspectRatio = Math.max(candidate.width, candidate.height) /
+          const aspectRatio =
+            Math.max(candidate.width, candidate.height) /
             Math.max(1, Math.min(candidate.width, candidate.height));
           return repeated && aspectRatio <= 2.5 && candidate.styleFingerprint.endsWith(':FILL');
         }
@@ -99,38 +112,62 @@ function looksLikeSeatLabel(rawText: string): boolean {
   );
 }
 
-/** 저장 좌표만 있는 기존 좌석을 주변 행·열 간격으로 셀 사각형에 복원합니다. */
-export function inferManualSeatRects(area: DraftArea): Map<string, LayoutRect> {
+/**
+ * 저장된 좌석은 셀 크기 정보 없이 중심 좌표만 남습니다. 레이아웃 전체에서
+ * 좌석 간 최근접 거리의 중앙값을 하나의 "좌석 피치"로 삼습니다. 구역마다 간격을
+ * 따로 추측하면 밀도가 다른 구역끼리 좌석 크기가 달라지고 서로 겹칩니다.
+ *
+ * 좌석 수가 많을 때를 대비해 최대 400개 지점만 표본으로 뽑아 최근접 거리를 재고,
+ * 각 표본은 전체 좌석과 비교합니다(표본 400 × 전체 n).
+ */
+export function computeSeatPitch(
+  areas: DraftArea[],
+  additionalSeats: { seatX: number; seatY: number }[] = [],
+): number {
+  const points = [
+    ...areas.flatMap((area) => area.manualSeats.map((seat) => ({ x: seat.seatX, y: seat.seatY }))),
+    ...additionalSeats.map((seat) => ({ x: seat.seatX, y: seat.seatY })),
+  ];
+  if (points.length < 2) return 16;
+
+  const stride = Math.max(1, Math.floor(points.length / Math.min(points.length, 400)));
+  const nearest: number[] = [];
+  for (let i = 0; i < points.length; i += stride) {
+    const probe = points[i];
+    if (!probe) continue;
+    let min = Infinity;
+    for (let j = 0; j < points.length; j += 1) {
+      if (j === i) continue;
+      const other = points[j];
+      if (!other) continue;
+      const distance = Math.hypot(probe.x - other.x, probe.y - other.y);
+      if (distance > 0.5 && distance < min) min = distance;
+    }
+    if (Number.isFinite(min)) nearest.push(min);
+  }
+  if (nearest.length === 0) return 16;
+  nearest.sort((left, right) => left - right);
+  return nearest[Math.floor(nearest.length / 2)] ?? 16;
+}
+
+/** 저장 좌표만 있는 기존 좌석을 공유 좌석 피치로 같은 크기 사각형에 배치합니다. */
+export function inferManualSeatRects(
+  area: Pick<DraftArea, 'manualSeats'>,
+  seatPitch: number,
+): Map<string, LayoutRect> {
   if (area.manualSeats.length === 0) return new Map();
-  const xGap = medianPositiveGap(area.manualSeats.map((seat) => seat.seatX));
-  const yGap = medianPositiveGap(area.manualSeats.map((seat) => seat.seatY));
-  const fallback = Math.max(8, Math.min(24, area.bounds.width, area.bounds.height));
-  const width = Math.max(5, (xGap ?? yGap ?? fallback) * 0.82);
-  const height = Math.max(5, (yGap ?? xGap ?? fallback) * 0.82);
+  const size = Math.max(5, seatPitch * 0.8);
   return new Map(
     area.manualSeats.map((seat) => [
       seat.clientId,
       {
-        x: seat.seatX - width / 2,
-        y: seat.seatY - height / 2,
-        width,
-        height,
+        x: seat.seatX - size / 2,
+        y: seat.seatY - size / 2,
+        width: size,
+        height: size,
       },
     ]),
   );
-}
-
-function medianPositiveGap(values: number[]): number | null {
-  const unique = [...new Set(values)].sort((left, right) => left - right);
-  const gaps = unique
-    .slice(1)
-    .flatMap((value, index) => {
-      const previous = unique[index];
-      return previous === undefined ? [] : [value - previous];
-    })
-    .filter((gap) => gap > 0.5)
-    .sort((left, right) => left - right);
-  return gaps.length === 0 ? null : (gaps[Math.floor(gaps.length / 2)] ?? null);
 }
 
 /** 클릭 지점 근처의 후보를 찾습니다. 후보 사각형이 작을수록 우선합니다. */
@@ -155,6 +192,69 @@ export function computeLayoutSize(candidates: ExcelCandidate[]): { width: number
   for (const candidate of candidates) {
     maxX = Math.max(maxX, candidate.x + candidate.width);
     maxY = Math.max(maxY, candidate.y + candidate.height);
+  }
+  return { width: Math.max(1, Math.ceil(maxX + 20)), height: Math.max(1, Math.ceil(maxY + 20)) };
+}
+
+/**
+ * Excel 원본을 별도 이미지 렌더러로 캡처하지 않고, 이미 분석한 좌표·도형·텍스트를
+ * 잠긴 배경 요소로 보존합니다. 좌석으로 자동 판정된 셀은 실제 좌석 레이어가 그리므로
+ * 중복 저장하지 않고, 무대·출입구 등의 요소와 좌석이 아닌 텍스트 셀만 남깁니다.
+ */
+/**
+ * 서버가 구역 좌표를 주지 않았을 때(레거시·구역 CRUD로 만든 배치), 그 구역 좌석들의
+ * 바운딩 박스에 여백을 더해 구역 사각형을 복원합니다. 좌석이 없으면 fallback 위치에
+ * 작은 박스를 둬 "좌표 없음"을 눈에 띄게 남깁니다.
+ */
+export function deriveAreaBounds(
+  seats: { seatX: number; seatY: number }[],
+  fallbackOrigin: LayoutPoint,
+): LayoutRect {
+  if (seats.length === 0) {
+    return {
+      x: Math.max(0, fallbackOrigin.x),
+      y: Math.max(0, fallbackOrigin.y),
+      width: 10,
+      height: 10,
+    };
+  }
+  const xs = seats.map((seat) => seat.seatX);
+  const ys = seats.map((seat) => seat.seatY);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+  const padX = Math.max(6, (maxX - minX) * 0.06);
+  const padY = Math.max(6, (maxY - minY) * 0.06);
+  return {
+    x: roundCoordinate(Math.max(0, minX - padX)),
+    y: roundCoordinate(Math.max(0, minY - padY)),
+    width: roundCoordinate(maxX - minX + padX * 2),
+    height: roundCoordinate(maxY - minY + padY * 2),
+  };
+}
+
+/**
+ * 구역·좌석·고정 요소가 실제로 차지하는 최대 범위. 서버가 준 배치 크기가 이보다
+ * 작거나 비정상이면 이 값으로 대체해 캔버스가 잘리거나 세로로 찌그러지는 것을 막습니다.
+ */
+export function computeLayoutExtent(
+  areas: DraftArea[],
+  elements: DraftLayoutElement[],
+): { width: number; height: number } {
+  let maxX = 0;
+  let maxY = 0;
+  for (const area of areas) {
+    maxX = Math.max(maxX, area.bounds.x + area.bounds.width);
+    maxY = Math.max(maxY, area.bounds.y + area.bounds.height);
+    for (const seat of area.manualSeats) {
+      maxX = Math.max(maxX, seat.seatX);
+      maxY = Math.max(maxY, seat.seatY);
+    }
+  }
+  for (const element of elements) {
+    maxX = Math.max(maxX, element.x + element.width);
+    maxY = Math.max(maxY, element.y + element.height);
   }
   return { width: Math.max(1, Math.ceil(maxX + 20)), height: Math.max(1, Math.ceil(maxY + 20)) };
 }
@@ -225,7 +325,8 @@ function parseStartRowIndex(label: string, format: DraftLabelingRule['rowFormat'
     const normalized = label.trim();
     if (!isValidHangulRowLabel(normalized)) return 0;
     let value = 0;
-    for (const character of normalized) value = value * 14 + HANGUL_ROW_ALPHABET.indexOf(character) + 1;
+    for (const character of normalized)
+      value = value * 14 + HANGUL_ROW_ALPHABET.indexOf(character) + 1;
     return value - 1;
   }
   const normalized = label.trim().toUpperCase();
@@ -236,7 +337,9 @@ function parseStartRowIndex(label: string, format: DraftLabelingRule['rowFormat'
 }
 
 export function isValidHangulRowLabel(label: string): boolean {
-  return label.length > 0 && [...label].every((character) => HANGUL_ROW_ALPHABET.includes(character));
+  return (
+    label.length > 0 && [...label].every((character) => HANGUL_ROW_ALPHABET.includes(character))
+  );
 }
 
 function alphaLabel(index: number): string {
@@ -340,8 +443,10 @@ export function validateLayoutDraft(
 ): LayoutDraftValidationIssue[] {
   const issues: LayoutDraftValidationIssue[] = [];
   const validLayoutSize =
-    Number.isFinite(layoutWidth) && Number.isFinite(layoutHeight) &&
-    layoutWidth > 0 && layoutHeight > 0;
+    Number.isFinite(layoutWidth) &&
+    Number.isFinite(layoutHeight) &&
+    layoutWidth > 0 &&
+    layoutHeight > 0;
   if (!validLayoutSize) {
     issues.push({ code: 'LAYOUT_SIZE', message: '배치의 전체 너비와 높이가 올바르지 않습니다.' });
   }
@@ -359,22 +464,30 @@ export function validateLayoutDraft(
     const areaName = area.areaCode.trim() || '(코드 없음)';
     const addAreaIssue = (code: LayoutDraftIssueCode, message: string) => {
       if (issues.some((issue) => issue.areaId === area.clientId && issue.code === code)) return;
-      issues.push({ code, message: `${area.levelCode} · ${areaName}: ${message}`, areaId: area.clientId,
-        sourceSheet: area.sourceSheet });
+      issues.push({
+        code,
+        message: `${area.levelCode} · ${areaName}: ${message}`,
+        areaId: area.clientId,
+        sourceSheet: area.sourceSheet,
+      });
     };
 
     const code = area.areaCode.trim();
     if (!code) addAreaIssue('AREA_CODE', '구역 코드를 입력해 주세요.');
     else {
       const scopedCode = `${area.levelCode}#${code}`;
-      if (areaCodes.has(scopedCode)) addAreaIssue('AREA_CODE_DUPLICATE', '같은 층에 중복된 구역 코드입니다.');
+      if (areaCodes.has(scopedCode))
+        addAreaIssue('AREA_CODE_DUPLICATE', '중복된 구역 코드입니다.');
       areaCodes.add(scopedCode);
     }
 
     const bounds = area.bounds;
     const validBounds =
       [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
-      bounds.x >= 0 && bounds.y >= 0 && bounds.width > 0 && bounds.height > 0 &&
+      bounds.x >= 0 &&
+      bounds.y >= 0 &&
+      bounds.width > 0 &&
+      bounds.height > 0 &&
       (!validLayoutSize ||
         (bounds.x + bounds.width <= layoutWidth && bounds.y + bounds.height <= layoutHeight));
     if (!validBounds) {
@@ -392,44 +505,69 @@ export function validateLayoutDraft(
       continue;
     }
 
-    if (acceptedSeatCount(area) === 0) addAreaIssue('AREA_EMPTY', '좌석을 한 개 이상 지정해 주세요.');
+    if (acceptedSeatCount(area) === 0)
+      addAreaIssue('AREA_EMPTY', '좌석을 한 개 이상 지정해 주세요.');
     const startRow = area.labelingRule.startRowLabel.trim();
-    const validStartRow = area.labelingRule.rowFormat === 'HANGUL'
-      ? isValidHangulRowLabel(startRow)
-      : /^[A-Za-z]+$/.test(startRow);
+    const validStartRow =
+      area.labelingRule.rowFormat === 'HANGUL'
+        ? isValidHangulRowLabel(startRow)
+        : /^[A-Za-z]+$/.test(startRow);
     if (!validStartRow) addAreaIssue('ROW_LABEL', '시작 행 라벨을 확인해 주세요.');
 
     const selectedCandidates: ExcelCandidate[] = [];
     for (const candidateId of area.acceptedCandidateIds) {
       const candidate = candidateById.get(candidateId);
       if (!candidate) {
-        addAreaIssue('CANDIDATE_NOT_FOUND', `좌석 후보 ${candidateId}를 Excel 분석 결과에서 찾을 수 없습니다.`);
+        addAreaIssue(
+          'CANDIDATE_NOT_FOUND',
+          `좌석 후보 ${candidateId}를 Excel 분석 결과에서 찾을 수 없습니다.`,
+        );
         continue;
       }
       selectedCandidates.push(candidate);
       if (candidate.sheet !== area.sourceSheet) {
-        addAreaIssue('CANDIDATE_SHEET', `좌석 후보가 ${candidate.sheet} 시트에 있어 현재 층과 일치하지 않습니다.`);
+        addAreaIssue(
+          'CANDIDATE_SHEET',
+          `좌석 후보가 ${candidate.sheet} 시트에 있어 현재 층과 일치하지 않습니다.`,
+        );
       }
       const previousOwner = candidateOwner.get(candidateId);
       if (previousOwner && previousOwner.clientId !== area.clientId) {
-        addAreaIssue('CANDIDATE_DUPLICATE', `${previousOwner.areaCode} 구역과 같은 좌석 후보를 사용하고 있습니다.`);
+        addAreaIssue(
+          'CANDIDATE_DUPLICATE',
+          `${previousOwner.areaCode} 구역과 같은 좌석 후보를 사용하고 있습니다.`,
+        );
       } else candidateOwner.set(candidateId, area);
       if (!isInsideRect(candidateCenter(candidate), bounds)) {
-        addAreaIssue('CANDIDATE_OUTSIDE_AREA', `선택 좌석 ${candidate.rawText || candidateId}의 중심점이 구역 밖에 있습니다.`);
+        addAreaIssue(
+          'CANDIDATE_OUTSIDE_AREA',
+          `선택 좌석 ${candidate.rawText || candidateId}의 중심점이 구역 밖에 있습니다.`,
+        );
       }
     }
 
     const labels = new Set(
-      buildSeatLabelPreview(area, selectedCandidates).map((seat) => `${seat.rowLabel}#${seat.seatNumber}`),
+      buildSeatLabelPreview(area, selectedCandidates).map(
+        (seat) => `${seat.rowLabel}#${seat.seatNumber}`,
+      ),
     );
     for (const seat of area.manualSeats) {
-      if (!Number.isFinite(seat.seatX) || !Number.isFinite(seat.seatY) ||
-          !isInsideRect({ x: seat.seatX, y: seat.seatY }, bounds)) {
-        addAreaIssue('MANUAL_SEAT_OUTSIDE_AREA', `${seat.rowLabel}-${seat.seatNumber} 좌석 좌표가 구역 밖에 있습니다.`);
+      if (
+        !Number.isFinite(seat.seatX) ||
+        !Number.isFinite(seat.seatY) ||
+        !isInsideRect({ x: seat.seatX, y: seat.seatY }, bounds)
+      ) {
+        addAreaIssue(
+          'MANUAL_SEAT_OUTSIDE_AREA',
+          `${seat.rowLabel}-${seat.seatNumber} 좌석 좌표가 구역 밖에 있습니다.`,
+        );
       }
       const label = `${seat.rowLabel.trim()}#${seat.seatNumber}`;
       if (!seat.rowLabel.trim() || labels.has(label)) {
-        addAreaIssue('SEAT_LABEL_DUPLICATE', `${seat.rowLabel || '(행 없음)'}-${seat.seatNumber} 좌석 라벨이 비었거나 중복되었습니다.`);
+        addAreaIssue(
+          'SEAT_LABEL_DUPLICATE',
+          `${seat.rowLabel || '(행 없음)'}-${seat.seatNumber} 좌석 라벨이 비었거나 중복되었습니다.`,
+        );
       }
       labels.add(label);
     }
@@ -437,17 +575,26 @@ export function validateLayoutDraft(
 
   for (const element of layoutElements) {
     const addElementIssue = (code: LayoutDraftIssueCode, message: string) => {
-      if (issues.some((issue) => issue.elementId === element.clientId && issue.code === code)) return;
-      issues.push({ code, message: `${element.levelCode} · ${element.label || '(이름 없음)'}: ${message}`,
-        elementId: element.clientId, sourceSheet: element.sourceSheet });
+      if (issues.some((issue) => issue.elementId === element.clientId && issue.code === code))
+        return;
+      issues.push({
+        code,
+        message: `${element.levelCode} · ${element.label || '(이름 없음)'}: ${message}`,
+        elementId: element.clientId,
+        sourceSheet: element.sourceSheet,
+      });
     };
     if (!element.type.trim()) addElementIssue('ELEMENT_TYPE', '고정 요소 종류를 입력해 주세요.');
     const validBounds =
       [element.x, element.y, element.width, element.height].every(Number.isFinite) &&
-      element.x >= 0 && element.y >= 0 && element.width >= 0 && element.height >= 0 &&
+      element.x >= 0 &&
+      element.y >= 0 &&
+      element.width >= 0 &&
+      element.height >= 0 &&
       (!validLayoutSize ||
         (element.x + element.width <= layoutWidth && element.y + element.height <= layoutHeight));
-    if (!validBounds) addElementIssue('ELEMENT_BOUNDS', '고정 요소 좌표가 배치 범위를 벗어났습니다.');
+    if (!validBounds)
+      addElementIssue('ELEMENT_BOUNDS', '고정 요소 좌표가 배치 범위를 벗어났습니다.');
   }
 
   return issues;
