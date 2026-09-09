@@ -19,6 +19,14 @@ export {
   useReopenInquiry,
 } from './hooks/useAdminInquiries';
 export {
+  useAdminBanners,
+  useCreateBanner,
+  useUpdateBanner,
+  useDeleteBanner,
+  useReorderBanners,
+  useUploadBannerImage,
+} from './hooks/useAdminBanners';
+export {
   useCreateAdminUser,
   useUpdateAdminUser,
   useResetAdminUserPassword,
@@ -42,9 +50,19 @@ export { AdminPasswordResetModal } from './components/AdminPasswordResetModal';
 export { AdminInquiryTable } from './components/AdminInquiryTable';
 export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 
+// View — 메인 배너 관리
+export { AdminBannerFormModal } from './components/AdminBannerFormModal';
+
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
 export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
+export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
+export type {
+  AdminBanner,
+  AdminBannerType,
+  AdminBannerWriteRequest,
+  BannerUploadUrl,
+} from './model/adminBanner.types';
 export type { AdminInquiryQuery } from './model/adminInquiry.types';
 export {
   USER_ROLES,

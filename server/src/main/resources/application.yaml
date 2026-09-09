@@ -192,3 +192,9 @@ blockchain:
   connect-timeout: 3s
   # 체인에 트랜잭션을 보내고 오므로 넉넉히 잡습니다 (SSAFY 체인은 블록이 10초)
   read-timeout: 20s
+
+banner:
+  image:
+    # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.
+    #   업로드 URL 을 내줄 때와 key 를 넘겨받을 때 똑같이 걸린다.
+    max-size: 10MB

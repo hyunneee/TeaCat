@@ -114,4 +114,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".inquiry")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi bannerApi() {
+        return GroupedOpenApi.builder()
+                .group("09-banner")
+                .displayName("메인 배너")
+                .packagesToScan(BASE_PACKAGE + ".banner")
+                .build();
+    }
 }
