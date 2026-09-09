@@ -47,17 +47,20 @@ limits_config:
   # 🔴 라벨 수를 제한한다. 라벨에 txHash 나 userId 가 섞이면 스트림이 무한히 늘어
   #    Loki 가 가벼운 이유 자체가 사라진다 (alloy/config.alloy 주석 참고)
   max_label_names_per_series: 15
+  # 보관 기간. 단일 호스트라 디스크가 유한하다 — 14일이면 회고에 충분하고,
+  # 그보다 오래된 로그를 볼 일은 실제로 거의 없다.
+  # 🔴 tsdb 스토어에서 보관 기간을 실제로 적용하는 건 **여기(limits_config) + compactor** 다.
+  #    table_manager 는 옛 스토어용이라 tsdb 에서는 값을 읽지 않는다 — 거기에 적어두면
+  #    설정은 통과하는데 삭제는 영영 일어나지 않고, 기본값(31일)으로 디스크가 찬다.
+  retention_period: 336h
 
-# 보관 기간. 단일 호스트라 디스크가 유한하다 — 14일이면 회고에 충분하고,
-# 그보다 오래된 로그를 볼 일은 실제로 거의 없다.
+# 보관 기간을 실제로 집행하는 쪽. 위 limits_config.retention_period 를 읽어 지운다.
 compactor:
   working_directory: /loki/compactor
   delete_request_store: filesystem
   retention_enabled: true
-
-table_manager:
-  retention_deletes_enabled: true
-  retention_period: 336h
+  # 지우기 전 유예. 잘못 지운 것을 눈치챌 시간이다
+  retention_delete_delay: 2h
 
 ruler:
   storage:

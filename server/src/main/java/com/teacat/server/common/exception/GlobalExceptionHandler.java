@@ -26,10 +26,14 @@ public class GlobalExceptionHandler {
      *    의미가 있는 건 <b>비율의 급변</b>이다. 평소 5% 인 것이 90% 가 되면 락이 안 풀리는 것이고,
      *    NFT_032/038(체인 실패)처럼 원래 0 이어야 하는 코드는 1건도 신호다.
      *    (docker/monitoring/prometheus/rules/alerts.yml 참고)
+     *
+     * <p>🔴 {@code Counter.Builder} 를 필드로 공유하지 않는다. {@code tag()} 가 빌더 내부 상태를
+     *    <b>변경</b>하며 자기 자신을 돌려주기 때문에, 공유하면 요청마다 태그가 누적되고 동시 요청
+     *    사이에 경합이 생겨 A 코드의 예외가 B 코드로 집계된다. 티켓 오픈처럼 예외가 몰릴 때
+     *    정확히 틀어지는 종류의 버그다. 빌더는 매번 새로 만들고, {@code register()} 가
+     *    이름+태그로 기존 미터를 찾아 돌려주므로 비용은 조회 한 번이다.
      */
-    private final Counter.Builder businessErrorCounter = Counter
-            .builder("teacat.business.error")
-            .description("비즈니스 예외 발생 수 (ErrorCode 별)");
+    private static final String BUSINESS_ERROR_METRIC = "teacat.business.error";
 
     private final MeterRegistry meterRegistry;
 
@@ -41,7 +45,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<BaseResponse<?>> handleCustomException(BusinessException e) {
         ErrorCode errorCode = e.getErrorCode();
 
-        businessErrorCounter
+        Counter.builder(BUSINESS_ERROR_METRIC)
+                .description("비즈니스 예외 발생 수 (ErrorCode 별)")
                 .tag("code", errorCode.getCode())
                 .tag("status", String.valueOf(errorCode.getHttpStatus().value()))
                 .register(meterRegistry)

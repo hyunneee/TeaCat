@@ -127,7 +127,7 @@ groups:
       - alert: SeatHoldLatencyHigh
         expr: >-
           histogram_quantile(0.95,
-            sum by (le) (rate(http_server_requests_seconds_bucket{uri=~".*seats.*",env="prod"}[5m]))
+            sum by (le) (rate(http_server_requests_seconds_bucket{uri=~".*/seats/.*/hold",env="prod"}[5m]))
           ) > 1
         for: 3m
         labels:
@@ -142,7 +142,7 @@ groups:
         expr: >-
           sum(rate(teacat_business_error_total{code=~"ERR_BOOKING_00[456]",env="prod"}[5m]))
           /
-          clamp_min(sum(rate(http_server_requests_seconds_count{uri=~".*seats.*",env="prod"}[5m])), 0.01)
+          clamp_min(sum(rate(http_server_requests_seconds_count{uri=~".*/seats/.*/hold",env="prod"}[5m])), 0.01)
           > 0.95
         for: 5m
         labels:

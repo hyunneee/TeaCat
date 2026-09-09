@@ -352,7 +352,16 @@ pipeline {
                         # 🔴 문법 검사를 **적용 전에** 한다. 깨진 규칙 파일을 올리고 reload 하면
                         #    Prometheus 는 옛 설정을 유지한 채 에러만 남긴다 — 배포는 초록인데
                         #    새 알림은 안 걸린 상태가 된다.
-                        docker run --rm -v "$DEPLOY_DIR/monitoring/prometheus:/cfg:ro" \\n                            --entrypoint promtool prom/prometheus:v3.1.0 \\n                            check config /cfg/prometheus.yml
+                        # 🔴 마운트 경로는 반드시 /etc/prometheus 다. prometheus.yml 의 rule_files 가
+                        #    /etc/prometheus/rules/*.yml 절대경로라, 다른 곳에 마운트하면 glob 이 뱈 채로
+                        #    매칭돼 **규칙을 하나도 검사하지 않고 SUCCESS** 를 낸다. 그래서 사실을
+                        #    알리는 "rule files found" 줄이 없으면 실패로 간주한다.
+                        PROMTOOL_OUT=$(docker run --rm -v "$DEPLOY_DIR/monitoring/prometheus:/etc/prometheus:ro" \
+                            --entrypoint promtool prom/prometheus:v3.1.0 \
+                            check config /etc/prometheus/prometheus.yml) || { echo "$PROMTOOL_OUT"; exit 1; }
+                        echo "$PROMTOOL_OUT"
+                        echo "$PROMTOOL_OUT" | grep -q "rule files found" || {
+                            echo "❌ 규칙 파일이 검사되지 않았습니다. 마운트 경로를 확인하세요."; exit 1; }
 
                         docker compose -f "$MON_COMPOSE" --env-file "$MON_ENV" up -d --remove-orphans
 
@@ -361,8 +370,10 @@ pipeline {
                         #    조용히 무시된다. 그래서 명시적으로 reload 를 친다.
                         #    (--web.enable-lifecycle 이 켜져 있어야 먹는다)
                         sleep 5
-                        docker exec mon-prometheus   wget -qO- --post-data='' http://localhost:9090/-/reload >/dev/null \\n                            && echo "prometheus 설정 reload"
-                        docker exec mon-alertmanager wget -qO- --post-data='' http://localhost:9093/-/reload >/dev/null \\n                            && echo "alertmanager 설정 reload"
+                        docker exec mon-prometheus   wget -qO- --post-data='' http://localhost:9090/-/reload >/dev/null \
+                            && echo "prometheus 설정 reload"
+                        docker exec mon-alertmanager wget -qO- --post-data='' http://localhost:9093/-/reload >/dev/null \
+                            && echo "alertmanager 설정 reload"
 
                         # 운영 타겟이 실제로 붙었는지 확인한다. 스택이 떠 있는 것과
                         # 지표가 들어오는 것은 다른 문제다.
@@ -371,7 +382,9 @@ pipeline {
                         #    타겟이 **하나도 없으면** 그 조건도 참이 되어, 아무것도 안 긁는
                         #    상태가 초록으로 통과한다. UP 개수가 0 이 아닌 것도 함께 본다.
                         probe() {
-                            docker exec mon-prometheus wget -qO- \\n                                "http://localhost:9090/api/v1/query?query=$1" \\n                                | grep -o '"value"' | wc -l
+                            docker exec mon-prometheus wget -qO- \
+                                "http://localhost:9090/api/v1/query?query=$1" \
+                                | grep -o '"value"' | wc -l
                         }
 
                         OK=no
@@ -387,7 +400,8 @@ pipeline {
                         if [ "$OK" != "yes" ]; then
                             echo "❌ 운영 타겟이 붙지 않았습니다 (UP=$UP, DOWN=$DOWN)."
                             echo "   Prometheus 타겟 상태:"
-                            docker exec mon-prometheus wget -qO- \\n                                'http://localhost:9090/api/v1/targets?state=any' | head -c 2000
+                            docker exec mon-prometheus wget -qO- \
+                                'http://localhost:9090/api/v1/targets?state=any' | head -c 2000
                             exit 1
                         fi
                     '''
