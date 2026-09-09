@@ -33,6 +33,7 @@ import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
 import com.teacat.server.stadium.repository.StadiumLayoutRepository;
 import com.teacat.server.stadium.entity.StadiumLayout;
+import com.teacat.server.stadium.entity.StadiumLayoutStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -89,8 +90,7 @@ public class AdminPerformanceService {
         List<LocalDateTime> performanceDates = normalizePerformanceDates(
                 request.performanceDatesOrEmpty(), request.ticketingStartAt());
 
-        StadiumLayout stadiumLayout = stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
-                .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+        StadiumLayout stadiumLayout = resolveLayout(stadium, request.stadiumLayoutId());
 
         String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY, imageProperties.posterMaxSize());
         String detailImageKey = uploadIfPresent(
@@ -487,6 +487,35 @@ public class AdminPerformanceService {
                 .map(pa -> PerformanceAreaResponse.of(
                         pa, soldByArea.getOrDefault(pa.getArea().getId(), 0L)))
                 .toList();
+    }
+
+    /**
+     * 이 공연이 쓸 무대 형식(배치)을 정한다.
+     *
+     * 한 공연장이 무대를 U형·O형처럼 바꿀 수 있고 형식마다 구역이 다르게 나뉜다.
+     * 그 형식들은 stadium_layouts 에 미리 저장돼 있고, 공연은 그중 하나를 골라 쓴다.
+     * 고른 형식이 이 공연에서 팔 수 있는 구역의 범위가 된다 (saveAreas 가 이 기준으로 검증한다).
+     *
+     * 생략하면 공연장의 기본 배치를 쓴다 — 형식을 신경 쓰지 않는 기존 호출과 같게 동작한다.
+     * DRAFT·ARCHIVED 배치는 고를 수 없다. 아직 만들던 중이거나 더 쓰지 않기로 한 형식이다.
+     */
+    private StadiumLayout resolveLayout(Stadium stadium, Long stadiumLayoutId) {
+        if (stadiumLayoutId == null) {
+            return stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
+                    .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+        }
+
+        StadiumLayout layout = stadiumLayoutRepository.findById(stadiumLayoutId)
+                .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+
+        if (!layout.getStadium().getId().equals(stadium.getId())) {
+            throw new BusinessException(PerformanceErrorCode.PERFORMANCE_LAYOUT_MISMATCH);
+        }
+        if (layout.getStatus() != StadiumLayoutStatus.ACTIVE) {
+            throw new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_ACTIVE);
+        }
+
+        return layout;
     }
 
     /**

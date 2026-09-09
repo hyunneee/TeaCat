@@ -38,7 +38,9 @@ public enum PerformanceErrorCode implements ErrorCode {
     STADIUM_LAYOUT_NOT_FOUND(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_001", "공연장에 활성 기본 배치가 없습니다."),
     PERFORMANCE_LAYOUT_MISMATCH(HttpStatus.BAD_REQUEST, "PERFORMANCE_LAYOUT_002", "공연장과 선택한 배치가 일치하지 않습니다."),
     PERFORMANCE_LAYOUT_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_003", "예매 시작 이후에는 공연 배치를 변경할 수 없습니다."),
-    BLOCKED_SEAT_CONFLICT(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_004", "점유 또는 판매된 좌석은 차단할 수 없습니다.");
+    BLOCKED_SEAT_CONFLICT(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_004", "점유 또는 판매된 좌석은 차단할 수 없습니다."),
+    STADIUM_LAYOUT_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "PERFORMANCE_LAYOUT_005",
+            "사용할 수 있는 무대 형식이 아닙니다. 공연장 관리에서 활성 상태로 바꿔 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

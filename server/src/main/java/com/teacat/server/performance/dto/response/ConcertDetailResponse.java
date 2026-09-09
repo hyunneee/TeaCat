@@ -3,6 +3,7 @@ package com.teacat.server.performance.dto.response;
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.entity.PerformanceStatus;
 import com.teacat.server.stadium.entity.Stadium;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
@@ -40,6 +41,9 @@ public record ConcertDetailResponse(
 
         @Schema(description = "공연장 정보")
         StadiumResponse stadium,
+
+        @Schema(description = "이 공연이 쓰는 무대 형식(배치) 정보. 이 공연에서 팔 수 있는 구역의 범위다")
+        LayoutResponse layout,
 
         @Schema(description = "회차 목록")
         List<ScheduleSummaryResponse> schedules,
@@ -85,6 +89,28 @@ public record ConcertDetailResponse(
     }
 
     /**
+     * 이 공연이 쓰는 무대 형식(배치).
+     *
+     * 한 공연장이 무대를 U형·O형처럼 바꿀 수 있고 형식마다 구역이 다르게 나뉜다.
+     * 수정 화면은 이 id 로 <b>그 형식의</b> 구역 목록을 불러와야 한다 —
+     * 공연장의 기본 배치를 불러오면 다른 형식의 구역이 나와 저장이 거절된다 (PERFORMANCE_010).
+     */
+    @Schema(description = "무대 형식(배치) 정보")
+    public record LayoutResponse(
+
+            @Schema(description = "배치 ID", example = "1")
+            Long layoutId,
+
+            @Schema(description = "배치 이름", example = "O형 무대")
+            String name
+    ) {
+
+        public static LayoutResponse from(StadiumLayout layout) {
+            return new LayoutResponse(layout.getId(), layout.getName());
+        }
+    }
+
+    /**
      * 클라이언트 조회(API-202)용. 구역 등급·가격은 담지 않는다 —
      * 그 정보는 공개 조회 API(GET /concerts/{concertId}/areas)가 따로 준다.
      */
@@ -110,6 +136,7 @@ public record ConcertDetailResponse(
                 posterUrl,
                 detailImageUrl,
                 StadiumResponse.from(performance.getStadium()),
+                LayoutResponse.from(performance.getStadiumLayout()),
                 schedules,
                 areas,
                 performance.getCreatedById(),
