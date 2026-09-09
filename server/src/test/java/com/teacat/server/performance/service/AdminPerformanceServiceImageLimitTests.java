@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -58,7 +59,8 @@ class AdminPerformanceServiceImageLimitTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, stadiumRepository, fileStorageService,
+                areaRepository, mock(com.teacat.server.ticket.repository.TicketRepository.class),
+                stadiumRepository, fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다

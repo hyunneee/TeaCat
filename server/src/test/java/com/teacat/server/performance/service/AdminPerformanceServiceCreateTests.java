@@ -58,7 +58,8 @@ class AdminPerformanceServiceCreateTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, stadiumRepository, fileStorageService,
+                areaRepository, mock(com.teacat.server.ticket.repository.TicketRepository.class),
+                stadiumRepository, fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
     }
 
