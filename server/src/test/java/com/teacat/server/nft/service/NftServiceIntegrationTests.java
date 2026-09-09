@@ -774,8 +774,8 @@ class NftServiceIntegrationTests {
                 """, Long.class, performanceId);
         jdbcTemplate.update("""
                 INSERT INTO performance_areas
-                    (performance_general_id, area_id, grade, price, max_cnt, sold_cnt)
-                VALUES (?, ?, 'VIP', 100000, 1000, 0)
+                    (performance_general_id, area_id, grade, price, max_cnt)
+                VALUES (?, ?, 'VIP', 100000, 1000)
                 """, performanceId, areaId);
         return new Fixture(performanceId, performanceDetailId, areaId);
     }
@@ -801,8 +801,8 @@ class NftServiceIntegrationTests {
                 """, Long.class, performanceId);
         jdbcTemplate.update("""
                 INSERT INTO performance_areas
-                    (performance_general_id, area_id, grade, price, max_cnt, sold_cnt)
-                VALUES (?, ?, 'STANDING', 50000, 1000, 0)
+                    (performance_general_id, area_id, grade, price, max_cnt)
+                VALUES (?, ?, 'STANDING', 50000, 1000)
                 """, performanceId, areaId);
         return new Fixture(performanceId, performanceDetailId, areaId);
     }

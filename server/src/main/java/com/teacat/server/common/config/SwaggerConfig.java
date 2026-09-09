@@ -86,6 +86,24 @@ public class SwaggerConfig {
                 .build();
     }
 
+    @Bean
+    public GroupedOpenApi ticketApi() {
+        return GroupedOpenApi.builder()
+                .group("08-ticket")
+                .displayName("티켓")
+                .packagesToScan(BASE_PACKAGE + ".ticket")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi paymentApi() {
+        return GroupedOpenApi.builder()
+                .group("07-payment")
+                .displayName("결제")
+                .packagesToScan(BASE_PACKAGE + ".payment")
+                .build();
+    }
+
     // 04 는 nft, 05 는 performance 가 이미 쓰고 있어 06 을 쓴다.
     // 접두어는 문서 주소용이고 드롭다운 정렬은 displayName 기준이라 번호 자체는 순서에 영향이 없다.
     @Bean
@@ -103,6 +121,24 @@ public class SwaggerConfig {
                 .group("07-stadium")
                 .displayName("공연장")
                 .packagesToScan(BASE_PACKAGE + ".stadium")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi inquiryApi() {
+        return GroupedOpenApi.builder()
+                .group("08-inquiry")
+                .displayName("문의")
+                .packagesToScan(BASE_PACKAGE + ".inquiry")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi bannerApi() {
+        return GroupedOpenApi.builder()
+                .group("09-banner")
+                .displayName("메인 배너")
+                .packagesToScan(BASE_PACKAGE + ".banner")
                 .build();
     }
 }

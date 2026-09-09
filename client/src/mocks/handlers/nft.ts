@@ -11,6 +11,7 @@ import {
   type MockPhotocard,
 } from '../db';
 import { requireUser } from './auth';
+import { closeExpiredAuctions, findActiveAuction } from './auction';
 
 /**
  * 포카 목업 — **서버 `NftController` 계약 그대로**.
@@ -101,7 +102,11 @@ mock('GET', '/nft-market/photocards', (ctx) => {
 
 /* ── P2 상세 ── */
 mock('GET', '/photocards/:photocardId', (ctx) => {
+  // 만료된 경매를 먼저 닫습니다 — 끝난 경매를 "진행 중" 으로 보여주면 안 됩니다.
+  closeExpiredAuctions();
+
   const p = findPhotocard(ctx.params.photocardId ?? '');
+  const activeAuction = findActiveAuction(p.photocardId);
 
   return {
     photocardId: p.photocardId,
@@ -120,8 +125,16 @@ mock('GET', '/photocards/:photocardId', (ctx) => {
           listedAt: p.listing.listedAt,
         }
       : null,
-    // 경매 목업은 다음 브랜치에서 채웁니다.
-    auction: null,
+    // 진행 중인 경매가 있으면 그 요약. `listing` 과 동시에 값이 있는 일은 없습니다.
+    auction: activeAuction
+      ? {
+          auctionId: activeAuction.auctionId,
+          currentPrice: activeAuction.currentPrice,
+          buyNowPrice: activeAuction.buyNowPrice,
+          bidCount: activeAuction.bidCount,
+          endsAt: activeAuction.endsAt,
+        }
+      : null,
   };
 });
 
@@ -160,6 +173,10 @@ mock('POST', '/photocards/:photocardId/listing', (ctx) => {
 
   if (p.ownerId !== user.id) throw mockError(403, 'NFT_003', '본인이 소유한 포토카드가 아닙니다.');
   if (p.listing) throw mockError(409, 'NFT_004', '이미 판매 등록된 포토카드입니다.');
+  // 포카 한 장은 고정가와 경매 중 **하나에만** 올라갑니다 (서버도 같은 규칙).
+  if (findActiveAuction(p.photocardId)) {
+    throw mockError(409, 'NFT_021', '이미 경매가 진행 중인 포토카드입니다.');
+  }
 
   p.listing = {
     listingId: nextListingId(),

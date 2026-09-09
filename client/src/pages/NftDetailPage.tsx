@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Armchair, BadgeCheck, Coins, TriangleAlert } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Armchair, BadgeCheck, Coins, Gavel, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
-import { Button, Card, Input, Textarea } from '@/shared/components/ui';
+import { Badge, Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
+import { AuctionCountdown, AuctionCreateForm, useCreateAuction } from '@/features/auction';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
 import { newIdempotencyKey } from '@/shared/api';
+import { ROUTES } from '@/shared/constants';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
@@ -25,6 +27,14 @@ import { useTokenBalance } from '@/features/token';
 /** 서버가 받는 판매자 설명 최대 길이 */
 const DESCRIPTION_MAX = 500;
 
+/** 파는 방법 — 값을 정해 바로 팔거나(고정가), 값을 겨루게 하거나(경매) */
+type SellMode = 'FIXED' | 'AUCTION';
+
+const SELL_MODES = [
+  { value: 'FIXED', label: '고정가' },
+  { value: 'AUCTION', label: '경매' },
+] as const satisfies readonly { value: SellMode; label: string }[];
+
 /**
  * 포토카드 상세.
  *
@@ -37,8 +47,10 @@ const DESCRIPTION_MAX = 500;
 export function NftDetailPage() {
   const { photocardId: raw = '' } = useParams();
   const photocardId = Number(raw);
+  const navigate = useNavigate();
   const { open } = useModal();
   const { user } = useAuth();
+  const createAuction = useCreateAuction(photocardId);
 
   const { data: card, isPending, isError } = usePhotocardDetail(photocardId);
   const { data: token } = useTokenBalance();
@@ -48,6 +60,7 @@ export function NftDetailPage() {
 
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [sellMode, setSellMode] = useState<SellMode>('FIXED');
   const [zoomed, setZoomed] = useState(false);
 
   /* 숫자가 아닌 id(`/nft/abc`)는 쿼리가 돌지 않아 isPending 이 영원히 true 입니다 — 먼저 걸러냅니다. */
@@ -65,7 +78,10 @@ export function NftDetailPage() {
 
   const mine = isOwner(card, user?.nickname);
   const listing = card.listing ?? null;
-  const balance = token?.balance ?? 0;
+  const auction = card.auction ?? null;
+  /* 살 수 있는지 판단하는 기준도 **쓸 수 있는 금액**입니다.
+     총액으로 판단하면 경매에 묶인 돈까지 셈에 넣어 "살 수 있다" 고 해놓고 서버가 거절합니다. */
+  const balance = token?.available ?? 0;
   const affordable = listing !== null && balance >= listing.price;
   const mintLabel = mintStatusLabel(card.status);
   const canSubmitListing = Number(price) > 0 && description.trim().length > 0;
@@ -95,7 +111,47 @@ export function NftDetailPage() {
             <h1 className="text-xl leading-snug font-extrabold">{card.designName}</h1>
           </div>
 
-          {/* 가격 — 이 화면에서 가장 먼저 읽혀야 하는 값 */}
+          {/* 경매 중이면 가격 자리를 경매가 차지합니다.
+              이 화면에서 입찰까지 받지는 않습니다 — 입찰은 경매 상세의 일이고,
+              두 곳에서 받으면 폴링도 두 벌이 되고 현재가가 서로 어긋납니다. */}
+          {auction ? (
+            <div className="surface-2 space-y-3 rounded-2xl p-4">
+              <div className="flex items-center gap-2">
+                <Badge tone="live" size="md">
+                  경매 진행 중
+                </Badge>
+                <span className="text-subtle inline-flex items-center gap-0.5 text-sm">
+                  <Gavel size={13} />
+                  {auction.bidCount}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-subtle text-sm">현재가</p>
+                <p className="mt-1 flex items-baseline gap-1">
+                  <span className="text-2xl font-extrabold tabular-nums">
+                    {auction.currentPrice.toLocaleString()}
+                  </span>
+                  <span className="text-ink-muted text-base font-bold">캣머니</span>
+                </p>
+              </div>
+
+              <div className="border-line flex items-center justify-between border-t pt-3">
+                <span className="text-muted text-sm">남은 시간</span>
+                <AuctionCountdown endsAt={auction.endsAt} className="text-sm font-extrabold" />
+              </div>
+
+              <Button
+                fullWidth
+                leftIcon={<Gavel size={17} />}
+                onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))}
+              >
+                경매 보러 가기
+              </Button>
+            </div>
+          ) : (
+
+          /* 가격 — 이 화면에서 가장 먼저 읽혀야 하는 값 */
           <div className="surface-2 rounded-2xl p-4">
             <p className="text-subtle text-sm">판매가</p>
             {listing ? (
@@ -114,6 +170,7 @@ export function NftDetailPage() {
               보유 {balance.toLocaleString()}캣머니
             </p>
           </div>
+          )}
 
           {/* 판매자가 남긴 설명 — 있을 때만.
               **가격 바로 아래**입니다. 값을 보고 "왜 이 값인지" 를 읽는 순서라,
@@ -145,9 +202,28 @@ export function NftDetailPage() {
             </div>
           </div>
 
-          {mine && !listing && (
+          {/* 파는 방법이 둘이라 **한 카드 안에서 고릅니다.**
+              폼을 둘 다 펼쳐 놓으면 초록 버튼이 두 개가 되어 어느 쪽이 지금 할 일인지
+              알 수 없습니다 (DESIGN.md 1장 — 한 화면에 primary 는 하나). */}
+          {mine && !listing && !auction && (
             <Card className="space-y-3">
               <p className="text-sm font-bold">판매 등록</p>
+              <Segmented options={SELL_MODES} value={sellMode} onChange={setSellMode} />
+
+              {sellMode === 'AUCTION' ? (
+                <AuctionCreateForm
+                  isPending={createAuction.isPending}
+                  onSubmit={(values) =>
+                    createAuction.mutate(values, {
+                      /* 올린 뒤 "어디로 갔지" 를 찾게 하지 않습니다 —
+                         만들어진 경매로 바로 보냅니다. */
+                      onSuccess: (created) =>
+                        navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId))),
+                    })
+                  }
+                />
+              ) : (
+                <>
               <Input
                 label="판매 가격"
                 showRequirement
@@ -185,13 +261,17 @@ export function NftDetailPage() {
               >
                 판매 등록하기
               </Button>
+                </>
+              )}
             </Card>
           )}
 
-          <BottomBar.Spacer />
+          {/* 경매 중이면 하단 바가 없습니다 — 눌러야 할 것은 위 경매 블록의 "경매 보러 가기" 하나입니다 */}
+          {!auction && <BottomBar.Spacer />}
         </div>
       </div>
 
+      {!auction && (
       <BottomBar>
         {mine ? (
           listing ? (
@@ -243,6 +323,7 @@ export function NftDetailPage() {
           <p className="text-subtle text-center text-sm">판매 중이 아닙니다.</p>
         )}
       </BottomBar>
+      )}
 
       <PocaFullscreen
         open={zoomed}

@@ -6,6 +6,7 @@ import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { formatPrice } from '@/shared/lib';
 import {
   HoldTimer,
+  priceLabel,
   seatLabel,
   useBookingStore,
   useRecipients,
@@ -26,7 +27,7 @@ export function BookingReviewPage() {
   const hold = useBookingStore((s) => s.hold);
   const sectionId = useBookingStore((s) => s.sectionId);
   const { remainSeconds } = useSeatHold(scheduleId);
-  const { data: seatMap } = useSeatMap(scheduleId, sectionId ?? undefined);
+  const { data: seatMap } = useSeatMap(scheduleId);
 
   const seatIds = hold?.seatIds ?? [];
   const recipients = useRecipients(seatIds);
@@ -35,7 +36,7 @@ export function BookingReviewPage() {
 
   const section = seatMap?.sections.find((s) => s.id === sectionId);
   const seats = seatMap?.seats.filter((s) => seatIds.includes(s.id)) ?? [];
-  const total = seats.reduce((sum, s) => sum + s.price, 0);
+  const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -61,7 +62,7 @@ export function BookingReviewPage() {
               <Card flat className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold">{seatLabel(seat, section?.name ?? '')}</p>
-                  <p className="text-muted text-sm">{formatPrice(seat.price)}</p>
+                  <p className="text-muted text-sm">{priceLabel(seat.price)}</p>
                 </div>
 
                 {/* 수령인은 **고칠 수 없습니다.** 입력창으로 열어 두면

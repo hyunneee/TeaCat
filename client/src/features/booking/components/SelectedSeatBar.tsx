@@ -13,7 +13,7 @@ interface Props {
 
 /** 선택한 좌석 칩 목록 + 합계. 하단 액션바 위에 붙습니다. */
 export function SelectedSeatBar({ seats, sectionName, maxPerUser, onRemove }: Props) {
-  const total = seats.reduce((sum, s) => sum + s.price, 0);
+  const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
 
   return (
     <div className="space-y-2.5">

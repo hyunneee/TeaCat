@@ -6,10 +6,20 @@ import {
   LayoutGrid,
   MousePointer2,
   RefreshCw,
+  Scan,
+  Scissors,
   Square,
   Trash2,
 } from 'lucide-react';
-import { Button, Card, CardHeader, Input, SectionTitle, Select } from '@/shared/components/ui';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Input,
+  Modal,
+  SectionTitle,
+  Select,
+} from '@/shared/components/ui';
 import type { StadiumEditorController } from '../hooks/useStadiumEditor';
 import {
   acceptedSeatCount,
@@ -20,6 +30,7 @@ import {
 import type {
   DraftArea,
   ExcelCandidate,
+  LayoutRect,
   RowFormat,
   RowOrder,
   SeatOrder,
@@ -27,7 +38,13 @@ import type {
 } from '../model/stadium.types';
 import { StadiumLayoutCanvas } from './StadiumLayoutCanvas';
 
-const STEP_LABELS = ['공연장 정보', '배치 시작 방법', 'Excel 업로드', '구역·좌석 지정', '확정'] as const;
+const STEP_LABELS = [
+  '공연장 정보',
+  '배치 시작 방법',
+  'Excel 업로드',
+  '구역·좌석 지정',
+  '확정',
+] as const;
 
 const AREA_TYPE_OPTIONS = [
   { value: 'SEATED', label: '지정 좌석' },
@@ -49,6 +66,21 @@ const SEAT_ORDER_OPTIONS = [
   { value: 'RIGHT_TO_LEFT', label: '오른쪽에서 왼쪽' },
 ] as const;
 
+function clampRectToLayout(
+  rect: LayoutRect,
+  layoutWidth: number,
+  layoutHeight: number,
+): LayoutRect {
+  const maxWidth = Math.max(1, layoutWidth);
+  const maxHeight = Math.max(1, layoutHeight);
+  const x = Math.min(Math.max(0, rect.x), maxWidth - 1);
+  const y = Math.min(Math.max(0, rect.y), maxHeight - 1);
+  const right = Math.min(maxWidth, Math.max(x + 1, rect.x + rect.width));
+  const bottom = Math.min(maxHeight, Math.max(y + 1, rect.y + rect.height));
+
+  return { x, y, width: right - x, height: bottom - y };
+}
+
 interface AdminStadiumWorkspaceProps {
   controller: StadiumEditorController;
   onExit: () => void;
@@ -66,8 +98,8 @@ export function AdminStadiumWorkspace({ controller, onExit }: AdminStadiumWorksp
     <div className="space-y-6 pb-10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-ink">좌석 배치 관리</h1>
-          <p className="mt-1 text-sm text-ink-muted">
+          <h1 className="text-ink text-lg font-bold">좌석 배치 관리</h1>
+          <p className="text-ink-muted mt-1 text-sm">
             공연장을 찾거나 등록한 뒤 Excel 좌석표를 검수해 배치를 생성합니다.
           </p>
         </div>
@@ -160,9 +192,13 @@ function StadiumInfoStep({ controller }: { controller: StadiumEditorController }
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold">{stadium.name}</span>
-                        <span className="text-subtle block truncate text-xs">{stadium.address}</span>
+                        <span className="text-subtle block truncate text-xs">
+                          {stadium.address}
+                        </span>
                       </span>
-                      <span className="text-accent-800 shrink-0 text-xs font-semibold">배치 추가</span>
+                      <span className="text-accent-800 shrink-0 text-xs font-semibold">
+                        배치 추가
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -175,44 +211,50 @@ function StadiumInfoStep({ controller }: { controller: StadiumEditorController }
       </Card>
 
       <Card>
-      <CardHeader title="공연장 기본 정보" />
-      <div className="space-y-3">
-        <Input
-          label="공연장 이름"
-          required
-          showRequirement
-          value={info.name}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setInfo('name', event.target.value)}
-          placeholder="예) 고척스카이돔"
-        />
-        <Input
-          label="주소"
-          required
-          showRequirement
-          value={info.address}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setInfo('address', event.target.value)}
-          placeholder="예) 서울 구로구 경인로 430"
-        />
-        <Input
-          label="전화번호"
-          value={info.phone}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setInfo('phone', event.target.value)}
-          placeholder="선택"
-        />
-      </div>
-      {createStadium.isError && (
-        <p className="text-danger mt-3 text-sm">
-          {createStadium.error instanceof Error ? createStadium.error.message : '등록에 실패했습니다.'}
-        </p>
-      )}
-      <Button
-        className="mt-4"
-        fullWidth
-        loading={createStadium.isPending}
-        onClick={() => createStadium.mutate()}
-      >
-        새 공연장 등록 후 배치 만들기
-      </Button>
+        <CardHeader title="공연장 기본 정보" />
+        <div className="space-y-3">
+          <Input
+            label="공연장 이름"
+            required
+            showRequirement
+            value={info.name}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setInfo('name', event.target.value)}
+            placeholder="예) 고척스카이돔"
+          />
+          <Input
+            label="주소"
+            required
+            showRequirement
+            value={info.address}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setInfo('address', event.target.value)
+            }
+            placeholder="예) 서울 구로구 경인로 430"
+          />
+          <Input
+            label="전화번호"
+            value={info.phone}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setInfo('phone', event.target.value)
+            }
+            placeholder="선택"
+          />
+        </div>
+        {createStadium.isError && (
+          <p className="text-danger mt-3 text-sm">
+            {createStadium.error instanceof Error
+              ? createStadium.error.message
+              : '등록에 실패했습니다.'}
+          </p>
+        )}
+        <Button
+          className="mt-4"
+          fullWidth
+          loading={createStadium.isPending}
+          onClick={() => createStadium.mutate()}
+        >
+          새 공연장 등록 후 배치 만들기
+        </Button>
       </Card>
     </div>
   );
@@ -249,7 +291,10 @@ function LayoutSourceStep({ controller }: { controller: StadiumEditorController 
         ) : layouts.data?.layouts.length ? (
           <ul className="space-y-2">
             {layouts.data.layouts.map((layout) => (
-              <li key={layout.layoutId} className="surface-2 flex items-center justify-between gap-3 rounded-xl p-3">
+              <li
+                key={layout.layoutId}
+                className="surface-2 flex items-center justify-between gap-3 rounded-xl p-3"
+              >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">
                     {layout.name} {layout.isDefault && '· 기본'}
@@ -321,8 +366,8 @@ function ExcelUploadStep({ controller }: { controller: StadiumEditorController }
     <Card>
       <CardHeader title="좌석표 Excel 업로드" />
       <p className="text-muted mb-3 text-sm">
-        자유 형식의 .xlsx 파일을 업로드하면 셀과 도형에서 좌석·구역 후보를 분석합니다. 최대 20MB이며 DB에는
-        저장되지 않습니다.
+        자유 형식의 .xlsx 파일을 업로드하면 셀과 도형에서 좌석·구역 후보를 분석합니다. 최대 20MB이며
+        DB에는 저장되지 않습니다.
       </p>
       <label className="border-line hover:bg-surface-2 flex h-24 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed text-sm">
         <FileSpreadsheet size={18} className="text-subtle" />
@@ -331,7 +376,9 @@ function ExcelUploadStep({ controller }: { controller: StadiumEditorController }
       </label>
       {analyzeExcel.isError && (
         <p className="text-danger mt-3 text-sm">
-          {analyzeExcel.error instanceof Error ? analyzeExcel.error.message : '분석에 실패했습니다.'}
+          {analyzeExcel.error instanceof Error
+            ? analyzeExcel.error.message
+            : '분석에 실패했습니다.'}
         </p>
       )}
       <div className="mt-4 flex gap-2">
@@ -354,6 +401,13 @@ function ExcelUploadStep({ controller }: { controller: StadiumEditorController }
 /* ── 4단계: 구역·좌석 지정 ─────────────────────────────── */
 
 function AreaEditorStep({ controller }: { controller: StadiumEditorController }) {
+  const [pendingBounds, setPendingBounds] = useState<{
+    areaId: string;
+    bounds: LayoutRect;
+    releasedCandidateCount: number;
+    releasedManualSeatCount: number;
+  } | null>(null);
+  const [areaEditError, setAreaEditError] = useState<string | null>(null);
   const {
     analysis,
     selectedSheet,
@@ -366,11 +420,15 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     selectedAreaId,
     selectArea,
     updateArea,
+    updateAreaBounds,
+    autoFitAreaBounds,
+    splitArea,
     updateLabelingRule,
     removeArea,
     acceptCandidates,
     removeCandidates,
     removeManualSeats,
+    assignManualSeats,
     toggleCandidate,
     addArea,
     addElement,
@@ -383,6 +441,7 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     candidatesForSheet,
     automaticSeatCandidateIdsForSheet,
     areasForSheet,
+    unassignedSeatsForSheet,
     layoutElementsForSheet,
     selectedArea,
     selectedElement,
@@ -407,286 +466,429 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     validationIssues.flatMap((issue) => (issue.areaId ? [issue.areaId] : [])),
   );
 
+  const requestAreaBoundsChange = (areaId: string, bounds: LayoutRect) => {
+    const area = areas.find((item) => item.clientId === areaId);
+    if (!area) return;
+    const nextBounds = clampRectToLayout(bounds, layoutWidth, layoutHeight);
+    const candidateById = new Map(
+      candidatesForSheet.seats.map((candidate) => [candidate.candidateId, candidate]),
+    );
+    const releasedCandidateCount = area.acceptedCandidateIds.filter((candidateId) => {
+      const candidate = candidateById.get(candidateId);
+      return candidate ? !isInsideRect(candidateCenter(candidate), nextBounds) : false;
+    }).length;
+    const releasedManualSeatCount = area.manualSeats.filter(
+      (seat) => !isInsideRect({ x: seat.seatX, y: seat.seatY }, nextBounds),
+    ).length;
+    setAreaEditError(null);
+    if (releasedCandidateCount + releasedManualSeatCount > 0) {
+      setPendingBounds({
+        areaId,
+        bounds: nextBounds,
+        releasedCandidateCount,
+        releasedManualSeatCount,
+      });
+      return;
+    }
+    updateAreaBounds(areaId, nextBounds);
+    setTool('pick-seats');
+  };
+
+  const requestSplitArea = (areaId: string, selection: LayoutRect) => {
+    const area = areas.find((item) => item.clientId === areaId);
+    if (!area || area.type !== 'SEATED') {
+      setAreaEditError('지정 좌석 구역만 분할할 수 있습니다.');
+      return;
+    }
+    const splitBounds = clampRectToLayout(selection, layoutWidth, layoutHeight);
+    const candidateById = new Map(
+      candidatesForSheet.seats.map((candidate) => [candidate.candidateId, candidate]),
+    );
+    const selectedCandidateCount = area.acceptedCandidateIds.filter((candidateId) => {
+      const candidate = candidateById.get(candidateId);
+      return candidate ? isInsideRect(candidateCenter(candidate), splitBounds) : false;
+    }).length;
+    const selectedManualSeatCount = area.manualSeats.filter((seat) =>
+      isInsideRect({ x: seat.seatX, y: seat.seatY }, splitBounds),
+    ).length;
+    const selectedCount = selectedCandidateCount + selectedManualSeatCount;
+    const totalCount = area.acceptedCandidateIds.length + area.manualSeats.length;
+    if (selectedCount === 0) {
+      setAreaEditError('분할할 좌석이 포함되도록 범위를 다시 지정해 주세요.');
+      return;
+    }
+    if (selectedCount >= totalCount) {
+      setAreaEditError('기존 구역에 좌석이 하나 이상 남도록 분할 범위를 줄여 주세요.');
+      return;
+    }
+    setAreaEditError(null);
+    splitArea(areaId, splitBounds);
+  };
   return (
-    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-w-0 space-y-3">
-        {validationIssues.length > 0 && (
-          <Card tone="danger">
-            <p className="text-sm font-semibold text-danger">
-              저장 전에 수정할 항목 {validationIssues.length}개
-            </p>
-            <p className="mt-1 text-xs text-ink-muted">
-              항목을 누르면 오류가 난 층과 구역으로 이동합니다. 빨간 테두리 구역을 먼저 확인하세요.
-            </p>
-            <ul className="mt-2 space-y-1">
-              {validationIssues.map((issue, index) => (
-                <li key={`${issue.code}-${issue.areaId ?? issue.elementId ?? 'layout'}-${index}`}>
-                  <button
-                    type="button"
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-danger hover:bg-danger-soft"
-                    onClick={() => focusValidationIssue(issue)}
-                  >
-                    {issue.message}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {analysis && analysis.warnings.length > 0 && (
-          <Card tone="warning">
-            <p className="text-sm font-semibold">분석 경고</p>
-            <ul className="text-muted mt-1 list-disc space-y-0.5 pl-4 text-xs">
-              {analysis.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        <Card className="min-w-0 overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex max-w-full gap-1 overflow-x-auto" role="tablist" aria-label="공연장 층">
-              {floorTabs.map((sheet) => (
-                <button
-                  key={sheet.name}
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedSheet === sheet.name}
-                  onClick={() => setSelectedSheet(sheet.name)}
-                  className={
-                    'shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium ' +
-                    (selectedSheet === sheet.name
-                      ? 'bg-accent-700 text-white'
-                      : 'surface-2 text-ink-muted')
-                  }
-                >
-                  {sheet.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1.5">
-              <ToolButton
-                icon={<Square size={16} />}
-                label="구역 그리기"
-                active={tool === 'draw-area'}
-                onClick={() => setTool('draw-area')}
-              />
-              <ToolButton
-                icon={<MousePointer2 size={16} />}
-                label="좌석 선택"
-                active={tool === 'pick-seats'}
-                onClick={() => setTool('pick-seats')}
-              />
-              <ToolButton
-                icon={<span className="text-base font-bold">＋</span>}
-                label="범위 좌석 추가"
-                active={tool === 'add-seat-range'}
-                onClick={() => setTool('add-seat-range')}
-              />
-              <ToolButton
-                icon={<span className="text-base font-bold">−</span>}
-                label="범위 좌석 제외"
-                active={tool === 'remove-seat-range'}
-                onClick={() => setTool('remove-seat-range')}
-              />
-              <ToolButton
-                icon={<LayoutGrid size={16} />}
-                label="고정 요소 그리기"
-                active={tool === 'draw-element'}
-                onClick={() => setTool('draw-element')}
-              />
-            </div>
-          </div>
-          <p className="text-subtle mt-2 text-xs">
-            {tool === 'draw-area' &&
-              '드래그한 구역 안에서 좌석 라벨·반복 채움 셀·반복 좌석 도형으로 인식된 항목만 자동 선택됩니다.'}
-            {tool === 'pick-seats' &&
-              '셀·도형을 클릭해 좌석을 개별적으로 켜거나 끌 수 있습니다.'}
-            {tool === 'add-seat-range' &&
-              '선택한 구역 안을 드래그하면 범위에 포함된 미선택 좌석을 한 번에 추가합니다.'}
-            {tool === 'remove-seat-range' &&
-              '선택한 구역 안을 드래그하면 범위에 포함된 선택 좌석을 한 번에 제외합니다.'}
-            {tool === 'draw-element' && '드래그해서 기둥·출입구 등 고정 요소 범위를 지정하세요.'}
-          </p>
-          <StadiumLayoutCanvas
-            className="mt-3"
-            layoutWidth={layoutWidth}
-            layoutHeight={layoutHeight}
-            seatCandidates={candidatesForSheet.seats}
-            elementCandidates={candidatesForSheet.elements}
-            areas={areasForSheet}
-            invalidAreaIds={invalidAreaIds}
-            layoutElements={layoutElementsForSheet}
-            selectedAreaId={selectedAreaId}
-            selectedElementId={selectedElementId}
-            tool={tool}
-            ownerByCandidateId={ownerByCandidateId}
-            automaticSeatCandidateIds={automaticSeatCandidateIdsForSheet}
-            onAddArea={addArea}
-            onSelectArea={selectArea}
-            onToggleCandidate={toggleCandidate}
-            onRemoveManualSeats={removeManualSeats}
-            onBulkCandidateChange={(areaId, rect, operation) => {
-              const area = areas.find((item) => item.clientId === areaId);
-              if (!area || area.type !== 'SEATED') return;
-              const candidateIds = candidatesForSheet.seats
-                .filter((candidate) => {
-                  const center = candidateCenter(candidate);
-                  return isInsideRect(center, area.bounds) && isInsideRect(center, rect);
-                })
-                .filter((candidate) =>
-                  operation === 'ADD'
-                    ? !ownerByCandidateId.has(candidate.candidateId)
-                    : area.acceptedCandidateIds.includes(candidate.candidateId),
-                )
-                .map((candidate) => candidate.candidateId);
-              if (operation === 'ADD') acceptCandidates(areaId, candidateIds);
-              else {
-                removeCandidates(areaId, candidateIds);
-                removeManualSeats(
-                  areaId,
-                  area.manualSeats
-                    .filter((seat) => isInsideRect({ x: seat.seatX, y: seat.seatY }, rect))
-                    .map((seat) => seat.clientId),
-                );
-              }
-            }}
-            onAddElement={addElement}
-            onSelectElement={selectElement}
-          />
-        </Card>
-      </div>
-
-      <div className="space-y-3">
-        <Card>
-          <CardHeader title={`${selectedSheet} 구역 (${areasForSheet.length})`} />
-          {areasForSheet.length === 0 ? (
-            <p className="text-subtle text-sm">캔버스에 드래그해서 구역을 추가하세요.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {areasForSheet.map((area) => (
-                <li key={area.clientId}>
-                  <button
-                    type="button"
-                    onClick={() => selectArea(area.clientId)}
-                    className={
-                      'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ' +
-                      (area.clientId === selectedAreaId
-                        ? 'bg-accent-700 text-white'
-                        : invalidAreaIds.has(area.clientId)
-                          ? 'bg-danger-soft text-danger'
-                          : 'hover:bg-surface-2')
-                    }
-                  >
-                    <span className="font-medium">{area.areaCode || '(코드 없음)'}</span>
-                    <span className="text-xs opacity-80">
-                      {area.type === 'STANDING' ? `스탠딩 ${area.maxSeat}명` : `좌석 ${acceptedSeatCount(area)}석`}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        {selectedArea && (
-          <AreaDetailPanel
-            key={selectedArea.clientId}
-            area={selectedArea}
-            candidates={candidatesForSheet.seats}
-            onUpdate={(values) => updateArea(selectedArea.clientId, values)}
-            onUpdateLabelingRule={(values) => updateLabelingRule(selectedArea.clientId, values)}
-            onRemove={() => removeArea(selectedArea.clientId)}
-          />
-        )}
-
-        <Card>
-          <CardHeader title={`${selectedSheet} 고정 요소 (${layoutElementsForSheet.length})`} />
-          {layoutElementsForSheet.length === 0 ? (
-            <p className="text-subtle text-sm">기둥·출입구 등은 선택 사항입니다.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {layoutElementsForSheet.map((element) => (
-                <li key={element.clientId}>
-                  <button
-                    type="button"
-                    onClick={() => selectElement(element.clientId)}
-                    className={
-                      'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ' +
-                      (element.clientId === selectedElementId
-                        ? 'bg-accent-700 text-white'
-                        : 'hover:bg-surface-2')
-                    }
-                  >
-                    <span className="font-medium">{element.label}</span>
-                    <span className="text-xs opacity-80">{element.type}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        {selectedElement && (
-          <Card>
-            <CardHeader
-              title="고정 요소 편집"
-              action={
-                <button
-                  type="button"
-                  aria-label="고정 요소 삭제"
-                  onClick={() => removeElement(selectedElement.clientId)}
-                  className="text-danger hover:bg-danger-soft rounded-lg p-1.5"
-                >
-                  <Trash2 size={16} />
-                </button>
-              }
-            />
-            <div className="space-y-3">
-              <Input
-                label="이름"
-                value={selectedElement.label}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  updateElement(selectedElement.clientId, { label: event.target.value })
-                }
-              />
-              <Input
-                label="종류"
-                value={selectedElement.type}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  updateElement(selectedElement.clientId, { type: event.target.value.toUpperCase() })
-                }
-                hint="예: PILLAR, GATE, AISLE"
-              />
-            </div>
-          </Card>
-        )}
-
-        <Card>
+    <>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-3">
           {validationIssues.length > 0 && (
-            <p className="mb-3 text-sm text-danger">위의 오류를 모두 수정해야 확정 단계로 이동할 수 있습니다.</p>
+            <Card tone="danger">
+              <p className="text-danger text-sm font-semibold">
+                저장 전에 수정할 항목 {validationIssues.length}개
+              </p>
+              <p className="text-ink-muted mt-1 text-xs">
+                항목을 누르면 오류가 난 층과 구역으로 이동합니다. 빨간 테두리 구역을 먼저
+                확인하세요.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {validationIssues.map((issue, index) => (
+                  <li key={`${issue.code}-${issue.areaId ?? issue.elementId ?? 'layout'}-${index}`}>
+                    <button
+                      type="button"
+                      className="text-danger hover:bg-danger-soft w-full rounded-lg px-2 py-1.5 text-left text-xs"
+                      onClick={() => focusValidationIssue(issue)}
+                    >
+                      {issue.message}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           )}
+
+          {analysis && analysis.warnings.length > 0 && (
+            <Card tone="warning">
+              <p className="text-sm font-semibold">분석 경고</p>
+              <ul className="text-muted mt-1 list-disc space-y-0.5 pl-4 text-xs">
+                {analysis.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <Card className="min-w-0 overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div
+                className="flex max-w-full gap-1 overflow-x-auto"
+                role="tablist"
+                aria-label="공연장 층"
+              >
+                {floorTabs.map((sheet) => (
+                  <button
+                    key={sheet.name}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedSheet === sheet.name}
+                    onClick={() => setSelectedSheet(sheet.name)}
+                    className={
+                      'shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium ' +
+                      (selectedSheet === sheet.name
+                        ? 'bg-accent-700 text-white'
+                        : 'surface-2 text-ink-muted')
+                    }
+                  >
+                    {sheet.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1.5">
+                <ToolButton
+                  icon={<Square size={16} />}
+                  label="구역 그리기"
+                  active={tool === 'draw-area'}
+                  onClick={() => setTool('draw-area')}
+                />
+                <ToolButton
+                  icon={<Scan size={16} />}
+                  label="선택 구역 경계 다시 지정"
+                  active={tool === 'resize-area'}
+                  disabled={!selectedAreaId}
+                  onClick={() => setTool('resize-area')}
+                />
+                <ToolButton
+                  icon={<Scissors size={16} />}
+                  label="선택 구역 분할"
+                  active={tool === 'split-area'}
+                  disabled={!selectedArea || selectedArea.type !== 'SEATED'}
+                  onClick={() => setTool('split-area')}
+                />
+                <ToolButton
+                  icon={<MousePointer2 size={16} />}
+                  label="좌석 선택"
+                  active={tool === 'pick-seats'}
+                  onClick={() => setTool('pick-seats')}
+                />
+                <ToolButton
+                  icon={<span className="text-base font-bold">＋</span>}
+                  label="범위 좌석 추가"
+                  active={tool === 'add-seat-range'}
+                  onClick={() => setTool('add-seat-range')}
+                />
+                <ToolButton
+                  icon={<span className="text-base font-bold">−</span>}
+                  label="범위 좌석 제외"
+                  active={tool === 'remove-seat-range'}
+                  onClick={() => setTool('remove-seat-range')}
+                />
+                <ToolButton
+                  icon={<LayoutGrid size={16} />}
+                  label="고정 요소 그리기"
+                  active={tool === 'draw-element'}
+                  onClick={() => setTool('draw-element')}
+                />
+              </div>
+            </div>
+            <p className="text-subtle mt-2 text-xs">
+              {tool === 'draw-area' &&
+                '드래그한 구역 안에서 좌석 라벨·반복 채움 셀·반복 좌석 도형으로 인식된 항목만 자동 선택됩니다.'}
+              {tool === 'resize-area' &&
+                '새 경계를 드래그하세요. 경계 밖 좌석은 확인 후 미할당 상태로 전환됩니다.'}
+              {tool === 'split-area' &&
+                '기존 구역에서 새 구역으로 옮길 좌석 범위를 드래그하세요. 두 구역 경계는 좌석에 맞춰 자동 조정됩니다.'}
+              {tool === 'pick-seats' && '셀·도형을 클릭해 좌석을 개별적으로 켜거나 끌 수 있습니다.'}
+              {tool === 'add-seat-range' &&
+                '선택한 구역 안을 드래그하면 범위에 포함된 미선택 좌석을 한 번에 추가합니다.'}
+              {tool === 'remove-seat-range' &&
+                '선택한 구역 안을 드래그하면 범위에 포함된 선택 좌석을 한 번에 제외합니다.'}
+              {tool === 'draw-element' && '드래그해서 기둥·출입구 등 고정 요소 범위를 지정하세요.'}
+            </p>
+            <StadiumLayoutCanvas
+              className="mt-3"
+              layoutWidth={layoutWidth}
+              layoutHeight={layoutHeight}
+              seatCandidates={candidatesForSheet.seats}
+              elementCandidates={candidatesForSheet.elements}
+              areas={areasForSheet}
+              unassignedSeats={unassignedSeatsForSheet}
+              invalidAreaIds={invalidAreaIds}
+              layoutElements={layoutElementsForSheet}
+              selectedAreaId={selectedAreaId}
+              selectedElementId={selectedElementId}
+              tool={tool}
+              ownerByCandidateId={ownerByCandidateId}
+              automaticSeatCandidateIds={automaticSeatCandidateIdsForSheet}
+              onAddArea={addArea}
+              onUpdateAreaBounds={requestAreaBoundsChange}
+              onSplitArea={requestSplitArea}
+              onSelectArea={selectArea}
+              onToggleCandidate={toggleCandidate}
+              onRemoveManualSeats={removeManualSeats}
+              onAssignManualSeats={assignManualSeats}
+              onBulkCandidateChange={(areaId, rect, operation) => {
+                const area = areas.find((item) => item.clientId === areaId);
+                if (!area || area.type !== 'SEATED') return;
+                const candidateIds = candidatesForSheet.seats
+                  .filter((candidate) => {
+                    const center = candidateCenter(candidate);
+                    return isInsideRect(center, area.bounds) && isInsideRect(center, rect);
+                  })
+                  .filter((candidate) =>
+                    operation === 'ADD'
+                      ? !ownerByCandidateId.has(candidate.candidateId)
+                      : area.acceptedCandidateIds.includes(candidate.candidateId),
+                  )
+                  .map((candidate) => candidate.candidateId);
+                if (operation === 'ADD') {
+                  acceptCandidates(areaId, candidateIds);
+                  assignManualSeats(
+                    areaId,
+                    unassignedSeatsForSheet
+                      .filter((seat) => isInsideRect({ x: seat.seatX, y: seat.seatY }, rect))
+                      .map((seat) => seat.clientId),
+                  );
+                } else {
+                  removeCandidates(areaId, candidateIds);
+                  removeManualSeats(
+                    areaId,
+                    area.manualSeats
+                      .filter((seat) => isInsideRect({ x: seat.seatX, y: seat.seatY }, rect))
+                      .map((seat) => seat.clientId),
+                  );
+                }
+              }}
+              onAddElement={addElement}
+              onSelectElement={selectElement}
+            />
+          </Card>
+          {areaEditError && (
+            <Card tone="warning">
+              <p className="text-sm">{areaEditError}</p>
+            </Card>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <Card>
+            <CardHeader title={`${selectedSheet} 구역 (${areasForSheet.length})`} />
+            {areasForSheet.length === 0 ? (
+              <p className="text-subtle text-sm">캔버스에 드래그해서 구역을 추가하세요.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {areasForSheet.map((area) => (
+                  <li key={area.clientId}>
+                    <button
+                      type="button"
+                      onClick={() => selectArea(area.clientId)}
+                      className={
+                        'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ' +
+                        (area.clientId === selectedAreaId
+                          ? 'bg-accent-700 text-white'
+                          : invalidAreaIds.has(area.clientId)
+                            ? 'bg-danger-soft text-danger'
+                            : 'hover:bg-surface-2')
+                      }
+                    >
+                      <span className="font-medium">{area.areaCode || '(코드 없음)'}</span>
+                      <span className="text-xs opacity-80">
+                        {area.type === 'STANDING'
+                          ? `스탠딩 ${area.maxSeat}명`
+                          : `좌석 ${acceptedSeatCount(area)}석`}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {selectedArea && (
+            <AreaDetailPanel
+              key={selectedArea.clientId}
+              area={selectedArea}
+              candidates={candidatesForSheet.seats}
+              onUpdate={(values) => updateArea(selectedArea.clientId, values)}
+              onUpdateLabelingRule={(values) => updateLabelingRule(selectedArea.clientId, values)}
+              onRedefineBounds={() => setTool('resize-area')}
+              onAutoFitBounds={() => autoFitAreaBounds(selectedArea.clientId)}
+              onSplit={() => setTool('split-area')}
+              onRemove={() => removeArea(selectedArea.clientId)}
+            />
+          )}
+
+          <Card>
+            <CardHeader title={`${selectedSheet} 고정 요소 (${layoutElementsForSheet.length})`} />
+            {layoutElementsForSheet.length === 0 ? (
+              <p className="text-subtle text-sm">기둥·출입구 등은 선택 사항입니다.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {layoutElementsForSheet.map((element) => (
+                  <li key={element.clientId}>
+                    <button
+                      type="button"
+                      onClick={() => selectElement(element.clientId)}
+                      className={
+                        'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ' +
+                        (element.clientId === selectedElementId
+                          ? 'bg-accent-700 text-white'
+                          : 'hover:bg-surface-2')
+                      }
+                    >
+                      <span className="font-medium">{element.label}</span>
+                      <span className="text-xs opacity-80">{element.type}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {selectedElement && (
+            <Card>
+              <CardHeader
+                title="고정 요소 편집"
+                action={
+                  <button
+                    type="button"
+                    aria-label="고정 요소 삭제"
+                    onClick={() => removeElement(selectedElement.clientId)}
+                    className="text-danger hover:bg-danger-soft rounded-lg p-1.5"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                }
+              />
+              <div className="space-y-3">
+                <Input
+                  label="이름"
+                  value={selectedElement.label}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    updateElement(selectedElement.clientId, { label: event.target.value })
+                  }
+                />
+                <Input
+                  label="종류"
+                  value={selectedElement.type}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    updateElement(selectedElement.clientId, {
+                      type: event.target.value.toUpperCase(),
+                    })
+                  }
+                  hint="예: PILLAR, GATE, AISLE"
+                />
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <p className="text-ink-muted mb-3 text-xs">
+              미할당 기존 좌석 {unassignedSeatsForSheet.length}석 · 좌석을 제외해도 삭제되지 않으며
+              다른 구역에 다시 할당할 수 있습니다.
+            </p>
+            {validationIssues.length > 0 && (
+              <p className="text-danger mb-3 text-sm">
+                위의 오류를 모두 수정해야 확정 단계로 이동할 수 있습니다.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                leftIcon={<ArrowLeft size={16} />}
+                onClick={() => controller.goToStep(analysis ? 2 : 1)}
+              >
+                이전
+              </Button>
+              <Button
+                fullWidth
+                disabled={validationIssues.length > 0}
+                onClick={() => controller.goToStep(4)}
+              >
+                배치 확정하러 가기
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
+      <Modal
+        open={pendingBounds !== null}
+        variant="center"
+        title="경계 밖 좌석을 미할당으로 전환할까요?"
+        description="좌석 데이터는 삭제되지 않으며 다른 구역에 다시 할당할 수 있습니다."
+        onClose={() => setPendingBounds(null)}
+        footer={
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              leftIcon={<ArrowLeft size={16} />}
-              onClick={() => controller.goToStep(analysis ? 2 : 1)}
-            >
-              이전
+            <Button variant="soft" fullWidth onClick={() => setPendingBounds(null)}>
+              취소
             </Button>
             <Button
               fullWidth
-              disabled={validationIssues.length > 0}
-              onClick={() => controller.goToStep(4)}
+              onClick={() => {
+                if (!pendingBounds) return;
+                updateAreaBounds(pendingBounds.areaId, pendingBounds.bounds);
+                setPendingBounds(null);
+                setTool('pick-seats');
+              }}
             >
-              배치 확정하러 가기
+              경계 변경
             </Button>
           </div>
-        </Card>
-      </div>
-    </div>
+        }
+      >
+        {pendingBounds && (
+          <p className="text-ink-muted text-sm leading-relaxed">
+            Excel 후보 {pendingBounds.releasedCandidateCount}석, 기존 좌석{' '}
+            {pendingBounds.releasedManualSeatCount}석이 현재 구역에서 제외됩니다.
+          </p>
+        )}
+      </Modal>
+    </>
   );
 }
 
@@ -694,11 +896,13 @@ function ToolButton({
   icon,
   label,
   active,
+  disabled = false,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -707,10 +911,12 @@ function ToolButton({
       title={label}
       aria-label={label}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
       className={
         'flex size-9 items-center justify-center rounded-lg transition-colors ' +
-        (active ? 'bg-accent-700 text-white' : 'surface-2 text-ink-muted hover:bg-surface-3')
+        (active ? 'bg-accent-700 text-white' : 'surface-2 text-ink-muted hover:bg-surface-3') +
+        (disabled ? ' cursor-not-allowed opacity-40' : '')
       }
     >
       {icon}
@@ -723,6 +929,9 @@ function AreaDetailPanel({
   candidates,
   onUpdate,
   onUpdateLabelingRule,
+  onRedefineBounds,
+  onAutoFitBounds,
+  onSplit,
   onRemove,
 }: {
   area: DraftArea;
@@ -737,6 +946,9 @@ function AreaDetailPanel({
       startNumber: number;
     }>,
   ) => void;
+  onRedefineBounds: () => void;
+  onAutoFitBounds: () => void;
+  onSplit: () => void;
   onRemove: () => void;
 }) {
   const labelPreview = buildSeatLabelPreview(area, candidates);
@@ -756,11 +968,33 @@ function AreaDetailPanel({
           </button>
         }
       />
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <Button
+          variant="soft"
+          size="sm"
+          className={area.type === 'STANDING' ? 'col-span-2' : undefined}
+          onClick={onRedefineBounds}
+        >
+          경계 다시 지정
+        </Button>
+        {area.type === 'SEATED' && (
+          <>
+            <Button variant="soft" size="sm" onClick={onAutoFitBounds}>
+              좌석에 맞춤
+            </Button>
+            <Button variant="soft" size="sm" className="col-span-2" onClick={onSplit}>
+              선택 범위로 구역 분할
+            </Button>
+          </>
+        )}
+      </div>
       <div className="space-y-3">
         <Input
           label="구역 코드"
           value={area.areaCode}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => onUpdate({ areaCode: event.target.value })}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onUpdate({ areaCode: event.target.value })
+          }
         />
         <div className="flex items-center justify-between">
           <span className="text-ink-muted text-sm font-medium">구역 종류</span>
@@ -808,7 +1042,9 @@ function AreaDetailPanel({
               />
             </div>
             <Input
-              label={area.labelingRule.rowFormat === 'ALPHA' ? '시작 행 알파벳' : '시작 행 (가나다)'}
+              label={
+                area.labelingRule.rowFormat === 'ALPHA' ? '시작 행 알파벳' : '시작 행 (가나다)'
+              }
               value={area.labelingRule.startRowLabel}
               onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 onUpdateLabelingRule({
@@ -818,7 +1054,9 @@ function AreaDetailPanel({
                       : event.target.value,
                 })
               }
-              placeholder={area.labelingRule.rowFormat === 'ALPHA' ? '예: A, C, AA' : '예: 가, 다, 마'}
+              placeholder={
+                area.labelingRule.rowFormat === 'ALPHA' ? '예: A, C, AA' : '예: 가, 다, 마'
+              }
             />
             <div className="flex items-center justify-between">
               <span className="text-ink-muted text-sm font-medium">좌석 순서</span>
@@ -845,8 +1083,10 @@ function AreaDetailPanel({
             </p>
             {labelPreview.length > 0 && (
               <div className="bg-surface-2 rounded-lg p-2.5">
-                <p className="text-ink-muted text-xs font-semibold">저장될 자동 좌석 라벨 미리보기</p>
-                <p className="text-subtle mt-1 break-words text-xs">
+                <p className="text-ink-muted text-xs font-semibold">
+                  저장될 자동 좌석 라벨 미리보기
+                </p>
+                <p className="text-subtle mt-1 text-xs break-words">
                   {labelPreview
                     .slice(0, 20)
                     .map((seat) => seat.label)
@@ -865,7 +1105,16 @@ function AreaDetailPanel({
 /* ── 5단계: 확정 ────────────────────────────────────────── */
 
 function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
-  const { layoutName, setLayoutName, isDefault, setIsDefault, confirmLayout, copyLayout, areas, reset } = controller;
+  const {
+    layoutName,
+    setLayoutName,
+    isDefault,
+    setIsDefault,
+    confirmLayout,
+    copyLayout,
+    areas,
+    reset,
+  } = controller;
 
   if (confirmLayout.isSuccess || copyLayout.isSuccess) {
     const result = (confirmLayout.data ?? copyLayout.data)!;
@@ -878,7 +1127,12 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
         <p className="text-muted mt-2 text-sm">
           구역 {result.createdAreaCount}개, 좌석 {result.createdSeatCount}석이 등록됐습니다.
         </p>
-        <Button className="mt-4" variant="secondary" leftIcon={<RefreshCw size={16} />} onClick={reset}>
+        <Button
+          className="mt-4"
+          variant="secondary"
+          leftIcon={<RefreshCw size={16} />}
+          onClick={reset}
+        >
           다른 공연장·배치 작업
         </Button>
       </Card>
@@ -889,23 +1143,38 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
     <Card>
       <CardHeader title="배치 확정" />
       <div className="space-y-3">
-        <Input label="배치 이름" value={layoutName} onChange={(e: ChangeEvent<HTMLInputElement>) => setLayoutName(e.target.value)} />
+        <Input
+          label="배치 이름"
+          value={layoutName}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setLayoutName(e.target.value)}
+        />
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={isDefault}
+            onChange={(e) => setIsDefault(e.target.checked)}
+          />
           이 공연장의 기본 배치로 지정
         </label>
-        <SectionTitle description="확정하면 구역과 좌석이 하나의 트랜잭션으로 저장됩니다.">요약</SectionTitle>
+        <SectionTitle description="확정하면 구역과 좌석이 하나의 트랜잭션으로 저장됩니다.">
+          요약
+        </SectionTitle>
         <ul className="text-muted space-y-1 text-sm">
           {areas.map((area) => (
             <li key={area.clientId}>
-              {area.areaCode} — {area.type === 'STANDING' ? `스탠딩 ${area.maxSeat}명` : `좌석 ${acceptedSeatCount(area)}석`}
+              {area.areaCode} —{' '}
+              {area.type === 'STANDING'
+                ? `스탠딩 ${area.maxSeat}명`
+                : `좌석 ${acceptedSeatCount(area)}석`}
             </li>
           ))}
         </ul>
       </div>
       {confirmLayout.isError && (
         <p className="text-danger mt-3 text-sm">
-          {confirmLayout.error instanceof Error ? confirmLayout.error.message : '저장에 실패했습니다.'}
+          {confirmLayout.error instanceof Error
+            ? confirmLayout.error.message
+            : '저장에 실패했습니다.'}
         </p>
       )}
       <div className="mt-4 flex gap-2">

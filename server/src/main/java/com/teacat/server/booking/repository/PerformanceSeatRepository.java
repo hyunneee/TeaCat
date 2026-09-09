@@ -52,6 +52,38 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
     boolean existsByIdPerformanceDetailId(Long performanceDetailId);
 
     /**
+     * 회차의 좌석 상태 전체 (좌석맵 조회).
+     *
+     * <p>좌표·열·번호는 여기 없다. 그건 공연장 좌석(seats)의 것이고, 이 테이블은
+     * "이 회차에서 그 좌석이 지금 어떤 상태인가" 만 안다. 서비스가 둘을 합친다.
+     *
+     * <p>🔴 만료 판정을 <b>SQL 안에서</b> 한다. 자바에서 {@code LocalDateTime.now()} 로
+     * 비교하면 안 된다 — 위 {@link #hold} 가 {@code held_until < now()} 로 DB 시계를 쓰는데,
+     * 앱 컨테이너는 {@code TZ=Asia/Seoul} 이고 DB 컨테이너는 UTC 라 두 시계가 9시간 어긋난다.
+     * 시계가 다르면 <b>좌석맵은 "고를 수 있다" 고 그리는데 선점 API 는 거절하는</b>
+     * 구간이 생긴다 (사용자에게는 "눌러도 안 되는 좌석" 으로 보인다).
+     * 같은 시계로 판단해야 화면과 동작이 어긋나지 않는다.
+     */
+    @Query(value = """
+            SELECT ps.seat_id AS seatId,
+                   CASE WHEN ps.status = 'HELD' AND ps.held_until < now()
+                        THEN 'AVAILABLE'
+                        ELSE ps.status::text
+                   END AS status
+              FROM performance_seats ps
+             WHERE ps.performance_detail_id = :performanceDetailId
+            """, nativeQuery = true)
+    List<SeatStatusView> findEffectiveStatuses(@Param("performanceDetailId") Long performanceDetailId);
+
+    /** {@link #findEffectiveStatuses} 결과 한 줄 */
+    interface SeatStatusView {
+        Long getSeatId();
+
+        /** {@code seat_booking_status} 값의 문자열. 만료된 HELD 는 AVAILABLE 로 바뀐 뒤 */
+        String getStatus();
+    }
+
+    /**
      * 같은 회차에서 이 유저가 쥐고 있던 <b>만료된</b> 선점을 해제한다. 새 좌석을 선점하기 직전에 호출한다.
      *
      * <p>필요한 이유: {@code uq_performance_seats_held_by} 는 물리 {@code status} 만 보므로,
@@ -260,4 +292,51 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
         /** performance_general.ticketing_start_at */
         LocalDateTime getTicketingStartAt();
     }
+
+    /**
+     * 결제 확정 — 선점을 판매로 굳힌다.
+     *
+     * <p>조회로 확인한 뒤 UPDATE 하면 그 사이에 선점이 만료되어 남이 가져갈 수 있다. 조건을
+     * WHERE 에 넣어 <b>내 유효한 선점만</b> 원자적으로 SOLD 로 바꾼다.
+     *
+     * @return 1 이면 확보, 0 이면 그 사이 선점을 잃었다 (결제를 되돌려야 한다)
+     */
+    // clearAutomatically 를 쓰지 않는다. 컨텍스트를 비우면 부르는 쪽이 들고 있던 주문·회원이
+    // detach 되어, 이어서 하는 발권과 상태 변경이 조용히 반영되지 않는다.
+    // 여기서는 좌석 엔티티를 이후에 읽지 않으므로 비울 이유도 없다.
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'SOLD',
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'HELD'
+               AND held_by = :userId
+               AND held_until >= now()
+            """, nativeQuery = true)
+    int sell(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId,
+            @Param("userId") Long userId);
+
+    /**
+     * 예매 취소 — 팔린 좌석을 다시 풀어 준다.
+     *
+     * <p>{@code releaseHold} 와 다르다. 저쪽은 선점(HELD)을 푸는 것이고, 이것은 확정된 판매를
+     * 되돌린다. SOLD 는 취소로만 풀리므로 소유자 검사가 필요 없다 — 취소 권한은 주문에서 이미 봤다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'AVAILABLE',
+                   held_by = NULL,
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'SOLD'
+            """, nativeQuery = true)
+    int release(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId);
 }

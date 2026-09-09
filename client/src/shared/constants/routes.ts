@@ -60,6 +60,10 @@ export const ROUTES = {
   NFT_MARKET: '/nft',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
+  /** 경매 상세. 비로그인도 구경할 수 있어야 해서 가드 밖에 둡니다 */
+  AUCTION_DETAIL: (auctionId: string) => `/auctions/${auctionId}`,
+  MY_AUCTIONS: '/my/auctions',
+  MY_BIDS: '/my/bids',
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
@@ -73,6 +77,13 @@ export const ROUTES = {
   SETTINGS_NICKNAME: '/my/settings/nickname',
   SETTINGS_ABOUT: '/my/settings/about',
 
+  /* ── 문의 ── */
+  MY_INQUIRIES: '/my/inquiries',
+  MY_INQUIRY_NEW: '/my/inquiries/new',
+  /** 서버 inquiryId(숫자)를 문자열로 넘긴다 — `ROUTES.MY_INQUIRY_DETAIL(String(id))` */
+  MY_INQUIRY_DETAIL: (inquiryId: string) => `/my/inquiries/${inquiryId}`,
+  MY_INQUIRY_EDIT: (inquiryId: string) => `/my/inquiries/${inquiryId}/edit`,
+
   /* ── 운영 (어드민 대시보드) ────────────────────────────────
      `/admin` 아래는 **데스크톱 전용** 화면입니다. 앱(모바일)의 `.app-width`
      한 기둥 레이아웃을 쓰지 않고 화면을 꽉 씁니다. (client/CLAUDE.md 8장)
@@ -83,6 +94,10 @@ export const ROUTES = {
   ADMIN_USERS: '/admin/users',
   MONITORING: '/admin/monitoring',
   ADMIN_STADIUM: '/admin/stadium',
+  ADMIN_STADIUMS: '/admin/stadiums',
+  ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
+  ADMIN_INQUIRIES: '/admin/inquiries',
+  ADMIN_BANNERS: '/admin/banners',
 
   /**
    * 개발용 얼굴 인식 검증 화면.

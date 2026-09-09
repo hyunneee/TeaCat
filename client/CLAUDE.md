@@ -284,6 +284,7 @@ export function Card({ className, ...rest }: CardProps) {
 | 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
 | 예매·티켓·취소표·캣머니·결제·배너·앱정보 | 목업 |
 | 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
+| 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
 ⚠️ 공연은 실서버, 예매는 목업인 과도기입니다. 목업 예매 핸들러는 `mocks/db.ts` 의 회차 ID(`s-1` …)만 알아서,
 실서버 회차 ID 로 예매 플로우에 들어가면 목업이 404 를 줍니다. 예매가 실서버로 바뀌면 함께 풀립니다.
@@ -603,3 +604,6 @@ npm run typecheck && npm run lint
   (`features/admin` 의 `AdminLayout`, `lg` 미만은 안내만),
   `Modal` 에 `width="wide"` 변형을 한 줄 추가했습니다.
   `can.accessAdmin` / `can.manageUsers` 권한 판단을 `permission.ts` 에 추가. 사용자 요청
+- 2026-09-08 포카 경매 프론트 착수. `features/auction` 추가(포카와 나란히, 카드 그림만 배럴로 공유),
+  마켓 구매 탭 안에 상점·경매 **글자 탭**(DESIGN.md 10장), 잔액 표시를 `available` 로 전환,
+  `shared/lib/parseServerTime` 추가(서버가 타임존 없는 KST 를 주므로 카운트다운이 어긋나지 않게)

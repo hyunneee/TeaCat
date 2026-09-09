@@ -9,11 +9,13 @@ import {
   SeatLegend,
   SeatMap,
   SelectedSeatBar,
+  useBookingPolicy,
   useBookingStore,
   useSeatHold,
-  useSeatMap,
   useSeatSelection,
+  useSectionSeats,
 } from '@/features/booking';
+import { useSchedule } from '@/features/concert';
 
 /**
  * 좌석 선택 — 이 프로젝트의 폴더 구조 참고 예시입니다.
@@ -28,10 +30,13 @@ export function SeatSelectPage() {
   const { scheduleId = '' } = useParams();
   const sectionId = useBookingStore((s) => s.sectionId);
 
-  const { data: seatMap, isPending, isError } = useSeatMap(scheduleId, sectionId ?? undefined);
+  const { section, seats, isPending, isError } = useSectionSeats(scheduleId, sectionId);
 
-  // 서버가 준 값을 우선하고, 없으면 배포 환경 정책값 (dev 4매 / prod 1매)
-  const maxPerUser = seatMap?.maxPerUser ?? env.maxTicketsPerUser;
+  /* 1인 최대 매수는 회차가 아니라 **공연** 단위 정책이라 concertId 가 필요합니다.
+     회차 상세에서 얻어 정책을 조회하고, 아직 없으면 배포 환경 기본값을 씁니다. */
+  const { data: schedule } = useSchedule(scheduleId);
+  const { data: policy } = useBookingPolicy(schedule ? String(schedule.concertId) : undefined);
+  const maxPerUser = policy?.maxTicketsPerUser ?? env.maxTicketsPerUser;
 
   const { selectedSeatIds, select, count } = useSeatSelection(maxPerUser);
   const { holdSeats, isHolding } = useSeatHold(scheduleId);
@@ -40,7 +45,7 @@ export function SeatSelectPage() {
   if (!sectionId) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
 
   if (isPending) return <PageLoader />;
-  if (isError || !seatMap) {
+  if (isError) {
     return (
       <>
         <Header title="좌석 선택" showBack />
@@ -49,8 +54,7 @@ export function SeatSelectPage() {
     );
   }
 
-  const section = seatMap.sections.find((s) => s.id === sectionId);
-  const selectedSeats = seatMap.seats.filter((s) => selectedSeatIds.includes(s.id));
+  const selectedSeats = seats.filter((s) => selectedSeatIds.includes(s.id));
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -67,8 +71,10 @@ export function SeatSelectPage() {
       <Stepper steps={BOOKING_STEPS} current={2} />
 
       {/* 좌석맵 */}
-      <div className="min-h-0 flex-1 px-2">
-        <SeatMap seats={seatMap.seats} selectedSeatIds={selectedSeatIds} onSelect={select} />
+      {/* 🔴 flex 여야 안쪽 좌석맵이 이 자리를 다 씁니다. flex-1 만 주면
+          자식의 h-full(퍼센트 높이)이 auto 로 무너져 좌석맵이 얇은 띠가 됩니다. */}
+      <div className="flex min-h-0 flex-1 px-2">
+        <SeatMap seats={seats} selectedSeatIds={selectedSeatIds} onSelect={select} />
       </div>
 
       <div className="px-4">
