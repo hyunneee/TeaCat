@@ -59,7 +59,13 @@ export type AreaType = 'SEATED' | 'STANDING';
 export interface PerformanceArea {
   areaId: number;
   areaCode: string;
+  /** 공연장에 등록된 구역의 형태. 이 값은 공연이 바꿀 수 없습니다 */
   areaType: AreaType;
+  /**
+   * 이 공연에서 파는 방식. 좌석제 구역을 스탠딩으로 팔 수 있어(플로어에 의자를 두지 않는 경우)
+   * `areaType` 과 다를 수 있습니다. 반대는 불가능합니다 — 스탠딩 구역에는 좌석 좌표가 없습니다.
+   */
+  saleType: AreaType;
   grade: string | null;
   price: number | null;
   /** 이 구역에서 팔 최대 수량. 회차 구분이 없는 안내값입니다 */

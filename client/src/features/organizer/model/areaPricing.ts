@@ -30,9 +30,17 @@ export interface AreaPricingRow {
   areaId: number;
   /** 화면 표기 — "2F A" 처럼 층과 구역 코드 */
   label: string;
+  /** 공연장에 등록된 구역의 형태. 공연이 바꿀 수 없습니다 */
   type: AreaType;
-  /** 좌석제는 등록 좌석 수, 스탠딩은 최대 수용 인원 */
-  capacity: number;
+  /**
+   * 이 공연에서 파는 방식. 좌석제 구역은 스탠딩으로도 팔 수 있지만(플로어에 의자를 두지 않는 경우)
+   * 스탠딩 구역을 좌석제로 팔 수는 없습니다 — 배정할 좌석 좌표가 없기 때문입니다.
+   */
+  saleType: AreaType;
+  /** 구역의 최대 수용 인원 */
+  maxSeat: number;
+  /** 배치도에 등록된 좌석 수. 좌석제로 팔 때의 기준입니다 */
+  seatCount: number;
   /** 이 공연에서 판매할지 */
   enabled: boolean;
   grade: string;
@@ -52,6 +60,43 @@ export function areaLabel(area: Pick<StadiumArea, 'levelCode' | 'areaCode'>): st
 }
 
 /**
+ * 파는 방식에 따른 정원. 좌석제면 배치도에 그려진 좌석 수, 스탠딩이면 구역의 최대 수용 인원입니다.
+ * 좌석을 아직 안 그렸으면(0) 좌석제라도 최대 수용 인원을 씁니다.
+ */
+export function capacityOf(row: Pick<AreaPricingRow, 'saleType' | 'maxSeat' | 'seatCount'>): number {
+  return row.saleType === 'SEATED' && row.seatCount > 0 ? row.seatCount : row.maxSeat;
+}
+
+/** 스탠딩 구역에는 좌석 좌표가 없어 좌석을 지정해 팔 수 없습니다 (서버 PERFORMANCE_022 와 같은 규칙) */
+export function canSellSeated(row: Pick<AreaPricingRow, 'type'>): boolean {
+  return row.type === 'SEATED';
+}
+
+/**
+ * 좌석제로 팔기로 했는데 배치도에 좌석이 없는 상태.
+ *
+ * 저장은 됩니다(서버도 막지 않습니다). 다만 이대로 두면 회차 좌석 생성(API-269)이
+ * 만들 좌석을 못 찾아 예매 화면에 좌석맵이 비어 보입니다.
+ */
+export function needsSeatWarning(row: Pick<AreaPricingRow, 'saleType' | 'seatCount'>): boolean {
+  return row.saleType === 'SEATED' && row.seatCount === 0;
+}
+
+/**
+ * 파는 방식을 바꿀 때의 패치.
+ *
+ * 최대 수량이 이전 방식의 정원 그대로면(= 관리자가 손대지 않은 기본값) 새 방식의 정원으로 따라갑니다.
+ * 직접 적어 넣은 값은 건드리지 않습니다.
+ */
+export function changeSaleType(row: AreaPricingRow, saleType: AreaType): Partial<AreaPricingRow> {
+  const next = { ...row, saleType };
+  if (row.maxCnt === String(capacityOf(row))) {
+    return { saleType, maxCnt: String(capacityOf(next)) };
+  }
+  return { saleType };
+}
+
+/**
  * 공연장 구역 목록과 (있다면) 이미 저장된 설정을 합쳐 편집 줄을 만듭니다.
  * 저장된 구역은 체크된 상태로 값이 채워지고, 나머지는 꺼진 상태로 기본값(최대 수량 = 수용 인원)입니다.
  */
@@ -63,17 +108,21 @@ export function buildAreaRows(
 
   return stadiumAreas.map((area) => {
     const saved = byId.get(area.areaId);
-    // 좌석제는 배치도에 등록된 좌석 수가 상한이지만, 좌석을 아직 안 그렸으면(0) 구역의 최대 수용 인원을 쓴다
-    const capacity = area.type === 'SEATED' && area.seatCount > 0 ? area.seatCount : area.maxSeat;
-    return {
+    // 저장된 설정이 없으면 공연장 구역의 형태 그대로 판다
+    const base = {
       areaId: area.areaId,
       label: areaLabel(area),
       type: area.type,
-      capacity,
+      saleType: saved?.saleType ?? area.type,
+      maxSeat: area.maxSeat,
+      seatCount: area.seatCount,
+    };
+    return {
+      ...base,
       enabled: !!saved,
       grade: saved?.grade ?? '',
       price: saved?.price != null ? String(saved.price) : '',
-      maxCnt: saved?.maxCnt != null ? String(saved.maxCnt) : String(capacity),
+      maxCnt: saved?.maxCnt != null ? String(saved.maxCnt) : String(capacityOf(base)),
       soldCnt: saved?.soldCnt ?? 0,
     };
   });
@@ -94,6 +143,12 @@ export function validateAreaRows(rows: AreaPricingRow[]): (string | undefined)[]
       return row.soldCnt > 0 ? '이미 판매된 구역은 판매를 끌 수 없어요.' : undefined;
     }
     if (row.grade.length > GRADE_MAX_LENGTH) return `등급은 ${GRADE_MAX_LENGTH}자 이하여야 해요.`;
+    if (row.saleType === 'SEATED' && !canSellSeated(row)) {
+      return '스탠딩 구역은 좌석을 지정해 팔 수 없어요.';
+    }
+    /* 좌석이 아직 안 그려진 구역(seatCount 0)을 막지는 않습니다.
+       서버도 구역 형태만 보고 통과시키므로, 여기서 막으면 이미 그렇게 저장된 공연은
+       아무것도 못 고치게 됩니다. 대신 줄에 경고를 띄워 알려줍니다 (needsSeatWarning). */
 
     const price = toNonNegativeInt(row.price);
     if (price == null) return '가격을 0 이상 정수로 입력해 주세요.';
@@ -126,10 +181,18 @@ export function toAreaSaveRequest(rows: AreaPricingRow[]): AreaSaveRequest | nul
       grade: r.grade.trim() || null,
       price: Number(r.price),
       maxCnt: Number(r.maxCnt),
+      saleType: r.saleType,
     }));
   return areas.length === 0 ? null : { areas };
 }
 
 export interface AreaSaveRequest {
-  areas: { areaId: number; grade: string | null; price: number; maxCnt: number }[];
+  areas: {
+    areaId: number;
+    grade: string | null;
+    price: number;
+    maxCnt: number;
+    /** 생략하면 서버가 저장된 방식을 그대로 둡니다. 화면은 항상 채워 보냅니다 */
+    saleType: AreaType;
+  }[];
 }
