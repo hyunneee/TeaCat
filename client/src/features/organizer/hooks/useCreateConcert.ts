@@ -5,6 +5,7 @@ import { ROUTES, STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { concertKeys, type ConcertDetail } from '@/features/concert';
 import { organizerApi, organizerKeys } from '../api/organizerApi';
+import { toAreaSaveRequest, type AreaPricingRow } from '../model/areaPricing';
 import {
   filledPhotocardDesigns,
   toConcertUpdateRequest,
@@ -24,6 +25,10 @@ export function useStadiums() {
 
 /**
  * 공연 등록 — 포토카드 도안까지 함께.
+ *
+ * 공연(회차 포함)을 만든 뒤, 구역 등급·가격을 정했다면 이어서 저장합니다(API-268).
+ * 두 요청이라 구역 저장만 실패할 수 있는데, 그때는 공연은 이미 있으므로 수정 화면으로 보내
+ * 구역 설정을 다시 저장하게 합니다 — 등록 자체를 되돌리면 방금 올린 이미지·회차까지 다시 해야 합니다.
  *
  * 성공하면 공연 목록 캐시를 비우고(방금 등록한 공연이 바로 보이게) 상세로 이동합니다.
  * 등록 화면은 히스토리에서 빼서(replace) 뒤로가기로 빈 폼에 되돌아오지 않게 합니다.
@@ -51,8 +56,20 @@ export function useCreateConcert() {
   const [designProgress, setDesignProgress] = useState<DesignProgress | null>(null);
 
   const mutation = useMutation({
-    mutationFn: async ({ form, designs = [] }: CreateConcertInput) => {
+    mutationFn: async ({ form, areaRows = [], designs = [] }: CreateConcertInput) => {
       const { concertId } = await organizerApi.createConcert(form);
+
+      /* 구역 가격을 먼저 저장합니다. 요청 하나로 끝나고, 이게 있어야 팔 수 있는 공연이 됩니다.
+         도안은 IPFS·체인까지 가서 훨씬 느리므로 뒤로 미룹니다 */
+      let areaError: unknown = null;
+      const areas = toAreaSaveRequest(areaRows);
+      if (areas) {
+        try {
+          await organizerApi.saveAreas(String(concertId), areas);
+        } catch (error) {
+          areaError = error;
+        }
+      }
 
       const targets = filledPhotocardDesigns(designs);
       let failed = 0;
@@ -68,11 +85,24 @@ export function useCreateConcert() {
       }
 
       setDesignProgress(null);
-      return { concertId, designTotal: targets.length, designFailed: failed };
+      return { concertId, areaError, designTotal: targets.length, designFailed: failed };
     },
     retry: false,
-    onSuccess: ({ concertId, designTotal, designFailed }) => {
+    onSuccess: ({ concertId, areaError, designTotal, designFailed }) => {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
+      const id = String(concertId);
+
+      /* 구역 저장 실패가 더 급합니다 — 가격이 없으면 팔 수 없는 공연이라 수정 화면으로 보냅니다.
+         도안 실패는 공연을 파는 데 지장이 없어 알림만 남깁니다 */
+      if (areaError) {
+        toast.error(
+          areaError instanceof Error
+            ? `공연은 등록됐지만 구역 가격 저장에 실패했어요: ${areaError.message}`
+            : '공연은 등록됐지만 구역 가격 저장에 실패했어요. 수정 화면에서 다시 저장해 주세요.',
+        );
+        navigate(ROUTES.CONCERT_EDIT(id), { replace: true });
+        return;
+      }
 
       if (designFailed > 0) {
         toast.error(`공연은 등록됐지만 포토카드 도안 ${designFailed}장을 올리지 못했어요.`);
@@ -83,7 +113,7 @@ export function useCreateConcert() {
         toast.success('공연이 등록되었어요.');
       }
 
-      navigate(ROUTES.CONCERT_DETAIL(String(concertId)), { replace: true });
+      navigate(ROUTES.CONCERT_DETAIL(id), { replace: true });
     },
     onError: (error) => {
       setDesignProgress(null);
@@ -96,6 +126,8 @@ export function useCreateConcert() {
 
 export interface CreateConcertInput {
   form: ConcertCreateForm;
+  /** 구역별 등급·가격 줄. 켠 구역이 없으면 저장을 건너뜁니다 */
+  areaRows?: AreaPricingRow[];
   designs?: PhotocardDesignForm[];
 }
 

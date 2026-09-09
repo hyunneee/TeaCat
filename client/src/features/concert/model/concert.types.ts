@@ -53,6 +53,27 @@ export interface Stadium {
   phone: string | null;
 }
 
+export type AreaType = 'SEATED' | 'STANDING';
+
+/** 이 공연에서 판매하는 구역의 등급·가격 (API-268 로 설정한 것). 설정하지 않은 구역은 목록에 없습니다 */
+export interface PerformanceArea {
+  areaId: number;
+  areaCode: string;
+  /** 공연장에 등록된 구역의 형태. 이 값은 공연이 바꿀 수 없습니다 */
+  areaType: AreaType;
+  /**
+   * 이 공연에서 파는 방식. 좌석제 구역을 스탠딩으로 팔 수 있어(플로어에 의자를 두지 않는 경우)
+   * `areaType` 과 다를 수 있습니다. 반대는 불가능합니다 — 스탠딩 구역에는 좌석 좌표가 없습니다.
+   */
+  saleType: AreaType;
+  grade: string | null;
+  price: number | null;
+  /** 이 구역에서 팔 최대 수량. 회차 구분이 없는 안내값입니다 */
+  maxCnt: number | null;
+  /** 판매된 수량 — 공연 전체의 확정 티켓 수입니다 (회차 합산, 취소분 제외) */
+  soldCnt: number;
+}
+
 /** 공연 상세 (API-202) */
 export interface ConcertDetail {
   concertId: number;
@@ -65,6 +86,17 @@ export interface ConcertDetail {
   detailImageUrl: string | null;
   stadium: Stadium;
   schedules: ScheduleSummary[];
+  /**
+   * 구역별 등급·가격. **등록자용 상세(/admin/concerts/{id})에서만 채워집니다** — 수정 화면이 씁니다.
+   * 관람객용 상세(API-202)는 항상 빈 배열이고, 가격이 필요하면 `GET /concerts/{id}/areas` 를 쓰세요.
+   */
+  areas: PerformanceArea[];
+  /**
+   * 이 공연이 쓰는 무대 형식(배치). 같은 공연장도 형식마다 구역이 다르게 나뉩니다.
+   * 구역 목록은 **이 형식 기준**으로 불러와야 합니다 — 공연장 기준으로 불러오면
+   * 기본 배치의 구역이 와서 저장이 거절됩니다 (PERFORMANCE_010).
+   */
+  layout: { layoutId: number; name: string };
   /** 등록한 관리자의 userId. 서버는 이 사람에게만 수정·삭제를 허용합니다. 옛 데이터는 null */
   createdBy: number | null;
   /** 비공개 상태. 클라이언트 상세에서는 항상 false, 등록자용 상세(/admin/concerts/{id})에서만 true 가 옵니다 */

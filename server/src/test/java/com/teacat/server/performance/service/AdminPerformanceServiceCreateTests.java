@@ -13,6 +13,7 @@ import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.entity.Stadium;
 import com.teacat.server.stadium.entity.StadiumLayout;
+import com.teacat.server.stadium.entity.StadiumLayoutStatus;
 import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
@@ -35,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -47,6 +49,7 @@ class AdminPerformanceServiceCreateTests {
 
     private static final Long ADMIN = 6L;
     private static final LocalDateTime TICKETING = LocalDateTime.of(2026, 10, 1, 20, 0);
+    private static final Long LAYOUT_ID = 7L;
 
     @Mock private PerformanceGeneralRepository performanceGeneralRepository;
     @Mock private PerformanceDetailRepository performanceDetailRepository;
@@ -68,20 +71,85 @@ class AdminPerformanceServiceCreateTests {
     }
 
     private void givenStadiumAndSave() {
+        givenStadium();
+        given(stadiumLayoutRepository.findDefaultByStadiumId(1L))
+                .willReturn(Optional.of(mock(StadiumLayout.class)));
+        givenSave();
+    }
+
+    private Stadium givenStadium() {
         Stadium stadium = mock(Stadium.class);
         given(stadium.getId()).willReturn(1L);
         given(stadiumRepository.findById(1L)).willReturn(Optional.of(stadium));
-        given(stadiumLayoutRepository.findDefaultByStadiumId(1L))
-                .willReturn(Optional.of(mock(StadiumLayout.class)));
+        return stadium;
+    }
+
+    private StadiumLayout givenLayout(Long layoutId, Stadium stadium, StadiumLayoutStatus status) {
+        StadiumLayout layout = mock(StadiumLayout.class);
+        lenient().when(layout.getId()).thenReturn(layoutId);
+        given(layout.getStadium()).willReturn(stadium);
+        lenient().when(layout.getStatus()).thenReturn(status);
+        given(stadiumLayoutRepository.findById(layoutId)).willReturn(Optional.of(layout));
+        return layout;
+    }
+
+    private void givenSave() {
         given(performanceGeneralRepository.save(any(PerformanceGeneral.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(performanceDetailRepository.saveAll(anyList()))
                 .willAnswer(invocation -> invocation.getArgument(0));
     }
 
+    /** 무대 형식을 고르지 않은 요청 — 공연장의 기본 배치를 쓴다 */
     private static ConcertCreateRequest requestWith(List<LocalDateTime> dates) {
+        return requestWith(dates, null);
+    }
+
+    private static ConcertCreateRequest requestWith(List<LocalDateTime> dates, Long stadiumLayoutId) {
         return new ConcertCreateRequest(
-                1L, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, dates);
+                1L, stadiumLayoutId, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, dates);
+    }
+
+    @Test
+    void 무대_형식을_고르면_그_형식으로_등록된다() {
+        Stadium stadium = givenStadium();
+        StadiumLayout chosen = givenLayout(LAYOUT_ID, stadium, StadiumLayoutStatus.ACTIVE);
+        givenSave();
+
+        service.create(requestWith(List.of(), LAYOUT_ID), ADMIN);
+
+        ArgumentCaptor<PerformanceGeneral> captor = ArgumentCaptor.forClass(PerformanceGeneral.class);
+        verify(performanceGeneralRepository).save(captor.capture());
+        assertThat(captor.getValue().getStadiumLayout()).isSameAs(chosen);
+        // 기본 배치를 찾아볼 필요가 없다
+        verify(stadiumLayoutRepository, never()).findDefaultByStadiumId(any());
+    }
+
+    @Test
+    void 다른_공연장의_무대_형식은_고를_수_없다() {
+        Stadium stadium = givenStadium();
+        Stadium other = mock(Stadium.class);
+        given(other.getId()).willReturn(99L);
+        givenLayout(LAYOUT_ID, other, StadiumLayoutStatus.ACTIVE);
+
+        // 남의 공연장 형식을 붙이면 구역·좌석이 어긋난다
+        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.PERFORMANCE_LAYOUT_MISMATCH);
+        assertThat(stadium.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void 활성_상태가_아닌_무대_형식은_고를_수_없다() {
+        Stadium stadium = givenStadium();
+        givenLayout(LAYOUT_ID, stadium, StadiumLayoutStatus.DRAFT);
+
+        // 아직 만들던 중인 형식으로 티켓을 팔면 구역이 바뀌어 버린다
+        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.STADIUM_LAYOUT_NOT_ACTIVE);
     }
 
     @Test

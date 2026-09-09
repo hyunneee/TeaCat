@@ -7,16 +7,20 @@ import { EmptyState, Loading } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
 import type { ConcertDetail } from '@/features/concert';
 import {
+  AreaPricingEditor,
   ConcertForm,
   ScheduleEditor,
   concertToForm,
   isConcertCreateValid,
   isConcertFormDirty,
   isTicketingStarted,
+  toAreaSaveRequest,
   useAddSchedule,
+  useAreaPricingRows,
   useDeleteConcert,
   useDeleteSchedule,
   useMyConcert,
+  useSaveAreas,
   useSetVisibility,
   useStadiums,
   useUnsavedChangesGuard,
@@ -86,6 +90,11 @@ export function ConcertEditPage() {
         <Schedules concert={concert} />
       </section>
 
+      <section className="p-4 pt-2">
+        <SectionTitle>구역 등급·가격</SectionTitle>
+        <AreaPricing concert={concert} />
+      </section>
+
       <section className="pt-2">
         <div className="px-4">
           <SectionTitle>공연 정보</SectionTitle>
@@ -129,6 +138,57 @@ function Schedules({ concert }: { concert: ConcertDetail }) {
       adding={add.isPending}
       removingId={remove.isPending ? (remove.variables ?? null) : null}
     />
+  );
+}
+
+/**
+ * 구역별 등급·가격. PUT 이라 목록 전체를 한 번에 저장하므로 저장 버튼을 둡니다.
+ * 이미 팔린 구역은 끌 수 없고 판매량보다 적게 줄일 수 없습니다 — 줄 검증과 서버(PERFORMANCE_012)가 함께 막습니다.
+ */
+function AreaPricing({ concert }: { concert: ConcertDetail }) {
+  const { open } = useModal();
+  /* 구역은 공연장이 아니라 이 공연이 쓰는 **무대 형식**에 딸려 있습니다.
+     공연장 기준으로 불러오면 기본 배치의 구역이 와서, 다른 형식으로 등록한 공연은
+     저장할 때마다 거절됩니다 (PERFORMANCE_010). */
+  const pricing = useAreaPricingRows(String(concert.layout.layoutId), concert.areas);
+  const save = useSaveAreas(String(concert.concertId));
+
+  const body = toAreaSaveRequest(pricing.rows);
+
+  const confirmSave = () => {
+    if (!pricing.valid || !body) return;
+    open('common/confirm', {
+      title: '구역 등급·가격을 저장할까요?',
+      message: '끈 구역은 이 공연에서 판매하지 않는 것으로 처리됩니다. 예매 화면의 가격이 바로 바뀝니다.',
+      confirmText: '저장',
+      onConfirm: () => save.mutate(body),
+    });
+  };
+
+  if (pricing.loading) return <Loading label="구역을 불러오는 중" className="min-h-0 py-6" />;
+  if (pricing.error) {
+    return <p className="text-danger py-3 text-center text-sm">구역 목록을 불러오지 못했어요.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <AreaPricingEditor rows={pricing.rows} errors={pricing.errors} onChange={pricing.setRow} />
+      {pricing.rows.length > 0 && (
+        <Button
+          variant="dark"
+          size="md"
+          fullWidth
+          loading={save.isPending}
+          disabled={!pricing.valid || !body}
+          onClick={confirmSave}
+        >
+          구역 설정 저장
+        </Button>
+      )}
+      {!body && pricing.rows.length > 0 && (
+        <p className="text-subtle text-center text-xs">판매할 구역을 하나 이상 켜야 저장할 수 있어요.</p>
+      )}
+    </div>
   );
 }
 

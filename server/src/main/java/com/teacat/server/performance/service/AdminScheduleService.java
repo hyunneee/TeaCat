@@ -97,10 +97,11 @@ public class AdminScheduleService {
             throw new BusinessException(PerformanceErrorCode.AREA_NOT_CONFIGURED);
         }
 
+        // 공연장 구역의 형태가 아니라 **이 공연에서 파는 방식**을 본다.
+        // 좌석제 구역을 스탠딩으로 팔기로 했으면 좌석을 만들지 않는다 (수량은 max_cnt 로 관리)
         List<Long> seatedAreaIds = configuredAreas.stream()
-                .map(PerformanceArea::getArea)
-                .filter(Area::isSeated)
-                .map(Area::getId)
+                .filter(PerformanceArea::isSoldAsSeated)
+                .map(pa -> pa.getArea().getId())
                 .toList();
 
         if (seatedAreaIds.isEmpty()) {
