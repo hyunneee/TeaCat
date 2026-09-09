@@ -448,6 +448,12 @@ public class AdminPerformanceService {
             if (current != null && sold > 0 && current.getSaleType() != saleType) {
                 throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_LOCKED);
             }
+
+            // 스탠딩은 max_cnt 가 인원을 제한하는 **유일한** 값이다.
+            // 좌석제는 좌석 행 수가 곧 상한이라 비어 있어도 되지만, 스탠딩에서 비우면 무제한이 된다
+            if (saleType == AreaType.STANDING && (setting.maxCnt() == null || setting.maxCnt() < 1)) {
+                throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+            }
         }
 
         // 판매 이력이 있는 구역을 빼면 그 티켓의 가격·등급 근거가 사라진다

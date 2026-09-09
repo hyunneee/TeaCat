@@ -39,8 +39,14 @@ public record PerformanceAreaSaveRequest(
             @Min(value = 0, message = "가격은 0 이상이어야 합니다.")
             Integer price,
 
-            @Schema(description = "이 구역에서 팔 최대 수량", example = "500")
-            @Min(value = 0, message = "최대 판매수량은 0 이상이어야 합니다.")
+            @Schema(description = """
+                    이 구역에서 받을 인원의 상한.
+
+                    - `STANDING` 으로 파는 구역은 **필수**입니다. 좌석 행이 없어 이 값이 인원을 제한하는
+                      유일한 근거이고, 비우면 무제한이 됩니다 (PERFORMANCE_024).
+                    - `SEATED` 로 파는 구역은 생략할 수 있습니다. 좌석 행 수가 곧 상한입니다.
+                    """, example = "500")
+            @Min(value = 0, message = "받을 인원 상한은 0 이상이어야 합니다.")
             Integer maxCnt,
 
             @Schema(description = """

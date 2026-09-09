@@ -33,6 +33,8 @@ public enum PerformanceErrorCode implements ErrorCode {
             "스탠딩 구역은 좌석제로 판매할 수 없습니다. 좌석을 지정해 팔려면 공연 배치에 좌석을 먼저 등록해 주세요."),
     AREA_SALE_TYPE_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_023",
             "판매 이력이 있는 구역은 판매 방식을 바꿀 수 없습니다."),
+    AREA_MAX_CNT_REQUIRED(HttpStatus.BAD_REQUEST, "PERFORMANCE_024",
+            "스탠딩으로 파는 구역은 받을 인원 상한을 1명 이상으로 정해야 합니다."),
     STADIUM_LAYOUT_NOT_FOUND(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_001", "공연장에 활성 기본 배치가 없습니다."),
     PERFORMANCE_LAYOUT_MISMATCH(HttpStatus.BAD_REQUEST, "PERFORMANCE_LAYOUT_002", "공연장과 선택한 배치가 일치하지 않습니다."),
     PERFORMANCE_LAYOUT_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_003", "예매 시작 이후에는 공연 배치를 변경할 수 없습니다."),

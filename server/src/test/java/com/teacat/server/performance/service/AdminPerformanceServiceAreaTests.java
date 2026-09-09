@@ -208,6 +208,51 @@ class AdminPerformanceServiceAreaTests {
                 .isEqualTo(AreaType.STANDING);
     }
 
+    @Test
+    void 스탠딩으로_팔면_인원_상한이_있어야_한다() {
+        givenSold(0);
+
+        // 좌석 행이 없어 max_cnt 가 인원을 제한하는 유일한 근거다. 비우면 무제한이 된다
+        assertThatThrownBy(() ->
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, null), OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+    }
+
+    @Test
+    void 스탠딩_인원_상한은_0명일_수_없다() {
+        givenSold(0);
+
+        assertThatThrownBy(() ->
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, 0), OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+    }
+
+    @Test
+    void 좌석제로_팔면_인원_상한을_생략할_수_있다() {
+        givenSold(0);
+        givenSaveReturnsInput();
+
+        // 좌석 행 수가 곧 상한이라 따로 적지 않아도 된다
+        assertThatCode(() -> service.saveAreas(CONCERT_ID, request(AREA_ID, null), OWNER))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 좌석제_구역을_스탠딩으로_팔_때도_인원_상한이_필요하다() {
+        givenSold(0);
+
+        // 스탠딩으로 팔기로 하면 좌석을 만들지 않으므로 좌석 수는 상한이 되지 못한다
+        assertThatThrownBy(() ->
+                service.saveAreas(CONCERT_ID, request(AREA_ID, null, AreaType.STANDING), OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+    }
+
     private void givenSold(long soldCount) {
         given(ticketRepository.countSoldByArea(CONCERT_ID))
                 .willReturn(soldCount == 0 ? List.of() : List.of(soldCount(AREA_ID, soldCount)));
