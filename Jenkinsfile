@@ -420,7 +420,11 @@ pipeline {
                 # 프론트 이미지는 커밋마다 태그가 붙어 계속 쌓인다 (하나당 수십 MB).
                 # prune 은 dangling 만 지우므로 여기서 최근 3개만 남기고 지운다.
                 # docker images 는 최신순으로 출력한다. -latest 는 변경 감지가 쓰므로 제외.
-                docker images teacat-client --format '{{.Tag}}' 2>/dev/null \n                    | grep "^$DEPLOY_ENV-" \n                    | grep -v -- '-latest$' \n                    | tail -n +4 \n                    | while read -r t; do
+                docker images teacat-client --format '{{.Tag}}' 2>/dev/null \
+                    | grep "^$DEPLOY_ENV-" \
+                    | grep -v -- '-latest$' \
+                    | tail -n +4 \
+                    | while read -r t; do
                           docker rmi "teacat-client:$t" >/dev/null 2>&1 || true
                       done || true
             '''
