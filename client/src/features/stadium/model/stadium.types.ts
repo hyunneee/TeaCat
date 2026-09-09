@@ -48,6 +48,18 @@ export interface StadiumList {
   stadiums: StadiumSummary[];
 }
 
+export interface StadiumDetail extends StadiumSummary {
+  layoutImageUrl: string | null;
+  layoutWidth: number | null;
+  layoutHeight: number | null;
+}
+
+export interface StadiumUpdateRequest {
+  name?: string;
+  address?: string;
+  phone?: string;
+}
+
 export interface ExcelSheet {
   name: string;
   rowCount: number;
@@ -157,6 +169,12 @@ export interface StadiumLayoutSummary {
 export interface StadiumLayoutList {
   stadiumId: number;
   layouts: StadiumLayoutSummary[];
+}
+
+export interface StadiumLayoutUpdateRequest {
+  name?: string;
+  isDefault?: boolean;
+  status?: StadiumLayoutStatusValue;
 }
 
 export interface StadiumLayoutDetail {

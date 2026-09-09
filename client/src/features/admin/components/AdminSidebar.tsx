@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Armchair, LayoutDashboard, Users, type LucideIcon } from 'lucide-react';
+import { Armchair, Building2, LayoutDashboard, Users, type LucideIcon } from 'lucide-react';
 import { cn } from '@/shared/lib';
 import { ROUTES } from '@/shared/constants';
 import { Logo } from '@/shared/components/ui';
@@ -33,13 +33,26 @@ interface AdminMenuItem {
 const ADMIN_MENU: AdminMenuItem[] = [
   { to: ROUTES.ADMIN, label: '대시보드', icon: LayoutDashboard },
   {
+    to: ROUTES.ADMIN_STADIUMS,
+    label: '공연장 목록',
+    icon: Building2,
+    visible: can.manageStadiumLayouts,
+    matchNested: true,
+  },
+  {
     to: ROUTES.ADMIN_STADIUM,
     label: '좌석 배치 관리',
     icon: Armchair,
     visible: can.manageStadiumLayouts,
     matchNested: true,
   },
-  { to: ROUTES.ADMIN_USERS, label: '유저 관리', icon: Users, visible: can.manageUsers, matchNested: true },
+  {
+    to: ROUTES.ADMIN_USERS,
+    label: '유저 관리',
+    icon: Users,
+    visible: can.manageUsers,
+    matchNested: true,
+  },
 ];
 
 export interface AdminSidebarProps {
@@ -55,7 +68,7 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
       className={cn(
         /* 어두운 면은 70:25:5 의 25(구조)입니다. brand 는 채도 0 이라
            초록(강조 5%)을 잡아먹지 않습니다. 선택된 메뉴만 초록입니다. */
-        'flex w-60 shrink-0 flex-col gap-1 bg-brand-900 p-4 text-white',
+        'bg-brand-900 flex w-60 shrink-0 flex-col gap-1 p-4 text-white',
         className,
       )}
     >
@@ -74,8 +87,8 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
               cn(
                 'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors',
                 isActive
-                  // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
-                  ? 'bg-accent-700 font-semibold text-white'
+                  ? // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
+                    'bg-accent-700 font-semibold text-white'
                   : 'text-white/70 hover:bg-white/10 hover:text-white',
               )
             }

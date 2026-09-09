@@ -69,6 +69,10 @@ const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSign
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
 const AdminStadiumPage = page(() => import('@/pages/AdminStadiumPage'), 'AdminStadiumPage');
+const AdminStadiumListPage = page(
+  () => import('@/pages/AdminStadiumListPage'),
+  'AdminStadiumListPage',
+);
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
 /* 어드민 대시보드. 껍데기까지 lazy 로 쪼갭니다 —
@@ -163,6 +167,7 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN', 'STADIUM']} />,
                 children: [
                   { path: ROUTES.ADMIN_STADIUM, element: withBoundary(<AdminStadiumPage />) },
+                  { path: ROUTES.ADMIN_STADIUMS, element: withBoundary(<AdminStadiumListPage />) },
                 ],
               },
               {
