@@ -49,6 +49,13 @@ export const can = {
   manageBanners: (user: User | null): boolean => user?.role === 'ADMIN',
 
   /**
+   * 운영 통계 메뉴 — 가입·접속 추이.
+   *
+   * 서버의 `/admin/analytics/**` 는 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
+   */
+  viewAnalytics: (user: User | null): boolean => user?.role === 'ADMIN',
+
+  /**
    * 문의 관리 메뉴 — 답변·해결 처리.
    *
    * 서버의 `/admin/inquiries/**` 는 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).

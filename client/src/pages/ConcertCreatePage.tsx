@@ -3,6 +3,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { EmptyState, Loading } from '@/shared/components/common';
 import {
+  arePhotocardDesignsValid,
   ConcertForm,
   EMPTY_CONCERT_CREATE,
   isConcertCreateValid,
@@ -12,6 +13,7 @@ import {
   useStadiums,
   validateConcertCreate,
   type ConcertCreateFormValues,
+  type PhotocardDesignForm,
 } from '@/features/organizer';
 
 /**
@@ -25,6 +27,8 @@ import {
  */
 export function ConcertCreatePage() {
   const [form, setForm] = useState<ConcertCreateFormValues>(EMPTY_CONCERT_CREATE);
+  /* 도안은 공연이 만들어진 뒤에야 보낼 수 있어 폼 값과 따로 들고 있습니다 */
+  const [designs, setDesigns] = useState<PhotocardDesignForm[]>([]);
   const [touched, setTouched] = useState<Partial<Record<keyof ConcertCreateFormValues, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -49,7 +53,8 @@ export function ConcertCreatePage() {
   }, [usableLayoutIds, form.stadiumLayoutId]);
 
   const errors = validateConcertCreate(form);
-  const valid = isConcertCreateValid(form) && areaPricing.valid;
+  const valid =
+    isConcertCreateValid(form) && areaPricing.valid && arePhotocardDesignsValid(designs);
 
   const visibleErrors = Object.fromEntries(
     Object.entries(errors).filter(([name]) => submitted || touched[name as keyof ConcertCreateFormValues]),
@@ -58,7 +63,7 @@ export function ConcertCreatePage() {
   const handleSubmit = () => {
     setSubmitted(true);
     if (!valid) return;
-    create.mutate({ form, areaRows: areaPricing.rows });
+    create.mutate({ form, areaRows: areaPricing.rows, designs });
   };
 
   if (isPending) {
@@ -92,7 +97,11 @@ export function ConcertCreatePage() {
         stadiums={stadiums}
         submitting={create.isPending}
         disabled={submitted && !valid}
-        submitLabel="등록하기"
+        submitLabel={
+          create.designProgress
+            ? `포토카드 올리는 중 ${create.designProgress.done + 1}/${create.designProgress.total}`
+            : '등록하기'
+        }
         layouts={{ options: layouts.usable, loading: layouts.isPending }}
         areaPricing={{
           rows: areaPricing.rows,
@@ -102,6 +111,9 @@ export function ConcertCreatePage() {
           error: areaPricing.error,
           onChange: areaPricing.setRow,
         }}
+        designs={designs}
+        onDesignsChange={setDesigns}
+        showDesignErrors={submitted}
         onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
         onBlur={(name) => setTouched((prev) => ({ ...prev, [name]: true }))}
         onSubmit={handleSubmit}

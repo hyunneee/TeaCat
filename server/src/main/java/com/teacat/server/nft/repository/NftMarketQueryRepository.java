@@ -213,16 +213,85 @@ public class NftMarketQueryRepository {
                 ));
     }
 
+    /**
+     * 카드 행을 만든다. <b>{@code wallet_id} 를 여기서 채운다</b> — 발행을 보내려면 받는 주소가
+     * 필요하고, 그 주소는 이 지갑에서 나온다.
+     *
+     * <p>{@code status} 는 {@code PENDING} 으로 시작한다. 그 뒤 {@code MINTING → MINTED} 는
+     * 블록체인 서비스가 옮긴다 (PHOTOCARD_PLAN.md 6-4).
+     */
     public void batchIssuePhotocards(List<IssueRow> rows) {
         String sql = """
-                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
-                VALUES (?, ?, ?, 'PENDING')
+                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, wallet_id, status)
+                VALUES (?, ?, ?, ?, 'PENDING')
                 """;
         jdbcTemplate.getJdbcTemplate().batchUpdate(sql, rows, 500, (statement, row) -> {
             statement.setLong(1, row.designId());
             statement.setLong(2, row.ticketId());
             statement.setLong(3, row.ownerId());
+            statement.setLong(4, row.walletId());
         });
+    }
+
+    /**
+     * 유저별 지갑. 발행 대상 주소를 찾는다.
+     *
+     * <p>체인마다 주소가 다르므로 {@code chainId} 로 좁힌다. 지갑이 없는 유저는 결과에
+     * 안 나오고, 부르는 쪽이 그걸로 발급 전체를 거절한다 — 카드가 절반만 나간 공연을
+     * 수습하는 비용이 훨씬 크다.
+     */
+    public List<UserWalletRow> findActiveWallets(List<Long> userIds, int chainId) {
+        if (userIds.isEmpty()) {
+            return List.of();
+        }
+
+        String sql = """
+                SELECT wo.user_id, w.id AS wallet_id, w.address
+                FROM wallet_owners wo
+                JOIN wallets w ON w.owner_id = wo.id
+                WHERE wo.user_id IN (:userIds)
+                  AND w.chain_id = :chainId
+                  AND w.status = 'ACTIVE'
+                """;
+        return jdbcTemplate.query(sql,
+                new MapSqlParameterSource()
+                        .addValue("userIds", userIds)
+                        .addValue("chainId", chainId),
+                (rs, rowNum) -> new UserWalletRow(
+                        rs.getLong("user_id"),
+                        rs.getLong("wallet_id"),
+                        // char(42) 라 뒤가 공백으로 채워져 올 수 있다
+                        rs.getString("address").trim()
+                ));
+    }
+
+    /**
+     * 아직 체인에 안 보낸 카드. 발행 재시도가 쓴다.
+     *
+     * <p>{@code PENDING} 만 고른다 — {@code MINTING} 은 트랜잭션이 이미 나가 확정을 기다리는
+     * 중이라 다시 보내면 안 된다.
+     */
+    public List<PendingMintRow> findPendingMints(Long performanceId, int limit) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.design_id, w.address
+                FROM nft_photocards p
+                JOIN nft_photocard_designs d ON d.id = p.design_id
+                JOIN wallets w ON w.id = p.wallet_id
+                WHERE d.performance_general_id = :performanceId
+                  AND p.status = 'PENDING'
+                  AND p.wallet_id IS NOT NULL
+                ORDER BY p.id
+                LIMIT :limit
+                """;
+        return jdbcTemplate.query(sql,
+                new MapSqlParameterSource()
+                        .addValue("performanceId", performanceId)
+                        .addValue("limit", limit),
+                (rs, rowNum) -> new PendingMintRow(
+                        rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
+                        rs.getString("address").trim()
+                ));
     }
 
     private List<UserTradeRow> findUserTradeHistory(String userColumn,
@@ -327,6 +396,13 @@ public class NftMarketQueryRepository {
     public record TicketRecipientRow(Long ticketId, Long userId) {
     }
 
-    public record IssueRow(Long designId, Long ticketId, Long ownerId) {
+    public record IssueRow(Long designId, Long ticketId, Long ownerId, Long walletId) {
+    }
+
+    public record UserWalletRow(Long userId, Long walletId, String address) {
+    }
+
+    /** 발행 요청에 실어 보낼 한 장. {@code photocardId} 가 그대로 온체인 멱등 키다 */
+    public record PendingMintRow(Long photocardId, Long designId, String address) {
     }
 }

@@ -2,6 +2,7 @@ import {
   Armchair,
   Building2,
   CalendarPlus,
+  ChartLine,
   ScanFace,
   ShieldCheck,
   UserPlus,
@@ -92,6 +93,14 @@ export function AdminDashboardPage() {
               description="등록된 공연장과 기본 정보를 조회하고 저장된 좌석 배치를 관리합니다."
               icon={Building2}
               to={ROUTES.ADMIN_STADIUMS}
+            />
+
+            <BentoTile
+              span={4}
+              title="운영 통계"
+              description="일자별 가입·탈퇴와 하루 접속자를 꺾은선으로 봅니다. 운영 배포 시점이 함께 표시됩니다."
+              icon={ChartLine}
+              to={ROUTES.ADMIN_ANALYTICS}
             />
 
             <BentoTile

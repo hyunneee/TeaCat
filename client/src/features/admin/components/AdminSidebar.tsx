@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   Armchair,
   Building2,
+  ChartLine,
   GalleryHorizontalEnd,
   LayoutDashboard,
   MessagesSquare,
@@ -40,6 +41,13 @@ interface AdminMenuItem {
 
 const ADMIN_MENU: AdminMenuItem[] = [
   { to: ROUTES.ADMIN, label: '대시보드', icon: LayoutDashboard },
+  {
+    to: ROUTES.ADMIN_ANALYTICS,
+    label: '운영 통계',
+    icon: ChartLine,
+    visible: can.viewAnalytics,
+    matchNested: true,
+  },
   {
     to: ROUTES.ADMIN_STADIUMS,
     label: '공연장 목록',

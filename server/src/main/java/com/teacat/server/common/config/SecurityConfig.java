@@ -1,5 +1,7 @@
 package com.teacat.server.common.config;
 
+import com.teacat.server.analytics.security.DailyActiveUserFilter;
+import com.teacat.server.analytics.service.DailyActiveUserRecorder;
 import com.teacat.server.auth.security.JwtAccessDeniedHandler;
 import com.teacat.server.auth.security.JwtAuthenticationEntryPoint;
 import com.teacat.server.auth.security.JwtAuthenticationFilter;
@@ -56,6 +58,7 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CorsProperties corsProperties;
     private final ObjectMapper objectMapper;
+    private final DailyActiveUserRecorder dailyActiveUserRecorder;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -70,6 +73,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // 배포 파이프라인(젠킨스)이 부르는 경로. 로그인 세션이 없어서 토큰으로
+                        // 인증할 수 없고, 대신 컨트롤러가 X-Internal-Api-Key 를 검사한다.
+                        //
+                        // 🔴 여기에 경로를 늘릴 때는 그 컨트롤러가 키를 검사하는지 반드시 확인할 것.
+                        //    검사를 빠뜨리면 인터넷에 그대로 열린 API 가 된다.
+                        .requestMatchers("/internal/**").permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
                         // NFT 마켓·경매 조회는 비로그인도 볼 수 있다. GET 만 열리므로 입찰·즉시구매·취소는 그대로 인증이 필요하다
@@ -94,6 +103,10 @@ public class SecurityConfig {
                         .accessDeniedHandler(new JwtAccessDeniedHandler(objectMapper)))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class)
+                // 인증이 끝난 뒤여야 누가 왔는지 알 수 있다. 하루 접속자 집계용이고,
+                // 실패해도 요청에 영향을 주지 않는다 (DailyActiveUserRecorder)
+                .addFilterAfter(new DailyActiveUserFilter(dailyActiveUserRecorder),
+                        JwtAuthenticationFilter.class)
                 .build();
     }
 

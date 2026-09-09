@@ -26,6 +26,7 @@ export {
   useReorderBanners,
   useUploadBannerImage,
 } from './hooks/useAdminBanners';
+export { useMemberSummary, useMemberTrend } from './hooks/useAdminAnalytics';
 export {
   useCreateAdminUser,
   useUpdateAdminUser,
@@ -53,10 +54,26 @@ export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
 
+// View — 운영 통계
+// 🔴 recharts 는 어드민 전용입니다 (CLAUDE.md 1장). 차트 컴포넌트를 사용자 화면에서
+//    쓰지 마세요 — 여기로 내보내는 것도 어드민 페이지가 조립할 수 있게 하기 위한 것입니다.
+export { MemberTrendSection } from './components/MemberTrendSection';
+export { TrendLineChart } from './components/TrendLineChart';
+
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
 export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
 export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
+export { adminAnalyticsApi, adminAnalyticsKeys } from './api/adminAnalyticsApi';
+export {
+  TREND_RANGES,
+  TREND_RANGE_LABEL,
+  type MemberSummary,
+  type MemberTrend,
+  type MemberDailyPoint,
+  type DeploymentMarker,
+  type TrendRange,
+} from './model/adminAnalytics.types';
 export type {
   AdminBanner,
   AdminBannerType,

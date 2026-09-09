@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +26,7 @@ import java.util.Map;
 public class PhotocardChainClient {
 
     private static final String DESIGN_PATH = "/internal/photocards/designs";
+    private static final String ISSUE_PATH = "/internal/photocards/issue";
     private static final String TX_PATH = "/internal/tx/";
     private static final String HEALTH_PATH = "/health";
     private static final String PHOTOCARD_CONTRACT = "PhotocardNFT";
@@ -50,6 +52,33 @@ public class PhotocardChainClient {
         return blockchainRestClient.post(
                 DESIGN_PATH, body, PhotocardDesignRegisterResult.class,
                 NftErrorCode.DESIGN_REGISTRATION_FAILED);
+    }
+
+    /**
+     * 카드를 배치로 발행한다. 한 요청이 한 트랜잭션이고 <b>최대 200장</b>이다
+     * (컨트랙트의 {@code MAX_BATCH}). 그보다 많으면 부르는 쪽이 잘라서 여러 번 보낸다.
+     *
+     * <p>같은 {@code photocardKey} 로 다시 보내면 컨트랙트가 <b>revert 가 아니라 건너뛴다.</b>
+     * 응답을 못 받아 재시도해도 카드가 두 장 나가지 않는 이유다 (DESIGN.md 4-3).
+     *
+     * <p>등록되지 않은 도안이 하나라도 섞이면 <b>배치 전체가 실패한다.</b> 보내기 전에
+     * 도안이 전부 REGISTERED 인지 확인해야 한다.
+     */
+    public PhotocardIssueResult issuePhotocards(List<IssueItem> items) {
+        return blockchainRestClient.post(
+                ISSUE_PATH, Map.of("items", items), PhotocardIssueResult.class,
+                NftErrorCode.PHOTOCARD_MINT_FAILED);
+    }
+
+    /**
+     * 발행 요청 한 줄.
+     *
+     * @param photocardKey {@code nft_photocards.id}. <b>이 값 하나가 한 티켓에 카드 두 장이
+     *                     나가는 것을 막는다</b> — 해시가 체인에 영구히 남으므로 비밀값을 넣으면 안 된다
+     * @param designId     {@code nft_photocard_designs.id}. 그대로 온체인 tokenId다
+     * @param to           받는 지갑 주소
+     */
+    public record IssueItem(String photocardKey, String designId, String to) {
     }
 
     /**

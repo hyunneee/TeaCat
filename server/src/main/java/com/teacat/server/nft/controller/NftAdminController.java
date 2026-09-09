@@ -3,7 +3,7 @@ package com.teacat.server.nft.controller;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
-import com.teacat.server.nft.service.NftService;
+import com.teacat.server.nft.service.NftPhotocardIssuer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,19 +24,47 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class NftAdminController {
 
-    private final NftService nftService;
+    private final NftPhotocardIssuer photocardIssuer;
 
     @Operation(
             summary = "NFT 포토카드 일괄 발급",
-            description = "ADMIN 전용 API입니다. 공연의 확정 티켓마다 포토카드 한 장을 생성하고 요청한 도안별 수량에 맞춰 무작위 배포합니다. "
-                    + "배정 수량 합계는 발급 대상 티켓 수와 같아야 하며, 같은 공연에는 한 번만 발급할 수 있습니다. "
-                    + "블록체인 미연동 기간에는 민팅 상태를 PENDING으로 저장합니다."
+            description = """
+                    ADMIN 전용 API입니다. 공연의 확정 티켓마다 포토카드 한 장을 생성하고 요청한 도안별 수량에 맞춰
+                    무작위 배포한 뒤, 곧바로 체인에 발행을 요청합니다. 배정 수량 합계는 발급 대상 티켓 수와 같아야 하며,
+                    같은 공연에는 한 번만 발급할 수 있습니다.
+
+                    **배정된 도안은 전부 온체인 등록(`REGISTERED`)이 끝나 있어야 합니다.** 미등록 도안이 하나라도
+                    섞이면 발행 배치 전체가 실패하므로, 보내기 전에 거절합니다.
+
+                    **발급 대상 전원에게 지갑이 있어야 합니다.** 한 명이라도 없으면 발급 전체를 거절합니다 —
+                    카드가 절반만 나간 공연을 수습하는 비용이 훨씬 크기 때문입니다.
+
+                    체인 전송이 실패해도 카드 행은 `PENDING`으로 남습니다. 응답의 `failedCount`가 아직 안 나간
+                    장수이며, 발행 재시도 API로 이어 보낼 수 있습니다. 민팅은 202로 먼저 끝나고 블록이 실리면
+                    블록체인 서비스가 `MINTING → MINTED`로 옮깁니다.
+                    """
     )
     @PostMapping("/{performanceId}/photocards/issue")
     public ResponseEntity<BaseResponse<NftPhotocardIssueResponse>> issuePhotocards(
             @PathVariable Long performanceId,
             @Valid @RequestBody NftPhotocardIssueRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(nftService.issuePhotocards(performanceId, request)));
+                .body(BaseResponse.success(photocardIssuer.issue(performanceId, request)));
+    }
+
+    @Operation(
+            summary = "포토카드 온체인 발행 재시도",
+            description = """
+                    ADMIN 전용 API입니다. 발급은 됐는데 아직 체인에 안 보낸 카드(`PENDING`)를 이어서 발행합니다.
+                    같은 카드를 다시 보내도 컨트랙트가 이미 발행된 키를 건너뛰므로 안전하며, 확정을 기다리는 중인
+                    `MINTING` 카드는 대상에서 빠집니다.
+                    """
+    )
+    @PostMapping("/{performanceId}/photocards/mint")
+    public ResponseEntity<BaseResponse<NftPhotocardIssueResponse>> mintPending(
+            @PathVariable Long performanceId) {
+        return ResponseEntity.ok(BaseResponse.success(
+                "포토카드 발행 요청을 보냈습니다.",
+                photocardIssuer.mintPending(performanceId)));
     }
 }

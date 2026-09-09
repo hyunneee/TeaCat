@@ -225,3 +225,9 @@ banner:
     # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.
     #   업로드 URL 을 내줄 때와 key 를 넘겨받을 때 똑같이 걸린다.
     max-size: 10MB
+
+analytics:
+  # 젠킨스가 배포 기록을 보낼 때 쓰는 키 (POST /internal/deployments 의 X-Internal-Api-Key).
+  # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 통계 마커만 안 쌓일 뿐 다른 기능에는 영향이 없다.
+  #    "비었으면 통과" 로 만들지 말 것 — 운영에 키를 안 넣은 실수가 열린 API 가 된다.
+  internal-api-key: ${ANALYTICS_INTERNAL_API_KEY:}

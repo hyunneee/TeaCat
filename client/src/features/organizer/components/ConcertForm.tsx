@@ -8,10 +8,12 @@ import {
   TITLE_MAX_LENGTH,
   type ConcertCreateErrors,
   type ConcertCreateForm as FormValues,
+  type PhotocardDesignForm,
   type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
 import { AreaPricingEditor } from './AreaPricingEditor';
+import { PhotocardDesignEditor } from './PhotocardDesignEditor';
 
 interface Props {
   form: FormValues;
@@ -51,6 +53,15 @@ interface Props {
     error: boolean;
     onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
   };
+  /**
+   * 공연과 함께 등록할 포토카드 도안. **등록 화면에서만** 넘깁니다 —
+   * 도안 API 가 `performanceId` 를 요구해서 공연이 만들어진 뒤에야 보낼 수 있고,
+   * 수정 화면은 이미 있는 공연이라 도안 관리가 따로 필요합니다.
+   */
+  designs?: PhotocardDesignForm[];
+  onDesignsChange?: (designs: PhotocardDesignForm[]) => void;
+  /** 도안 줄의 에러를 보여줄지. 제출을 누른 뒤부터 켭니다 */
+  showDesignErrors?: boolean;
   onChange: (patch: Partial<FormValues>) => void;
   onBlur: (name: keyof FormValues) => void;
   onSubmit: () => void;
@@ -75,6 +86,9 @@ export function ConcertForm({
   editing = false,
   layouts,
   areaPricing,
+  designs,
+  onDesignsChange,
+  showDesignErrors = false,
   onChange,
   onBlur,
   onSubmit,
@@ -310,6 +324,15 @@ export function ConcertForm({
         error={errors.detailImage}
         onChange={pickFile('detailImage')}
       />
+
+      {designs && onDesignsChange && (
+        <PhotocardDesignEditor
+          designs={designs}
+          showErrors={showDesignErrors}
+          disabled={submitting}
+          onChange={onDesignsChange}
+        />
+      )}
 
       <Button
         type="submit"

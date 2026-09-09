@@ -3,12 +3,15 @@ import type { ConcertDetail, ConcertSummary, PerformanceArea } from '@/features/
 import type { AreaSaveRequest, StadiumAreaListResponse } from '../model/areaPricing';
 import {
   toConcertCreateFormData,
+  toPhotocardDesignFormData,
   toServerDateTime,
   type ConcertCreateForm,
   type ConcertCreateResponse,
   type ConcertUpdateRequest,
   type ConcertVisibilityResponse,
   type ImageType,
+  type PhotocardDesignForm,
+  type PhotocardDesignResponse,
   type PresignedUpload,
   type ScheduleCreateResponse,
   type StadiumLayoutSummary,
@@ -86,6 +89,23 @@ export const organizerApi = {
 
   /** 회차 삭제 (API-267). 예매 이력이 있으면 서버가 거절합니다(PERFORMANCE_009) */
   deleteSchedule: (scheduleId: string) => http.delete<void>(`/admin/schedules/${scheduleId}`),
+
+  /**
+   * 포토카드 도안 등록. ADMIN 전용, multipart.
+   *
+   * 요청 하나가 **IPFS 핀 두 번(이미지 → 메타데이터 JSON) → 도안 저장 → 온체인 등록**까지 갑니다.
+   * 그래서 공연 등록보다 느리고, 응답은 `chainStatus: REGISTERING` 으로 옵니다 —
+   * 확정(`REGISTERED`)은 서버의 감시가 30~40초 뒤에 채웁니다.
+   *
+   * 공연 이미지와 달리 업로드 URL(API-270)을 쓰지 않습니다. 파일 바이트를 쥔 쪽이 그대로
+   * Pinata 에 올려야 CID 가 나오기 때문입니다.
+   */
+  createPhotocardDesign: (performanceId: number, design: PhotocardDesignForm) =>
+    http.post<PhotocardDesignResponse>(
+      '/admin/photocard-designs',
+      toPhotocardDesignFormData(performanceId, design),
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    ),
 
   /** 이미지 업로드 URL 발급 (API-270) */
   issueUploadUrl: (imageType: ImageType, contentType: string) =>
