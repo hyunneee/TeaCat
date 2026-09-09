@@ -319,13 +319,18 @@ pipeline {
                         mkdir -p "$DEPLOY_DIR/monitoring"
                         cp -rf docker/monitoring/. "$DEPLOY_DIR/monitoring/"
                         cp -f  docker/docker-compose.monitoring.yml "$MON_COMPOSE"
+                        # 🔴 예제 파일도 함께 올린다. 아래 안내가 "이걸 복사하세요" 라고 말하는데
+                        #    정작 서버에 그 파일이 없으면 안내가 아무 쓸모가 없다.
+                        cp -f  docker/.env.monitoring.example "$DEPLOY_DIR/.env.monitoring.example"
 
                         # 시크릿은 저장소에 없다. 서버에 파일을 만들기 전까지는 건너뛴다.
                         # compose 의 :? 가드에 걸려 배포가 죽는 것보다, 안 떴다고 말해주는 편이 낫다.
                         if [ ! -f "$MON_ENV" ]; then
-                            echo "⚠️  $MON_ENV 이 없어 모니터링 배포를 건너뜁니다."
-                            echo "    cp $DEPLOY_DIR/docker-compose.monitoring.yml 과 함께 올라온"
-                            echo "    docker/.env.monitoring.example 을 복사해 값을 채우세요."
+                            echo "⚠️  $MON_ENV 이 없어 모니터링 배포를 건너뜁니다. 서버에서:"
+                            echo "      cp $DEPLOY_DIR/.env.monitoring.example $MON_ENV"
+                            echo "      chmod 600 $MON_ENV"
+                            echo "    그 뒤 GRAFANA_ADMIN_PASSWORD 와 POSTGRES_PASSWORD 를 채우세요"
+                            echo "    (POSTGRES_PASSWORD 는 $DEPLOY_DIR/.env.prod 의 값과 같아야 합니다)."
                             exit 0
                         fi
 
@@ -338,8 +343,9 @@ pipeline {
                             exit 1
                         fi
                         if [ ! -f "$MON_HOOK" ]; then
-                            echo "⚠️  $MON_HOOK 이 없어 모니터링 배포를 건너뜁니다."
-                            echo "    cp $MON_HOOK.example $MON_HOOK 후 주소를 넣으세요."
+                            echo "⚠️  $MON_HOOK 이 없어 모니터링 배포를 건너뜁니다. 서버에서:"
+                            echo "      echo '<Mattermost 들어오는 웹후크 주소>' > $MON_HOOK"
+                            echo "      chmod 600 $MON_HOOK"
                             exit 0
                         fi
 

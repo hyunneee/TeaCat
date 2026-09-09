@@ -37,8 +37,25 @@ inhibit_rules:
 
 receivers:
   - name: 'default'
-    webhook_configs:
-      # Discord 로 바로 보내려면 주소 끝에 /slack 을 붙이고 Slack 포맷을 쓰거나,
-      # alertmanager-discord 같은 어댑터를 하나 두면 된다.
-      - url_file: /etc/alertmanager/webhook_url
+    # 🔴 webhook_configs 가 아니라 slack_configs 다.
+    #    webhook_configs 는 Alertmanager 고유 JSON({status, alerts:[...]})을 그대로 던지는데,
+    #    Mattermost 의 들어오는 웹후크는 {"text": ...} 를 기대해서 400 으로 거절한다.
+    #    알림이 안 오는데 앱 쪽에는 아무 흔적이 없어 원인을 찾기 어려운 종류의 실패다.
+    #
+    #    Mattermost 는 Slack 호환 페이로드를 받으므로 slack_configs 를 그대로 쓴다.
+    #    (Discord 로 바꾸게 되면 웹훅 주소 끝에 /slack 만 붙이면 된다)
+    slack_configs:
+      - api_url_file: /etc/alertmanager/webhook_url
         send_resolved: true
+        # 제목 한 줄에 상태·개수·이름이 다 보이게 한다. 알림은 대개 휴대폰 잠금화면에서
+        # 처음 읽히므로, 펼치지 않고도 "지금 급한가" 가 판단돼야 한다.
+        title: '{{ if eq .Status "firing" }}🔴{{ else }}✅ 해제 {{ end }} [{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}{{ if gt (len .Alerts) 1 }} ({{ len .Alerts }}건){{ end }}'
+        # 본문에는 요약과 대응 방법을 넣는다. 규칙마다 적어둔 description 이 곧 대응 안내다.
+        text: >-
+          {{ range .Alerts }}{{ .Annotations.summary }}
+
+          {{ .Annotations.description }}
+
+          {{ end }}
+        # 색으로 심각도를 구분한다. 목록에서 훑을 때 이게 제일 빠르다
+        color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
