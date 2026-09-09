@@ -23,6 +23,7 @@ import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.entity.PerformanceStatus;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.entity.Area;
@@ -68,6 +69,7 @@ public class AdminPerformanceService {
     private final PerformanceDetailRepository performanceDetailRepository;
     private final PerformanceAreaRepository performanceAreaRepository;
     private final AreaRepository areaRepository;
+    private final TicketRepository ticketRepository;
     private final StadiumRepository stadiumRepository;
     private final StadiumLayoutRepository stadiumLayoutRepository;
     private final FileStorageService fileStorageService;
@@ -410,17 +412,26 @@ public class AdminPerformanceService {
         Map<Long, PerformanceArea> existing = performanceAreaRepository.findAllByPerformanceId(concertId).stream()
                 .collect(Collectors.toMap(pa -> pa.getArea().getId(), Function.identity()));
 
+        // 판매량은 티켓에서 센다. sold_cnt 컬럼이 있던 시절에는 그 값을 아무도 갱신하지 않아
+        // 늘 0 이었고, 그래서 아래 두 검사가 통과만 하고 있었다
+        Map<Long, Long> soldByArea = ticketRepository.countSoldByArea(concertId).stream()
+                .collect(Collectors.toMap(
+                        TicketRepository.AreaSoldCount::getAreaId,
+                        TicketRepository.AreaSoldCount::getSoldCount));
+
         for (PerformanceAreaSaveRequest.AreaSetting setting : request.areas()) {
             PerformanceArea current = existing.get(setting.areaId());
+            long sold = soldByArea.getOrDefault(setting.areaId(), 0L);
 
-            if (current != null && current.wouldBreakSoldCount(setting.maxCnt())) {
+            if (current != null && current.wouldBreakSoldCount(setting.maxCnt(), sold)) {
                 throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
             }
         }
 
         // 판매 이력이 있는 구역을 빼면 그 티켓의 가격·등급 근거가 사라진다
         boolean removesSoldArea = existing.values().stream()
-                .anyMatch(pa -> pa.getSoldCnt() > 0 && !requestedAreaIds.contains(pa.getArea().getId()));
+                .anyMatch(pa -> soldByArea.getOrDefault(pa.getArea().getId(), 0L) > 0
+                        && !requestedAreaIds.contains(pa.getArea().getId()));
 
         if (removesSoldArea) {
             throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
@@ -444,7 +455,8 @@ public class AdminPerformanceService {
                 .toList();
 
         return performanceAreaRepository.saveAll(saved).stream()
-                .map(PerformanceAreaResponse::from)
+                .map(pa -> PerformanceAreaResponse.of(
+                        pa, soldByArea.getOrDefault(pa.getArea().getId(), 0L)))
                 .toList();
     }
 

@@ -73,6 +73,29 @@ booking:
     face-verification-required: true
     # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
 
+payment:
+  toss:
+    base-url: ${TOSS_API_URL:https://api.tosspayments.com}
+    # 🔴 이 키 하나로 승인·취소가 다 됩니다. 설정 파일에 적지 말고 server/.env 에 넣으세요.
+    #    프론트가 쓰는 것은 공개값인 클라이언트 키이고, 시크릿 키는 절대 내려보내지 않습니다.
+    #    비어 있으면 결제만 PAYMENT_001 로 거절되고 나머지 기능은 그대로 동작합니다.
+    secret-key: ${TOSS_SECRET_KEY:}
+    connect-timeout: 3s
+    # 승인은 카드사까지 다녀옵니다. 짧게 잡고 끊으면 "토스는 승인했는데 우리는 실패로 아는"
+    # 상태가 잦아집니다 — 그건 복구 배치가 뒤늦게 되살려야 하는 가장 비싼 실패입니다
+    read-timeout: 30s
+  token-charge:
+    # 충전 한도. 실수로 0 을 더 붙이는 사고를 막고, 탈취된 계정의 큰 결제를 늦춥니다
+    min-amount: ${TOKEN_CHARGE_MIN_AMOUNT:1000}
+    max-amount: ${TOKEN_CHARGE_MAX_AMOUNT:1000000}
+  recovery:
+    # 승인 결과를 못 받은 결제를 토스에 되묻는 주기
+    interval: ${PAYMENT_RECOVERY_INTERVAL:60s}
+    initial-delay: 30s
+    # 결제창을 띄우고 그냥 떠나는 일이 흔해서, 갓 만들어진 결제까지 물으면 헛걸음입니다.
+    # 승인이 끝날 만한 시간이 지난 것만 봅니다
+    settle-after: ${PAYMENT_SETTLE_AFTER:5m}
+
 nft:
   auction:
     # 판매자가 고를 수 있는 경매 진행 시간 범위
@@ -192,6 +215,10 @@ blockchain:
   connect-timeout: 3s
   # 체인에 트랜잭션을 보내고 오므로 넉넉히 잡습니다 (SSAFY 체인은 블록이 10초)
   read-timeout: 20s
+  # 발행·소각의 확정 확인 주기. 블록이 10초라 그보다 짧게 돌 이유가 없습니다
+  confirm-poll:
+    interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
+    initial-delay: 20s
 
 banner:
   image:

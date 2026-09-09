@@ -12,6 +12,7 @@ import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 공연 조회 (API-201, 202, 204, 205, 207).
@@ -38,6 +41,7 @@ public class PerformanceService {
     private final PerformanceGeneralRepository performanceGeneralRepository;
     private final PerformanceDetailRepository performanceDetailRepository;
     private final PerformanceAreaRepository performanceAreaRepository;
+    private final TicketRepository ticketRepository;
     private final FileStorageService fileStorageService;
     private final BookingPolicyProperties bookingPolicy;
 
@@ -124,8 +128,15 @@ public class PerformanceService {
             throw new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND);
         }
 
+        // 판매량은 티켓에서 센다 — performance_areas.sold_cnt 는 아무도 갱신하지 않아 없앴다
+        Map<Long, Long> soldByArea = ticketRepository.countSoldByArea(concertId).stream()
+                .collect(Collectors.toMap(
+                        TicketRepository.AreaSoldCount::getAreaId,
+                        TicketRepository.AreaSoldCount::getSoldCount));
+
         return performanceAreaRepository.findAllByPerformanceId(concertId).stream()
-                .map(PerformanceAreaResponse::from)
+                .map(pa -> PerformanceAreaResponse.of(
+                        pa, soldByArea.getOrDefault(pa.getArea().getId(), 0L)))
                 .toList();
     }
 

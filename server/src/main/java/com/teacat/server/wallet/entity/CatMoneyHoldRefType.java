@@ -5,5 +5,7 @@ public enum CatMoneyHoldRefType {
     /** ref_id = nft_auction_bids.id */
     AUCTION_BID,
     /** ref_id = nft_auctions.id */
-    AUCTION_BUY_NOW
+    AUCTION_BUY_NOW,
+    /** ref_id = ticket_orders.id. 결제가 끝나면 CAPTURED(소각), 무산되면 RELEASED */
+    TICKET_ORDER
 }

@@ -292,4 +292,51 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
         /** performance_general.ticketing_start_at */
         LocalDateTime getTicketingStartAt();
     }
+
+    /**
+     * 결제 확정 — 선점을 판매로 굳힌다.
+     *
+     * <p>조회로 확인한 뒤 UPDATE 하면 그 사이에 선점이 만료되어 남이 가져갈 수 있다. 조건을
+     * WHERE 에 넣어 <b>내 유효한 선점만</b> 원자적으로 SOLD 로 바꾼다.
+     *
+     * @return 1 이면 확보, 0 이면 그 사이 선점을 잃었다 (결제를 되돌려야 한다)
+     */
+    // clearAutomatically 를 쓰지 않는다. 컨텍스트를 비우면 부르는 쪽이 들고 있던 주문·회원이
+    // detach 되어, 이어서 하는 발권과 상태 변경이 조용히 반영되지 않는다.
+    // 여기서는 좌석 엔티티를 이후에 읽지 않으므로 비울 이유도 없다.
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'SOLD',
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'HELD'
+               AND held_by = :userId
+               AND held_until >= now()
+            """, nativeQuery = true)
+    int sell(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId,
+            @Param("userId") Long userId);
+
+    /**
+     * 예매 취소 — 팔린 좌석을 다시 풀어 준다.
+     *
+     * <p>{@code releaseHold} 와 다르다. 저쪽은 선점(HELD)을 푸는 것이고, 이것은 확정된 판매를
+     * 되돌린다. SOLD 는 취소로만 풀리므로 소유자 검사가 필요 없다 — 취소 권한은 주문에서 이미 봤다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'AVAILABLE',
+                   held_by = NULL,
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'SOLD'
+            """, nativeQuery = true)
+    int release(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId);
 }

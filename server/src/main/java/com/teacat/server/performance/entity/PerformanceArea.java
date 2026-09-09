@@ -53,13 +53,6 @@ public class PerformanceArea {
     @Column(name = "max_cnt")
     private Integer maxCnt;
 
-    /**
-     * 팔린 수량. 예매가 올리고 취소가 내린다.
-     * DB 에 sold_cnt <= max_cnt CHECK 가 걸려 있어 초과 판매를 막는다.
-     */
-    @Column(name = "sold_cnt", nullable = false)
-    private int soldCnt;
-
     private PerformanceArea(PerformanceGeneral performance, Area area, String grade, Integer price, Integer maxCnt) {
         this.id = new PerformanceAreaId(performance.getId(), area.getId());
         this.performance = performance;
@@ -67,7 +60,6 @@ public class PerformanceArea {
         this.grade = grade;
         this.price = price;
         this.maxCnt = maxCnt;
-        this.soldCnt = 0;
     }
 
     /** 공연 구역 등급·가격 설정 (API-268) */
@@ -84,8 +76,14 @@ public class PerformanceArea {
     }
 
     /** 이미 팔린 수량보다 적게 최대 수량을 줄이면 CHECK 제약에 걸린다 */
-    public boolean wouldBreakSoldCount(Integer newMaxCnt) {
-        return newMaxCnt != null && newMaxCnt < this.soldCnt;
+    /**
+     * 새 최대 수량이 이미 판 수량보다 적은가.
+     *
+     * <p>판매량은 티켓에서 세어 넘긴다 — 예전에는 이 엔티티가 sold_cnt 를 들고 있었지만
+     * 그 값을 갱신하는 코드가 없어 늘 0 이었고, 그래서 이 검사가 무력했다.
+     */
+    public boolean wouldBreakSoldCount(Integer newMaxCnt, long soldCount) {
+        return newMaxCnt != null && newMaxCnt < soldCount;
     }
 
     @Embeddable

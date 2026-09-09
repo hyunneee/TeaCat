@@ -29,7 +29,16 @@ public enum BookingErrorCode implements ErrorCode {
             "좌석 선점 시간이 만료되었습니다. 좌석을 다시 선택해주세요."),
     SEAT_ALREADY_HELD_BY_ME(HttpStatus.CONFLICT, "ERR_BOOKING_010",
             "이미 선점한 좌석입니다. 선점 시간은 연장할 수 없습니다."),
-    ;
+
+    /**
+     * 얼굴 미등록. 선점 단계에서 막는다.
+     *
+     * 티켓은 얼굴 없이 발급될 수 없다({@code tickets.face_id} 가 NOT NULL). 결제까지 받은 뒤
+     * 발급에서 막히면 "돈은 나갔는데 티켓이 없는" 상태가 되므로, 좌석을 묶기 전에 거절한다.
+     * 남의 좌석을 10분간 묶어두는 행위이기도 하다.
+     */
+    FACE_NOT_REGISTERED(HttpStatus.FORBIDDEN, "ERR_BOOKING_011",
+            "얼굴 정보를 먼저 등록해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;
