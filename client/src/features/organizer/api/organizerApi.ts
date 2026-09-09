@@ -14,6 +14,7 @@ import {
   type PhotocardDesignResponse,
   type PresignedUpload,
   type ScheduleCreateResponse,
+  type SeatGenerateResponse,
   type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
@@ -89,6 +90,20 @@ export const organizerApi = {
 
   /** 회차 삭제 (API-267). 예매 이력이 있으면 서버가 거절합니다(PERFORMANCE_009) */
   deleteSchedule: (scheduleId: string) => http.delete<void>(`/admin/schedules/${scheduleId}`),
+
+  /**
+   * 회차 좌석 생성.
+   *
+   * 🔴 **이걸 돌리지 않으면 예매가 열리지 않습니다.** 회차를 만들어도 좌석 행은 생기지 않고,
+   *    좌석맵은 전 좌석을 `BLOCKED` 로 내려줍니다 — 예매 화면에서는 "매진" 처럼 보입니다.
+   *    구역 등급·가격을 먼저 저장한 뒤에 눌러야 합니다 (판매하기로 한 구역의 좌석만 만듭니다).
+   *
+   * 🔴 **다시 돌릴 수 없습니다.** 좌석 행이 하나라도 있으면 서버가 거절합니다
+   *    (PERFORMANCE_014 이미 좌석이 생성된 회차입니다). 구역을 나중에 추가했다면 지금은 회차를 지웠다
+   *    다시 만드는 수밖에 없습니다.
+   */
+  generateSeats: (scheduleId: string) =>
+    http.post<SeatGenerateResponse>(`/admin/schedules/${scheduleId}/seats`),
 
   /**
    * 포토카드 도안 등록. ADMIN 전용, multipart.

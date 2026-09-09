@@ -10,7 +10,11 @@ export {
   useDeleteConcert,
   useStadiums,
 } from './hooks/useCreateConcert';
-export { useAddSchedule, useDeleteSchedule } from './hooks/useManageSchedules';
+export {
+  useAddSchedule,
+  useDeleteSchedule,
+  useGenerateSeats,
+} from './hooks/useManageSchedules';
 export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
 export {
   useStadiumLayouts,

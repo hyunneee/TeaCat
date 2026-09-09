@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, queryClient } from '@/shared/api';
@@ -20,8 +20,21 @@ import { useBookingStore } from '../store/bookingStore';
  * 프론트에서 "누가 먼저 눌렀는지" 를 판정하려는 시도는 전부 틀립니다.
  *
  * 🔴 **한 사용자는 회차당 좌석 하나만** 선점합니다 (서버 제약).
- *    좌석을 바꾸려면 기존 선점을 먼저 해제해야 하고, 안 하면
- *    ERR_BOOKING_006 으로 거절됩니다. 아래에서 그 경우를 잡아 안내합니다.
+ *    좌석을 바꾸려면 기존 선점을 먼저 해제해야 하고, 안 하면 ERR_BOOKING_006 으로 거절됩니다.
+ *
+ * ── 좌석 바꾸기: 놓고 → 잡기 ─────────────────────────────────
+ * 결제까지 갔다가 뒤로 돌아와 **다른 자리를 고르는 것은 정상적인 사용**입니다.
+ * 그런데 예전에는 그때마다 서버가 006 으로 거절했고, 화면은 그 오류를 받고 다시
+ * 예매 확인으로 돌려보냈습니다 — 사용자는 자리를 영영 못 바꾸고 두 화면 사이를
+ * 오갈 뿐이었습니다. (스토어에 선점이 없는 경우엔 구역 선택까지 튕겼습니다)
+ *
+ * 그래서 새 좌석을 잡기 전에 **쥐고 있던 좌석을 먼저 놓습니다.** 스토어가 모르는
+ * 선점이 서버에 남아 있을 수도 있어(탭을 닫았다가 다시 온 경우), 006 을 받으면
+ * `GET /me/holds` 로 무엇을 쥐고 있는지 물어 놓고 한 번만 다시 시도합니다.
+ *
+ * 🔴 놓았다 잡는 사이(~100ms)에 남이 그 자리를 채갈 수 있습니다. 그러면 **이전 자리까지
+ *    없어집니다.** 서버에 "자리 바꾸기" 를 한 번에 하는 API 가 없어서 피할 수 없고,
+ *    대신 그 사실을 좌석 화면에 미리 적어두고 실패했을 때도 그대로 알려줍니다.
  */
 
 /** 서버 BookingErrorCode 중 프론트가 분기하는 것만 */
@@ -68,33 +81,86 @@ export function useSeatHold(scheduleId: string) {
     navigate(ROUTES.BOOKING_SEATS(scheduleId), { replace: true });
   }, [hold, remainSeconds, deadline, scheduleId, setHold, clearSelection, navigate]);
 
+  /**
+   * 이 회차에 남아 있는 내 선점을 놓습니다 (스토어가 모르는 것까지).
+   *
+   * 해제 실패는 삼킵니다 — 이미 만료됐거나 남이 가져간 뒤라면 어차피 놓여 있는 것이고,
+   * 여기서 예외를 던지면 정작 하려던 "새 좌석 잡기" 를 못 하게 됩니다.
+   *
+   * @returns 놓은 좌석이 있었는지
+   */
+  const releaseServerHolds = async (): Promise<boolean> => {
+    const holds = await bookingApi.myHolds().catch(() => []);
+    const mine = holds.filter((h) => h.scheduleId === scheduleId);
+    if (mine.length === 0) return false;
+
+    await Promise.all(
+      mine.map((h) => bookingApi.releaseHold(scheduleId, h.seatId).catch(() => undefined)),
+    );
+    return true;
+  };
+
+  /** 직전 시도에서 쥐고 있던 좌석을 놓았는지 — 실패 메시지에 "이전 자리도 풀렸다" 를 덧붙일지 판단합니다 */
+  const gaveUpPrevious = useRef(false);
+
   const holdMutation = useMutation({
-    mutationFn: (seatId: string) => bookingApi.hold(scheduleId, seatId),
+    mutationFn: async (seatId: string) => {
+      gaveUpPrevious.current = false;
+      const previous = useBookingStore.getState().hold;
+
+      /* 1인 1좌석이라 새 좌석을 잡으려면 쥔 것을 먼저 놓아야 합니다.
+         같은 좌석을 다시 누른 경우는 놓지 않습니다 — 놓았다 다시 잡으면
+         남은 시간만 초기화되고 그 사이 남에게 뺏길 수 있습니다 */
+      if (previous && previous.seatId !== seatId) {
+        await bookingApi.releaseHold(scheduleId, previous.seatId).catch(() => undefined);
+        setHold(null);
+        gaveUpPrevious.current = true;
+      }
+
+      try {
+        return await bookingApi.hold(scheduleId, seatId);
+      } catch (error) {
+        // 스토어가 모르는 선점이 서버에 남아 있는 경우. 무엇을 쥐고 있는지 물어 놓고 한 번만 재시도합니다
+        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING) throw error;
+
+        const released = await releaseServerHolds();
+        if (!released) throw error;
+
+        gaveUpPrevious.current = true;
+        return await bookingApi.hold(scheduleId, seatId);
+      }
+    },
     onSuccess: (result) => {
       setHold(result);
       navigate(ROUTES.BOOKING_REVIEW(scheduleId));
     },
     onError: (error) => {
+      /* 쥐고 있던 자리를 놓은 뒤에 실패했다면 그 사실을 반드시 말해야 합니다.
+         안 그러면 "왜 아까 그 자리도 없어졌지" 가 됩니다 */
+      const lostPrevious = gaveUpPrevious.current
+        ? ' 이전에 잡아둔 자리도 풀렸어요.'
+        : '';
+
       if (!ApiError.isApiError(error)) {
-        toast.error('좌석 선점에 실패했어요.');
+        toast.error(`좌석 선점에 실패했어요.${lostPrevious}`);
+        void invalidateSeats();
         return;
       }
 
       switch (error.code) {
         case BOOKING_ERROR.HELD_BY_OTHER:
         case BOOKING_ERROR.SOLD:
-          toast.error('방금 다른 분이 선택한 좌석이에요. 다른 좌석을 골라주세요.');
+          toast.error(`방금 다른 분이 선택한 좌석이에요. 다른 좌석을 골라주세요.${lostPrevious}`);
           clearSelection();
           void invalidateSeats();
           return;
 
         case BOOKING_ERROR.ALREADY_HOLDING:
-          /* 이전 판의 선점이 서버에 남아 있는 경우입니다 (탭을 닫았다가 다시 온 등).
-             프론트 스토어에는 없어서 사용자는 아무것도 안 잡은 줄 압니다.
-             결제 화면으로 보내 정리하게 합니다 — 거기서 해제하거나 결제합니다. */
-          toast.error('이미 선점한 좌석이 있어요. 먼저 정리해 주세요.');
+          /* 놓기까지 시도했는데도 남아 있는 경우입니다. 여기서 예매 확인으로 보내면
+             스토어에 선점이 없을 때 구역 선택까지 튕겨서 더 헤맵니다 — 그냥 알리고 멈춥니다 */
+          toast.error('잡아둔 좌석을 정리하지 못했어요. 잠시 후 다시 시도해 주세요.');
           void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
-          navigate(ROUTES.BOOKING_REVIEW(scheduleId));
+          void invalidateSeats();
           return;
 
         case BOOKING_ERROR.SAME_SEAT:
@@ -109,17 +175,24 @@ export function useSeatHold(scheduleId: string) {
           return;
 
         default:
-          toast.error(error.message);
+          toast.error(`${error.message}${lostPrevious}`);
+          void invalidateSeats();
       }
     },
   });
 
   const releaseMutation = useMutation({
     mutationFn: (seatId: string) => bookingApi.releaseHold(scheduleId, seatId),
+    /* 실패해도 스토어를 비웁니다(onSettled). 해제가 실패하는 경우는 대개
+       이미 만료됐거나 남이 가져간 뒤라서, 붙들고 있어 봐야 사용자만 헷갈립니다 */
     onSettled: () => {
       setHold(null);
+      clearSelection();
       void invalidateSeats();
       void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+    },
+    onSuccess: () => {
+      toast.info('자리를 놓았어요. 다시 고를 수 있어요.');
     },
   });
 

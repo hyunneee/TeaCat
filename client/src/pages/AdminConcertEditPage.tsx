@@ -19,6 +19,7 @@ import {
   useAreaPricingRows,
   useDeleteConcert,
   useDeleteSchedule,
+  useGenerateSeats,
   useMyConcert,
   useSaveAreas,
   useSetVisibility,
@@ -135,6 +136,7 @@ function Schedules({ concert }: { concert: ConcertDetail }) {
   const { open } = useModal();
   const add = useAddSchedule(String(concert.concertId));
   const remove = useDeleteSchedule();
+  const generate = useGenerateSeats();
 
   const existingDates = concert.schedules.map((s) => s.performanceDate);
 
@@ -158,6 +160,8 @@ function Schedules({ concert }: { concert: ConcertDetail }) {
       onRemove={confirmRemove}
       adding={add.isPending}
       removingId={remove.isPending ? (remove.variables ?? null) : null}
+      onGenerateSeats={(scheduleId) => generate.mutate(scheduleId)}
+      generatingId={generate.isPending ? (generate.variables ?? null) : null}
     />
   );
 }

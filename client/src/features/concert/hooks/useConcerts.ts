@@ -29,3 +29,17 @@ export function useSchedule(scheduleId: string) {
     enabled: !!scheduleId,
   });
 }
+
+/**
+ * 공연 배치도 — 도면 크기와 기둥·출입구 같은 고정 요소.
+ *
+ * 공연 내내 바뀌지 않아 오래 캐시합니다. 구역 도면(VenueMap)이 씁니다.
+ */
+export function useConcertLayout(concertId: string | undefined) {
+  return useQuery({
+    queryKey: concertKeys.layout(concertId ?? ''),
+    queryFn: () => concertApi.layout(concertId ?? ''),
+    staleTime: STALE_TIME.LONG,
+    enabled: !!concertId,
+  });
+}

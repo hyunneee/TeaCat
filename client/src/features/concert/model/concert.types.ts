@@ -118,3 +118,38 @@ export interface ScheduleDetail {
   stadiumName: string;
   ticketingStartAt: string;
 }
+
+/**
+ * 공연장 도면 위의 고정 요소 — 기둥·출입구·통로 같은 것들.
+ *
+ * `type` 은 정해진 목록이 아니라 운영자가 적는 값입니다 (`PILLAR`·`GATE`·`AISLE`·`STAGE` 관례).
+ * 그래서 화면은 **모르는 타입도 그릴 수 있어야** 합니다 — 기본 모양으로 그리고 label 을 붙입니다.
+ */
+export interface LayoutElement {
+  type: string;
+  label?: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 공연이 쓰는 무대 형식(배치도).
+ *
+ * 🔴 좌표는 이 배치도의 좌표계(`width` × `height`)입니다. 구역 `bounds` 도 같은 좌표계라
+ *    둘을 같은 SVG 에 그대로 얹을 수 있습니다.
+ */
+export interface ConcertLayout {
+  concertId: number;
+  stadiumId: number;
+  layoutId: number;
+  layoutName: string;
+  layoutImageUrl: string | null;
+  width: number;
+  height: number;
+  /** 공연장 배치도에 원래 있는 것들 (기둥 등) */
+  baseElements: LayoutElement[];
+  /** 이 공연이 추가로 얹은 것들 */
+  elements: LayoutElement[];
+}
