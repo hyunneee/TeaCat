@@ -32,6 +32,7 @@ import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
+import com.teacat.server.wallet.client.BlockchainProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -68,6 +71,7 @@ public class NftService {
     private final NftMarketQueryRepository queryRepository;
     private final UserRepository userRepository;
     private final NftCursorCodec cursorCodec;
+    private final BlockchainProperties blockchainProperties;
 
     public NftCursorPageResponse<NftMarketPhotocardResponse> getMarketPhotocards(
             Long performanceId, String keyword, NftMarketSort sort, String cursor, Integer requestedSize) {
@@ -287,6 +291,8 @@ public class NftService {
             designById.put(design.getId(), design);
         }
 
+        requireDesignsRegistered(designById.values());
+
         List<NftMarketQueryRepository.TicketRecipientRow> recipients =
                 queryRepository.findConfirmedTicketRecipients(performanceId);
         int allocationTotal = allocations.stream().mapToInt(NftDesignAllocationRequest::quantity).sum();
@@ -295,6 +301,8 @@ public class NftService {
         }
 
         Map<Long, User> usersById = loadRecipients(recipients);
+        Map<Long, Long> walletIdByUser = loadRecipientWallets(recipients);
+
         List<Long> designPool = new ArrayList<>(allocationTotal);
         for (NftDesignAllocationRequest allocation : allocations) {
             NftPhotocardDesign design = designById.get(allocation.designId());
@@ -310,10 +318,53 @@ public class NftService {
             NftMarketQueryRepository.TicketRecipientRow recipient = recipients.get(i);
             User owner = usersById.get(recipient.userId());
             issueRows.add(new NftMarketQueryRepository.IssueRow(
-                    designPool.get(i), recipient.ticketId(), owner.getId()));
+                    designPool.get(i), recipient.ticketId(), owner.getId(),
+                    walletIdByUser.get(owner.getId())));
         }
         queryRepository.batchIssuePhotocards(issueRows);
         return new NftPhotocardIssueResponse(issueRows.size(), 0);
+    }
+
+    /**
+     * 배정된 도안이 전부 온체인에 등록됐는지.
+     *
+     * <p><b>미등록 도안이 하나라도 섞이면 발행 배치 전체가 revert 된다.</b> 200장을 보내고
+     * 10초 뒤에 통째로 실패한 걸 알게 되는 것보다, 여기서 막는 편이 낫다.
+     * (blockchain/PHOTOCARD_PLAN.md 2장)
+     */
+    private void requireDesignsRegistered(Collection<NftPhotocardDesign> designs) {
+        for (NftPhotocardDesign design : designs) {
+            if (!design.isRegistered()) {
+                throw new BusinessException(NftErrorCode.DESIGN_NOT_REGISTERED_ON_CHAIN);
+            }
+        }
+    }
+
+    /**
+     * 받는 사람들의 지갑. <b>한 명이라도 없으면 발급 전체를 거절한다.</b>
+     *
+     * <p>지갑이 없으면 보낼 주소가 없어 그 카드만 체인에 못 올라간다. 그대로 두면 카드가
+     * 절반만 나간 공연이 생기고, 수습 비용이 발급을 다시 하는 것보다 훨씬 크다.
+     * 탈퇴 회원이 섞였을 때 전체를 롤백하는 것과 같은 태도다.
+     */
+    private Map<Long, Long> loadRecipientWallets(
+            List<NftMarketQueryRepository.TicketRecipientRow> recipients) {
+        List<Long> userIds = recipients.stream()
+                .map(NftMarketQueryRepository.TicketRecipientRow::userId)
+                .distinct()
+                .toList();
+
+        Map<Long, Long> walletIdByUser = queryRepository
+                .findActiveWallets(userIds, blockchainProperties.chainId()).stream()
+                .collect(Collectors.toMap(
+                        NftMarketQueryRepository.UserWalletRow::userId,
+                        NftMarketQueryRepository.UserWalletRow::walletId));
+
+        if (walletIdByUser.size() != userIds.size()) {
+            throw new BusinessException(NftErrorCode.RECIPIENT_WALLET_NOT_FOUND);
+        }
+
+        return walletIdByUser;
     }
 
     private NftPhotocard getPhotocardForUpdate(Long photocardId) {

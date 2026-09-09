@@ -9,10 +9,13 @@ import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
+import com.teacat.server.nft.client.PhotocardChainClient;
+import com.teacat.server.nft.client.PhotocardIssueResult;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -37,6 +40,12 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willReturn;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -72,6 +81,19 @@ class NftServiceIntegrationTests {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private com.teacat.server.wallet.client.BlockchainProperties blockchainProperties;
+
+    @Autowired
+    private NftPhotocardIssuer photocardIssuer;
+
+    /*
+     * 체인은 붙이지 않는다. server/.env 가 테스트에서도 로드되므로 스텁으로 막지 않으면
+     * 진짜 블록체인 서비스로 발행 요청이 나가 실제 체인에 카드가 민팅된다.
+     */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.teacat.server.nft.client.PhotocardChainClient photocardChainClient;
 
     @BeforeEach
     void cleanDatabase() {
@@ -658,8 +680,16 @@ class NftServiceIntegrationTests {
         assertThat(detail.origin().seatNumber()).isNull();
     }
 
+    /**
+     * ERC-1155 로 가면서 tokenId 가 카드가 아니라 <b>도안</b>이 됐다. 같은 도안 카드 여러 장이
+     * 같은 (chain_id, contract_address, token_id) 를 갖는 것이 이제 정상이다 —
+     * 예전 UNIQUE 제약은 두 장째 발행을 막았다. (PHOTOCARD_PLAN.md 6-2)
+     *
+     * <p>세 필드가 함께 채워져야 한다는 CHECK 은 그대로 남는다. 하나만 빠지면 재배포 뒤에
+     * "어느 컨트랙트의 몇 번인지" 답할 수 없기 때문이다.
+     */
     @Test
-    void 체인_식별자는_세_필드가_함께_있어야_하고_체인별로_토큰을_구분한다() {
+    void 체인_식별자는_세_필드가_함께_있어야_하고_같은_도안은_토큰을_공유한다() {
         Long ownerId = insertUser("owner@test.com", "소유자");
         Fixture fixture = insertPerformanceFixture();
         Long designId = insertDesign(fixture.performanceId(), "체인 검사", 3);
@@ -668,28 +698,24 @@ class NftServiceIntegrationTests {
         Long thirdCardId = insertPhotocard(designId, insertTicket(ownerId, fixture), ownerId);
         String address = "0x1111111111111111111111111111111111111111";
 
+        // 셋 중 하나만 채우면 거절한다
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "UPDATE nft_photocards SET chain_id = 1 WHERE id = ?", firstCardId))
                 .isInstanceOf(DataIntegrityViolationException.class);
 
-        jdbcTemplate.update("""
-                UPDATE nft_photocards
-                SET chain_id = 1, contract_address = ?, token_id = 7, metadata_uri = 'ipfs://metadata/7'
-                WHERE id = ?
-                """, address, firstCardId);
-        jdbcTemplate.update("""
-                UPDATE nft_photocards
-                SET chain_id = 2, contract_address = ?, token_id = 7
-                WHERE id = ?
-                """, address, secondCardId);
-        assertThatThrownBy(() -> jdbcTemplate.update("""
-                UPDATE nft_photocards
-                SET chain_id = 1, contract_address = ?, token_id = 7
-                WHERE id = ?
-                """, address, thirdCardId)).isInstanceOf(DataIntegrityViolationException.class);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT metadata_uri FROM nft_photocards WHERE id = ?", String.class, firstCardId))
-                .isEqualTo("ipfs://metadata/7");
+        for (Long cardId : List.of(firstCardId, secondCardId, thirdCardId)) {
+            jdbcTemplate.update("""
+                    UPDATE nft_photocards
+                    SET chain_id = 1, contract_address = ?, token_id = ?
+                    WHERE id = ?
+                    """, address, designId, cardId);
+        }
+
+        // 같은 도안 세 장이 같은 토큰을 가리킨다. 예전에는 여기서 UNIQUE 위반이 났다
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM nft_photocards
+                 WHERE chain_id = 1 AND contract_address = ? AND token_id = ?
+                """, Integer.class, address, designId)).isEqualTo(3);
     }
 
     @Test
@@ -741,16 +767,170 @@ class NftServiceIntegrationTests {
                 """, Long.class, stadiumId);
     }
 
+    // ── 온체인 발행 ────────────────────────────────────────────────
+
+    @Test
+    void 발급하면_wallet_id_가_채워지고_체인으로_발행_요청이_나간다() {
+        Fixture fixture = insertPerformanceFixture();
+        Long userId = insertUser("owner@test.com", "소유자");
+        insertTicket(userId, fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 5);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1))));
+
+        assertThat(response.issuedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+
+        // 발행을 보내려면 받는 주소가 필요하다. 그 주소는 이 지갑에서 나온다
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards WHERE wallet_id IS NOT NULL", Integer.class))
+                .isEqualTo(1);
+
+        ArgumentCaptor<List<PhotocardChainClient.IssueItem>> sent = ArgumentCaptor.captor();
+        verify(photocardChainClient).issuePhotocards(sent.capture());
+
+        List<PhotocardChainClient.IssueItem> items = sent.getValue();
+        assertThat(items).hasSize(1);
+        // photocardKey 는 nft_photocards.id 다. 이 값 하나가 한 티켓에 두 장이 나가는 것을 막는다
+        assertThat(items.getFirst().photocardKey()).isEqualTo(
+                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class).toString());
+        assertThat(items.getFirst().designId()).isEqualTo(designId.toString());
+        assertThat(items.getFirst().to()).isEqualTo("0x" + String.format("%040x", userId));
+    }
+
+    @Test
+    void 지갑이_없는_회원이_섞이면_발급_전체를_되돌린다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("has@test.com", "지갑있음"), fixture);
+        insertTicket(insertWalletlessUser("none@test.com", "지갑없음", "USER"), fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 5);
+
+        assertThatThrownBy(() -> photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 2)))))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(NftErrorCode.RECIPIENT_WALLET_NOT_FOUND);
+
+        // 절반만 나간 공연을 수습하는 비용이 발급을 다시 하는 것보다 훨씬 크다
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards", Integer.class)).isZero();
+        verifyNoInteractions(photocardChainClient);
+    }
+
+    @Test
+    void 온체인_등록이_안_끝난_도안은_발급을_거절한다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("owner@test.com", "소유자"), fixture);
+        Long designId = insertUnregisteredDesign(fixture.performanceId(), "미등록 도안", 5);
+
+        // 미등록 도안이 하나라도 섞이면 발행 배치 전체가 revert 된다. 보내기 전에 막는다
+        assertThatThrownBy(() -> photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1)))))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(NftErrorCode.DESIGN_NOT_REGISTERED_ON_CHAIN);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards", Integer.class)).isZero();
+        verifyNoInteractions(photocardChainClient);
+    }
+
+    @Test
+    void 체인_전송이_실패해도_카드는_남고_재시도로_이어_보낸다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("owner@test.com", "소유자"), fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 5);
+
+        willThrow(new BusinessException(NftErrorCode.PHOTOCARD_MINT_FAILED))
+                .given(photocardChainClient).issuePhotocards(any());
+
+        NftPhotocardIssueResponse issued = photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1))));
+
+        // 여기서 되돌리면 재발급이 막혀 있어 손쓸 방법이 없어진다
+        assertThat(issued.issuedCount()).isEqualTo(1);
+        assertThat(issued.failedCount()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards WHERE status = 'PENDING'", Integer.class))
+                .isEqualTo(1);
+
+        willReturn(new PhotocardIssueResult("PENDING", "0xabc", 1))
+                .given(photocardChainClient).issuePhotocards(any());
+
+        assertThat(photocardIssuer.mintPending(fixture.performanceId()).issuedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 이미_보낸_카드는_재시도_대상이_아니다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("owner@test.com", "소유자"), fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 5);
+        photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1))));
+
+        // 블록체인 서비스가 요청을 받은 자리에서 MINTING 으로 옮긴다
+        jdbcTemplate.update("UPDATE nft_photocards SET status = 'MINTING'");
+
+        // MINTING 은 트랜잭션이 이미 나가 확정을 기다리는 중이라 다시 보내면 안 된다
+        assertThatThrownBy(() -> photocardIssuer.mintPending(fixture.performanceId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(NftErrorCode.NO_PENDING_PHOTOCARDS);
+    }
+
+    @Test
+    void 한_배치_상한을_넘으면_잘라서_여러_번_보낸다() {
+        Fixture fixture = insertPerformanceFixture();
+        int total = 201;
+        for (int i = 0; i < total; i++) {
+            insertTicket(insertUser("owner" + i + "@test.com", "소유자" + i), fixture);
+        }
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", total);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issue(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, total))));
+
+        assertThat(response.issuedCount()).isEqualTo(total);
+        assertThat(response.failedCount()).isZero();
+
+        // 컨트랙트의 MAX_BATCH 가 200 이라 넘겨 보내면 400 으로 돌아온다
+        ArgumentCaptor<List<PhotocardChainClient.IssueItem>> sent = ArgumentCaptor.captor();
+        verify(photocardChainClient, times(2)).issuePhotocards(sent.capture());
+        assertThat(sent.getAllValues().get(0)).hasSize(200);
+        assertThat(sent.getAllValues().get(1)).hasSize(1);
+    }
+
     private Long insertUser(String email, String nickname) {
         return insertUser(email, nickname, "USER");
     }
 
+    /** 지갑까지 갖춘 회원. 발급 대상 전원에게 지갑이 있어야 하므로 이게 기본이다 */
     private Long insertUser(String email, String nickname, String role) {
+        Long userId = insertWalletlessUser(email, nickname, role);
+        insertWallet(userId);
+        return userId;
+    }
+
+    /** 지갑 없는 회원. "한 명이라도 지갑이 없으면 전체 롤백" 을 확인할 때만 쓴다 */
+    private Long insertWalletlessUser(String email, String nickname, String role) {
         return jdbcTemplate.queryForObject("""
                 INSERT INTO users (email, password, name, nickname, phone, role)
                 VALUES (?, 'encoded-password', '테스트 사용자', ?, '010-0000-0000', ?::user_role)
                 RETURNING id
                 """, Long.class, email, nickname, role);
+    }
+
+    private void insertWallet(Long userId) {
+        String address = "0x" + String.format("%040x", userId);
+        Long ownerId = jdbcTemplate.queryForObject("""
+                INSERT INTO wallet_owners (user_id, derivation_index, owner_address, key_version)
+                VALUES (?, ?, ?, 1) RETURNING id
+                """, Long.class, userId, userId.intValue(), address);
+        jdbcTemplate.update("""
+                INSERT INTO wallets (owner_id, chain_id, type, address, status)
+                VALUES (?, ?, 'RELAYER_EOA', ?, 'ACTIVE')
+                """, ownerId, blockchainProperties.chainId(), address);
     }
 
     private Fixture insertPerformanceFixture() {
@@ -837,7 +1017,22 @@ class NftServiceIntegrationTests {
                 """, Long.class, zeros);
     }
 
+    /**
+     * 발급의 전제가 "도안이 온체인에 등록돼 있을 것" 이라 REGISTERED 로 만든다.
+     * 미등록 도안을 확인하는 테스트는 {@link #insertUnregisteredDesign} 을 쓴다.
+     */
     private Long insertDesign(Long performanceId, String name, int totalSupply) {
+        Long designId = insertUnregisteredDesign(performanceId, name, totalSupply);
+        jdbcTemplate.update("""
+                UPDATE nft_photocard_designs
+                SET chain_status = 'REGISTERED', image_cid = 'bafyIMG', metadata_cid = 'bafyMETA',
+                    registered_at = now()
+                WHERE id = ?
+                """, designId);
+        return designId;
+    }
+
+    private Long insertUnregisteredDesign(Long performanceId, String name, int totalSupply) {
         return jdbcTemplate.queryForObject("""
                 INSERT INTO nft_photocard_designs
                     (performance_general_id, name, image_url, total_supply)
