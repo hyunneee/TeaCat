@@ -2,6 +2,8 @@ import { http } from '@/shared/api';
 import type { ConcertDetail, ConcertSummary } from '@/features/concert';
 import {
   toConcertCreateFormData,
+  type ConcertArea,
+  type ConcertAreaSetting,
   toPhotocardDesignFormData,
   toServerDateTime,
   type ConcertCreateForm,
@@ -48,6 +50,26 @@ export const organizerApi = {
 
   /** 내가 등록한 공연 목록 — 비공개 포함. 비공개 공연을 되돌릴 입구입니다 */
   myConcerts: () => http.get<ConcertSummary[]>('/admin/concerts/mine'),
+
+  /**
+   * 전체 공연 목록 — 등록자와 무관하게, 비공개 포함.
+   *
+   * 🔴 **ADMIN 전용입니다** (서버가 경로로 막습니다). 공연 주최자(PERFORMANCE)가 부르면 403 이니
+   *    그쪽에는 `myConcerts` 를 쓰세요. 어느 쪽을 부를지는 `useManagedConcerts` 가 판단합니다.
+   */
+  allConcerts: (keyword?: string) =>
+    http.get<ConcertSummary[]>('/admin/concerts', {
+      // 빈 문자열을 보내면 서버가 "빈 검색어" 로 받습니다. axios 는 undefined 를 뺍니다
+      params: { keyword: keyword?.trim() || undefined },
+    }),
+
+  /** 구역 등급·가격 편집 화면이 읽는 값 — 아직 팔지 않는 구역까지 전부 옵니다 */
+  concertAreas: (concertId: string) =>
+    http.get<ConcertArea[]>(`/admin/concerts/${concertId}/areas`),
+
+  /** 구역 등급·가격 저장 (API-268). PUT 이라 보낸 것이 전체가 됩니다 */
+  saveConcertAreas: (concertId: string, areas: ConcertAreaSetting[]) =>
+    http.put<unknown>(`/admin/concerts/${concertId}/areas`, { areas }),
 
   /** 내가 등록한 공연 상세 — 비공개여도 옵니다. 수정 화면이 씁니다 */
   myConcert: (concertId: string) => http.get<ConcertDetail>(`/admin/concerts/${concertId}`),
@@ -103,9 +125,15 @@ export const organizerApi = {
   },
 };
 
+/**
+ * 🔴 전부 `all` 아래에 둡니다. 수정·삭제·노출 전환 훅이 `organizerKeys.all` 하나로 무효화하는데,
+ *    바깥에 새 키를 만들면 그 목록만 옛 값으로 남습니다.
+ */
 export const organizerKeys = {
   all: ['organizer'] as const,
   stadiums: () => [...organizerKeys.all, 'stadiums'] as const,
   myConcerts: () => [...organizerKeys.all, 'myConcerts'] as const,
   myConcert: (concertId: string) => [...organizerKeys.all, 'myConcert', concertId] as const,
+  allConcerts: (keyword: string) => [...organizerKeys.all, 'allConcerts', keyword] as const,
+  concertAreas: (concertId: string) => [...organizerKeys.all, 'areas', concertId] as const,
 };

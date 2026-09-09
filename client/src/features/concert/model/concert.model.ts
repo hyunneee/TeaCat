@@ -1,4 +1,4 @@
-import type { ConcertDetail, ConcertSummary } from './concert.types';
+import type { ConcertDetail, ConcertStatus, ConcertSummary } from './concert.types';
 
 /**
  * 티켓팅이 열렸는가 (목록 카드의 "예매중" / "오픈 예정" 칩).
@@ -28,3 +28,26 @@ export function posterSeedOf(concert: Pick<ConcertSummary | ConcertDetail, 'conc
 export function isConcertOwner(concert: Pick<ConcertDetail, 'createdBy'>, userId: number | undefined): boolean {
   return concert.createdBy != null && concert.createdBy === userId;
 }
+
+/**
+ * 이 사용자가 이 공연을 관리할 수 있는가.
+ *
+ * 🔴 서버 규칙과 **같아야** 합니다 (`AdminPerformanceService.getOwnedPerformance`) —
+ * 등록자 본인, 그리고 **ADMIN 은 남이 등록한 공연도** 관리합니다. 운영자가 손댈 수 없는
+ * 공연이 남으면 안 되고, `createdBy` 가 null 인 옛 공연은 ADMIN 만 고칠 수 있습니다.
+ */
+export function canManageConcert(
+  concert: Pick<ConcertDetail, 'createdBy'>,
+  user: { userId: number; role: string } | null | undefined,
+): boolean {
+  if (!user) return false;
+  return user.role === 'ADMIN' || isConcertOwner(concert, user.userId);
+}
+
+/** 공연 진행 상태 표시명 */
+export const CONCERT_STATUS_LABEL: Record<ConcertStatus, string> = {
+  UPCOMING: '예정',
+  ONGOING: '진행 중',
+  ENDED: '종료',
+  CANCELLED: '취소',
+};

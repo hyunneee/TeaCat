@@ -45,6 +45,134 @@ export interface ConcertVisibilityResponse {
 }
 
 /**
+ * 구역 등급·가격 편집 화면이 읽는 한 줄 (GET /admin/concerts/{id}/areas).
+ *
+ * 🔴 관람객용 `GET /concerts/{id}/areas` 와 다릅니다 — 이쪽은 **아직 팔기로 하지 않은 구역까지**
+ *    배치도에 있는 것을 전부 줍니다. 그래야 화면에서 구역을 새로 열 수 있습니다.
+ */
+export interface ConcertArea {
+  areaId: number;
+  areaCode: string;
+  /** 층·등급 코드. 없을 수 있습니다 */
+  levelCode: string | null;
+  areaType: 'SEATED' | 'STANDING';
+  /** 배치도상 좌석 수. 최대 판매수량의 상한 기준입니다 */
+  capacity: number;
+  /** 이 공연에서 파는 구역인가. false 면 아래 값은 전부 null */
+  selling: boolean;
+  grade: string | null;
+  price: number | null;
+  maxCnt: number | null;
+  /** 이미 팔린 수량. 이 아래로 최대 판매수량을 줄일 수 없습니다 */
+  soldCnt: number;
+}
+
+/**
+ * 구역 설정 저장 요청 (API-268).
+ *
+ * 🔴 PUT 이라 **보낸 것이 전체**가 됩니다. 빠진 구역은 "팔지 않는다" 로 보고 서버가 지웁니다.
+ *    팔린 이력이 있는 구역을 빼면 서버가 거절합니다.
+ */
+export interface ConcertAreaSetting {
+  areaId: number;
+  grade: string | null;
+  price: number | null;
+  maxCnt: number | null;
+}
+
+/** 구역 편집 폼 한 줄. 입력 요소의 값이라 숫자도 문자열로 들고 있습니다 */
+export interface ConcertAreaRow {
+  areaId: number;
+  areaCode: string;
+  levelCode: string | null;
+  areaType: 'SEATED' | 'STANDING';
+  capacity: number;
+  soldCnt: number;
+  selling: boolean;
+  grade: string;
+  price: string;
+  maxCnt: string;
+}
+
+export const AREA_GRADE_MAX_LENGTH = 20;
+
+export function toAreaRows(areas: ConcertArea[]): ConcertAreaRow[] {
+  return areas.map((area) => ({
+    areaId: area.areaId,
+    areaCode: area.areaCode,
+    levelCode: area.levelCode,
+    areaType: area.areaType,
+    capacity: area.capacity,
+    soldCnt: area.soldCnt,
+    selling: area.selling,
+    grade: area.grade ?? '',
+    /* 설정 전이면 빈칸입니다. 0 을 채워 두면 "무료" 로 저장해 버릴 수 있습니다 */
+    price: area.price === null ? '' : String(area.price),
+    /* 처음 여는 구역은 배치도 좌석 수를 기본값으로 제안합니다 — 대개 그 값이 맞습니다 */
+    maxCnt: area.maxCnt === null ? '' : String(area.maxCnt),
+  }));
+}
+
+export type ConcertAreaErrors = Record<number, string>;
+
+/**
+ * 파는 구역만 검사합니다. 안 파는 구역의 입력값은 저장되지 않으니 막을 이유가 없습니다.
+ *
+ * 서버도 같은 것을 검사하지만(가격 0 이상, 판매량 미만 금지), 저장 버튼을 누르기 전에
+ * 어느 줄이 문제인지 알려주는 편이 낫습니다.
+ */
+export function validateAreaRows(rows: ConcertAreaRow[]): ConcertAreaErrors {
+  const errors: ConcertAreaErrors = {};
+
+  for (const row of rows) {
+    if (!row.selling) continue;
+
+    if (row.grade.trim().length > AREA_GRADE_MAX_LENGTH) {
+      errors[row.areaId] = `등급은 ${AREA_GRADE_MAX_LENGTH}자 이하여야 해요.`;
+      continue;
+    }
+
+    const price = Number(row.price);
+    if (row.price.trim() === '' || !Number.isInteger(price) || price < 0) {
+      errors[row.areaId] = '가격을 0 이상의 정수로 입력해 주세요.';
+      continue;
+    }
+
+    const maxCnt = Number(row.maxCnt);
+    if (row.maxCnt.trim() === '' || !Number.isInteger(maxCnt) || maxCnt < 0) {
+      errors[row.areaId] = '최대 판매수량을 0 이상의 정수로 입력해 주세요.';
+      continue;
+    }
+    if (maxCnt < row.soldCnt) {
+      errors[row.areaId] = `이미 ${row.soldCnt}장 팔렸어요. 그보다 적게 줄일 수 없어요.`;
+      continue;
+    }
+    if (maxCnt > row.capacity) {
+      errors[row.areaId] = `배치도상 좌석은 ${row.capacity}석이에요.`;
+    }
+  }
+
+  return errors;
+}
+
+/** 팔기로 한 구역이 하나도 없으면 서버가 거절합니다 (@NotEmpty) */
+export function areAreaRowsValid(rows: ConcertAreaRow[]): boolean {
+  return rows.some((row) => row.selling) && Object.keys(validateAreaRows(rows)).length === 0;
+}
+
+/** 저장 요청으로 바꿉니다. **파는 구역만** 보냅니다 — 빠진 구역은 서버가 지웁니다 */
+export function toAreaSettings(rows: ConcertAreaRow[]): ConcertAreaSetting[] {
+  return rows
+    .filter((row) => row.selling)
+    .map((row) => ({
+      areaId: row.areaId,
+      grade: row.grade.trim() || null,
+      price: Number(row.price),
+      maxCnt: Number(row.maxCnt),
+    }));
+}
+
+/**
  * 공연 수정 요청 (API-262). 보내는 필드만 바뀝니다.
  * 이미지는 파일이 아니라 업로드 URL 로 올린 뒤 받은 key 를 넘깁니다.
  */

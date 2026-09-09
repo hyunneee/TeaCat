@@ -77,6 +77,15 @@ const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'Adm
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
 const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
+const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
+const AdminConcertCreatePage = page(
+  () => import('@/pages/AdminConcertCreatePage'),
+  'AdminConcertCreatePage',
+);
+const AdminConcertEditPage = page(
+  () => import('@/pages/AdminConcertEditPage'),
+  'AdminConcertEditPage',
+);
 const AdminInquiriesPage = page(
   () => import('@/pages/AdminInquiriesPage'),
   'AdminInquiriesPage',
@@ -175,6 +184,25 @@ const routes: RouteObject[] = [
                   {
                     path: ROUTES.ADMIN_STADIUM_DETAIL(':stadiumId'),
                     element: withBoundary(<AdminStadiumDetailPage />),
+                  },
+                ],
+              },
+              {
+                /* 공연 관리는 서버가 ADMIN 과 공연 주최자(PERFORMANCE)에게 열어 둔다
+                   (SecurityConfig 의 /admin/concerts/**). 보이는 범위는 다르다 —
+                   ADMIN 은 전체, PERFORMANCE 는 본인이 등록한 것만
+                   (useManagedConcerts 가 부르는 API 를 나눈다). */
+                element: <RequireRole roles={['ADMIN', 'PERFORMANCE']} />,
+                children: [
+                  { path: ROUTES.ADMIN_CONCERTS, element: withBoundary(<AdminConcertsPage />) },
+                  {
+                    /* 정적 경로가 `:concertId` 보다 먼저 와야 'new' 를 ID 로 읽지 않는다 */
+                    path: ROUTES.ADMIN_CONCERT_CREATE,
+                    element: withBoundary(<AdminConcertCreatePage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_CONCERT_EDIT(':concertId'),
+                    element: withBoundary(<AdminConcertEditPage />),
                   },
                 ],
               },

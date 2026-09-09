@@ -86,8 +86,14 @@ public class SecurityConfig {
                                 "/nft-market/auctions", "/auctions/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
+                        // 전체 공연 목록은 운영자만 본다. 공연 주최자에게는 /admin/concerts/mine 이 있다.
+                        //
+                        // 🔴 아래 /admin/concerts/** 보다 먼저 와야 한다 — /** 는 빈 경로도 삼켜서
+                        //    순서를 바꾸면 PERFORMANCE 도 남의 공연 목록을 보게 된다.
+                        .requestMatchers(HttpMethod.GET, "/admin/concerts").hasRole(UserRole.ADMIN.name())
                         // 공연 관리(등록·수정·회차·구역·이미지)는 공연 주최자(PERFORMANCE)도 쓴다.
                         // 등록자 본인 것만 다룰 수 있는 건 서비스가 따로 검사한다(PERFORMANCE_020).
+                        // ADMIN 은 그 검사에서 예외라 남이 등록한 공연도 다룰 수 있다.
                         .requestMatchers("/admin/concerts/**", "/admin/schedules/**", "/admin/uploads/**")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         // 공연장·구역·좌석 배치 관리는 공연장 운영자(STADIUM)도 쓴다

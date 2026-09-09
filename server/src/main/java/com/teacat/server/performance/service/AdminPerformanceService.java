@@ -1,5 +1,6 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.config.PerformanceImageProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.storage.FileStorageService;
@@ -8,6 +9,7 @@ import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
 import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
+import com.teacat.server.performance.dto.response.AdminConcertAreaResponse;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
 import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertStatusResponse;
@@ -36,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -55,6 +58,9 @@ import java.util.stream.Collectors;
  *
  * 등록(261)과 업로드 URL 발급(270)을 뺀 모든 API 는 **등록자 본인만** 쓸 수 있다.
  * 관리자 여럿이 각자 공연을 올리는 구조라, 남의 공연을 실수로 지우는 일을 막아야 한다.
+ *
+ * **단 ADMIN 은 예외다** — 운영자가 손댈 수 없는 공연이 남으면 안 된다.
+ * 판단은 {@link #getOwnedPerformance} 한곳에 모여 있다.
  */
 @Service
 @Slf4j
@@ -140,12 +146,12 @@ public class AdminPerformanceService {
      * 공연장·티켓팅 시각·노출 시작일은 예매자가 이미 보고 결정한 정보라 뒤늦게 바꾸면 안 된다.
      */
     @Transactional
-    public void update(Long concertId, ConcertUpdateRequest request, Long userId) {
+    public void update(Long concertId, ConcertUpdateRequest request, AuthUser actor) {
         if (request.isEmpty()) {
             throw new BusinessException(PerformanceErrorCode.NOTHING_TO_UPDATE);
         }
 
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
 
         if (performance.isTicketingStarted(LocalDateTime.now()) && request.touchesLockedFields()) {
             throw new BusinessException(PerformanceErrorCode.TICKETING_ALREADY_STARTED);
@@ -237,8 +243,8 @@ public class AdminPerformanceService {
      * "삭제를 눌렀는데 비공개가 됐다"는 결과가 관리자에게 보이지 않아 분리했다.
      */
     @Transactional
-    public void delete(Long concertId, Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+    public void delete(Long concertId, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
 
         if (performanceGeneralRepository.existsTicketByPerformanceId(concertId)) {
             throw new BusinessException(PerformanceErrorCode.PERFORMANCE_HAS_TICKETS);
@@ -261,8 +267,8 @@ public class AdminPerformanceService {
      * 번호를 직접 지정하면 그대로 쓰되, (performance_general_id, performance_num) UNIQUE 에 걸리는 중복은 미리 막는다.
      */
     @Transactional
-    public ScheduleCreateResponse createSchedule(Long concertId, ScheduleCreateRequest request, Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+    public ScheduleCreateResponse createSchedule(Long concertId, ScheduleCreateRequest request, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
 
         // 티켓팅 시작일보다 앞선 공연일은 예매가 불가능한 회차가 된다
         if (request.performanceDate().isBefore(performance.getTicketingStartAt())) {
@@ -316,11 +322,72 @@ public class AdminPerformanceService {
     }
 
     /**
-     * 내가 등록한 공연 상세 — 비공개여도 준다 (등록자 본인만).
+     * 모든 공연 — 등록자와 무관하게, 비공개 포함 (어드민 콘솔의 공연 관리 목록).
+     *
+     * <p>🔴 ADMIN 전용이다 ({@code SecurityConfig} 가 경로로 막는다). 공연 주최자에게는
+     * {@link #getMyConcerts} 가 본인 것만 준다.
+     *
+     * @param keyword 공연명 부분 일치. 비우면 전체
+     */
+    public List<ConcertSummaryResponse> getAllConcerts(String keyword) {
+        return performanceGeneralRepository.findAllForAdmin(toTitlePattern(keyword)).stream()
+                .map(p -> ConcertSummaryResponse.of(p, fileStorageService.presignedUrl(p.getPosterImageKey())))
+                .toList();
+    }
+
+    /**
+     * 구역 등급·가격 편집 화면이 읽는 값.
+     *
+     * <p>관람객용 {@code GET /concerts/{id}/areas} 와 달리 <b>배치도에 있는 구역을 전부</b> 준다.
+     * 설정된 것만 주면 화면에서 새 구역을 팔기 시작할 방법이 없고, 비공개 공연은 그쪽 API 가
+     * 404 라 편집 화면이 아예 열리지 않는다.
+     */
+    public List<AdminConcertAreaResponse> getConcertAreas(Long concertId, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
+
+        Map<Long, PerformanceArea> settings = performanceAreaRepository.findAllByPerformanceId(concertId).stream()
+                .collect(Collectors.toMap(pa -> pa.getArea().getId(), Function.identity()));
+
+        Map<Long, Long> soldByArea = ticketRepository.countSoldByArea(concertId).stream()
+                .collect(Collectors.toMap(
+                        TicketRepository.AreaSoldCount::getAreaId,
+                        TicketRepository.AreaSoldCount::getSoldCount));
+
+        return areaRepository
+                .findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(performance.getStadiumLayout().getId())
+                .stream()
+                .map(area -> AdminConcertAreaResponse.of(
+                        area,
+                        settings.get(area.getId()),
+                        soldByArea.getOrDefault(area.getId(), 0L)))
+                .toList();
+    }
+
+    /**
+     * 검색어를 LIKE 패턴으로 바꾼다. 검색어가 없으면 전체를 뜻하는 '%' 다.
+     *
+     * <p>사용자가 넣은 %, _ 는 와일드카드가 아니라 글자 그대로 찾아야 하므로 이스케이프한다.
+     * ({@code PerformanceService.toTitlePattern} 과 같은 규칙이다)
+     */
+    private String toTitlePattern(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return "%";
+        }
+
+        String escaped = keyword.trim()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+
+        return "%" + escaped + "%";
+    }
+
+    /**
+     * 관리용 공연 상세 — 비공개여도 준다 (등록자 본인, 또는 ADMIN).
      * 수정 화면이 클라이언트 상세(API-202)를 쓰면 비공개 공연은 404 라 수정할 수 없어서 따로 둔다.
      */
-    public ConcertDetailResponse getMyConcert(Long concertId, Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+    public ConcertDetailResponse getMyConcert(Long concertId, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
         LocalDateTime now = LocalDateTime.now();
 
         List<ScheduleSummaryResponse> schedules = performanceDetailRepository
@@ -346,8 +413,8 @@ public class AdminPerformanceService {
      * 예매·티켓 도메인의 일이라 여기서 건드리지 않는다.
      */
     @Transactional
-    public ConcertStatusResponse changeStatus(Long concertId, PerformanceStatus target, Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+    public ConcertStatusResponse changeStatus(Long concertId, PerformanceStatus target, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
         PerformanceStatus current = performance.getStatus();
 
         if (!current.canTransitionTo(target)) {
@@ -368,8 +435,8 @@ public class AdminPerformanceService {
      * 비공개는 목록·상세에서 감출 뿐 데이터를 지우지 않아 언제든 되돌릴 수 있다.
      */
     @Transactional
-    public ConcertVisibilityResponse setVisibility(Long concertId, boolean visible, Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+    public ConcertVisibilityResponse setVisibility(Long concertId, boolean visible, AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
 
         if (visible) {
             performance.show();
@@ -388,8 +455,8 @@ public class AdminPerformanceService {
      */
     @Transactional
     public List<PerformanceAreaResponse> saveAreas(Long concertId, PerformanceAreaSaveRequest request,
-                                                   Long userId) {
-        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+                                                   AuthUser actor) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, actor);
 
         List<Long> requestedAreaIds = request.areas().stream()
                 .map(PerformanceAreaSaveRequest.AreaSetting::areaId)
@@ -493,16 +560,21 @@ public class AdminPerformanceService {
     }
 
     /**
-     * 관리자 API 는 본인이 등록한 공연만 다룬다.
+     * 공연 관리 API 는 <b>등록자 본인</b>만 다룬다. 단 <b>ADMIN 은 예외</b>로 남이 등록한 공연도 다룬다.
      *
-     * 남의 공연은 "없는 공연"(404)이 아니라 "권한 없음"(403)으로 알려준다.
+     * <p>🔴 ADMIN 예외가 필요한 이유 — 공연 주최자(PERFORMANCE) 계정이 등록한 공연을 운영자가
+     * 손댈 수 없으면, 잘못 올라간 공연을 내리거나 고칠 사람이 그 계정 주인뿐이다.
+     * {@code created_by} 가 NULL 인 옛 공연(컬럼이 생기기 전에 등록된 것)은 소유자가 아예 없어서
+     * 이 예외가 없으면 <b>영영 아무도 수정할 수 없다.</b>
+     *
+     * <p>남의 공연은 "없는 공연"(404)이 아니라 "권한 없음"(403)으로 알려준다.
      * 관리자끼리는 공연이 존재한다는 사실을 감출 이유가 없고, 404 를 주면 ID 를 잘못 넣었다고 오해한다.
      */
-    private PerformanceGeneral getOwnedPerformance(Long concertId, Long userId) {
+    private PerformanceGeneral getOwnedPerformance(Long concertId, AuthUser actor) {
         PerformanceGeneral performance = performanceGeneralRepository.findById(concertId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND));
 
-        if (!performance.isOwnedBy(userId)) {
+        if (!actor.isAdmin() && !performance.isOwnedBy(actor.id())) {
             throw new BusinessException(PerformanceErrorCode.NOT_OWNER);
         }
 

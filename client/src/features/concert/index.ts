@@ -3,7 +3,13 @@ export { ConcertCard } from './components/ConcertCard';
 export { ScheduleList } from './components/ScheduleList';
 export { concertApi, concertKeys } from './api/concertApi';
 export { isBookable, canWaitlist, scheduleStatusLabel, scheduleTone } from './model/schedule.model';
-export { isTicketingOpen, posterSeedOf, isConcertOwner } from './model/concert.model';
+export {
+  isTicketingOpen,
+  posterSeedOf,
+  isConcertOwner,
+  canManageConcert,
+  CONCERT_STATUS_LABEL,
+} from './model/concert.model';
 export type {
   ConcertSummary,
   ConcertListPage,
