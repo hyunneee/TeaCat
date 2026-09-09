@@ -55,8 +55,20 @@ public class NftPhotocardMinter {
      * @return 체인으로 보낸 카드 수
      */
     public int mintPending(Long performanceId) {
-        List<PendingMintRow> rows = queryRepository.findPendingMints(performanceId, SWEEP_LIMIT);
+        return send("performanceId=" + performanceId,
+                queryRepository.findPendingMints(performanceId, SWEEP_LIMIT));
+    }
 
+    /**
+     * {@link #mintPending} 의 회차 스코프 버전. 이 회차 티켓의 {@code PENDING} 카드만 보낸다.
+     * 자동 발급 스케줄러가 "회차 시작 1시간 전" 에 만든 카드를 이어서 체인으로 밀어 넣는 경로다.
+     */
+    public int mintPendingForSchedule(Long scheduleId) {
+        return send("scheduleId=" + scheduleId,
+                queryRepository.findPendingMintsForSchedule(scheduleId, SWEEP_LIMIT));
+    }
+
+    private int send(String scope, List<PendingMintRow> rows) {
         if (rows.isEmpty()) {
             return 0;
         }
@@ -72,8 +84,7 @@ public class NftPhotocardMinter {
 
             chainClient.issuePhotocards(items);
             sent += items.size();
-            log.info("포토카드 발행 요청 performanceId={} {}건 (누적 {}/{})",
-                    performanceId, items.size(), sent, rows.size());
+            log.info("포토카드 발행 요청 {} {}건 (누적 {}/{})", scope, items.size(), sent, rows.size());
         }
 
         return sent;

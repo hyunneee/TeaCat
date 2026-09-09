@@ -34,6 +34,7 @@ import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
 import com.teacat.server.wallet.client.BlockchainProperties;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -322,6 +324,116 @@ public class NftService {
                     walletIdByUser.get(owner.getId())));
         }
         queryRepository.batchIssuePhotocards(issueRows);
+        return new NftPhotocardIssueResponse(issueRows.size(), 0);
+    }
+
+    /**
+     * 회차(performance_detail) 하나에 자동 발급한다. <b>스케줄러 전용</b>이다 —
+     * 사람이 넣어 주는 도안별 수량이 없어, 수동 발급({@link #issuePhotocards})과 규칙이 다르다.
+     *
+     * <ul>
+     *   <li><b>회차 단위 중복 방지</b> — 이 회차 티켓으로 카드가 하나라도 만들어졌으면 조용히 끝낸다
+     *       (예외 아님). 스케줄러가 매시 다시 도는 것이 정상 경로다.
+     *   <li><b>수량 중심 배정</b> — 도안 재고만큼만 발급하고, 재고가 모자라면 일부 수령자는 카드가 없다
+     *       ({@link NftPhotocardScheduleAllocator}).
+     *   <li><b>거를 것은 거르고 진행</b> — 지갑·회원 정보가 없는 수령자, 온체인 미등록 도안은 대상에서
+     *       빼고 나머지로 발급한다. 수동 발급의 "한 명이라도 없으면 전체 롤백" 과 반대다 —
+     *       스케줄러는 사람이 지켜보지 않아, 한 건이 전체를 멈추게 두면 안 된다.
+     * </ul>
+     *
+     * <p>체인 전송은 여기서 하지 않는다. 카드 행만 PENDING 으로 만들고, 전송은
+     * {@code NftPhotocardMinter.mintPendingForSchedule} 이 트랜잭션 밖에서 이어 한다.
+     */
+    @Transactional
+    public NftPhotocardIssueResponse issuePhotocardsForSchedule(Long scheduleId) {
+        if (!queryRepository.lockSchedule(scheduleId)) {
+            throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
+        }
+        if (queryRepository.existsPhotocardForSchedule(scheduleId)) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+        Long performanceId = queryRepository.findPerformanceIdBySchedule(scheduleId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND));
+
+        List<NftPhotocardDesign> allDesigns = designRepository.findAllByPerformanceIdOrderByIdAsc(performanceId);
+        if (allDesigns.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 공연에 도안이 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+        // 배정하며 issued_supply 를 누적 갱신하므로 잠그고 읽는다. 잠근 뒤 상태를 다시 본다
+        List<NftPhotocardDesign> designs = designRepository.findAllByIdForUpdate(
+                        allDesigns.stream().map(NftPhotocardDesign::getId).toList()).stream()
+                .filter(NftPhotocardDesign::isRegistered)
+                .toList();
+        if (designs.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 온체인 등록된 도안이 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        List<NftMarketQueryRepository.TicketRecipientRow> recipients =
+                queryRepository.findConfirmedTicketRecipientsForSchedule(scheduleId);
+        if (recipients.isEmpty()) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        List<Long> userIds = recipients.stream()
+                .map(NftMarketQueryRepository.TicketRecipientRow::userId).distinct().toList();
+        Map<Long, User> usersById = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> usersById.put(user.getId(), user));
+        Map<Long, Long> walletIdByUser = queryRepository
+                .findActiveWallets(userIds, blockchainProperties.chainId()).stream()
+                .collect(Collectors.toMap(
+                        NftMarketQueryRepository.UserWalletRow::userId,
+                        NftMarketQueryRepository.UserWalletRow::walletId));
+
+        List<NftMarketQueryRepository.TicketRecipientRow> eligible = recipients.stream()
+                .filter(row -> usersById.containsKey(row.userId()) && walletIdByUser.containsKey(row.userId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (eligible.size() < recipients.size()) {
+            log.warn("회차 자동 발급 — 지갑/회원 정보가 없는 수령자 {}명 제외 scheduleId={}",
+                    recipients.size() - eligible.size(), scheduleId);
+        }
+        if (eligible.isEmpty()) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        int[] remaining = designs.stream()
+                .mapToInt(design -> design.getTotalSupply() - design.getIssuedSupply())
+                .toArray();
+        int[] quantities = NftPhotocardScheduleAllocator.allocate(remaining, eligible.size());
+
+        List<Long> designPool = new ArrayList<>();
+        for (int i = 0; i < designs.size(); i++) {
+            if (quantities[i] <= 0) {
+                continue;
+            }
+            NftPhotocardDesign design = designs.get(i);
+            design.reserve(quantities[i]);
+            for (int n = 0; n < quantities[i]; n++) {
+                designPool.add(design.getId());
+            }
+        }
+        if (designPool.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 도안 재고가 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        Collections.shuffle(designPool, SECURE_RANDOM);
+        Collections.shuffle(eligible, SECURE_RANDOM);
+
+        List<NftMarketQueryRepository.IssueRow> issueRows = new ArrayList<>(designPool.size());
+        for (int i = 0; i < designPool.size(); i++) {
+            NftMarketQueryRepository.TicketRecipientRow recipient = eligible.get(i);
+            issueRows.add(new NftMarketQueryRepository.IssueRow(
+                    designPool.get(i), recipient.ticketId(), recipient.userId(),
+                    walletIdByUser.get(recipient.userId())));
+        }
+        queryRepository.batchIssuePhotocards(issueRows);
+        log.info("회차 자동 발급 scheduleId={} 확정 티켓 {}명 중 {}장 발급",
+                scheduleId, recipients.size(), issueRows.size());
         return new NftPhotocardIssueResponse(issueRows.size(), 0);
     }
 
