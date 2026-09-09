@@ -87,6 +87,15 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi ticketApi() {
+        return GroupedOpenApi.builder()
+                .group("08-ticket")
+                .displayName("티켓")
+                .packagesToScan(BASE_PACKAGE + ".ticket")
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi paymentApi() {
         return GroupedOpenApi.builder()
                 .group("07-payment")
