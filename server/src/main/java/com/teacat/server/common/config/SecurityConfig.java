@@ -6,8 +6,10 @@ import com.teacat.server.auth.security.JwtAuthenticationFilter;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.user.entity.UserRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -56,6 +58,30 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CorsProperties corsProperties;
     private final ObjectMapper objectMapper;
+
+    /**
+     * 액추에이터 전용 체인. <b>아래 기본 체인보다 먼저 잡아야 한다</b> —
+     * 기본 체인의 {@code anyRequest().authenticated()} 가 /actuator/prometheus 까지 막아
+     * Prometheus 스크레이프가 통째로 401 이 된다.
+     *
+     * <p>인증 없이 여는 근거는 <b>포트가 다르기 때문</b>이다. 액추에이터는
+     * {@code management.server.port}(8081)에만 뜨고, compose 가 그 포트를 호스트로 열지 않아
+     * teacat-net 안에서만 닿는다. 블록체인 서비스의 {@code /health} 와 같은 취급이다.
+     *
+     * <p>🔴 8081 을 호스트나 nginx 로 내보내는 순간 이 permitAll 이 인터넷에 열린다.
+     *    포트를 열어야 하면 여기에 인증을 붙이고 Prometheus 스크레이프에도 자격증명을 넣어야 한다.
+     */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .build();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

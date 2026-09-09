@@ -1,4 +1,5 @@
 import { provider } from './provider';
+import { nonceResets, txQueueDepth, txQueueWait, txSendDuration } from '../metrics';
 
 /**
  * 트랜잭션 직렬화 + 논스 관리. (DESIGN.md 4-4)
@@ -49,7 +50,17 @@ export function sendSerialized<T>(
 ): Promise<T> {
   const key = address.toLowerCase();
 
+  // 큐에 들어간 시점. 아래에서 "실제로 시작된 시점" 과 빼면 대기 시간이 나옵니다.
+  // 이 큐가 한 줄이라 대기 시간이 곧 발행 지연이고, 적체를 가장 먼저 알려주는 값입니다.
+  const enqueuedAt = Date.now();
+  txQueueDepth.inc();
+
   async function runTask(): Promise<T> {
+    txQueueDepth.dec();
+    txQueueWait.observe((Date.now() - enqueuedAt) / 1000);
+
+    const startedAt = Date.now();
+
     let nonce = nextNonce.get(key);
     if (nonce === undefined) {
       // 'latest' 를 씁니다. 'pending' 은 노드마다 다르게 셉니다.
@@ -59,10 +70,14 @@ export function sendSerialized<T>(
     try {
       const result = await send(nonce);
       nextNonce.set(key, nonce + 1);
+      txSendDuration.observe({ result: 'success' }, (Date.now() - startedAt) / 1000);
       return result;
     } catch (error) {
       // 우리가 센 값이 체인과 어긋났을 수 있습니다. 다음 번에 다시 읽습니다.
       nextNonce.delete(key);
+      txSendDuration.observe({ result: 'failure' }, (Date.now() - startedAt) / 1000);
+      // 평소에는 0 이어야 하는 값입니다. 오르는 동안 트랜잭션이 조용히 사라질 수 있습니다.
+      nonceResets.inc();
       throw error;
     }
   }

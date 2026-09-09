@@ -10,6 +10,7 @@ import {
   type SentPhotocard,
 } from '../db/photocardRepo';
 import { logger, short } from '../shared/logger';
+import { confirmDuration, sweepProcessed, txDropped, watchingCount } from '../metrics';
 
 /**
  * 포토카드 확정 감시 — 체인에 실린 걸 확인해 Spring DB 에 기록합니다.
@@ -70,6 +71,7 @@ export async function watchIssueBatch(cards: SentPhotocard[], txHash: string): P
   if (!dbEnabled()) return;
 
   watching.set(txHash, { photocardKeys: cards.map((card) => card.photocardKey), since: Date.now() });
+  watchingCount.set({ kind: 'photocard' }, watching.size);
 
   const address = photocardNftAddress();
   if (address === null) return;
@@ -120,11 +122,13 @@ async function tick(): Promise<void> {
         if (Date.now() - item.since > DROP_AFTER_MS) {
           logger.warn(`추적 포기 tx=${short(txHash)} — 훑기로 넘깁니다`);
           watching.delete(txHash);
+          watchingCount.set({ kind: 'photocard' }, watching.size);
         }
         continue;
       }
 
       watching.delete(txHash);
+      watchingCount.set({ kind: 'photocard' }, watching.size);
 
       /* 성공이면 배치 안의 카드가 전부 나갔거나(발행) 이미 있었습니다(건너뜀).
          어느 쪽이든 그 키는 체인에서 소비됐으므로 MINTED 입니다. */
@@ -134,6 +138,12 @@ async function tick(): Promise<void> {
             `${chain.revertReason ?? '사유 불명'}`,
         );
       }
+      // 배치 하나가 카드 여러 장이라, 한 번의 확정이 곧 그 장수만큼의 발행이다
+      confirmDuration.observe(
+        { kind: 'photocard', result: chain.success ? 'minted' : 'failed' },
+        (Date.now() - item.since) / 1000,
+      );
+
       await write(item.photocardKeys, chain.success ? 'MINTED' : 'FAILED', txHash);
     }
   } finally {
@@ -165,6 +175,8 @@ async function sweep(): Promise<void> {
       if (row.mintTxHash !== null && watching.has(row.mintTxHash)) continue;
 
       if (await isIssued(row.photocardKey)) {
+        // 추적이 놓친 것을 훑기가 주웠다는 뜻이다
+        sweepProcessed.inc({ kind: 'photocard' });
         minted.push(row.photocardKey);
         continue;
       }
@@ -178,6 +190,8 @@ async function sweep(): Promise<void> {
       if (chain.found) continue; // 아직 살아 있습니다
 
       logger.error(`트랜잭션 드롭 card=${row.photocardKey} tx=${short(row.mintTxHash)}`);
+      // 🔴 0 이어야 정상인 값. 카드가 유실된 것이라 1건도 알림 대상이다
+      txDropped.inc({ kind: 'photocard' });
       failed.push(row.photocardKey);
     }
 
