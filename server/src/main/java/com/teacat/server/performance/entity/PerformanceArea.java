@@ -1,8 +1,11 @@
 package com.teacat.server.performance.entity;
 
 import com.teacat.server.stadium.entity.Area;
+import com.teacat.server.stadium.entity.AreaType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -10,6 +13,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -53,26 +58,47 @@ public class PerformanceArea {
     @Column(name = "max_cnt")
     private Integer maxCnt;
 
-    private PerformanceArea(PerformanceGeneral performance, Area area, String grade, Integer price, Integer maxCnt) {
+    /**
+     * 이 공연에서 이 구역을 파는 방식.
+     *
+     * <p>공연장 구역의 형태(area.type)와 다를 수 있다 — 같은 플로어를 이번 공연은 스탠딩으로,
+     * 다음 공연은 좌석제로 파는 일이 흔하다. 좌석 생성(API-269)과 좌석맵은 이 값을 본다.
+     *
+     * <p>반대 방향은 성립하지 않는다: 스탠딩 구역에는 좌석 좌표가 없어 좌석제로 팔 수 없다.
+     */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "sale_type", nullable = false, columnDefinition = "area_type")
+    private AreaType saleType;
+
+    private PerformanceArea(PerformanceGeneral performance, Area area, String grade, Integer price, Integer maxCnt,
+                            AreaType saleType) {
         this.id = new PerformanceAreaId(performance.getId(), area.getId());
         this.performance = performance;
         this.area = area;
         this.grade = grade;
         this.price = price;
         this.maxCnt = maxCnt;
+        this.saleType = saleType;
     }
 
     /** 공연 구역 등급·가격 설정 (API-268) */
     public static PerformanceArea create(PerformanceGeneral performance, Area area,
-                                         String grade, Integer price, Integer maxCnt) {
-        return new PerformanceArea(performance, area, grade, price, maxCnt);
+                                         String grade, Integer price, Integer maxCnt, AreaType saleType) {
+        return new PerformanceArea(performance, area, grade, price, maxCnt, saleType);
     }
 
-    /** 기존 구역의 등급·가격·최대 수량을 갱신한다 (API-268 재저장) */
-    public void updateSetting(String grade, Integer price, Integer maxCnt) {
+    /** 기존 구역의 등급·가격·최대 수량·판매 방식을 갱신한다 (API-268 재저장) */
+    public void updateSetting(String grade, Integer price, Integer maxCnt, AreaType saleType) {
         this.grade = grade;
         this.price = price;
         this.maxCnt = maxCnt;
+        this.saleType = saleType;
+    }
+
+    /** 이 공연에서 좌석을 지정해 파는 구역인가. 좌석 생성·좌석맵이 이 값으로 대상을 고른다 */
+    public boolean isSoldAsSeated() {
+        return this.saleType == AreaType.SEATED;
     }
 
     /** 이미 팔린 수량보다 적게 최대 수량을 줄이면 CHECK 제약에 걸린다 */

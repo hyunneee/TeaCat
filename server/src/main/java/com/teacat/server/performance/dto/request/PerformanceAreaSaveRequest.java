@@ -1,5 +1,6 @@
 package com.teacat.server.performance.dto.request;
 
+import com.teacat.server.stadium.entity.AreaType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -40,7 +41,19 @@ public record PerformanceAreaSaveRequest(
 
             @Schema(description = "이 구역에서 팔 최대 수량", example = "500")
             @Min(value = 0, message = "최대 판매수량은 0 이상이어야 합니다.")
-            Integer maxCnt
+            Integer maxCnt,
+
+            @Schema(description = """
+                    이 공연에서 이 구역을 파는 방식. 생략하면 이미 저장된 방식을 그대로 둡니다
+                    (아직 설정하지 않은 구역이면 공연장 구역의 형태를 씁니다).
+
+                    - `SEATED` 는 **공연장 구역이 좌석제일 때만** 됩니다. 스탠딩 구역에는 좌석 좌표가 없어
+                      배정할 자리가 없습니다 (PERFORMANCE_022).
+                    - 좌석제 구역을 `STANDING` 으로 파는 것은 됩니다. 그러면 좌석을 만들지 않고
+                      `maxCnt` 로 수량만 관리합니다.
+                    - 판매 이력이 있는 구역은 바꿀 수 없습니다 (PERFORMANCE_023).
+                    """, example = "SEATED")
+            AreaType saleType
     ) {
     }
 }

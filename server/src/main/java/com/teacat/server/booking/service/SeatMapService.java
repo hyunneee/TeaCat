@@ -61,8 +61,10 @@ public class SeatMapService {
                 performanceAreaRepository.findAllByPerformanceId(detail.getPerformance().getId());
 
         List<PerformanceArea> targets = configured.stream()
-                // 스탠딩 구역에는 좌석이 없다. 좌석맵에 빈 구역으로 끼워 넣지 않는다
-                .filter(pa -> pa.getArea().isSeated())
+                // 스탠딩으로 파는 구역에는 좌석이 없다. 좌석맵에 빈 구역으로 끼워 넣지 않는다.
+                // 공연장 구역의 형태가 아니라 이 공연에서 파는 방식(sale_type)을 본다 —
+                // 좌석제 구역을 스탠딩으로 팔기로 했으면 좌석을 만들지도 않았다
+                .filter(PerformanceArea::isSoldAsSeated)
                 .filter(pa -> areaId == null || pa.getArea().getId().equals(areaId))
                 .sorted(Comparator.comparing(pa -> pa.getArea().getId()))
                 .toList();

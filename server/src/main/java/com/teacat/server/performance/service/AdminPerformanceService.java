@@ -27,6 +27,7 @@ import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.entity.Area;
+import com.teacat.server.stadium.entity.AreaType;
 import com.teacat.server.stadium.entity.Stadium;
 import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
@@ -439,6 +440,14 @@ public class AdminPerformanceService {
             if (current != null && current.wouldBreakSoldCount(setting.maxCnt(), sold)) {
                 throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
             }
+
+            AreaType saleType = resolveSaleType(setting, stadiumAreas.get(setting.areaId()), current);
+
+            // 판 뒤에 방식을 바꾸면 이미 나간 티켓의 근거가 어긋난다.
+            // 좌석제로 팔린 티켓은 좌석을 가리키는데 스탠딩으로 바꾸면 그 좌석이 사라진다
+            if (current != null && sold > 0 && current.getSaleType() != saleType) {
+                throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_LOCKED);
+            }
         }
 
         // 판매 이력이 있는 구역을 빼면 그 티켓의 가격·등급 근거가 사라진다
@@ -454,16 +463,17 @@ public class AdminPerformanceService {
 
         List<PerformanceArea> saved = request.areas().stream()
                 .map(setting -> {
+                    Area area = stadiumAreas.get(setting.areaId());
                     PerformanceArea current = existing.get(setting.areaId());
+                    AreaType saleType = resolveSaleType(setting, area, current);
 
                     if (current != null) {
-                        current.updateSetting(setting.grade(), setting.price(), setting.maxCnt());
+                        current.updateSetting(setting.grade(), setting.price(), setting.maxCnt(), saleType);
                         return current;
                     }
 
                     return PerformanceArea.create(
-                            performance, stadiumAreas.get(setting.areaId()),
-                            setting.grade(), setting.price(), setting.maxCnt());
+                            performance, area, setting.grade(), setting.price(), setting.maxCnt(), saleType);
                 })
                 .toList();
 
@@ -471,6 +481,27 @@ public class AdminPerformanceService {
                 .map(pa -> PerformanceAreaResponse.of(
                         pa, soldByArea.getOrDefault(pa.getArea().getId(), 0L)))
                 .toList();
+    }
+
+    /**
+     * 이 공연에서 구역을 파는 방식을 정한다 (API-268).
+     *
+     * 생략하면 **이미 저장된 방식을 그대로 둔다**. 새 구역이면 공연장 구역의 형태를 따른다.
+     * 생략을 "공연장 형태로 되돌리기" 로 해석하면, 방식을 신경 쓰지 않는 옛 클라이언트가
+     * 스탠딩으로 설정해 둔 구역을 저장할 때마다 좌석제로 되돌려 버린다.
+     *
+     * 좌석제 구역을 스탠딩으로 파는 것은 된다(플로어에 의자를 두지 않는 경우).
+     * 그 반대는 막는다 — 스탠딩 구역에는 좌석 좌표가 없어 배정할 자리가 없다.
+     */
+    private AreaType resolveSaleType(PerformanceAreaSaveRequest.AreaSetting setting, Area area,
+                                     PerformanceArea current) {
+        if (setting.saleType() == null) {
+            return current != null ? current.getSaleType() : area.getType();
+        }
+        if (setting.saleType() == AreaType.SEATED && !area.isSeated()) {
+            throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_NOT_ALLOWED);
+        }
+        return setting.saleType();
     }
 
     /**
