@@ -34,8 +34,12 @@ export {
   hasEnabledArea,
   capacityOf,
   canSellSeated,
+  canSellStanding,
+  sellableTypes,
+  isUnsellable,
+  pickSaleType,
   changeSaleType,
-  needsSeatWarning,
+
   exceedsVenueCapacity,
   type AreaPricingRow,
   type StadiumArea,

@@ -67,19 +67,62 @@ export function capacityOf(row: Pick<AreaPricingRow, 'saleType' | 'maxSeat' | 's
   return row.saleType === 'SEATED' && row.seatCount > 0 ? row.seatCount : row.maxSeat;
 }
 
-/** 스탠딩 구역에는 좌석 좌표가 없어 좌석을 지정해 팔 수 없습니다 (서버 PERFORMANCE_022 와 같은 규칙) */
-export function canSellSeated(row: Pick<AreaPricingRow, 'type'>): boolean {
-  return row.type === 'SEATED';
+/**
+ * 좌석을 지정해 팔 수 있는 구역인지 — **좌석이 등록돼 있으면** 됩니다.
+ *
+ * 배치도에 좌석 행이 없으면 배정할 자리가 없어서, 켜 두면 회차 좌석 생성(API-269)이
+ * 만들 좌석을 못 찾습니다(NO_SEATS_TO_GENERATE).
+ */
+export function canSellSeated(row: Pick<AreaPricingRow, 'seatCount'>): boolean {
+  return row.seatCount > 0;
 }
 
 /**
- * 좌석제로 팔기로 했는데 배치도에 좌석이 없는 상태.
+ * 스탠딩으로 팔 수 있는 구역인지 — **의자가 없으면** 됩니다 (서버 PERFORMANCE_022 와 같은 규칙).
  *
- * 저장은 됩니다(서버도 막지 않습니다). 다만 이대로 두면 회차 좌석 생성(API-269)이
- * 만들 좌석을 못 찾아 예매 화면에 좌석맵이 비어 보입니다.
+ * 의자가 깔린 구역(`type === 'SEATED'`)은 그 의자가 자리에 그대로 있어서 사람을 세울 수 없습니다.
+ * 의자를 치운 구성은 무대 형식(배치)을 따로 만들어 표현합니다.
  */
-export function needsSeatWarning(row: Pick<AreaPricingRow, 'saleType' | 'seatCount'>): boolean {
-  return row.saleType === 'SEATED' && row.seatCount === 0;
+export function canSellStanding(row: Pick<AreaPricingRow, 'type'>): boolean {
+  return row.type !== 'SEATED';
+}
+
+/**
+ * 이 공연에서 고를 수 있는 판매 방식.
+ *
+ * 공연장이 구역을 등록할 때 좌석까지 그려 두면 둘 다 되고, 한쪽만 등록했으면 그 하나만 됩니다.
+ * <pre>
+ *   의자 있음 + 좌석 등록  →  좌석 지정만
+ *   의자 없음 + 좌석 등록  →  둘 다 (전환 가능)
+ *   의자 없음 + 좌석 없음  →  스탠딩만
+ *   의자 있음 + 좌석 없음  →  없음 (팔 수 없는 구역)
+ * </pre>
+ */
+export function sellableTypes(row: Pick<AreaPricingRow, 'type' | 'seatCount'>): AreaType[] {
+  const types: AreaType[] = [];
+  if (canSellSeated(row)) types.push('SEATED');
+  if (canSellStanding(row)) types.push('STANDING');
+  return types;
+}
+
+/** 팔 방법이 하나도 없는 구역. 판매를 켤 수 없습니다 */
+export function isUnsellable(row: Pick<AreaPricingRow, 'type' | 'seatCount'>): boolean {
+  return sellableTypes(row).length === 0;
+}
+
+/**
+ * 바라는 방식이 가능하면 그대로, 아니면 가능한 하나로 바꿉니다.
+ *
+ * 팔 방법이 없는 구역은 바라는 값을 그대로 둡니다 — 어차피 판매를 켤 수 없고,
+ * 여기서 값을 뒤집으면 화면에 왜 못 켜는지가 흐려집니다.
+ */
+export function pickSaleType(
+  row: Pick<AreaPricingRow, 'type' | 'seatCount'>,
+  wanted: AreaType,
+): AreaType {
+  const options = sellableTypes(row);
+  if (options.length === 0 || options.includes(wanted)) return wanted;
+  return options[0]!;
 }
 
 /**
@@ -124,12 +167,14 @@ export function buildAreaRows(
 
   return stadiumAreas.map((area) => {
     const saved = byId.get(area.areaId);
-    // 저장된 설정이 없으면 공연장 구역의 형태 그대로 판다
+    const capability = { type: area.type, seatCount: area.seatCount };
     const base = {
       areaId: area.areaId,
       label: areaLabel(area),
       type: area.type,
-      saleType: saved?.saleType ?? area.type,
+      /* 고를 수 있는 방식이 하나뿐이면 그걸로 자동 고정합니다.
+         저장된 값이 지금 불가능해진 경우(좌석을 지운 뒤 등)도 여기서 바로잡습니다 */
+      saleType: pickSaleType(capability, saved?.saleType ?? area.type),
       maxSeat: area.maxSeat,
       seatCount: area.seatCount,
     };
@@ -158,13 +203,17 @@ export function validateAreaRows(rows: AreaPricingRow[]): (string | undefined)[]
     if (!row.enabled) {
       return row.soldCnt > 0 ? '이미 판매된 구역은 판매를 끌 수 없어요.' : undefined;
     }
-    if (row.grade.length > GRADE_MAX_LENGTH) return `등급은 ${GRADE_MAX_LENGTH}자 이하여야 해요.`;
-    if (row.saleType === 'SEATED' && !canSellSeated(row)) {
-      return '스탠딩 구역은 좌석을 지정해 팔 수 없어요.';
+    /* 좌석도 없고 의자 때문에 스탠딩도 안 되면 팔 방법이 없습니다 */
+    if (isUnsellable(row)) {
+      return '좌석이 등록되지 않아 팔 수 없어요. 공연장 관리에서 좌석을 먼저 등록해 주세요.';
     }
-    /* 좌석이 아직 안 그려진 구역(seatCount 0)을 막지는 않습니다.
-       서버도 구역 형태만 보고 통과시키므로, 여기서 막으면 이미 그렇게 저장된 공연은
-       아무것도 못 고치게 됩니다. 대신 줄에 경고를 띄워 알려줍니다 (needsSeatWarning). */
+    if (row.grade.length > GRADE_MAX_LENGTH) return `등급은 ${GRADE_MAX_LENGTH}자 이하여야 해요.`;
+    if (row.saleType === 'STANDING' && !canSellStanding(row)) {
+      return '의자가 설치된 구역은 스탠딩으로 팔 수 없어요.';
+    }
+    if (row.saleType === 'SEATED' && !canSellSeated(row)) {
+      return '등록된 좌석이 없어 좌석을 지정해 팔 수 없어요.';
+    }
 
     const price = toNonNegativeInt(row.price);
     if (price == null) return '가격을 0 이상 정수로 입력해 주세요.';
