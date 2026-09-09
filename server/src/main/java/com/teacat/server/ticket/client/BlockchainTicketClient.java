@@ -22,6 +22,7 @@ import java.util.UUID;
 public class BlockchainTicketClient {
 
     private static final String ISSUE_PATH = "/internal/tickets/issue";
+    private static final String BURN_PATH_FORMAT = "/internal/tickets/%s/burn";
 
     private final BlockchainRestClient blockchainRestClient;
 
@@ -37,5 +38,23 @@ public class BlockchainTicketClient {
 
         return blockchainRestClient.post(
                 ISSUE_PATH, body, TicketIssueResult.class, TicketErrorCode.TICKET_ISSUE_FAILED);
+    }
+
+    /**
+     * 소각 — 예매 취소. <b>tokenId 는 영구 소멸합니다.</b>
+     *
+     * <p>정지 스위치를 보지 않습니다. 사고로 발행을 멈춰도 환불 경로는 살아 있어야 합니다
+     * (blockchain/DESIGN.md).
+     *
+     * <p>이미 소각된 티켓이면 새 트랜잭션 없이 {@code ALREADY_DONE} 입니다. 발행된 적 없는
+     * 번호는 404 이고, 재시도로 풀리지 않습니다.
+     *
+     * @param tokenId 온체인 토큰 번호. 정수 문자열이다 — JSON number 로 다루면 큰 값에서
+     *                정밀도가 깨진다
+     */
+    public TicketIssueResult burn(String tokenId) {
+        return blockchainRestClient.post(
+                BURN_PATH_FORMAT.formatted(tokenId), Map.of(),
+                TicketIssueResult.class, TicketErrorCode.TICKET_BURN_FAILED);
     }
 }

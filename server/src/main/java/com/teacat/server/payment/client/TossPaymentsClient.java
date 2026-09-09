@@ -32,6 +32,7 @@ public class TossPaymentsClient {
 
     private static final String CONFIRM_PATH = "/v1/payments/confirm";
     private static final String ORDER_PATH = "/v1/payments/orders/";
+    private static final String CANCEL_PATH_FORMAT = "/v1/payments/%s/cancel";
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
     /** 토스가 "그런 주문번호가 없다" 고 답할 때의 코드 */
     private static final String NOT_FOUND_PAYMENT = "NOT_FOUND_PAYMENT";
@@ -88,6 +89,48 @@ public class TossPaymentsClient {
             return result;
         } catch (RestClientResponseException e) {
             throw toTossException(e, orderId);
+        }
+    }
+
+    /**
+     * 결제 취소 (전액 또는 부분).
+     *
+     * <p><b>같은 멱등 키로 다시 보내도 두 번 취소되지 않습니다.</b> 취소는 재시도가 필요한
+     * 작업이라(환불이 안 되면 사용자 돈이 묶입니다) 키를 반드시 고정해서 보냅니다 —
+     * 주문 번호에서 만들어 매번 같은 값이 되게 합니다.
+     *
+     * @param cancelAmount 부분취소 금액. null 이면 전액 취소
+     * @throws TossPaymentException 토스가 거절한 경우 (이미 취소됨·기간 초과 등)
+     */
+    public TossPaymentResult cancel(String paymentKey, String reason, Integer cancelAmount,
+            String idempotencyKey) {
+        requireConfigured();
+
+        Map<String, Object> body = cancelAmount == null
+                ? Map.of("cancelReason", reason)
+                : Map.of("cancelReason", reason, "cancelAmount", cancelAmount);
+
+        try {
+            TossPaymentResult result = restClient.post()
+                    .uri(CANCEL_PATH_FORMAT.formatted(paymentKey))
+                    .header(HttpHeaders.AUTHORIZATION, basicAuth())
+                    .header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(TossPaymentResult.class);
+
+            if (result == null) {
+                // 취소가 됐는지 모르는 상태다. 실패로 확정하면 재시도가 두 번 취소할 수 있다
+                log.error("토스 취소 응답이 비어 있습니다. paymentKey 앞자리={}",
+                        paymentKey.substring(0, Math.min(8, paymentKey.length())));
+                throw new BusinessException(PaymentErrorCode.PAYMENT_CANCEL_FAILED);
+            }
+
+            return result;
+        } catch (RestClientResponseException e) {
+            throw toTossException(e, "cancel");
         }
     }
 

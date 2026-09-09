@@ -45,7 +45,22 @@ public enum PaymentErrorCode implements ErrorCode {
      * 그때는 사람이 봐야 하므로 로그를 크게 남긴다.
      */
     SEAT_NO_LONGER_HELD(HttpStatus.CONFLICT, "PAYMENT_012",
-            "좌석 선점이 유지되지 않아 발권할 수 없습니다. 좌석을 다시 선택해 주세요.");
+            "좌석 선점이 유지되지 않아 발권할 수 없습니다. 좌석을 다시 선택해 주세요."),
+
+    /**
+     * 카드 취소 요청이 실패했다.
+     *
+     * 예매는 이미 무효화된 뒤라 사용자에게 "취소 실패" 로 보여선 안 된다.
+     * 부르는 쪽이 잡아서 재시도에 맡긴다 — 멱등 키가 있어 두 번 취소되지 않는다.
+     */
+    PAYMENT_CANCEL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_013",
+            "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+    /** 공연이 시작된 뒤에는 취소할 수 없다 (예매 정책) */
+    CANCEL_DEADLINE_PASSED(HttpStatus.CONFLICT, "PAYMENT_014",
+            "공연이 시작되어 취소할 수 없습니다."),
+    /** 이미 취소된 예매 */
+    ALREADY_CANCELED(HttpStatus.CONFLICT, "PAYMENT_015",
+            "이미 취소된 예매입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

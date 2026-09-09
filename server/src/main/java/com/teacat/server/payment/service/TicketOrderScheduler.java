@@ -3,6 +3,7 @@ package com.teacat.server.payment.service;
 import com.teacat.server.payment.entity.TicketOrder;
 import com.teacat.server.payment.entity.TicketOrderStatus;
 import com.teacat.server.payment.repository.TicketOrderRepository;
+import com.teacat.server.ticket.service.TicketBurnService;
 import com.teacat.server.ticket.service.TicketIssueService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,9 @@ public class TicketOrderScheduler {
     private final TicketOrderRepository ticketOrderRepository;
     private final TicketOrderService ticketOrderService;
     private final TicketIssueService ticketIssueService;
+    private final TicketBurnService ticketBurnService;
+    private final TicketCancelService ticketCancelService;
+    private final TicketCancelRecorder ticketCancelRecorder;
 
     /**
      * 방금 만든 티켓은 블록체인 서비스가 아직 전송 기록을 남기기 전일 수 있다.
@@ -70,6 +74,26 @@ public class TicketOrderScheduler {
 
         for (Long ticketId : unissued) {
             ticketIssueService.requestIssue(ticketId);
+        }
+    }
+
+    /**
+     * 환불은 반드시 끝나야 하는 빚이다. 실패한 것을 끝까지 따라간다.
+     *
+     * <p>카드 취소·캣머니 환급·NFT 소각 모두 멱등이라 다시 보내도 두 번 실행되지 않는다.
+     */
+    @Scheduled(
+            fixedDelayString = "${payment.recovery.interval}",
+            initialDelayString = "${payment.recovery.initial-delay}")
+    public void retryPendingRefunds() {
+        for (Long ticketOrderId : ticketCancelRecorder.findUnrefundedCards(BATCH_SIZE)) {
+            ticketCancelService.cancelCard(ticketOrderId);
+        }
+        for (Long ticketOrderId : ticketCancelRecorder.findUnrefundedTokens(BATCH_SIZE)) {
+            ticketCancelService.refundToken(ticketOrderId);
+        }
+        for (Long ticketId : ticketBurnService.findUnburned(BATCH_SIZE)) {
+            ticketBurnService.requestBurn(ticketId);
         }
     }
 }

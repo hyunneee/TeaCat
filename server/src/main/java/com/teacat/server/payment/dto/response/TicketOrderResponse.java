@@ -33,6 +33,7 @@ public record TicketOrderResponse(
                 NFT 티켓 발행 상태.
                 - `PENDING` / `MINTING` : 발행 요청 후 체인 확정을 기다리는 중입니다 (정상 구간)
                 - `MINTED` : 체인에 올라갔습니다
+                - `BURNED` : 예매 취소로 소각됐습니다
                 - `FAILED` : 발행이 실패했습니다. 예매 자체는 유효합니다
                 """, example = "PENDING")
         String nftStatus,

@@ -6,6 +6,7 @@ import com.teacat.server.payment.dto.request.TicketOrderConfirmRequest;
 import com.teacat.server.payment.dto.request.TicketOrderPrepareRequest;
 import com.teacat.server.payment.dto.response.TicketOrderPrepareResponse;
 import com.teacat.server.payment.dto.response.TicketOrderResponse;
+import com.teacat.server.payment.service.TicketCancelService;
 import com.teacat.server.payment.service.TicketOrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TicketOrderController {
 
     private final TicketOrderService ticketOrderService;
+    private final TicketCancelService ticketCancelService;
 
     @Operation(
             summary = "주문 준비",
@@ -202,5 +204,64 @@ public class TicketOrderController {
     ) {
         return ResponseEntity.ok(BaseResponse.success(
                 ticketOrderService.getOrder(authUser.id(), ticketOrderId)));
+    }
+
+    @Operation(
+            summary = "예매 취소",
+            description = """
+                    예매를 취소하고 환불을 시작합니다.
+
+                    - **공연 시작 시각까지만 취소할 수 있습니다** (예매 정책). 지난 뒤에는
+                      `PAYMENT_014`로 거절됩니다.
+                    - 응답이 돌아온 시점에 **예매는 이미 무효화됐고 좌석도 풀렸습니다.**
+                      환불(카드 취소 · 캣머니 환급 · NFT 소각)은 뒤이어 비동기로 진행됩니다.
+                    - **환불이 아직 안 끝났어도 취소는 성공입니다.** 서버가 끝까지 재시도하므로
+                      실패로 보여주지 마세요. 카드 환불은 카드사 사정으로 며칠 걸릴 수 있습니다.
+                    - 같은 요청을 다시 보내면 `PAYMENT_015`로 거절됩니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "취소 성공 (환불은 진행 중)"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "`PAYMENT_004` : 본인의 주문이 아님",
+                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "`PAYMENT_011` : 존재하지 않는 주문",
+                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = """
+                            - `PAYMENT_006` : 결제가 끝나지 않은 주문
+                            - `PAYMENT_014` : 공연이 시작되어 취소 불가
+                            - `PAYMENT_015` : 이미 취소된 예매
+                            """,
+                    content = @Content(
+                            schema = @Schema(implementation = BaseResponse.class),
+                            examples = @ExampleObject(
+                                    name = "PAYMENT_014",
+                                    value = """
+                                            {
+                                              "success": false,
+                                              "code": "PAYMENT_014",
+                                              "message": "공연이 시작되어 취소할 수 없습니다."
+                                            }
+                                            """
+                            )
+                    )
+            )
+    })
+    @PostMapping("/{ticketOrderId}/cancel")
+    public ResponseEntity<BaseResponse<TicketOrderResponse>> cancel(
+            @Parameter(description = "주문 ID", example = "31")
+            @PathVariable Long ticketOrderId,
+
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ResponseEntity.ok(BaseResponse.success("예매가 취소되었습니다. 환불이 진행됩니다.",
+                ticketCancelService.cancel(authUser.id(), ticketOrderId)));
     }
 }

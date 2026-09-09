@@ -114,12 +114,20 @@ public class Payment {
     }
 
     /**
-     * 승인 요청 직전 선점. 이 상태로 커밋해야 중복 승인을 막고, 서버가 죽어도 복구 대상으로 남는다.
+     * 승인 요청 직전 선점. 이 상태로 커밋해야 서버가 죽어도 복구 대상으로 남는다.
      *
-     * @return 선점했으면 true, 이미 다른 요청이 가져갔으면 false
+     * <p><b>{@code IN_PROGRESS} 도 다시 선점할 수 있다.</b> 승인은 보냈는데 그 뒤 처리가
+     * 실패하면(발권 실패 등) 결제만 잡힌 채 굳어 버리는데, 그 상태를 되살릴 방법이 없으면
+     * "돈은 빠졌는데 티켓이 없는" 상태가 영구히 남는다.
+     *
+     * <p>다시 보내도 이중 결제가 되지 않는 이유는 두 가지다 — 승인 요청에 주문번호를
+     * 멱등 키로 실어 보내므로 토스가 같은 결제를 두 번 승인하지 않고, 호출자가 주문 행을
+     * 잠그고 들어오므로 동시 요청은 줄을 선다.
+     *
+     * @return 선점했으면 true, 이미 끝난 결제면 false
      */
     public boolean claimForApproval() {
-        if (status != PaymentStatus.READY) {
+        if (status != PaymentStatus.READY && status != PaymentStatus.IN_PROGRESS) {
             return false;
         }
 
@@ -136,6 +144,24 @@ public class Payment {
         this.approvedAt = approvedAt;
         this.failureCode = null;
         this.failureMessage = null;
+    }
+
+    /**
+     * 카드 취소를 반영한다.
+     *
+     * <p>부분취소가 여러 번 일어날 수 있어 누적한다. 전액이 되면 CANCELED, 일부면
+     * PARTIAL_CANCELED 다. DB 에 {@code canceled_amount <= amount} CHECK 이 걸려 있다.
+     */
+    public void applyCancel(int canceledAmount) {
+        this.canceledAmount += canceledAmount;
+        this.status = this.canceledAmount >= this.amount
+                ? PaymentStatus.CANCELED
+                : PaymentStatus.PARTIAL_CANCELED;
+    }
+
+    /** 아직 취소되지 않은 금액. 이미 전액 취소됐으면 0 이다 */
+    public int cancelableAmount() {
+        return amount - canceledAmount;
     }
 
     /** 승인이 거절됐다. 사유는 토스가 준 코드를 그대로 남긴다 */

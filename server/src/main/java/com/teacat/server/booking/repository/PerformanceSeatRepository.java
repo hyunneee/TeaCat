@@ -255,4 +255,24 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
     int sell(@Param("performanceDetailId") Long performanceDetailId,
             @Param("seatId") Long seatId,
             @Param("userId") Long userId);
+
+    /**
+     * 예매 취소 — 팔린 좌석을 다시 풀어 준다.
+     *
+     * <p>{@code releaseHold} 와 다르다. 저쪽은 선점(HELD)을 푸는 것이고, 이것은 확정된 판매를
+     * 되돌린다. SOLD 는 취소로만 풀리므로 소유자 검사가 필요 없다 — 취소 권한은 주문에서 이미 봤다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'AVAILABLE',
+                   held_by = NULL,
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'SOLD'
+            """, nativeQuery = true)
+    int release(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId);
 }
