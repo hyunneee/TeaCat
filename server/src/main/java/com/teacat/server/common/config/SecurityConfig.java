@@ -46,7 +46,9 @@ public class SecurityConfig {
             "/stadiums/**",
             "/stadium-layouts/**",
             "/areas/**",
-            "/performances/**"
+            "/performances/**",
+            // 홈 상단 슬라이드. 비로그인도 첫 화면을 봐야 한다
+            "/banners"
     };
 
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;

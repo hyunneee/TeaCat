@@ -9,7 +9,8 @@ import type { Seat, SeatStatus, Section } from './booking.types';
  */
 
 export function isSelectable(seat: Seat): boolean {
-  return seat.status === 'AVAILABLE';
+  // 가격이 없으면 결제 금액을 정할 수 없습니다. 고르게 두면 다음 화면에서 막힙니다
+  return seat.status === 'AVAILABLE' && seat.price !== null;
 }
 
 export type SelectionError = 'LIMIT_EXCEEDED' | 'NOT_SELECTABLE' | null;
@@ -28,7 +29,9 @@ export function validateSelection(
 }
 
 export function totalPrice(seats: Seat[], selectedIds: readonly string[]): number {
-  return seats.filter((s) => selectedIds.includes(s.id)).reduce((sum, s) => sum + s.price, 0);
+  return seats
+    .filter((s) => selectedIds.includes(s.id))
+    .reduce((sum, s) => sum + (s.price ?? 0), 0);
 }
 
 /** 'VIP석 12열 5번' */
@@ -43,6 +46,21 @@ export function sectionRemainRatio(section: Section): number {
 
 export function isSectionSoldOut(section: Section): boolean {
   return section.availableSeats === 0;
+}
+
+/**
+ * 이 구역을 고를 수 있는가.
+ *
+ * 🔴 가격이 null 인 구역은 관리자가 공연-구역 설정에서 등급·가격을 넣지 않은
+ *    상태입니다. 결제 금액을 정할 수 없으므로 예매를 막고 안내합니다.
+ */
+export function isSectionBookable(section: Section): boolean {
+  return !isSectionSoldOut(section) && section.price !== null;
+}
+
+/** 가격 표기. 미설정 구역은 금액 대신 상태를 보여줍니다 */
+export function priceLabel(price: number | null): string {
+  return price === null ? '가격 미정' : `${price.toLocaleString('ko-KR')}원`;
 }
 
 /** 좌석 상태 → Tailwind fill 클래스. 색은 styles/index.css 의 --color-seat-* 에서 관리합니다. */

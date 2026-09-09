@@ -498,6 +498,150 @@ export const purchaseKeys = new Map<
   }
 >();
 
+/* ─────────────────── 경매 (서버 nft_auctions 계약) ─────────────────── */
+
+export interface MockAuction {
+  auctionId: number;
+  photocardId: number;
+  sellerId: string;
+  startPrice: number;
+  buyNowPrice: number | null;
+  /** 비정규화 값. 진실은 topBidId 가 가리키는 입찰의 amount 다 (서버와 같은 구조) */
+  currentPrice: number;
+  topBidId: number | null;
+  bidCount: number;
+  endsAt: string;
+  status: 'ACTIVE' | 'SOLD' | 'EXPIRED' | 'CANCELLED';
+  winnerId: string | null;
+  createdAt: string;
+  closedAt: string | null;
+}
+
+export interface MockAuctionBid {
+  bidId: number;
+  auctionId: number;
+  bidderId: string;
+  amount: number;
+  bidAt: string;
+}
+
+/**
+ * 캣머니 홀드 원장 (서버 `cat_money_holds`).
+ * 입찰하면 그 금액이 묶이고, 밀리면 풀립니다.
+ * ⚠️ 화면 잔액은 **실서버**에서 오므로 이 홀드는 화면에 보이지 않습니다.
+ * 목업 안에서 "가용 잔액 부족" 분기를 볼 수 있게 남겨 둡니다.
+ */
+export interface MockCatMoneyHold {
+  userId: string;
+  amount: number;
+  refType: 'AUCTION_BID' | 'AUCTION_BUY_NOW';
+  refId: number;
+  status: 'ACTIVE' | 'RELEASED' | 'CAPTURED';
+}
+
+let auctionSeq = 10;
+let bidSeq = 70;
+export const nextAuctionId = () => (auctionSeq += 1);
+export const nextBidId = () => (bidSeq += 1);
+
+const HOUR = 3600_000;
+const MINUTE = 60_000;
+
+/* 경매 네 건을 심습니다. 각각 다른 상황을 화면에서 볼 수 있게:
+     a-1 입찰 여럿 + 즉시구매 있음 (u-1 은 밀린 입찰자)
+     a-2 입찰 없음
+     a-3 곧 마감 (2분) — 마감과 낙찰을 실제로 볼 수 있습니다. u-1 이 최고 입찰자
+     a-4 u-1 이 판매자 (취소 버튼 확인용)
+   경매에 올린 포카는 고정가 판매를 비웁니다 — 서버가 둘을 동시에 허용하지 않습니다. */
+const AUCTION_SEED: Array<{
+  photocardId: number;
+  sellerId: string;
+  startPrice: number;
+  buyNowPrice: number | null;
+  endsInMs: number;
+  bids: Array<{ bidderId: string; amount: number; agoMs: number }>;
+}> = [
+  {
+    photocardId: 504,
+    sellerId: 'u-3',
+    startPrice: 1000,
+    buyNowPrice: 5000,
+    endsInMs: 2 * DAY,
+    bids: [
+      { bidderId: 'u-1', amount: 1200, agoMs: 5 * HOUR },
+      { bidderId: 'u-2', amount: 1800, agoMs: 2 * HOUR },
+    ],
+  },
+  { photocardId: 506, sellerId: 'u-3', startPrice: 300, buyNowPrice: null, endsInMs: 6 * HOUR, bids: [] },
+  {
+    photocardId: 509,
+    sellerId: 'u-3',
+    startPrice: 500,
+    buyNowPrice: 3000,
+    endsInMs: 2 * MINUTE,
+    bids: [{ bidderId: 'u-1', amount: 700, agoMs: 30 * MINUTE }],
+  },
+  { photocardId: 502, sellerId: 'u-1', startPrice: 900, buyNowPrice: 2500, endsInMs: 3 * DAY, bids: [] },
+];
+
+export const auctions: MockAuction[] = [];
+export const auctionBids: MockAuctionBid[] = [];
+export const catMoneyHolds: MockCatMoneyHold[] = [];
+
+for (const seed of AUCTION_SEED) {
+  const card = photocards.find((p) => p.photocardId === seed.photocardId);
+  if (card) {
+    card.ownerId = seed.sellerId;
+    card.listing = null; // 고정가와 경매는 동시에 올라갈 수 없습니다
+  }
+
+  const auction: MockAuction = {
+    auctionId: nextAuctionId(),
+    photocardId: seed.photocardId,
+    sellerId: seed.sellerId,
+    startPrice: seed.startPrice,
+    buyNowPrice: seed.buyNowPrice,
+    currentPrice: seed.startPrice,
+    topBidId: null,
+    bidCount: 0,
+    endsAt: iso(now() + seed.endsInMs),
+    status: 'ACTIVE',
+    winnerId: null,
+    createdAt: iso(now() - 2 * DAY),
+    closedAt: null,
+  };
+
+  for (const bid of seed.bids) {
+    const row: MockAuctionBid = {
+      bidId: nextBidId(),
+      auctionId: auction.auctionId,
+      bidderId: bid.bidderId,
+      amount: bid.amount,
+      bidAt: iso(now() - bid.agoMs),
+    };
+    auctionBids.push(row);
+    auction.currentPrice = bid.amount;
+    auction.topBidId = row.bidId;
+    auction.bidCount += 1;
+  }
+
+  // 홀드는 **최고 입찰 하나**만 살아 있습니다 — 밀린 입찰은 그 즉시 풀립니다.
+  if (auction.topBidId !== null) {
+    const top = auctionBids.find((b) => b.bidId === auction.topBidId);
+    if (top) {
+      catMoneyHolds.push({
+        userId: top.bidderId,
+        amount: top.amount,
+        refType: 'AUCTION_BID',
+        refId: top.bidId,
+        status: 'ACTIVE',
+      });
+    }
+  }
+
+  auctions.push(auction);
+}
+
 /* ── 세션 (목업용 아주 단순한 토큰 저장소) ── */
 export const sessions = new Map<string, string>(); // accessToken -> userId
 
@@ -531,6 +675,16 @@ export const userFromToken = (token: string | undefined) => {
   const restored = matched ? findUser(matched[1] ?? '') : undefined;
   if (restored) sessions.set(token, restored.id);
   return restored;
+};
+
+/**
+ * 목업이 심은 시각 문자열 → epoch ms.
+ * 목업은 `toISOString()`(Z)을 쓰고 실서버는 타임존 없는 KST 를 줍니다.
+ * 핸들러가 두 형태를 같은 방식으로 비교하도록 프론트와 같은 규칙을 씁니다.
+ */
+export const parseTime = (value: string): number => {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasZone ? value : `${value}+09:00`).getTime();
 };
 
 export { iso, DAY, now };

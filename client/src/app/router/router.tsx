@@ -42,6 +42,9 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
 
 const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
+const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
+const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -72,6 +75,15 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminInquiriesPage = page(
+  () => import('@/pages/AdminInquiriesPage'),
+  'AdminInquiriesPage',
+);
+
+const InquiryListPage = page(() => import('@/pages/InquiryListPage'), 'InquiryListPage');
+const InquiryWritePage = page(() => import('@/pages/InquiryWritePage'), 'InquiryWritePage');
+const InquiryDetailPage = page(() => import('@/pages/InquiryDetailPage'), 'InquiryDetailPage');
 
 /**
  * 첫 화면이 그려진 뒤 **한가할 때** 미리 받아 두는 화면들.
@@ -169,7 +181,11 @@ const routes: RouteObject[] = [
                 /* 회원 관리는 서버가 ADMIN 전용이다. STADIUM·PERFORMANCE 는
                    대시보드까지만 들어오고 여기서 홈으로 되돌려보낸다. */
                 element: <RequireRole roles={['ADMIN']} />,
-                children: [{ path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) }],
+                children: [
+                  { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
+                  { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
+                ],
               },
               /* 모니터링(/admin/monitoring)은 아직 앱(모바일) 레이아웃에 있습니다.
                  이 콘솔로 옮길 때 위 자식으로 내리고 AdminSidebar 에 메뉴를 넣으세요. */
@@ -219,6 +235,9 @@ const routes: RouteObject[] = [
       { path: ROUTES.OAUTH_CALLBACK, element: withBoundary(<OauthCallbackPage />) },
       { path: ROUTES.OAUTH_SIGNUP, element: withBoundary(<OauthSignupPage />) },
       { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
+      /* 경매 상세는 **가드 밖**입니다. 로그인해야 볼 수 있게 하면 경매가 열려 있는지조차
+         알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
+      { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
 
       /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
       { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
@@ -233,11 +252,19 @@ const routes: RouteObject[] = [
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
           { path: ROUTES.SETTINGS_NICKNAME, element: withBoundary(<NicknameChangePage />) },
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
+
+          /* 문의 — 목록·작성·상세. 로그인한 회원 본인 것만 봅니다 */
+          { path: ROUTES.MY_INQUIRIES, element: withBoundary(<InquiryListPage />) },
+          { path: ROUTES.MY_INQUIRY_NEW, element: withBoundary(<InquiryWritePage />) },
+          { path: '/my/inquiries/:inquiryId', element: withBoundary(<InquiryDetailPage />) },
+          { path: '/my/inquiries/:inquiryId/edit', element: withBoundary(<InquiryWritePage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.

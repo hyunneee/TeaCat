@@ -103,9 +103,11 @@ services:
       # 🔴 개발과 다른 값을 쓴다. 같으면 개발에서 발급한 토큰이 운영에서도 통한다.
       JWT_SECRET: ${JWT_SECRET:?32바이트 이상}
 
-      # ⚠️ 지금은 컨테이너 내부 주소다. 이 주소로 presigned URL 이 만들어지면
-      #    브라우저가 못 연다. 이미지 업로드를 붙일 때 다시 손봐야 한다.
+      # MINIO_ENDPOINT 는 컨테이너 내부 주소라 브라우저가 열 수 없다. 그래서 presigned URL 은
+      # MINIO_PUBLIC_BASE_URL 로 바꿔 내려주고, nginx 의 /storage/ 가 MinIO 로 넘긴다
+      # (docker/nginx/conf.d/prod.conf). 서명이 내부 Host 로 계산되므로 nginx 가 Host 를 되돌려 보낸다.
       MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_BASE_URL: https://teacat.site/storage
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
 

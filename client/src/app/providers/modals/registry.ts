@@ -1,5 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { ConfirmModalProps } from '@/shared/components/ui';
+import type { BidModalProps } from '@/features/auction';
 
 /**
  * ┌─ 모달을 새로 추가하는 방법 (3단계) ────────────────────────┐
@@ -17,6 +18,7 @@ import type { ConfirmModalProps } from '@/shared/components/ui';
 /** 모달 키 -> 그 모달이 받는 props */
 export interface ModalPropsMap {
   'common/confirm': ConfirmModalProps;
+  'auction/bid': BidModalProps;
   // 예시)
   // 'booking/seat-detail': { seatId: string };
   // 'nft/trade-offer': { nftId: string; ownerId: string };
@@ -32,6 +34,9 @@ type AnyModalComponent = LazyExoticComponent<ComponentType<any>>;
 export const MODAL_REGISTRY: Record<ModalKey, AnyModalComponent> = {
   'common/confirm': lazy(() =>
     import('@/shared/components/ui').then((m) => ({ default: m.ConfirmModal })),
+  ) as AnyModalComponent,
+  'auction/bid': lazy(() =>
+    import('@/features/auction').then((m) => ({ default: m.BidModal })),
   ) as AnyModalComponent,
   // 'booking/seat-detail': lazy(() =>
   //   import('@/features/booking').then((m) => ({ default: m.SeatDetailModal })),
