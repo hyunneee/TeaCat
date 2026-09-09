@@ -523,17 +523,26 @@ public class AdminPerformanceService {
      *
      * 생략하면 **이미 저장된 방식을 그대로 둔다**. 새 구역이면 공연장 구역의 형태를 따른다.
      * 생략을 "공연장 형태로 되돌리기" 로 해석하면, 방식을 신경 쓰지 않는 옛 클라이언트가
-     * 스탠딩으로 설정해 둔 구역을 저장할 때마다 좌석제로 되돌려 버린다.
+     * 바꿔 둔 방식을 저장할 때마다 되돌려 버린다.
      *
-     * 좌석제 구역을 스탠딩으로 파는 것은 된다(플로어에 의자를 두지 않는 경우).
-     * 그 반대는 막는다 — 스탠딩 구역에는 좌석 좌표가 없어 배정할 자리가 없다.
+     * 기준은 <b>의자가 설치돼 있는지</b> 하나다.
+     * <pre>
+     *   areas.type = SEATED    의자가 깔린 구역   → 좌석제로만 판다
+     *   areas.type = STANDING  의자가 없는 구역   → 스탠딩·좌석제 둘 다 된다
+     * </pre>
+     *
+     * 의자가 깔린 구역을 스탠딩으로 파는 것은 막는다 — 의자가 그 자리에 그대로 있어서
+     * 사람을 세울 수 없다. 의자를 치운 구성은 무대 형식(배치)을 따로 만들어 표현한다.
+     *
+     * 의자가 없는 구역을 좌석제로 파는 것은 막지 않는다. 좌석을 그려 넣으면 그대로 팔 수 있고,
+     * 아직 좌석이 없으면 회차 좌석 생성(API-269)이 만들 좌석이 없다고 알려 준다.
      */
     private AreaType resolveSaleType(PerformanceAreaSaveRequest.AreaSetting setting, Area area,
                                      PerformanceArea current) {
         if (setting.saleType() == null) {
             return current != null ? current.getSaleType() : area.getType();
         }
-        if (setting.saleType() == AreaType.SEATED && !area.isSeated()) {
+        if (setting.saleType() == AreaType.STANDING && area.isSeated()) {
             throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_NOT_ALLOWED);
         }
         return setting.saleType();

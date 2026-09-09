@@ -30,7 +30,7 @@ public enum PerformanceErrorCode implements ErrorCode {
     NOT_OWNER(HttpStatus.FORBIDDEN, "PERFORMANCE_020", "본인이 등록한 공연만 관리할 수 있습니다."),
     DUPLICATE_PERFORMANCE_DATE(HttpStatus.BAD_REQUEST, "PERFORMANCE_021", "같은 일시의 회차가 두 번 포함되었습니다."),
     AREA_SALE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "PERFORMANCE_022",
-            "스탠딩 구역은 좌석제로 판매할 수 없습니다. 좌석을 지정해 팔려면 공연 배치에 좌석을 먼저 등록해 주세요."),
+            "의자가 설치된 구역은 스탠딩으로 판매할 수 없습니다. 의자를 치운 배치를 무대 형식으로 따로 만들어 주세요."),
     AREA_SALE_TYPE_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_023",
             "판매 이력이 있는 구역은 판매 방식을 바꿀 수 없습니다."),
     AREA_MAX_CNT_REQUIRED(HttpStatus.BAD_REQUEST, "PERFORMANCE_024",

@@ -74,6 +74,9 @@ class AdminPerformanceServiceAreaTests {
 
     private PerformanceArea performanceArea;
 
+    /** 판매 방식을 바꾸는 테스트가 구역 설정을 새로 만들어야 해서 들고 있습니다 */
+    private PerformanceGeneral performance;
+
     @BeforeEach
     void setUp() {
         // Stadium, Area, StadiumLayout 은 읽기 전용 엔티티라 팩토리가 없다. 여기서 필요한 건 id 와 형태 뿐이다
@@ -94,7 +97,7 @@ class AdminPerformanceServiceAreaTests {
         lenient().when(standingArea.isSeated()).thenReturn(false);
 
         // 구역 목록은 공연장이 아니라 그 공연이 쓰는 배치도 기준이다
-        PerformanceGeneral performance = PerformanceGeneral.create(
+        performance = PerformanceGeneral.create(
                 stadium, layout, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
                 LocalDate.of(2026, 9, 1), null, null, OWNER);
         ReflectionTestUtils.setField(performance, "id", CONCERT_ID);
@@ -104,8 +107,9 @@ class AdminPerformanceServiceAreaTests {
         given(performanceGeneralRepository.findById(CONCERT_ID)).willReturn(Optional.of(performance));
         given(areaRepository.findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(LAYOUT_ID))
                 .willReturn(List.of(area, standingArea));
-        given(performanceAreaRepository.findAllByPerformanceId(CONCERT_ID))
-                .willReturn(List.of(performanceArea));
+        // 판매 방식 테스트는 다른 구역 구성으로 덮어씁니다
+        lenient().when(performanceAreaRepository.findAllByPerformanceId(CONCERT_ID))
+                .thenReturn(List.of(performanceArea));
     }
 
     @Test
@@ -149,35 +153,59 @@ class AdminPerformanceServiceAreaTests {
     }
 
     @Test
-    void 좌석제_구역을_스탠딩으로_팔_수_있다() {
-        givenSold(0);
-        givenSaveReturnsInput();
-
-        // 플로어에 의자를 두지 않는 경우다. 좌석을 만들지 않고 max_cnt 로 수량만 관리한다
-        assertThatCode(() -> service.saveAreas(CONCERT_ID, request(AREA_ID, 300, AreaType.STANDING), OWNER))
-                .doesNotThrowAnyException();
-        assertThat(performanceArea.getSaleType()).isEqualTo(AreaType.STANDING);
-    }
-
-    @Test
-    void 스탠딩_구역은_좌석제로_팔_수_없다() {
+    void 의자가_깔린_구역은_스탠딩으로_팔_수_없다() {
         givenSold(0);
 
-        // 스탠딩 구역에는 좌석 좌표가 없어 배정할 자리가 없다
+        // 의자가 그 자리에 그대로 있어서 사람을 세울 수 없다.
+        // 의자를 치운 구성은 무대 형식(배치)을 따로 만들어 표현한다
         assertThatThrownBy(() ->
-                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, 100, AreaType.SEATED), OWNER))
+                service.saveAreas(CONCERT_ID, request(AREA_ID, 300, AreaType.STANDING), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.AREA_SALE_TYPE_NOT_ALLOWED);
     }
 
     @Test
-    void 판매_이력이_있으면_판매_방식을_바꿀_수_없다() {
-        givenSold(30);
+    void 의자가_없는_구역은_좌석제로도_팔_수_있다() {
+        givenSold(0);
+        givenSaveReturnsInput();
 
-        // 좌석제로 팔린 티켓은 좌석을 가리키는데 스탠딩으로 바꾸면 그 좌석이 사라진다
+        // 좌석을 그려 넣으면 그대로 팔 수 있다. 아직 좌석이 없으면
+        // 회차 좌석 생성(API-269)이 만들 좌석이 없다고 알려 준다 — 여기서 막지 않는다
+        List<PerformanceAreaResponse> saved =
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, null, AreaType.SEATED), OWNER);
+
+        assertThat(saved).singleElement()
+                .extracting(PerformanceAreaResponse::saleType)
+                .isEqualTo(AreaType.SEATED);
+    }
+
+    @Test
+    void 의자가_없는_구역은_스탠딩으로도_팔_수_있다() {
+        givenSold(0);
+        givenSaveReturnsInput();
+
+        List<PerformanceAreaResponse> saved =
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, 700, AreaType.STANDING), OWNER);
+
+        assertThat(saved).singleElement()
+                .extracting(PerformanceAreaResponse::saleType)
+                .isEqualTo(AreaType.STANDING);
+    }
+
+    @Test
+    void 판매_이력이_있으면_판매_방식을_바꿀_수_없다() {
+        // 의자가 없는 구역을 스탠딩으로 팔아 30장이 나간 상태
+        PerformanceArea configured =
+                PerformanceArea.create(performance, standingArea, "FLOOR", 99_000, 700, AreaType.STANDING);
+        given(performanceAreaRepository.findAllByPerformanceId(CONCERT_ID))
+                .willReturn(List.of(configured));
+        given(ticketRepository.countSoldByArea(CONCERT_ID))
+                .willReturn(List.of(soldCount(STANDING_AREA_ID, 30)));
+
+        // 스탠딩으로 팔린 30장은 좌석을 가리키지 않는데, 좌석제로 바꾸면 그 티켓의 자리가 없어진다
         assertThatThrownBy(() ->
-                service.saveAreas(CONCERT_ID, request(AREA_ID, 300, AreaType.STANDING), OWNER))
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, 700, AreaType.SEATED), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.AREA_SALE_TYPE_LOCKED);
@@ -242,12 +270,13 @@ class AdminPerformanceServiceAreaTests {
     }
 
     @Test
-    void 좌석제_구역을_스탠딩으로_팔_때도_인원_상한이_필요하다() {
+    void 판매_방식을_직접_스탠딩으로_적어도_인원_상한이_필요하다() {
         givenSold(0);
 
-        // 스탠딩으로 팔기로 하면 좌석을 만들지 않으므로 좌석 수는 상한이 되지 못한다
+        // 위 테스트는 방식을 생략해 공연장 형태(STANDING)를 따라간 경우다.
+        // 직접 적어 보낸 경우에도 같은 검사를 지나야 한다
         assertThatThrownBy(() ->
-                service.saveAreas(CONCERT_ID, request(AREA_ID, null, AreaType.STANDING), OWNER))
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, null, AreaType.STANDING), OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);

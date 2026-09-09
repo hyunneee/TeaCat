@@ -53,10 +53,14 @@ public record PerformanceAreaSaveRequest(
                     이 공연에서 이 구역을 파는 방식. 생략하면 이미 저장된 방식을 그대로 둡니다
                     (아직 설정하지 않은 구역이면 공연장 구역의 형태를 씁니다).
 
-                    - `SEATED` 는 **공연장 구역이 좌석제일 때만** 됩니다. 스탠딩 구역에는 좌석 좌표가 없어
-                      배정할 자리가 없습니다 (PERFORMANCE_022).
-                    - 좌석제 구역을 `STANDING` 으로 파는 것은 됩니다. 그러면 좌석을 만들지 않고
-                      `maxCnt` 로 수량만 관리합니다.
+                    기준은 의자가 설치돼 있는지 하나입니다.
+
+                    - 의자가 깔린 구역(`areas.type = SEATED`)은 `SEATED` 로만 팝니다.
+                      `STANDING` 은 거절합니다 — 의자가 그 자리에 있어 사람을 세울 수 없습니다
+                      (PERFORMANCE_022). 의자를 치운 구성은 무대 형식을 따로 만들어 표현하세요.
+                    - 의자가 없는 구역(`areas.type = STANDING`)은 둘 다 됩니다.
+                      `STANDING` 이면 좌석을 만들지 않고 `maxCnt` 로 인원만 관리하고,
+                      `SEATED` 면 그 구역에 등록된 좌석을 그대로 팝니다.
                     - 판매 이력이 있는 구역은 바꿀 수 없습니다 (PERFORMANCE_023).
                     """, example = "SEATED")
             AreaType saleType
