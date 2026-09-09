@@ -4,9 +4,11 @@ export { StadiumEditModal } from './components/StadiumEditModal';
 export { StadiumLayoutEditModal } from './components/StadiumLayoutEditModal';
 export { StadiumLayoutPreview } from './components/StadiumLayoutPreview';
 export { useStadiumEditor, type StadiumEditorController } from './hooks/useStadiumEditor';
+export { useStadiumDraftNavigationGuard } from './hooks/useStadiumDraftNavigationGuard';
 export { useStadiumDetailManagement, useStadiumListManagement } from './hooks/useStadiumManagement';
 export { useStadiumLayoutPreview } from './hooks/useStadiumLayoutPreview';
 export { STADIUM_LAYOUT_STATUS_LABEL } from './model/stadium.model';
+export { clearStadiumEditorDraft, loadStadiumEditorDraft } from './model/stadiumDraftStorage';
 export type {
   DraftArea,
   DraftLayoutElement,
