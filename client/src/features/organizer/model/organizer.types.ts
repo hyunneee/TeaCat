@@ -48,6 +48,19 @@ export interface PresignedUpload {
 export type ImageType = 'POSTER' | 'DETAIL';
 
 /** 회차 등록 응답 (API-265) */
+/**
+ * 회차 좌석 생성 결과.
+ *
+ * 스탠딩으로만 파는 공연은 만들 좌석이 없어 `createdSeatCount` 가 0 으로 옵니다 —
+ * 실패가 아니라 "만들 게 없었다" 는 뜻입니다.
+ */
+export interface SeatGenerateResponse {
+  scheduleId: number;
+  createdSeatCount: number;
+  /** 좌석을 만든 구역 수. 스탠딩 구역은 빠집니다 */
+  seatedAreaCount: number;
+}
+
 export interface ScheduleCreateResponse {
   scheduleId: number;
   performanceNum: number;

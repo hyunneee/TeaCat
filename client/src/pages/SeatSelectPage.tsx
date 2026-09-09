@@ -1,11 +1,13 @@
-import { Navigate, useParams } from 'react-router-dom';
-import { TriangleAlert } from 'lucide-react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Armchair, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, LiveDot, Stepper } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { env } from '@/shared/config';
+import { useModal } from '@/app/providers';
 import {
+  HeldSeatNotice,
   SeatLegend,
   SeatMap,
   SelectedSeatBar,
@@ -13,6 +15,7 @@ import {
   useBookingStore,
   useSeatHold,
   useSeatSelection,
+  sectionBlockedReason,
   useSectionSeats,
 } from '@/features/booking';
 import { useSchedule } from '@/features/concert';
@@ -27,10 +30,13 @@ import { useSchedule } from '@/features/concert';
  * ⚠️ 이 화면에는 지연을 만드는 애니메이션을 넣지 않습니다. 속도가 곧 UX 입니다.
  */
 export function SeatSelectPage() {
+  const navigate = useNavigate();
   const { scheduleId = '' } = useParams();
+  const { open } = useModal();
   const sectionId = useBookingStore((s) => s.sectionId);
 
-  const { section, seats, isPending, isError } = useSectionSeats(scheduleId, sectionId);
+  const { data: seatMap, section, seats, isPending, isError } = useSectionSeats(scheduleId, sectionId);
+  const hold = useBookingStore((s) => s.hold);
 
   /* 1인 최대 매수는 회차가 아니라 **공연** 단위 정책이라 concertId 가 필요합니다.
      회차 상세에서 얻어 정책을 조회하고, 아직 없으면 배포 환경 기본값을 씁니다. */
@@ -39,7 +45,17 @@ export function SeatSelectPage() {
   const maxPerUser = policy?.maxTicketsPerUser ?? env.maxTicketsPerUser;
 
   const { selectedSeatIds, select, count } = useSeatSelection(maxPerUser);
-  const { holdSeats, isHolding } = useSeatHold(scheduleId);
+  const { holdSeats, isHolding, remainSeconds, releaseHold, isReleasing } = useSeatHold(scheduleId);
+
+  /* 자리를 놓으면 남이 바로 가져갈 수 있어 되돌릴 수 없습니다 → 붉은 확인 모달 (CLAUDE.md 4-7) */
+  const confirmRelease = () =>
+    open('common/confirm', {
+      title: '잡아둔 자리를 놓을까요?',
+      message: '자리가 바로 풀려서 다른 분이 가져갈 수 있어요. 되돌릴 수 없습니다.',
+      confirmText: '놓기',
+      danger: true,
+      onConfirm: releaseHold,
+    });
 
   // 구역을 안 고르고 직접 URL 로 들어온 경우
   if (!sectionId) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
@@ -50,6 +66,29 @@ export function SeatSelectPage() {
       <>
         <Header title="좌석 선택" showBack />
         <EmptyState icon={TriangleAlert} title="좌석 정보를 불러오지 못했어요" />
+      </>
+    );
+  }
+
+  /* 고를 수 있는 좌석이 하나도 없으면 이유를 말해 줍니다.
+     🔴 이걸 안 하면 회색 좌석만 잔뜩 그려 놓고 눌러도 아무 반응이 없는 화면이 됩니다 —
+        "좌석이 안 눌린다" 는 신고가 여기서 나옵니다. 구역 화면에서 이미 막고 있지만,
+        폴링 도중 매진되거나 예전에 골라둔 구역으로 되돌아오는 길도 있어 여기서도 막습니다. */
+  const blockedReason = section ? sectionBlockedReason(section) : null;
+  if (blockedReason) {
+    return (
+      <>
+        <Header title={section?.name ?? '좌석 선택'} showBack />
+        <EmptyState
+          icon={Armchair}
+          title={blockedReason}
+          description="다른 구역을 골라 보세요."
+          action={
+            <Button variant="dark" onClick={() => navigate(ROUTES.BOOKING_SECTION(scheduleId))}>
+              구역 다시 고르기
+            </Button>
+          }
+        />
       </>
     );
   }
@@ -69,6 +108,21 @@ export function SeatSelectPage() {
         }
       />
       <Stepper steps={BOOKING_STEPS} current={2} />
+
+      {/* 결제까지 갔다가 돌아온 경우 — 잡아둔 자리를 알려주고 이어가기·놓기 길을 함께 줍니다.
+          안내만 있으면 그 자리로 돌아갈 방법이 없어 막다른 길이 됩니다 */}
+      {hold && (
+        <div className="px-4 pb-2">
+          <HeldSeatNotice
+            hold={hold}
+            seatMap={seatMap}
+            remainSeconds={remainSeconds}
+            onContinue={() => navigate(ROUTES.BOOKING_REVIEW(scheduleId))}
+            onRelease={confirmRelease}
+            releasing={isReleasing}
+          />
+        </div>
+      )}
 
       {/* 좌석맵 */}
       {/* 🔴 flex 여야 안쪽 좌석맵이 이 자리를 다 씁니다. flex-1 만 주면
