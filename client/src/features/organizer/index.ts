@@ -31,6 +31,7 @@ export {
   canSellSeated,
   changeSaleType,
   needsSeatWarning,
+  exceedsVenueCapacity,
   type AreaPricingRow,
   type StadiumArea,
   type AreaSaveRequest,

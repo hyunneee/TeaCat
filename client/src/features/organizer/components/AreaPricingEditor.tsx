@@ -8,6 +8,7 @@ import {
   capacityOf,
   changeSaleType,
   needsSeatWarning,
+  exceedsVenueCapacity,
   type AreaPricingRow,
 } from '../model/areaPricing';
 
@@ -27,7 +28,8 @@ interface Props {
 /**
  * 구역별 등급·가격 편집 (순수 View).
  *
- * 한 줄 = 공연장 구역 하나. 체크를 켜면 이 공연에서 판매하는 구역이 되고 등급·가격·최대 수량을 적습니다.
+ * 한 줄 = **공연장에 이미 등록된** 구역 하나. 구역과 좌석은 공연장의 것이라 여기서 만들지 않습니다.
+ * 체크를 켜면 이 공연에서 판매하는 구역이 되고, 이 공연에서만 쓰는 등급·가격·수량을 적습니다.
  *
  * ⚠️ 저장은 PUT 이라 **목록에서 빠지면 삭제**입니다. 그래서 이미 팔린 구역은 체크를 잠가
  * 실수로 빠뜨려 저장 전체가 거절되는 일(AREA_MAX_CNT_BELOW_SOLD, 409)을 막습니다.
@@ -37,8 +39,12 @@ interface Props {
  * 그 반대는 막혀 있습니다 — 스탠딩 구역에는 배정할 좌석 좌표가 없습니다(서버 PERFORMANCE_022).
  * 팔린 뒤에는 방식을 바꿀 수 없어(PERFORMANCE_023) 체크와 함께 잠급니다.
  *
- * 최대 수량 기본값은 좌석제면 등록 좌석 수, 스탠딩이면 최대 수용 인원입니다.
- * 다만 상한으로 걸지는 않습니다 — 이유는 areaPricing.ts 의 검증 주석 참고.
+ * 세 번째 칸의 뜻이 방식에 따라 다릅니다. 좌석제면 최대 판매수량(좌석 수가 이미 상한),
+ * 스탠딩이면 **받을 인원 상한**입니다 — 좌석 행이 없어 이 값이 인원을 제한하는 유일한 근거이고,
+ * 그래서 스탠딩에서는 1명 이상이 필수입니다(서버 PERFORMANCE_024).
+ *
+ * 기본값은 좌석제면 등록 좌석 수, 스탠딩이면 구역의 최대 수용 인원입니다.
+ * 다만 정원을 상한으로 걸지는 않고 경고만 띄웁니다 — 이유는 areaPricing.ts 의 검증 주석 참고.
  */
 export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: Props) {
   if (rows.length === 0) {
@@ -54,6 +60,12 @@ export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: 
       {rows.map((row, index) => {
         const error = errors[index];
         const locked = disabled || row.soldCnt > 0;
+        /* 저장을 막지 않는 주의사항. 막는 것은 error 로 따로 내려옵니다 */
+        const warning = needsSeatWarning(row)
+          ? '배치도에 좌석이 없어요. 공연장 관리에서 좌석을 등록해야 좌석맵이 보입니다.'
+          : exceedsVenueCapacity(row)
+            ? `공연장 구역 정원(${row.maxSeat}명)보다 많아요. 회차가 여러 개면 정상입니다.`
+            : null;
 
         return (
           <li
@@ -126,12 +138,11 @@ export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: 
                     );
                   })}
                 </div>
-                <span className={cn('text-xs', needsSeatWarning(row) ? 'text-warning' : 'text-subtle')}>
-                  {needsSeatWarning(row)
-                    ? '배치도에 좌석이 없어요. 공연장 관리에서 좌석을 등록해야 좌석맵이 보입니다.'
-                    : row.saleType === 'SEATED'
+                <span className={cn('text-xs', warning ? 'text-warning' : 'text-subtle')}>
+                  {warning ??
+                    (row.saleType === 'SEATED'
                       ? `좌석 ${capacityOf(row)}석을 그대로 팝니다`
-                      : `좌석 없이 ${capacityOf(row)}명까지 수량으로 팝니다`}
+                      : '좌석 없이 받을 인원만 정해서 팝니다')}
                 </span>
               </div>
             )}
@@ -155,8 +166,8 @@ export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: 
                   onChange={(e) => onChange(index, { price: e.target.value.replace(/[^\d]/g, '') })}
                 />
                 <Input
-                  aria-label={`${row.label} 최대 판매수량`}
-                  placeholder="최대 수량"
+                  aria-label={`${row.label} ${row.saleType === 'STANDING' ? '받을 인원' : '최대 판매수량'}`}
+                  placeholder={row.saleType === 'STANDING' ? '받을 인원(명)' : '최대 수량'}
                   inputMode="numeric"
                   value={row.maxCnt}
                   disabled={disabled}

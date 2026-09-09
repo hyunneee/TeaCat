@@ -83,6 +83,21 @@ export function needsSeatWarning(row: Pick<AreaPricingRow, 'saleType' | 'seatCou
 }
 
 /**
+ * 받을 인원 상한이 공연장 구역의 최대 수용 인원을 넘은 상태.
+ *
+ * 막지는 않습니다. 판매량(soldCnt)이 **회차 합산**이라 회차가 여러 개면 한 구역의 정원을
+ * 넘는 게 정상이고(3회차 × 400명), 여기서 정원을 상한으로 걸면 "판매량보다 적게 못 줄임" 과
+ * 충돌해 저장 자체가 막힙니다 (validateAreaRows 주석 참고). 그래서 경고만 띄웁니다.
+ */
+export function exceedsVenueCapacity(
+  row: Pick<AreaPricingRow, 'enabled' | 'maxCnt' | 'maxSeat'>,
+): boolean {
+  if (!row.enabled) return false;
+  const maxCnt = Number(row.maxCnt);
+  return Number.isInteger(maxCnt) && maxCnt > row.maxSeat;
+}
+
+/**
  * 파는 방식을 바꿀 때의 패치.
  *
  * 최대 수량이 이전 방식의 정원 그대로면(= 관리자가 손대지 않은 기본값) 새 방식의 정원으로 따라갑니다.
@@ -154,7 +169,12 @@ export function validateAreaRows(rows: AreaPricingRow[]): (string | undefined)[]
     if (price == null) return '가격을 0 이상 정수로 입력해 주세요.';
 
     const maxCnt = toNonNegativeInt(row.maxCnt);
-    if (maxCnt == null) return '최대 판매수량을 0 이상 정수로 입력해 주세요.';
+    if (maxCnt == null) return '받을 인원 상한을 0 이상 정수로 입력해 주세요.';
+    /* 스탠딩은 좌석 행이 없어 이 값이 인원을 제한하는 유일한 근거입니다.
+       비워 두면 무제한이 되므로 1명 이상을 받습니다 (서버 PERFORMANCE_024 와 같은 규칙) */
+    if (row.saleType === 'STANDING' && maxCnt < 1) {
+      return '스탠딩으로 팔 구역은 받을 인원을 1명 이상으로 정해 주세요.';
+    }
     if (maxCnt < row.soldCnt) {
       return `전 회차 합계로 이미 ${row.soldCnt}장 팔려서 그보다 적게 줄일 수 없어요.`;
     }
