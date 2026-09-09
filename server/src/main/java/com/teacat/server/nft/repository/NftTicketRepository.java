@@ -89,4 +89,18 @@ public interface NftTicketRepository extends JpaRepository<NftTicket, Long> {
     default int markBurned(Long ticketId) {
         return markBurned(ticketId, NftMintStatus.MINTED, NftMintStatus.BURNED, LocalDateTime.now());
     }
+
+    /** 상태별 티켓 수. 포토카드와 같은 파이프라인 지표다 (NftChainPipelineMetrics) */
+    @Query("select t.status as status, count(t) as count from NftTicket t group by t.status")
+    List<StatusCount> countGroupByStatus();
+
+    /** 해당 상태에서 가장 오래 머문 행의 시각. 없으면 null */
+    @Query("select min(t.updatedAt) from NftTicket t where t.status = :status")
+    LocalDateTime findOldestUpdatedAt(@Param("status") NftMintStatus status);
+
+    interface StatusCount {
+        NftMintStatus getStatus();
+
+        long getCount();
+    }
 }

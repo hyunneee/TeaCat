@@ -1,0 +1,73 @@
+# Prometheus 스크레이프 설정 (EC2).
+#
+# 여기 적힌 주소를 15초마다 긁어서 저장하는 것이 전부다. Prometheus 는 MINTING 이 뭔지,
+# 좌석이 뭔지 모른다 — 앱이 /metrics 로 내보낸 숫자만 받아 적는다.
+#
+# ── 스택 하나가 dev 와 prod 를 함께 본다 ──────────────────────────
+# 두 스택이 같은 호스트의 같은 teacat-net 에 있으므로 컨테이너 이름만 다르다.
+# 나눠 띄울 이유가 없고, 오히려 같은 화면에서 비교되는 편이 낫다 —
+# 운영에서 처음 보는 문제가 dev 에는 이미 있었던 경우가 대부분이다.
+#
+# 구분은 env 라벨로 한다. 대시보드에서 env="prod" 로 좁히면 운영만 보인다.
+#
+# 🔴 dev 스택이 안 떠 있으면 그쪽 타겟은 DOWN 으로 남는다. 정상이다 —
+#    다만 TargetDown 알림이 계속 울리므로, dev 를 상시 띄우지 않는다면
+#    아래 dev 블록을 지우는 편이 낫다.
+
+global:
+  # 15초. 이보다 촘촘하게 해도 얻는 게 없다 — 앱 게이지 갱신 주기가 30초다
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    # 이 Prometheus 가 어디서 도는지. env 는 타겟별 라벨로 따로 붙인다
+    host: ec2
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # ── 앱 계측 (직접 짠 지표가 나오는 곳) ─────────────────────────────
+  - job_name: 'spring-server'
+    # 🔴 8080 이 아니라 8081 이다. 8080 은 context-path 가 /api 라 nginx 를 통해
+    #    인터넷에 열리고, 액추에이터를 거기 두면 그대로 노출된다.
+    #    (server/src/main/resources/application.yaml 의 management.server.port)
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['prod-server:8081']
+        labels: { service: server, env: prod }
+      - targets: ['dev-server:8081']
+        labels: { service: server, env: dev }
+
+  - job_name: 'blockchain-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['prod-blockchain:4000']
+        labels: { service: blockchain, env: prod }
+      - targets: ['dev-blockchain:4000']
+        labels: { service: blockchain, env: dev }
+
+  # ── 미들웨어 통계 (앱 협조 없이 나오는 것) ──────────────────────────
+  # 🔴 좌석 선점이 Redis 가 아니라 Postgres 조건부 UPDATE 라, 티켓 오픈의 병목이
+  #    여기서 보인다 (BookingService 의 hold — 행 락과 커넥션 풀).
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels: { service: postgres, env: prod }
+
+  # ── 인프라 ────────────────────────────────────────────────────────
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

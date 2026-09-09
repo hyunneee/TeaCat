@@ -113,10 +113,10 @@ pipeline {
                     // Jenkinsfile 이 바뀌면 빌드 인자(MOCK 등)나 빌드 명령 자체가 바뀔 수 있다.
                     // 무엇이 영향받는지 알 수 없으므로 전부 빌드한다.
                     //
-                    // docker/ 는 여기 넣지 않는다. compose·nginx conf 뿐이고 세 빌드 컨텍스트
-                    // (./client, ./server, ./blockchain) 밖이라 이미지 내용에 영향이 없다.
-                    // '설정 동기화'·'앱 배포' 가 이미지 재빌드 없이 반영한다.
-                    // compose 에 서비스가 새로 생기면 아래 missing() 이 잡는다.
+                    // docker/ 는 여기 넣지 않는다. compose·nginx conf·모니터링 설정 뿐이고
+                    // 세 빌드 컨텍스트(./client, ./server, ./blockchain) 밖이라 이미지 내용에
+                    // 영향이 없다. '설정 동기화'·'앱 배포'·'모니터링 배포' 가 이미지 재빌드 없이
+                    // 반영한다. compose 에 서비스가 새로 생기면 아래 missing() 이 잡는다.
                     def wide = !hasBase || files.contains('Jenkinsfile')
 
                     def missing = { String image ->
@@ -291,6 +291,125 @@ pipeline {
                 '''
             }
         }
+
+        stage('모니터링 배포') {
+            // 🔴 master 에서만 돈다. 모니터링 스택은 호스트에 하나뿐이고 dev/prod 를
+            //    함께 긁는다(monitoring/prometheus/prometheus.yml). 두 파이프라인이
+            //    같은 compose 프로젝트를 건드리면 disableConcurrentBuilds 가 브랜치별이라
+            //    막아주지 못한다. 인프라 설정의 원본은 master 로 못박는다.
+            when { environment name: 'DEPLOY_ENV', value: 'prod' }
+            steps {
+                // 모니터링이 깨져도 앱 배포는 성공으로 둔다 — 앱은 실제로 떴기 때문이다.
+                // 대신 빌드를 노랑(UNSTABLE)으로 만들어 조용히 넘어가지 않게 한다.
+                // 🔴 여기서 실패하면 "모니터링이 되고 있다고 믿는데 실은 아닌" 상태가 되므로,
+                //    초록으로 덮지 않는 것이 중요하다.
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    sh '''
+                        set -e
+
+                        MON_ENV="$DEPLOY_DIR/.env.monitoring"
+                        MON_COMPOSE="$DEPLOY_DIR/docker-compose.monitoring.yml"
+                        MON_HOOK="$DEPLOY_DIR/monitoring/alertmanager/webhook_url"
+
+                        # 설정을 서버로 옮긴다. 저장소가 원본이라는 원칙은 여기도 같다.
+                        # 🔴 cp 여야 한다. mv 로 갈아끼우면 파일 단위 바인드 마운트가 끊긴다
+                        #    (prometheus.yml, loki-config.yml, config.alloy 가 파일 마운트다).
+                        #
+                        # 시크릿 검사보다 **먼저** 한다. 첫 배포 때 여기서 .example 파일들이
+                        # 서버에 깔리는데, 검사를 먼저 하면 "예제를 복사하세요" 라고 안내해놓고
+                        # 정작 복사할 예제가 서버에 없는 상태가 된다.
+                        mkdir -p "$DEPLOY_DIR/monitoring"
+                        cp -rf docker/monitoring/. "$DEPLOY_DIR/monitoring/"
+                        cp -f  docker/docker-compose.monitoring.yml "$MON_COMPOSE"
+                        # 🔴 예제 파일도 함께 올린다. 아래 안내가 "이걸 복사하세요" 라고 말하는데
+                        #    정작 서버에 그 파일이 없으면 안내가 아무 쓸모가 없다.
+                        cp -f  docker/.env.monitoring.example "$DEPLOY_DIR/.env.monitoring.example"
+
+                        # 시크릿은 저장소에 없다. 서버에 파일을 만들기 전까지는 건너뛴다.
+                        # compose 의 :? 가드에 걸려 배포가 죽는 것보다, 안 떴다고 말해주는 편이 낫다.
+                        if [ ! -f "$MON_ENV" ]; then
+                            echo "⚠️  $MON_ENV 이 없어 모니터링 배포를 건너뜁니다. 서버에서:"
+                            echo "      cp $DEPLOY_DIR/.env.monitoring.example $MON_ENV"
+                            echo "      chmod 600 $MON_ENV"
+                            echo "    그 뒤 GRAFANA_ADMIN_PASSWORD 와 POSTGRES_PASSWORD 를 채우세요"
+                            echo "    (POSTGRES_PASSWORD 는 $DEPLOY_DIR/.env.prod 의 값과 같아야 합니다)."
+                            exit 0
+                        fi
+
+                        # 🔴 웹훅 주소 파일도 gitignore 라 저장소에 없다. 없는 채로 up 하면
+                        #    도커가 그 경로에 **디렉터리를 만들어** 버리고, alertmanager 는
+                        #    "is a directory" 로 죽는다. 한번 만들어지면 지운 뒤 다시
+                        #    만들어야 하므로, 올리기 전에 막는다.
+                        if [ -d "$MON_HOOK" ]; then
+                            echo "❌ $MON_HOOK 이 디렉터리입니다 (도커가 만든 것). 지우고 파일로 만드세요."
+                            exit 1
+                        fi
+                        if [ ! -f "$MON_HOOK" ]; then
+                            echo "⚠️  $MON_HOOK 이 없어 모니터링 배포를 건너뜁니다. 서버에서:"
+                            echo "      echo '<Mattermost 들어오는 웹후크 주소>' > $MON_HOOK"
+                            echo "      chmod 600 $MON_HOOK"
+                            exit 0
+                        fi
+
+                        # 🔴 문법 검사를 **적용 전에** 한다. 깨진 규칙 파일을 올리고 reload 하면
+                        #    Prometheus 는 옛 설정을 유지한 채 에러만 남긴다 — 배포는 초록인데
+                        #    새 알림은 안 걸린 상태가 된다.
+                        # 🔴 마운트 경로는 반드시 /etc/prometheus 다. prometheus.yml 의 rule_files 가
+                        #    /etc/prometheus/rules/*.yml 절대경로라, 다른 곳에 마운트하면 glob 이 뱈 채로
+                        #    매칭돼 **규칙을 하나도 검사하지 않고 SUCCESS** 를 낸다. 그래서 사실을
+                        #    알리는 "rule files found" 줄이 없으면 실패로 간주한다.
+                        PROMTOOL_OUT=$(docker run --rm -v "$DEPLOY_DIR/monitoring/prometheus:/etc/prometheus:ro" \
+                            --entrypoint promtool prom/prometheus:v3.1.0 \
+                            check config /etc/prometheus/prometheus.yml) || { echo "$PROMTOOL_OUT"; exit 1; }
+                        echo "$PROMTOOL_OUT"
+                        echo "$PROMTOOL_OUT" | grep -q "rule files found" || {
+                            echo "❌ 규칙 파일이 검사되지 않았습니다. 마운트 경로를 확인하세요."; exit 1; }
+
+                        docker compose -f "$MON_COMPOSE" --env-file "$MON_ENV" up -d --remove-orphans
+
+                        # 🔴 up -d 만으로는 설정이 반영되지 않는다. 컨테이너 정의가 그대로면
+                        #    compose 는 아무것도 하지 않으므로, alerts.yml 만 고친 배포는
+                        #    조용히 무시된다. 그래서 명시적으로 reload 를 친다.
+                        #    (--web.enable-lifecycle 이 켜져 있어야 먹는다)
+                        sleep 5
+                        docker exec mon-prometheus   wget -qO- --post-data='' http://localhost:9090/-/reload >/dev/null \
+                            && echo "prometheus 설정 reload"
+                        docker exec mon-alertmanager wget -qO- --post-data='' http://localhost:9093/-/reload >/dev/null \
+                            && echo "alertmanager 설정 reload"
+
+                        # 운영 타겟이 실제로 붙었는지 확인한다. 스택이 떠 있는 것과
+                        # 지표가 들어오는 것은 다른 문제다.
+                        #
+                        # 🔴 "DOWN 이 없다" 만으로는 부족하다. 라벨을 잘못 적어 env="prod"
+                        #    타겟이 **하나도 없으면** 그 조건도 참이 되어, 아무것도 안 긁는
+                        #    상태가 초록으로 통과한다. UP 개수가 0 이 아닌 것도 함께 본다.
+                        probe() {
+                            docker exec mon-prometheus wget -qO- \
+                                "http://localhost:9090/api/v1/query?query=$1" \
+                                | grep -o '"value"' | wc -l
+                        }
+
+                        OK=no
+                        for i in $(seq 1 12); do
+                            UP=$(probe 'count(up{env="prod"}==1)')
+                            DOWN=$(probe 'up{env="prod"}==0')
+                            if [ "$UP" != "0" ] && [ "$DOWN" = "0" ]; then
+                                OK=yes; echo "운영 타겟 전부 정상"; break
+                            fi
+                            sleep 5
+                        done
+
+                        if [ "$OK" != "yes" ]; then
+                            echo "❌ 운영 타겟이 붙지 않았습니다 (UP=$UP, DOWN=$DOWN)."
+                            echo "   Prometheus 타겟 상태:"
+                            docker exec mon-prometheus wget -qO- \
+                                'http://localhost:9090/api/v1/targets?state=any' | head -c 2000
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -301,11 +420,7 @@ pipeline {
                 # 프론트 이미지는 커밋마다 태그가 붙어 계속 쌓인다 (하나당 수십 MB).
                 # prune 은 dangling 만 지우므로 여기서 최근 3개만 남기고 지운다.
                 # docker images 는 최신순으로 출력한다. -latest 는 변경 감지가 쓰므로 제외.
-                docker images teacat-client --format '{{.Tag}}' 2>/dev/null \
-                    | grep "^$DEPLOY_ENV-" \
-                    | grep -v -- '-latest$' \
-                    | tail -n +4 \
-                    | while read -r t; do
+                docker images teacat-client --format '{{.Tag}}' 2>/dev/null \n                    | grep "^$DEPLOY_ENV-" \n                    | grep -v -- '-latest$' \n                    | tail -n +4 \n                    | while read -r t; do
                           docker rmi "teacat-client:$t" >/dev/null 2>&1 || true
                       done || true
             '''

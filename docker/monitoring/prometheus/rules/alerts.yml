@@ -1,0 +1,220 @@
+# 알림 규칙.
+#
+# ── 설계 원칙 ───────────────────────────────────────────────────────
+# 1) **울리면 사람이 뭔가 해야 하는 것만 넣는다.** "CPU 80%" 같은 건 넣지 않는다 —
+#    아무도 할 일이 없는 알림이 반복되면 진짜 알림도 같이 무시하게 된다.
+# 2) **경합 실패는 알림이 아니다.** 티켓 오픈에서 ERR_BOOKING_004(좌석 선점 실패)는
+#    정상 동작이다. 한 좌석을 100명이 누르면 99명이 이 코드를 받는다.
+#    그래서 절대량이 아니라 **비율의 급변**만 본다.
+# 3) **적체는 개수가 아니라 체류 시간으로 판단한다.** MINTING 100건이 흘러가는 중이면
+#    정상이고, 1건이 20분째면 사고다.
+#
+# ── 🔴 전부 env="prod" 로 좁혀져 있다 ───────────────────────────────
+# Prometheus 는 dev 스택도 함께 긁는다(prometheus.yml). 그건 대시보드에서 비교해
+# 보기 위한 것이지 알림을 받으려는 게 아니다. dev 는 수시로 내려가고 실험 데이터가
+# 들어가므로, 좁히지 않으면 알림이 울리는 게 일상이 되고 그 순간 알림은 죽는다.
+#
+# dev 도 알림을 받고 싶다면 severity 를 나눠 별도 채널로 보내는 편이 낫다
+# (alertmanager.yml 의 route 에 env 매처를 추가).
+
+groups:
+  # ══════════════════════════════════════════════════════════════════
+  - name: chain-pipeline
+    # 이 그룹이 이 서비스의 급소다. 여기 걸리는 것들은 전부
+    # **HTTP 로는 아무 흔적도 남기지 않는 실패**다 (이미 202 로 응답이 나간 뒤라서).
+    rules:
+      - alert: PhotocardMintStuck
+        expr: teacat_nft_photocard_stuck_age_seconds{env="prod"} > 600
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: '포토카드 발행이 {{ $value | humanizeDuration }} 째 확정되지 않았습니다'
+          description: >-
+            MINTING 상태의 카드가 10분 넘게 그대로입니다. 블록이 10초이므로 정상이라면
+            30초 안에 넘어갑니다. 블록체인 서비스의 확정 감시가 멎었거나, RPC 가 끊겼거나,
+            트랜잭션이 드롭됐습니다. prod-blockchain 로그와 teacat_bc_chain_up 을 먼저 보세요.
+
+      - alert: TicketMintStuck
+        expr: teacat_nft_ticket_stuck_age_seconds{env="prod"} > 600
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: '티켓 SBT 발행이 {{ $value | humanizeDuration }} 째 확정되지 않았습니다'
+          description: >-
+            결제는 끝났는데 티켓이 체인에 안 올라간 상태입니다. 사용자에게는 실패로 보이지
+            않으므로 문의가 들어오지 않습니다 — 이 알림이 유일한 신호입니다.
+
+      - alert: ChainTxDropped
+        # 🔴 0 이어야 정상인 값. 1건이라도 오르면 발행이 유실된 것이다
+        expr: increase(teacat_bc_tx_dropped_total{env="prod"}[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: '트랜잭션 드롭 {{ $value }}건 ({{ $labels.kind }})'
+          description: 체인이 끝내 모르는 트랜잭션이 있습니다. 해당 건은 FAILED 로 내려갔으니 재발행이 필요합니다.
+
+      - alert: ChainRpcDown
+        expr: teacat_bc_chain_up{env="prod"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'SSAFY 체인 RPC 두절'
+          description: 이 동안 보낸 트랜잭션은 확정되지 않습니다. 발행·소각이 전부 멈춥니다.
+
+      - alert: ChainBlockNotAdvancing
+        # 블록 번호가 5분간 그대로. 연결은 되는데 체인이 안 도는 경우를 잡는다.
+        # 🔴 increase() 가 아니라 delta() 다 — increase() 는 카운터용이라 리셋 보정이
+        #    들어가고, 게이지에 쓰면 값이 왜곡된다.
+        expr: delta(teacat_bc_chain_block_number{env="prod"}[5m]) == 0 and teacat_bc_chain_up{env="prod"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '블록이 5분째 진행되지 않습니다'
+          description: RPC 는 응답하는데 블록 번호가 그대로입니다. 노드가 동기화에서 뒤처졌을 수 있습니다.
+
+      - alert: NonceDrift
+        expr: increase(teacat_bc_nonce_reset_total{env="prod"}[10m]) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: '논스 재조회가 10분간 {{ $value }}회 발생했습니다'
+          description: >-
+            전송 실패가 반복되고 있습니다. 논스가 어긋나는 동안 트랜잭션이 조용히
+            사라질 수 있습니다 (blockchain/api/src/chain/nonce.ts).
+
+      - alert: TxQueueBacklog
+        # 큐가 하나라 이 값이 곧 발행 대기열이다
+        expr: histogram_quantile(0.9, rate(teacat_bc_tx_queue_wait_seconds_bucket{env="prod"}[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '트랜잭션 큐 대기가 {{ $value | humanizeDuration }} 입니다'
+          description: >-
+            논스 큐는 단일 프로세스에서 한 줄로 돕니다. 대기가 길어지면 발행 처리량의
+            상한에 닿은 것입니다 — 스케일 아웃하려면 논스를 외부에서 관리해야 합니다.
+
+      - alert: DesignRegistrationStuck
+        expr: teacat_nft_design_count{status="REGISTERING",env="prod"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '도안 온체인 등록이 10분째 확정되지 않았습니다'
+          description: >-
+            이 상태의 도안이 발행 배치에 섞이면 NFT_037 로 배치 전체가 막힙니다.
+            NftDesignRegistrationSweeper 가 도는지 확인하세요.
+
+  # ══════════════════════════════════════════════════════════════════
+  - name: ticketing
+    rules:
+      - alert: HikariPoolExhausted
+        # 🔴 티켓 오픈 1순위 장애. 좌석 선점이 DB 조건부 UPDATE 라 요청마다 커넥션을 쥔다
+        expr: hikaricp_connections_pending{env="prod"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'DB 커넥션 대기가 발생했습니다 ({{ $value }}건)'
+          description: >-
+            커넥션을 못 얻어 대기 중인 스레드가 있습니다. 좌석 선점이 Postgres 행 락으로
+            돌아가므로, 락이 안 풀리면 풀이 마르고 예매 전체가 멈춥니다.
+
+      - alert: SeatHoldLatencyHigh
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{uri=~".*/seats/.*/hold",env="prod"}[5m]))
+          ) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: '좌석 API p95 가 {{ $value | humanizeDuration }} 입니다'
+          description: 정상은 100ms 안쪽입니다. 행 락 경합이나 커넥션 부족을 의심하세요.
+
+      - alert: SeatContentionSpike
+        # 경합 실패 "자체" 가 아니라 **비율**을 본다. 오픈에는 이 값이 높은 게 정상이므로
+        # 임계치를 아주 높게 잡고, 그마저도 5분간 지속될 때만 울린다.
+        expr: >-
+          sum(rate(teacat_business_error_total{code=~"ERR_BOOKING_00[456]",env="prod"}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count{uri=~".*/seats/.*/hold",env="prod"}[5m])), 0.01)
+          > 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: '좌석 선점이 사실상 전부 실패하고 있습니다 ({{ $value | humanizePercentage }})'
+          description: >-
+            오픈 직후 경합은 정상이지만, 5분간 95% 이상이 실패하면 만료 정리가 안 돌거나
+            락이 안 풀리는 것입니다. 선점 만료(BOOKING_HOLD_DURATION)가 지났는데도
+            HELD 가 줄지 않는지 확인하세요.
+
+      - alert: ChainWriteFailing
+        # NFT_032(도안 등록 실패) / NFT_038(발행 실패). 원래 0 이어야 하는 코드다
+        expr: increase(teacat_business_error_total{code=~"NFT_03[28]",env="prod"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '체인 쓰기 거절 {{ $value }}건 ({{ $labels.code }})'
+          description: 블록체인 서비스에 닿지 못했거나 거절당했습니다. prod-blockchain 이 살아 있는지 보세요.
+
+      - alert: UnexpectedErrors
+        expr: increase(teacat_unexpected_error_total{env="prod"}[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '처리되지 않은 예외 {{ $value }}건 ({{ $labels.exception }})'
+          description: 비즈니스 예외가 아닌 진짜 버그입니다. 로그에서 스택트레이스를 확인하세요.
+
+  # ══════════════════════════════════════════════════════════════════
+  - name: infra
+    rules:
+      - alert: TargetDown
+        # 🔴 dev 는 제외한다. dev 스택은 수시로 내려가므로 포함하면 이 알림이
+        #    상시로 켜져 있게 되고, 그러면 운영이 죽어도 아무도 안 본다.
+        #    (env 라벨이 없는 job — node/cadvisor/prometheus — 은 포함된다)
+        expr: up{env!="dev"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.job }} 스크레이프 실패'
+          description: 대상이 죽었거나 네트워크가 끊겼습니다. 지표가 안 들어오는 동안은 다른 알림도 울리지 않습니다.
+
+      - alert: ContainerNearMemoryLimit
+        # 🔴 OOMKill 선행 지표. JVM 힙 그래프는 정상인데 컨테이너가 죽는 경우를 잡는다.
+        #    prod-server 는 2g 중 힙이 1.5g(MaxRAMPercentage=75)라 나머지 500m 에서 터진다.
+        expr: >-
+          container_memory_working_set_bytes{name=~"prod-.*"}
+          / container_spec_memory_limit_bytes{name=~"prod-.*"} > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.name }} 메모리가 한도의 {{ $value | humanizePercentage }} 입니다'
+          description: >-
+            커널이 한도와 비교하는 값이 이것입니다. 넘으면 exit 137 로 조용히 재시작되고,
+            restart 정책 때문에 흔적이 거의 남지 않습니다.
+
+      - alert: ContainerRestarted
+        expr: time() - container_start_time_seconds{name=~"prod-.*"} < 120
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.name }} 이 방금 재시작됐습니다'
+          description: >-
+            prod-blockchain 이면 특히 중요합니다 — 확정 감시의 추적 목록이 메모리라
+            재시작하면 통째로 사라지고, 그 건들은 60초 훑기가 주울 때까지 대기합니다.
+
+      - alert: PostgresDeadlocks
+        expr: increase(pg_stat_database_deadlocks{datname="teacat"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '데드락 {{ $value }}건'
+          description: 좌석 선점 UPDATE 순서가 엇갈렸을 수 있습니다.

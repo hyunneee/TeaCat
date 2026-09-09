@@ -1,0 +1,173 @@
+# 모니터링 스택. 앱 스택(docker-compose.prod.yml)과 분리해서 띄운다.
+#
+#   docker compose -f docker-compose.monitoring.yml --env-file .env.monitoring up -d
+#
+# ── 왜 분리하나 ─────────────────────────────────────────────────────
+# 앱을 재배포할 때 모니터링까지 같이 내려가면, 정작 배포가 잘 됐는지 볼 수단이 사라진다.
+# 수명주기를 따로 두면 앱을 몇 번을 다시 올려도 지표와 로그는 계속 쌓인다.
+#
+# ── 노출 ───────────────────────────────────────────────────────────
+# 🔴 Grafana(3000)만 호스트에 열고, 나머지(Prometheus·Loki·exporter)는 열지 않는다.
+#    Prometheus UI 는 인증이 없어서 열면 누구나 지표를 다 본다. 필요하면 SSH 터널을 쓴다:
+#      ssh -L 9090:localhost:9090 <서버>
+#    Grafana 도 nginx 뒤에 두고 싶으면 docker-compose.proxy.yml 에 라우팅을 추가한다.
+#
+# ── 메모리 ──────────────────────────────────────────────────────────
+# 호스트 16G 에 dev/prod 스택이 이미 올라가 있다. 이 스택 전체가 ~1.3G 를 넘지 않도록
+# 컨테이너마다 한도를 박아둔다. 한도가 없으면 Prometheus 가 카디널리티에 따라 얼마든지 부푼다.
+
+name: teacat-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: mon-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # 🔴 보관 기간을 반드시 박는다. 기본값(15일)이라도 명시해두지 않으면
+      #    나중에 누가 스크레이프 대상을 늘렸을 때 디스크가 조용히 찬다.
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=8GB'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    mem_limit: 768m
+    networks: [teacat-net]
+    # 포트를 열지 않는다. Grafana 가 내부에서 붙고, 사람은 SSH 터널로 본다.
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.0
+    container_name: mon-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # 🔴 웹훅 주소는 설정 파일이 아니라 이 파일에서 읽는다 (gitignore 됨).
+      #    monitoring/alertmanager/webhook_url.example 을 복사해서 주소를 넣으세요.
+      - ./monitoring/alertmanager/webhook_url:/etc/alertmanager/webhook_url:ro
+      - alertmanager_data:/alertmanager
+    mem_limit: 128m
+    networks: [teacat-net]
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: mon-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    mem_limit: 512m
+    networks: [teacat-net]
+
+  alloy:
+    image: grafana/alloy:v1.6.1
+    container_name: mon-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      # UI 를 컨테이너 안에서만 연다. 호스트로 내보내지 않는다
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # 🔴 docker.sock 은 사실상 호스트 root 권한이다. 읽기 전용으로만 준다.
+      #    이 호스트는 MASTER_MNEMONIC 을 쥔 프로세스가 도는 곳이라 특히 조심한다.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    mem_limit: 256m
+    networks: [teacat-net]
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: mon-grafana
+    restart: unless-stopped
+    environment:
+      # 🔴 .env.monitoring 에 넣는다. 기본값(admin/admin)으로 두면 열자마자 아무나 들어온다
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?.env.monitoring 에 넣으세요}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?.env.monitoring 에 넣으세요}
+      # 가입을 막는다. 대시보드에 지표가 다 보이므로 아무나 계정을 만들면 안 된다
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      # 이 스택에서 유일하게 호스트로 여는 포트다.
+      # 127.0.0.1 에 묶어 외부에서 직접 못 붙게 하고, 볼 때는 SSH 터널을 쓴다:
+      #   ssh -L 3000:localhost:3000 <서버>
+      - '127.0.0.1:3000:3000'
+    depends_on: [prometheus, loki]
+    mem_limit: 256m
+    networks: [teacat-net]
+
+  # ── exporter (앱 협조 없이 지표를 만드는 것들) ────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: mon-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      # 도커가 만드는 오버레이 마운트가 수백 개라 디스크 지표를 오염시킨다. 걷어낸다
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|var/lib/docker/.+)($$|/)'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 128m
+    networks: [teacat-net]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: mon-cadvisor
+    restart: unless-stopped
+    command:
+      - '--docker_only=true'
+      # 15초. Prometheus 스크레이프 주기와 맞춘다 — 더 촘촘히 돌면 CPU 만 쓴다
+      - '--housekeeping_interval=15s'
+      # 🔴 카디널리티를 줄인다. 기본값은 컨테이너당 수백 시계열을 뱉는다
+      - '--disable_metrics=percpu,sched,tcp,udp,hugetlb,referenced_memory,cpu_topology,resctrl,advtcp,process'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    mem_limit: 256m
+    networks: [teacat-net]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: mon-postgres-exporter
+    restart: unless-stopped
+    command:
+      # 🔴 PostgreSQL 18 에서 체크포인트 통계가 pg_stat_bgwriter 에서 pg_stat_checkpointer 로
+      #    옮겨갔는데(PG 17 변경) exporter v0.16.0 이 아직 옛 컬럼을 본다. 켜두면 15초마다
+      #    "checkpoints_timed does not exist" 에러만 쌓인다.
+      #    알림이 쓰는 지표(pg_stat_database_deadlocks, pg_locks)는 다른 컬렉터라 영향이 없다.
+      - '--no-collector.stat_bgwriter'
+    environment:
+      # 🔴 좌석 선점이 Postgres 조건부 UPDATE 라, 티켓 오픈의 병목이 여기서 보인다.
+      #    (server 의 BookingService — Redis 가 아니라 DB 행 락이다)
+      DATA_SOURCE_NAME: >-
+        postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD:?.env.monitoring 에 넣으세요}@prod-postgres:5432/${POSTGRES_DB:-teacat}?sslmode=disable
+    mem_limit: 128m
+    networks: [teacat-net]
+
+networks:
+  teacat-net:
+    external: true
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  loki_data:
+  alloy_data:
+  grafana_data:
