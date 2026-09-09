@@ -66,6 +66,8 @@ export interface AdminPaginationProps {
   page: number;
   totalPages: number;
   totalElements: number;
+  /** 세는 단위. 회원 표는 '명', 문의 표는 '건' 처럼 화면마다 다릅니다 */
+  unit?: string;
   onChange: (page: number) => void;
 }
 
@@ -73,19 +75,24 @@ export function AdminPagination({
   page,
   totalPages,
   totalElements,
+  unit = '명',
   onChange,
 }: AdminPaginationProps) {
   if (totalPages <= 1) {
     return (
       <p className="border-t border-line px-4 py-3 text-xs text-ink-muted">
-        전체 {totalElements}명
+        전체 {totalElements}
+        {unit}
       </p>
     );
   }
 
   return (
     <div className="flex items-center justify-between border-t border-line px-4 py-3">
-      <p className="text-xs text-ink-muted">전체 {totalElements}명</p>
+      <p className="text-xs text-ink-muted">
+        전체 {totalElements}
+        {unit}
+      </p>
 
       <div className="flex items-center gap-2">
         <Button

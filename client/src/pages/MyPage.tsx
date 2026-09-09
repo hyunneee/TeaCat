@@ -7,6 +7,7 @@ import {
   HandCoins,
   Hourglass,
   LogOut,
+  MessageSquare,
   Receipt,
   ScanFace,
   Settings,
@@ -181,6 +182,12 @@ export function MyPage() {
               icon={<Receipt size={18} />}
               title="포카 거래 내역"
               onClick={() => navigate(ROUTES.MY_NFT_TRADES)}
+            />
+            <ListRow
+              icon={<MessageSquare size={18} />}
+              title="문의하기"
+              description="오류 신고 · 개선 제안"
+              onClick={() => navigate(ROUTES.MY_INQUIRIES)}
             />
           </Card>
         </section>
