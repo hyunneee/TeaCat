@@ -11,6 +11,14 @@
 export { useAdminUsers, useAdminUserStats } from './hooks/useAdminUsers';
 export { useAdminUserManagement } from './hooks/useAdminUserManagement';
 export {
+  useAdminInquiries,
+  useAdminInquiry,
+  useAdminInquiryStats,
+  useAnswerInquiry,
+  useResolveInquiry,
+  useReopenInquiry,
+} from './hooks/useAdminInquiries';
+export {
   useCreateAdminUser,
   useUpdateAdminUser,
   useResetAdminUserPassword,
@@ -30,8 +38,14 @@ export { AdminUserCreateModal } from './components/AdminUserCreateModal';
 export { AdminUserEditModal } from './components/AdminUserEditModal';
 export { AdminPasswordResetModal } from './components/AdminPasswordResetModal';
 
+// View — 문의 관리
+export { AdminInquiryTable } from './components/AdminInquiryTable';
+export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
+
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
+export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
+export type { AdminInquiryQuery } from './model/adminInquiry.types';
 export {
   USER_ROLES,
   ROLE_LABEL,

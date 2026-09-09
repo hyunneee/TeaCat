@@ -82,6 +82,14 @@ const AdminDashboardPage = page(
   'AdminDashboardPage',
 );
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminInquiriesPage = page(
+  () => import('@/pages/AdminInquiriesPage'),
+  'AdminInquiriesPage',
+);
+
+const InquiryListPage = page(() => import('@/pages/InquiryListPage'), 'InquiryListPage');
+const InquiryWritePage = page(() => import('@/pages/InquiryWritePage'), 'InquiryWritePage');
+const InquiryDetailPage = page(() => import('@/pages/InquiryDetailPage'), 'InquiryDetailPage');
 
 /**
  * 첫 화면이 그려진 뒤 **한가할 때** 미리 받아 두는 화면들.
@@ -174,6 +182,7 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                 ],
               },
               /* 모니터링(/admin/monitoring)은 아직 앱(모바일) 레이아웃에 있습니다.
@@ -248,6 +257,12 @@ const routes: RouteObject[] = [
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
           { path: ROUTES.SETTINGS_NICKNAME, element: withBoundary(<NicknameChangePage />) },
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
+
+          /* 문의 — 목록·작성·상세. 로그인한 회원 본인 것만 봅니다 */
+          { path: ROUTES.MY_INQUIRIES, element: withBoundary(<InquiryListPage />) },
+          { path: ROUTES.MY_INQUIRY_NEW, element: withBoundary(<InquiryWritePage />) },
+          { path: '/my/inquiries/:inquiryId', element: withBoundary(<InquiryDetailPage />) },
+          { path: '/my/inquiries/:inquiryId/edit', element: withBoundary(<InquiryWritePage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.

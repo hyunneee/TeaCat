@@ -41,6 +41,13 @@ export const can = {
    */
   manageUsers: (user: User | null): boolean => user?.role === 'ADMIN',
 
+  /**
+   * 문의 관리 메뉴 — 답변·해결 처리.
+   *
+   * 서버의 `/admin/inquiries/**` 는 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
+   */
+  manageInquiries: (user: User | null): boolean => user?.role === 'ADMIN',
+
   /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
   manageStadiumLayouts: (user: User | null): boolean =>
     hasRole(user, 'ADMIN', 'STADIUM'),
