@@ -10,7 +10,7 @@
 # 🔴 Grafana(3000)만 호스트에 열고, 나머지(Prometheus·Loki·exporter)는 열지 않는다.
 #    Prometheus UI 는 인증이 없어서 열면 누구나 지표를 다 본다. 필요하면 SSH 터널을 쓴다:
 #      ssh -L 9090:localhost:9090 <서버>
-#    Grafana 도 nginx 뒤에 두고 싶으면 docker-compose.proxy.yml 에 라우팅을 추가한다.
+#    Grafana 는 nginx 가 https://<도메인>/dashboard/ 로 프록시한다 (nginx/conf.d/dev.conf·prod.conf).
 #
 # ── 메모리 ──────────────────────────────────────────────────────────
 # 호스트 16G 에 dev/prod 스택이 이미 올라가 있다. 이 스택 전체가 ~1.3G 를 넘지 않도록
@@ -94,13 +94,21 @@ services:
       GF_USERS_ALLOW_SIGN_UP: 'false'
       GF_ANALYTICS_REPORTING_ENABLED: 'false'
       GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      # nginx 가 https://<도메인>/dashboard/ 를 이 컨테이너로 넘긴다 (nginx/conf.d/*.conf).
+      # 🔴 SERVE_FROM_SUB_PATH 가 없으면 Grafana 가 /login 같은 절대경로로 리다이렉트해
+      #    /dashboard 밖으로 튕겨 나가고 404 만 보인다.
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN:-dev.teacat.site}/dashboard/
+      GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
+      # HTTPS 뒤에 있으므로 세션 쿠키를 Secure 로. 익명 접속은 기본값(꺼짐) 그대로다
+      GF_SECURITY_COOKIE_SECURE: 'true'
+      GF_SECURITY_DISABLE_GRAVATAR: 'true'
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      # 이 스택에서 유일하게 호스트로 여는 포트다.
-      # 127.0.0.1 에 묶어 외부에서 직접 못 붙게 하고, 볼 때는 SSH 터널을 쓴다:
-      #   ssh -L 3000:localhost:3000 <서버>
+      # 평소에는 nginx 가 https://<도메인>/dashboard/ 로 프록시하므로 이 바인딩이 필요 없다.
+      # nginx 가 죽었을 때의 예비 통로다 — 127.0.0.1 에 묶여 있어 SSH 터널로만 닿는다:
+      #   ssh -L 3001:localhost:3000 teacat
       - '127.0.0.1:3000:3000'
     depends_on: [prometheus, loki]
     mem_limit: 256m
@@ -143,21 +151,36 @@ services:
     mem_limit: 256m
     networks: [teacat-net]
 
-  postgres-exporter:
+  # ── postgres-exporter: 환경마다 하나 ───────────────────────────────
+  # 🔴 좌석 선점이 Postgres 조건부 UPDATE 라, 티켓 오픈의 병목이 여기서 보인다.
+  #    (server 의 BookingService — Redis 가 아니라 DB 행 락이다)
+  # DB 비밀번호가 환경마다 달라 exporter 도 환경마다 하나다. dev 는 늘 켜고, prod 는
+  # profile 로 묶어 운영이 뜰 때 켠다 — Jenkins 는 .env.monitoring 에 POSTGRES_PASSWORD_PROD 가
+  # 채워져 있으면 --profile prod 를 붙인다. 손으로 올릴 때는 --profile prod 를 직접 준다.
+  # 🔴 PG 18 은 체크포인트 통계가 pg_stat_checkpointer 로 옮겨가 stat_bgwriter 컬렉터가
+  #    15초마다 에러만 쌓는다. 끈다 — 알림이 쓰는 deadlocks·pg_locks 는 다른 컬렉터다.
+  postgres-exporter-dev:
     image: prometheuscommunity/postgres-exporter:v0.16.0
-    container_name: mon-postgres-exporter
+    container_name: mon-postgres-exporter-dev
     restart: unless-stopped
-    command:
-      # 🔴 PostgreSQL 18 에서 체크포인트 통계가 pg_stat_bgwriter 에서 pg_stat_checkpointer 로
-      #    옮겨갔는데(PG 17 변경) exporter v0.16.0 이 아직 옛 컬럼을 본다. 켜두면 15초마다
-      #    "checkpoints_timed does not exist" 에러만 쌓인다.
-      #    알림이 쓰는 지표(pg_stat_database_deadlocks, pg_locks)는 다른 컬렉터라 영향이 없다.
-      - '--no-collector.stat_bgwriter'
+    command: ['--no-collector.stat_bgwriter']
     environment:
-      # 🔴 좌석 선점이 Postgres 조건부 UPDATE 라, 티켓 오픈의 병목이 여기서 보인다.
-      #    (server 의 BookingService — Redis 가 아니라 DB 행 락이다)
-      DATA_SOURCE_NAME: >-
-        postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD:?.env.monitoring 에 넣으세요}@prod-postgres:5432/${POSTGRES_DB:-teacat}?sslmode=disable
+      # .env.dev 의 POSTGRES_PASSWORD 와 같아야 한다
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD_DEV:?.env.monitoring 에 넣으세요}@dev-postgres:5432/${POSTGRES_DB:-teacat}?sslmode=disable
+    mem_limit: 128m
+    networks: [teacat-net]
+
+  postgres-exporter-prod:
+    # 🔴 :? 가드를 쓰지 않는다. compose 는 profile 이 꺼진 서비스의 변수도 먼저 보간하므로,
+    #    가드를 걸면 운영이 없을 때 스택 전체가 못 뜬다. 비어 있으면 이 컨테이너만 접속 실패한다.
+    profiles: ['prod']
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: mon-postgres-exporter-prod
+    restart: unless-stopped
+    command: ['--no-collector.stat_bgwriter']
+    environment:
+      # .env.prod 의 POSTGRES_PASSWORD 와 같아야 한다
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD_PROD:-}@prod-postgres:5432/${POSTGRES_DB:-teacat}?sslmode=disable
     mem_limit: 128m
     networks: [teacat-net]
 

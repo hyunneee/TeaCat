@@ -10,7 +10,8 @@ global:
 route:
   # 같은 종류의 알림을 묶어서 한 번에 보낸다. 티켓 오픈에 컨테이너 여러 개가 동시에
   # 메모리를 치면 알림이 10개 오는 대신 1개로 묶인다.
-  group_by: ['alertname', 'severity']
+  # env 를 넣는다 — dev 와 prod 의 같은 알림이 한 메시지로 합쳐지면 어느 쪽인지 모른다
+  group_by: ['alertname', 'severity', 'env']
   group_wait: 30s
   group_interval: 5m
   # 낫지 않는 알림을 다시 알리는 주기. 너무 짧으면 알림 피로가 오고,
@@ -33,7 +34,7 @@ inhibit_rules:
       - alertname = "TargetDown"
     target_matchers:
       - severity = "warning"
-    equal: ['job']
+    equal: ['job', 'env']
 
 receivers:
   - name: 'default'
@@ -49,7 +50,7 @@ receivers:
         send_resolved: true
         # 제목 한 줄에 상태·개수·이름이 다 보이게 한다. 알림은 대개 휴대폰 잠금화면에서
         # 처음 읽히므로, 펼치지 않고도 "지금 급한가" 가 판단돼야 한다.
-        title: '{{ if eq .Status "firing" }}🔴{{ else }}✅ 해제 {{ end }} [{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}{{ if gt (len .Alerts) 1 }} ({{ len .Alerts }}건){{ end }}'
+        title: '{{ if eq .Status "firing" }}🔴{{ else }}✅ 해제 {{ end }} [{{ .CommonLabels.severity }}]{{ with .CommonLabels.env }} [{{ . }}]{{ end }} {{ .CommonLabels.alertname }}{{ if gt (len .Alerts) 1 }} ({{ len .Alerts }}건){{ end }}'
         # 본문에는 요약과 대응 방법을 넣는다. 규칙마다 적어둔 description 이 곧 대응 안내다.
         text: >-
           {{ range .Alerts }}{{ .Annotations.summary }}
