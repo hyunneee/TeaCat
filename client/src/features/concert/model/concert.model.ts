@@ -19,12 +19,5 @@ export function posterSeedOf(concert: Pick<ConcertSummary | ConcertDetail, 'conc
   return `concert-${concert.concertId}`;
 }
 
-/**
- * 이 사용자가 등록한 공연인가.
- *
- * 서버가 관리자 API 를 등록자 본인에게만 허용하므로(PERFORMANCE_020), 화면도 같은 기준으로
- * 수정·삭제 버튼을 보여줍니다. 남의 공연에 버튼을 보이면 눌러도 403 만 납니다.
- */
-export function isConcertOwner(concert: Pick<ConcertDetail, 'createdBy'>, userId: number | undefined): boolean {
-  return concert.createdBy != null && concert.createdBy === userId;
-}
+/* 수정·삭제 버튼을 보일지는 역할까지 봐야 해서 `features/auth` 의 `can.manageThisConcert` 에 있습니다
+   — ADMIN 은 남의 공연도 다루고, PERFORMANCE 는 자기가 등록한 것만 다룹니다. */

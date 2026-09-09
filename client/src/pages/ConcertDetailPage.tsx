@@ -15,7 +15,7 @@ import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
-import { ScheduleList, isConcertOwner, posterSeedOf, useConcertDetail } from '@/features/concert';
+import { ScheduleList, posterSeedOf, useConcertDetail } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -27,9 +27,10 @@ export function ConcertDetailPage() {
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
-  /** 헤더 오른쪽의 수정 버튼은 **이 공연을 등록한 사람**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020).
+  /** 헤더 오른쪽의 수정 버튼 — 주최자는 **자기가 등록한 공연**에만, 전체 관리자(ADMIN)는 모든 공연에 보입니다.
+      서버도 같은 기준으로 거절합니다(PERFORMANCE_020).
       비공개 전환·삭제는 수정 화면 안의 "공연 관리" 에 있습니다 — 상세는 관람객이 보는 화면이라 관리 버튼을 늘리지 않습니다. */
-  const canManage = can.manageConcert(user) && !!concert && isConcertOwner(concert, user?.userId);
+  const canManage = !!concert && can.manageThisConcert(user, concert);
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;

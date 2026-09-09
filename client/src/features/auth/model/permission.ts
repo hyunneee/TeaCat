@@ -18,8 +18,27 @@ export const can = {
    */
   createConcert: (user: User | null): boolean => hasRole(user, 'ADMIN', 'PERFORMANCE'),
 
-  /** 등록한 공연을 수정·삭제할 수 있는가 — 역할은 등록 권한과 같고, 본인 것인지는 화면이 따로 봅니다(createdBy) */
+  /** 공연 관리 화면에 들어갈 수 있는 역할인가. 개별 공연을 다룰 수 있는지는 `manageThisConcert` 가 봅니다 */
   manageConcert: (user: User | null): boolean => hasRole(user, 'ADMIN', 'PERFORMANCE'),
+
+  /**
+   * **이** 공연을 수정·삭제할 수 있는가.
+   *
+   * | 역할 | 범위 |
+   * |---|---|
+   * | `ADMIN` | 모든 공연 — 전체 관리자 |
+   * | `PERFORMANCE` | 자기가 등록한 것만 |
+   *
+   * 서버의 판정(`AdminPerformanceService.getManageablePerformance`)과 **같아야** 합니다.
+   * 여기만 넓히면 버튼은 보이는데 눌러도 403(`PERFORMANCE_020`) 만 나는 화면이 됩니다.
+   *
+   * 등록자를 알 수 없는 옛 공연(`createdBy === null`)은 주최자는 못 다루고 ADMIN 만 다룹니다.
+   */
+  manageThisConcert: (user: User | null, concert: { createdBy: number | null }): boolean => {
+    if (!can.manageConcert(user)) return false;
+    if (user?.role === 'ADMIN') return true;
+    return concert.createdBy != null && concert.createdBy === user?.userId;
+  },
 
   /** 운영 모니터링 대시보드 접근 */
   viewMonitoring: (user: User | null): boolean => user?.role === 'ADMIN',
