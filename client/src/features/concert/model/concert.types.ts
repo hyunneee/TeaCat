@@ -53,6 +53,21 @@ export interface Stadium {
   phone: string | null;
 }
 
+export type AreaType = 'SEATED' | 'STANDING';
+
+/** 이 공연에서 판매하는 구역의 등급·가격 (API-268 로 설정한 것). 설정하지 않은 구역은 목록에 없습니다 */
+export interface PerformanceArea {
+  areaId: number;
+  areaCode: string;
+  areaType: AreaType;
+  grade: string | null;
+  price: number | null;
+  /** 이 구역에서 팔 최대 수량. 회차 구분이 없는 안내값입니다 */
+  maxCnt: number | null;
+  /** 판매된 수량 — 공연 전체의 확정 티켓 수입니다 (회차 합산, 취소분 제외) */
+  soldCnt: number;
+}
+
 /** 공연 상세 (API-202) */
 export interface ConcertDetail {
   concertId: number;
@@ -65,6 +80,11 @@ export interface ConcertDetail {
   detailImageUrl: string | null;
   stadium: Stadium;
   schedules: ScheduleSummary[];
+  /**
+   * 구역별 등급·가격. **등록자용 상세(/admin/concerts/{id})에서만 채워집니다** — 수정 화면이 씁니다.
+   * 관람객용 상세(API-202)는 항상 빈 배열이고, 가격이 필요하면 `GET /concerts/{id}/areas` 를 쓰세요.
+   */
+  areas: PerformanceArea[];
   /** 등록한 관리자의 userId. 서버는 이 사람에게만 수정·삭제를 허용합니다. 옛 데이터는 null */
   createdBy: number | null;
   /** 비공개 상태. 클라이언트 상세에서는 항상 false, 등록자용 상세(/admin/concerts/{id})에서만 true 가 옵니다 */

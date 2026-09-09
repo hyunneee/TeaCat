@@ -326,9 +326,17 @@ public class AdminPerformanceService {
                 .map(detail -> ScheduleSummaryResponse.of(detail, now))
                 .toList();
 
+        // 🔴 예매 브랜치(S15P21A402-49)가 머지되면 sold_cnt 컬럼이 사라지고 팩터리가
+        //    of(area, soldCount) 로 바뀐다. 그때 여기와 saveAreas 두 곳을 함께 고쳐야 한다 —
+        //    판매량은 ticketRepository.countSoldByArea(concertId) 로 세서 넘긴다.
+        List<PerformanceAreaResponse> areas = performanceAreaRepository.findAllByPerformanceId(concertId).stream()
+                .map(PerformanceAreaResponse::from)
+                .toList();
+
         return ConcertDetailResponse.of(
                 performance,
                 schedules,
+                areas,
                 fileStorageService.presignedUrl(performance.getPosterImageKey()),
                 fileStorageService.presignedUrl(performance.getDetailImageKey()));
     }

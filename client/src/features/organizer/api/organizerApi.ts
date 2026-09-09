@@ -1,5 +1,6 @@
 import { http } from '@/shared/api';
-import type { ConcertDetail, ConcertSummary } from '@/features/concert';
+import type { ConcertDetail, ConcertSummary, PerformanceArea } from '@/features/concert';
+import type { AreaSaveRequest, StadiumAreaListResponse } from '../model/areaPricing';
 import {
   toConcertCreateFormData,
   toServerDateTime,
@@ -49,6 +50,16 @@ export const organizerApi = {
   /** 내가 등록한 공연 상세 — 비공개여도 옵니다. 수정 화면이 씁니다 */
   myConcert: (concertId: string) => http.get<ConcertDetail>(`/admin/concerts/${concertId}`),
 
+  /** 공연장 구역 목록 (API-253). 구역별 등급·가격을 정할 때 줄을 만드는 바탕입니다 */
+  listStadiumAreas: async (stadiumId: string) => {
+    const response = await http.get<StadiumAreaListResponse>(`/stadiums/${stadiumId}/areas`);
+    return response.areas;
+  },
+
+  /** 공연 구역 등급·가격 일괄 저장 (API-268). PUT 이라 보낸 목록이 전체가 됩니다 */
+  saveAreas: (concertId: string, body: AreaSaveRequest) =>
+    http.put<PerformanceArea[]>(`/admin/concerts/${concertId}/areas`, body),
+
   /**
    * 회차 등록 (API-265). 번호를 넘기지 않으면 서버가 그 공연의 회차 번호를 **일시 순으로 다시 매깁니다**.
    * 그래서 더 이른 날짜를 나중에 추가해도 1회차가 가장 빠른 공연입니다. 삭제(267) 뒤에도 같은 규칙으로 다시 매겨집니다.
@@ -88,4 +99,5 @@ export const organizerKeys = {
   stadiums: () => [...organizerKeys.all, 'stadiums'] as const,
   myConcerts: () => [...organizerKeys.all, 'myConcerts'] as const,
   myConcert: (concertId: string) => [...organizerKeys.all, 'myConcert', concertId] as const,
+  stadiumAreas: (stadiumId: string) => [...organizerKeys.all, 'stadiumAreas', stadiumId] as const,
 };

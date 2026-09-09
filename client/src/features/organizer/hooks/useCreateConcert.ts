@@ -4,6 +4,7 @@ import { ROUTES, STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { concertKeys, type ConcertDetail } from '@/features/concert';
 import { organizerApi, organizerKeys } from '../api/organizerApi';
+import { toAreaSaveRequest, type AreaPricingRow } from '../model/areaPricing';
 import {
   toConcertUpdateRequest,
   type ConcertCreateForm,
@@ -22,6 +23,10 @@ export function useStadiums() {
 /**
  * 공연 등록.
  *
+ * 공연(회차 포함)을 만든 뒤, 구역 등급·가격을 정했다면 이어서 저장합니다(API-268).
+ * 두 요청이라 구역 저장만 실패할 수 있는데, 그때는 공연은 이미 있으므로 수정 화면으로 보내
+ * 구역 설정을 다시 저장하게 합니다 — 등록 자체를 되돌리면 방금 올린 이미지·회차까지 다시 해야 합니다.
+ *
  * 성공하면 공연 목록 캐시를 비우고(방금 등록한 공연이 바로 보이게) 상세로 이동합니다.
  * 등록 화면은 히스토리에서 빼서(replace) 뒤로가기로 빈 폼에 되돌아오지 않게 합니다.
  */
@@ -30,12 +35,35 @@ export function useCreateConcert() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (form: ConcertCreateForm) => organizerApi.createConcert(form),
+    mutationFn: async ({ form, areaRows }: { form: ConcertCreateForm; areaRows: AreaPricingRow[] }) => {
+      const { concertId } = await organizerApi.createConcert(form);
+      const areas = toAreaSaveRequest(areaRows);
+      if (!areas) return { concertId, areasSaved: true };
+
+      try {
+        await organizerApi.saveAreas(String(concertId), areas);
+        return { concertId, areasSaved: true };
+      } catch (error) {
+        return { concertId, areasSaved: false, areaError: error };
+      }
+    },
     retry: false,
-    onSuccess: ({ concertId }) => {
+    onSuccess: ({ concertId, areasSaved, areaError }) => {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
+      const id = String(concertId);
+
+      if (!areasSaved) {
+        toast.error(
+          areaError instanceof Error
+            ? `공연은 등록됐지만 구역 가격 저장에 실패했어요: ${areaError.message}`
+            : '공연은 등록됐지만 구역 가격 저장에 실패했어요. 수정 화면에서 다시 저장해 주세요.',
+        );
+        navigate(ROUTES.CONCERT_EDIT(id), { replace: true });
+        return;
+      }
+
       toast.success('공연이 등록되었어요.');
-      navigate(ROUTES.CONCERT_DETAIL(String(concertId)), { replace: true });
+      navigate(ROUTES.CONCERT_DETAIL(id), { replace: true });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '공연을 등록하지 못했어요.');

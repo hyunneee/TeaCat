@@ -6,6 +6,7 @@ import {
   ConcertForm,
   EMPTY_CONCERT_CREATE,
   isConcertCreateValid,
+  useAreaPricingRows,
   useCreateConcert,
   useStadiums,
   validateConcertCreate,
@@ -13,10 +14,13 @@ import {
 } from '@/features/organizer';
 
 /**
- * 공연 등록 (관리자).
+ * 공연 등록 (관리자·주최자).
  *
- * 검증 규칙은 `organizer.types.ts` 에 있고 이 화면은 그리기만 합니다.
+ * 검증 규칙은 `organizer.types.ts` 와 `areaPricing.ts` 에 있고 이 화면은 그리기만 합니다.
  * 에러는 회원가입과 같은 방식으로 **한 번 건드린 항목부터** 보여줍니다.
+ *
+ * 구역 등급·가격은 공연장을 고른 뒤 그 공연장의 구역으로 줄이 만들어지고,
+ * 등록 요청 뒤 이어서 저장됩니다 (`useCreateConcert` 참고).
  */
 export function ConcertCreatePage() {
   const [form, setForm] = useState<ConcertCreateFormValues>(EMPTY_CONCERT_CREATE);
@@ -24,10 +28,11 @@ export function ConcertCreatePage() {
   const [submitted, setSubmitted] = useState(false);
 
   const { data: stadiums, isPending, isError } = useStadiums();
+  const areaPricing = useAreaPricingRows(form.stadiumId);
   const create = useCreateConcert();
 
   const errors = validateConcertCreate(form);
-  const valid = isConcertCreateValid(form);
+  const valid = isConcertCreateValid(form) && areaPricing.valid;
 
   const visibleErrors = Object.fromEntries(
     Object.entries(errors).filter(([name]) => submitted || touched[name as keyof ConcertCreateFormValues]),
@@ -36,7 +41,7 @@ export function ConcertCreatePage() {
   const handleSubmit = () => {
     setSubmitted(true);
     if (!valid) return;
-    create.mutate(form);
+    create.mutate({ form, areaRows: areaPricing.rows });
   };
 
   if (isPending) {
@@ -71,6 +76,14 @@ export function ConcertCreatePage() {
         submitting={create.isPending}
         disabled={submitted && !valid}
         submitLabel="등록하기"
+        areaPricing={{
+          rows: areaPricing.rows,
+          // 구역 에러는 줄 단위라, 제출을 눌렀거나 값을 건드린 뒤에만 보여줍니다
+          errors: submitted ? areaPricing.errors : areaPricing.errors.map(() => undefined),
+          loading: areaPricing.loading,
+          error: areaPricing.error,
+          onChange: areaPricing.setRow,
+        }}
         onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
         onBlur={(name) => setTouched((prev) => ({ ...prev, [name]: true }))}
         onSubmit={handleSubmit}

@@ -2,6 +2,7 @@ import { ImagePlus, Lock, Plus, X } from 'lucide-react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import { Button, IconButton, Input } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
+import type { AreaPricingRow } from '../model/areaPricing';
 import {
   ACCEPTED_IMAGE_TYPES,
   TITLE_MAX_LENGTH,
@@ -9,6 +10,7 @@ import {
   type ConcertCreateForm as FormValues,
   type StadiumSummary,
 } from '../model/organizer.types';
+import { AreaPricingEditor } from './AreaPricingEditor';
 
 interface Props {
   form: FormValues;
@@ -25,6 +27,17 @@ interface Props {
   lockedReason?: string;
   /** 수정 화면이면 이미지 칸의 안내가 "바꾸려면 고르세요" 로 달라집니다 */
   editing?: boolean;
+  /**
+   * 구역별 등급·가격 (등록 화면). 공연장을 고르면 그 공연장의 구역이 줄로 뜹니다.
+   * 수정 화면은 구역 설정을 별도 섹션에서 저장하므로 넘기지 않습니다.
+   */
+  areaPricing?: {
+    rows: AreaPricingRow[];
+    errors: (string | undefined)[];
+    loading: boolean;
+    error: boolean;
+    onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
+  };
   onChange: (patch: Partial<FormValues>) => void;
   onBlur: (name: keyof FormValues) => void;
   onSubmit: () => void;
@@ -47,6 +60,7 @@ export function ConcertForm({
   submitLabel,
   lockedReason,
   editing = false,
+  areaPricing,
   onChange,
   onBlur,
   onSubmit,
@@ -120,6 +134,30 @@ export function ConcertForm({
           ))}
         </select>
       </Field>
+
+      {/* 구역 등급·가격 — 공연장 바로 아래. 공연장을 고르면 그 공연장의 구역이 뜨고,
+          팔 구역을 켜서 등급·가격·최대 수량을 적습니다. 예매 화면이 보여주는 가격의 출처입니다. */}
+      {areaPricing && (
+        <Field
+          label="구역 등급·가격"
+          hint="판매할 구역을 켜고 등급·가격·최대 판매수량을 적어요. 끈 구역은 이 공연에서 팔지 않아요. 나중에 수정 화면에서도 바꿀 수 있습니다."
+          error={areaPricing.errors.some(Boolean) ? '구역 설정을 확인해 주세요.' : undefined}
+        >
+          {!form.stadiumId ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">공연장을 먼저 선택하면 구역이 나타나요.</p>
+          ) : areaPricing.loading ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">구역을 불러오는 중…</p>
+          ) : areaPricing.error ? (
+            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">구역 목록을 불러오지 못했어요.</p>
+          ) : (
+            <AreaPricingEditor
+              rows={areaPricing.rows}
+              errors={areaPricing.errors}
+              onChange={areaPricing.onChange}
+            />
+          )}
+        </Field>
+      )}
 
       <Input
         label="티켓팅 오픈 시각"

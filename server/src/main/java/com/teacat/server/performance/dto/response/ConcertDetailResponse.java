@@ -44,6 +44,11 @@ public record ConcertDetailResponse(
         @Schema(description = "회차 목록")
         List<ScheduleSummaryResponse> schedules,
 
+        @Schema(description = "구역별 등급·가격. **등록자용 조회(/admin/concerts/{id})에서만 채워진다** — "
+                + "수정 화면이 저장된 값을 되불러오는 데 쓴다. 클라이언트 조회(API-202)는 항상 빈 배열이고, "
+                + "가격이 필요하면 GET /concerts/{concertId}/areas 를 쓴다")
+        List<PerformanceAreaResponse> areas,
+
         @Schema(description = "등록한 관리자 ID. 이 사람만 수정·삭제할 수 있다. 등록자를 알 수 없는 옛 데이터는 null",
                 example = "6")
         Long createdBy,
@@ -79,8 +84,21 @@ public record ConcertDetailResponse(
         }
     }
 
+    /**
+     * 클라이언트 조회(API-202)용. 구역 등급·가격은 담지 않는다 —
+     * 그 정보는 공개 조회 API(GET /concerts/{concertId}/areas)가 따로 준다.
+     */
     public static ConcertDetailResponse of(PerformanceGeneral performance,
                                            List<ScheduleSummaryResponse> schedules,
+                                           String posterUrl,
+                                           String detailImageUrl) {
+        return of(performance, schedules, List.of(), posterUrl, detailImageUrl);
+    }
+
+    /** 등록자용 조회. 수정 화면이 되불러올 수 있게 구역 등급·가격까지 담는다 */
+    public static ConcertDetailResponse of(PerformanceGeneral performance,
+                                           List<ScheduleSummaryResponse> schedules,
+                                           List<PerformanceAreaResponse> areas,
                                            String posterUrl,
                                            String detailImageUrl) {
         return new ConcertDetailResponse(
@@ -93,6 +111,7 @@ public record ConcertDetailResponse(
                 detailImageUrl,
                 StadiumResponse.from(performance.getStadium()),
                 schedules,
+                areas,
                 performance.getCreatedById(),
                 performance.isHidden()
         );

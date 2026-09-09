@@ -14,4 +14,6 @@ export type {
   ScheduleStatus,
   BookingOpenStatus,
   Stadium,
+  AreaType,
+  PerformanceArea,
 } from './model/concert.types';
