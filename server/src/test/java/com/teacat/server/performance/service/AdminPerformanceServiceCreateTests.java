@@ -1,7 +1,9 @@
 package com.teacat.server.performance.service;
 
 import com.teacat.server.common.config.PerformanceImageProperties;
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.dto.request.ConcertCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
@@ -47,7 +49,9 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class AdminPerformanceServiceCreateTests {
 
-    private static final Long ADMIN = 6L;
+    private static final Long ADMIN_ID = 6L;
+    /** 전체 관리자 */
+    private static final AuthUser ADMIN = new AuthUser(ADMIN_ID, UserRole.ADMIN);
     private static final LocalDateTime TICKETING = LocalDateTime.of(2026, 10, 1, 20, 0);
     private static final Long LAYOUT_ID = 7L;
 
@@ -116,7 +120,7 @@ class AdminPerformanceServiceCreateTests {
         StadiumLayout chosen = givenLayout(LAYOUT_ID, stadium, StadiumLayoutStatus.ACTIVE);
         givenSave();
 
-        service.create(requestWith(List.of(), LAYOUT_ID), ADMIN);
+        service.create(requestWith(List.of(), LAYOUT_ID), ADMIN_ID);
 
         ArgumentCaptor<PerformanceGeneral> captor = ArgumentCaptor.forClass(PerformanceGeneral.class);
         verify(performanceGeneralRepository).save(captor.capture());
@@ -133,7 +137,7 @@ class AdminPerformanceServiceCreateTests {
         givenLayout(LAYOUT_ID, other, StadiumLayoutStatus.ACTIVE);
 
         // 남의 공연장 형식을 붙이면 구역·좌석이 어긋난다
-        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN))
+        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.PERFORMANCE_LAYOUT_MISMATCH);
@@ -146,7 +150,7 @@ class AdminPerformanceServiceCreateTests {
         givenLayout(LAYOUT_ID, stadium, StadiumLayoutStatus.DRAFT);
 
         // 아직 만들던 중인 형식으로 티켓을 팔면 구역이 바뀌어 버린다
-        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN))
+        assertThatThrownBy(() -> service.create(requestWith(List.of(), LAYOUT_ID), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.STADIUM_LAYOUT_NOT_ACTIVE);
@@ -159,7 +163,7 @@ class AdminPerformanceServiceCreateTests {
         LocalDateTime later = LocalDateTime.of(2026, 11, 15, 19, 0);
         LocalDateTime earlier = LocalDateTime.of(2026, 11, 14, 19, 0);
 
-        ConcertCreateResponse response = service.create(requestWith(List.of(later, earlier)), ADMIN);
+        ConcertCreateResponse response = service.create(requestWith(List.of(later, earlier)), ADMIN_ID);
 
         ArgumentCaptor<List<PerformanceDetail>> captor = ArgumentCaptor.forClass(List.class);
         verify(performanceDetailRepository).saveAll(captor.capture());
@@ -173,7 +177,7 @@ class AdminPerformanceServiceCreateTests {
     @Test
     void 나중에_추가한_회차도_일시_순으로_번호를_다시_매긴다() {
         PerformanceGeneral performance = PerformanceGeneral.create(
-                null, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, ADMIN);
+                null, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, ADMIN_ID);
         given(performanceGeneralRepository.findById(1L)).willReturn(Optional.of(performance));
         given(performanceDetailRepository.findMaxPerformanceNum(1L)).willReturn(2);
         given(performanceDetailRepository.save(any(PerformanceDetail.class)))
@@ -195,7 +199,7 @@ class AdminPerformanceServiceCreateTests {
     @Test
     void 번호를_직접_지정하면_다시_매기지_않는다() {
         PerformanceGeneral performance = PerformanceGeneral.create(
-                null, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, ADMIN);
+                null, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, ADMIN_ID);
         given(performanceGeneralRepository.findById(1L)).willReturn(Optional.of(performance));
         given(performanceDetailRepository.existsByPerformanceIdAndPerformanceNum(1L, 5)).willReturn(false);
         given(performanceDetailRepository.save(any(PerformanceDetail.class)))
@@ -213,7 +217,7 @@ class AdminPerformanceServiceCreateTests {
     void 회차_없이도_등록된다() {
         givenStadiumAndSave();
 
-        ConcertCreateResponse response = service.create(requestWith(null), ADMIN);
+        ConcertCreateResponse response = service.create(requestWith(null), ADMIN_ID);
 
         assertThat(response.scheduleCount()).isZero();
     }
@@ -222,7 +226,7 @@ class AdminPerformanceServiceCreateTests {
     void 티켓팅_시작_전_일시의_회차는_거절하고_아무것도_저장하지_않는다() {
         given(stadiumRepository.findById(1L)).willReturn(Optional.of(mock(Stadium.class)));
 
-        assertThatThrownBy(() -> service.create(requestWith(List.of(TICKETING.minusDays(1))), ADMIN))
+        assertThatThrownBy(() -> service.create(requestWith(List.of(TICKETING.minusDays(1))), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.INVALID_PERFORMANCE_DATE);
@@ -236,7 +240,7 @@ class AdminPerformanceServiceCreateTests {
         given(stadiumRepository.findById(1L)).willReturn(Optional.of(mock(Stadium.class)));
         LocalDateTime date = LocalDateTime.of(2026, 11, 14, 19, 0);
 
-        assertThatThrownBy(() -> service.create(requestWith(List.of(date, date)), ADMIN))
+        assertThatThrownBy(() -> service.create(requestWith(List.of(date, date)), ADMIN_ID))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.DUPLICATE_PERFORMANCE_DATE);

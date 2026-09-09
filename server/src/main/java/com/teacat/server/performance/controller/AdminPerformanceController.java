@@ -69,7 +69,7 @@ public class AdminPerformanceController {
     @GetMapping("/mine")
     public ResponseEntity<BaseResponse<List<ConcertSummaryResponse>>> getMyConcerts(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
-        return ResponseEntity.ok(BaseResponse.success(adminPerformanceService.getMyConcerts(authUser.id())));
+        return ResponseEntity.ok(BaseResponse.success(adminPerformanceService.getMyConcerts(authUser)));
     }
 
     @Operation(summary = "내가 등록한 공연 상세",
@@ -79,7 +79,7 @@ public class AdminPerformanceController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
         return ResponseEntity.ok(BaseResponse.success(
-                adminPerformanceService.getMyConcert(concertId, authUser.id())));
+                adminPerformanceService.getMyConcert(concertId, authUser)));
     }
 
     @Operation(summary = "공연 수정",
@@ -89,7 +89,7 @@ public class AdminPerformanceController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertUpdateRequest request) {
-        adminPerformanceService.update(concertId, request, authUser.id());
+        adminPerformanceService.update(concertId, request, authUser);
         return ResponseEntity.ok(BaseResponse.success("공연 정보가 수정되었습니다."));
     }
 
@@ -102,7 +102,7 @@ public class AdminPerformanceController {
             @Valid @RequestBody ScheduleCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success("회차가 등록되었습니다.",
-                        adminPerformanceService.createSchedule(concertId, request, authUser.id())));
+                        adminPerformanceService.createSchedule(concertId, request, authUser)));
     }
 
     @Operation(summary = "공연 구역 등급·가격 설정",
@@ -114,7 +114,7 @@ public class AdminPerformanceController {
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody PerformanceAreaSaveRequest request) {
         return ResponseEntity.ok(BaseResponse.success("공연 구역 설정이 저장되었습니다.",
-                adminPerformanceService.saveAreas(concertId, request, authUser.id())));
+                adminPerformanceService.saveAreas(concertId, request, authUser)));
     }
 
     @Operation(summary = "공연 상태 전환",
@@ -126,7 +126,7 @@ public class AdminPerformanceController {
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertStatusRequest request) {
         return ResponseEntity.ok(BaseResponse.success("공연 상태가 변경되었습니다.",
-                adminPerformanceService.changeStatus(concertId, request.status(), authUser.id())));
+                adminPerformanceService.changeStatus(concertId, request.status(), authUser)));
     }
 
     @Operation(summary = "공연 노출 전환",
@@ -138,7 +138,7 @@ public class AdminPerformanceController {
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId,
             @Valid @RequestBody ConcertVisibilityRequest request) {
         return ResponseEntity.ok(BaseResponse.success(
-                adminPerformanceService.setVisibility(concertId, request.visible(), authUser.id())));
+                adminPerformanceService.setVisibility(concertId, request.visible(), authUser)));
     }
 
     @Operation(summary = "공연 삭제",
@@ -148,7 +148,7 @@ public class AdminPerformanceController {
     public ResponseEntity<Void> delete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
-        adminPerformanceService.delete(concertId, authUser.id());
+        adminPerformanceService.delete(concertId, authUser);
         return ResponseEntity.noContent().build();
     }
 }
