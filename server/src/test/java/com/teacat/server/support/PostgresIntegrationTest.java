@@ -50,6 +50,8 @@ public abstract class PostgresIntegrationTest {
         registry.add("nft.auction.sweep-enabled", () -> "false");
         // 도안 등록 확정 감시도 끈다. 확정은 테스트가 직접 confirm 을 불러 검증한다
         registry.add("nft.design.confirm-enabled", () -> "false");
+        // 회차 자동 발급 스케줄러도 끈다. 발급은 테스트가 직접 불러 검증한다
+        registry.add("nft.photocard.issue.scheduler-enabled", () -> "false");
     }
 
     @Autowired
