@@ -9,6 +9,7 @@ import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.entity.Area;
 import com.teacat.server.stadium.entity.Stadium;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.ticket.repository.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +43,7 @@ class AdminPerformanceServiceAreaTests {
     private static final Long OWNER = 6L;
     private static final Long CONCERT_ID = 1L;
     private static final Long AREA_ID = 10L;
+    private static final Long LAYOUT_ID = 100L;
 
     @Mock
     private PerformanceGeneralRepository performanceGeneralRepository;
@@ -63,22 +65,26 @@ class AdminPerformanceServiceAreaTests {
 
     @BeforeEach
     void setUp() {
-        // Stadium·Area 는 읽기 전용 엔티티라 팩토리가 없다. 여기서 필요한 건 id 뿐이다
+        // Stadium·Area·StadiumLayout 은 읽기 전용 엔티티라 팩토리가 없다. 여기서 필요한 건 id 뿐이다
         Stadium stadium = mock(Stadium.class);
-        given(stadium.getId()).willReturn(100L);
+
+        StadiumLayout layout = mock(StadiumLayout.class);
+        given(layout.getId()).willReturn(LAYOUT_ID);
 
         area = mock(Area.class);
         given(area.getId()).willReturn(AREA_ID);
 
+        // 구역 목록은 공연장이 아니라 그 공연이 쓰는 배치도 기준이다
         PerformanceGeneral performance = PerformanceGeneral.create(
-                stadium, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
+                stadium, layout, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
                 LocalDate.of(2026, 9, 1), null, null, OWNER);
         ReflectionTestUtils.setField(performance, "id", CONCERT_ID);
 
         performanceArea = PerformanceArea.create(performance, area, "VIP", 88_000, 100);
 
         given(performanceGeneralRepository.findById(CONCERT_ID)).willReturn(Optional.of(performance));
-        given(areaRepository.findByStadiumId(100L)).willReturn(List.of(area));
+        given(areaRepository.findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(LAYOUT_ID))
+                .willReturn(List.of(area));
         given(performanceAreaRepository.findAllByPerformanceId(CONCERT_ID))
                 .willReturn(List.of(performanceArea));
     }

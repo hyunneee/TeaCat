@@ -3,19 +3,25 @@ import { STALE_TIME } from '@/shared/constants';
 import { bookingApi, bookingKeys } from '../api/bookingApi';
 
 /**
- * 좌석 현황 조회.
+ * 회차 좌석 현황 조회.
  *
  * 티켓팅 오픈 순간에는 좌석 상태가 초 단위로 바뀝니다.
  * 캐시를 믿으면 "선택했는데 이미 팔린 좌석"이 계속 발생합니다.
  * 그래서 staleTime 0 + 3초 폴링.
  *
+ * 🔴 쿼리 키에 구역을 넣지 않습니다. 서버가 한 응답에 전 구역을 주므로
+ *    구역 선택 화면과 좌석 선택 화면이 **같은 캐시**를 씁니다.
+ *    구역별로 키를 쪼개면 화면을 옮길 때마다 다시 받고, 두 화면의
+ *    잔여 좌석 수가 서로 다르게 보입니다.
+ *    구역 필터는 `useSectionSeats` 가 메모이즈해서 걸러줍니다.
+ *
  * WebSocket 을 붙이면 폴링을 끄고 소켓 이벤트로 queryClient.setQueryData 하세요.
  * 훅의 반환 형태는 그대로라서 화면 코드는 한 줄도 안 바뀝니다.
  */
-export function useSeatMap(scheduleId: string, sectionId?: string) {
+export function useSeatMap(scheduleId: string) {
   return useQuery({
-    queryKey: bookingKeys.seatMap(scheduleId, sectionId),
-    queryFn: () => bookingApi.seatMap(scheduleId, sectionId),
+    queryKey: bookingKeys.seatMap(scheduleId),
+    queryFn: () => bookingApi.seatMap(scheduleId),
     staleTime: STALE_TIME.REALTIME,
     refetchInterval: 3000,
     // 백그라운드 탭에서는 폴링 중단 (서버 부하 + 배터리)

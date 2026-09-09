@@ -7,6 +7,14 @@
 // 도는 것과 같다. ~/teacat 이 컨테이너에 같은 경로로 마운트돼 있어야 한다.
 //
 // 시크릿은 저장소에 없다. ~/teacat/.env.<env> 를 그대로 읽는다.
+//
+// ── 빌드 시간 ─────────────────────────────────────────────
+// 세 이미지를 매번 다 빌드하면 t3.small 에서 5~8분이 걸린다. 대부분의 푸시는
+// 한 서비스만 건드리므로 '변경 감지' 가 직전 성공 커밋과 비교해 바뀐 것만 빌드한다.
+//
+// 🔴 판단이 불확실하면 전부 빌드한다 — 첫 빌드, force push, 얕은 클론,
+//    공용 파일(docker/·Jenkinsfile) 변경, 이미지 없음, 프론트 폴더 비어 있음.
+//    빠른 것보다 맞는 게 먼저다. 안 만든 이미지로 배포하면 조용히 옛 버전이 뜬다.
 
 pipeline {
     agent any
@@ -20,6 +28,15 @@ pipeline {
 
     environment {
         DEPLOY_DIR = '/home/ubuntu/teacat'
+
+        // 🔴 DOCKER_BUILDKIT 을 켜지 말 것. 젠킨스 이미지에 buildx 플러그인이 없어서
+        //    (docker/jenkins/Dockerfile 이 docker-ce-cli 와 compose 플러그인만 설치한다)
+        //    CLI 23+ 는 레거시 빌더로 폴백한다. 이 상태로 변수를 켜면
+        //    "buildx component is missing or broken" 으로 빌드가 죽는다.
+        //
+        //    같은 이유로 Dockerfile 에 --mount=type=cache 를 쓸 수 없다.
+        //    쓰려면 먼저 docker/jenkins/Dockerfile 에 docker-buildx-plugin 을 추가하고
+        //    EC2 에서 젠킨스 이미지를 다시 빌드해야 한다. (빌드 #25 가 이걸로 실패했다)
     }
 
     stages {
@@ -68,7 +85,73 @@ pipeline {
             }
         }
 
-        stage('이미지 빌드') {
+        stage('변경 감지') {
+            steps {
+                script {
+                    // 직전 '성공' 커밋과 비교한다. 직전 빌드(실패 포함)와 비교하면
+                    // 실패한 빌드에 들어 있던 변경이 영영 빌드되지 않고 넘어간다.
+                    def prev = env.GIT_PREVIOUS_SUCCESSFUL_COMMIT
+
+                    // 그 커밋이 이 워크스페이스에 실제로 있어야 diff 가 된다.
+                    // 첫 빌드·force push·얕은 클론이면 없다.
+                    def hasBase = prev && sh(
+                        script: "git rev-parse --verify --quiet '${prev}^{commit}' >/dev/null",
+                        returnStatus: true) == 0
+
+                    if (!hasBase) {
+                        echo "직전 성공 커밋을 쓸 수 없습니다 (${prev ?: '기록 없음'}). 전부 빌드합니다."
+                    }
+
+                    def files = hasBase
+                        ? sh(script: "git diff --name-only '${prev}' HEAD", returnStdout: true).trim().tokenize('\n')
+                        : []
+
+                    def touched = { String prefix -> files.any { it.startsWith(prefix) } }
+
+                    // Jenkinsfile 이 바뀌면 빌드 인자(MOCK 등)나 빌드 명령 자체가 바뀔 수 있다.
+                    // 무엇이 영향받는지 알 수 없으므로 전부 빌드한다.
+                    //
+                    // docker/ 는 여기 넣지 않는다. compose·nginx conf 뿐이고 세 빌드 컨텍스트
+                    // (./client, ./server, ./blockchain) 밖이라 이미지 내용에 영향이 없다.
+                    // '설정 동기화'·'앱 배포' 가 이미지 재빌드 없이 반영한다.
+                    // compose 에 서비스가 새로 생기면 아래 missing() 이 잡는다.
+                    def wide = !hasBase || files.contains('Jenkinsfile')
+
+                    def missing = { String image ->
+                        sh(script: "docker image inspect ${image} >/dev/null 2>&1", returnStatus: true) != 0
+                    }
+
+                    // nginx 가 보는 폴더가 비어 있으면 이미지가 있어도 dist 를 다시 꺼내야 한다.
+                    def frontEmpty = sh(
+                        script: "test -s '${env.DEPLOY_DIR}/frontend/${env.DEPLOY_ENV}/index.html'",
+                        returnStatus: true) != 0
+
+                    env.BUILD_CLIENT = (wide || touched('client/')
+                        || missing("teacat-client:${env.DEPLOY_ENV}-latest")
+                        || frontEmpty) ? 'true' : 'false'
+
+                    env.BUILD_SERVER = (wide || touched('server/')
+                        || missing("teacat-server:${env.DEPLOY_ENV}")) ? 'true' : 'false'
+
+                    env.BUILD_CHAIN = (wide || touched('blockchain/')
+                        || missing("teacat-blockchain:${env.DEPLOY_ENV}")) ? 'true' : 'false'
+
+                    def built = []
+                    if (env.BUILD_CLIENT == 'true') built << 'client'
+                    if (env.BUILD_SERVER == 'true') built << 'server'
+                    if (env.BUILD_CHAIN  == 'true') built << 'blockchain'
+                    env.BUILT_SUMMARY = built ? built.join(', ') : '없음 (재배포만)'
+
+                    if (frontEmpty) {
+                        echo "frontend/${env.DEPLOY_ENV} 가 비어 있어 프론트를 강제로 빌드합니다."
+                    }
+                    echo "변경 파일 ${files.size()}개 → 빌드 대상: ${env.BUILT_SUMMARY}"
+                }
+            }
+        }
+
+        stage('빌드: 프론트') {
+            when { environment name: 'BUILD_CLIENT', value: 'true' }
             steps {
                 sh '''
                     set -e
@@ -85,15 +168,39 @@ pipeline {
                     #    이 줄을 MOCK=false 로 바꾼다.
                     MOCK=true
 
-                    docker build -t teacat-client:$DEPLOY_ENV-$TAG \
+                    # -latest 는 '이 환경의 프론트 이미지가 있는가' 를 묻기 위한 고정 태그다.
+                    # 커밋 태그($TAG)만 붙이면 변경 감지가 매번 "이미지 없음" 으로 본다.
+                    docker build \
+                        -t "teacat-client:$DEPLOY_ENV-$TAG" \
+                        -t "teacat-client:$DEPLOY_ENV-latest" \
                         --build-arg VITE_USE_MOCK=$MOCK ./client
-                    docker build -t teacat-server:$DEPLOY_ENV     ./server
-                    docker build -t teacat-blockchain:$DEPLOY_ENV ./blockchain
+                '''
+            }
+        }
+
+        stage('빌드: 서버') {
+            when { environment name: 'BUILD_SERVER', value: 'true' }
+            steps {
+                sh '''
+                    set -e
+                    docker build -t "teacat-server:$DEPLOY_ENV" ./server
+                '''
+            }
+        }
+
+        stage('빌드: 블록체인') {
+            when { environment name: 'BUILD_CHAIN', value: 'true' }
+            steps {
+                sh '''
+                    set -e
+                    docker build -t "teacat-blockchain:$DEPLOY_ENV" ./blockchain
                 '''
             }
         }
 
         stage('프론트 배포') {
+            // 프론트를 안 빌드했으면 dist 는 이미 폴더에 있고, 꺼낼 $TAG 이미지도 없다.
+            when { environment name: 'BUILD_CLIENT', value: 'true' }
             steps {
                 sh '''
                     set -e
@@ -186,9 +293,22 @@ pipeline {
 
     post {
         always {
-            sh 'docker image prune -f >/dev/null 2>&1 || true'
+            sh '''
+                docker image prune -f >/dev/null 2>&1 || true
+
+                # 프론트 이미지는 커밋마다 태그가 붙어 계속 쌓인다 (하나당 수십 MB).
+                # prune 은 dangling 만 지우므로 여기서 최근 3개만 남기고 지운다.
+                # docker images 는 최신순으로 출력한다. -latest 는 변경 감지가 쓰므로 제외.
+                docker images teacat-client --format '{{.Tag}}' 2>/dev/null \
+                    | grep "^$DEPLOY_ENV-" \
+                    | grep -v -- '-latest$' \
+                    | tail -n +4 \
+                    | while read -r t; do
+                          docker rmi "teacat-client:$t" >/dev/null 2>&1 || true
+                      done || true
+            '''
         }
-        success { script { notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공") } }
+        success { script { notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공 — 빌드: ${env.BUILT_SUMMARY ?: '?'}") } }
         failure {
             sh '''
                 echo "── 실패 직전 상태 ──"
@@ -205,7 +325,11 @@ pipeline {
 
 def notifyMM(String color, String title) {
     withCredentials([string(credentialsId: 'mm-webhook', variable: 'HOOK')]) {
-        def payload = """{"attachments":[{"color":"${color}","title":"${title}","text":"**${env.JOB_NAME}** #${env.BUILD_NUMBER}\n[빌드 로그 보기](${env.BUILD_URL}console)"}]}"""
+        // \\n 이어야 JSON 규격에 맞는다. \n 으로 쓰면 Groovy 가 진짜 줄바꿈을 넣어
+        // JSON 문자열 안에 raw LF 가 들어간다.
+        // (Mattermost 는 그것도 받아준다 — 빌드 #25 에서 ok 응답을 확인했다.
+        //  고장난 적은 없고, 규격을 지키는 쪽으로만 맞춘 것이다)
+        def payload = """{"attachments":[{"color":"${color}","title":"${title}","text":"**${env.JOB_NAME}** #${env.BUILD_NUMBER}\\n[빌드 로그 보기](${env.BUILD_URL}console)"}]}"""
         sh """curl -s -X POST -H 'Content-Type: application/json' -d '${payload}' "\$HOOK" """
     }
 }

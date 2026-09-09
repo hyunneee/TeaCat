@@ -1,8 +1,8 @@
 import { motion } from 'motion/react';
 import { Check } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
-import { cn, formatPrice, SPRING } from '@/shared/lib';
-import { isSectionSoldOut, sectionRemainRatio } from '../model/seat.model';
+import { cn, SPRING } from '@/shared/lib';
+import { isSectionSoldOut, priceLabel, sectionRemainRatio } from '../model/seat.model';
 import type { Section } from '../model/booking.types';
 
 interface Props {
@@ -63,7 +63,7 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
                 <span className="truncate font-bold">{section.name}</span>
               </div>
 
-              <p className="text-ink mt-1 text-sm font-bold">{formatPrice(section.price)}</p>
+              <p className="text-ink mt-1 text-sm font-bold">{priceLabel(section.price)}</p>
 
               <div className="mt-2 flex items-center justify-between gap-1">
                 <span className="text-subtle text-xs">

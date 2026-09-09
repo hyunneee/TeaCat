@@ -20,4 +20,3 @@ contracts/deployments/hardhat.json
 # 빌드 산출물
 contracts/dist/
 api/dist/
-

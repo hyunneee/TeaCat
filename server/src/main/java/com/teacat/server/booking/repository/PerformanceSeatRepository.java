@@ -13,11 +13,75 @@ import java.util.Optional;
 
 public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat, PerformanceSeatId> {
 
+    @Query(value = """
+            SELECT COUNT(*) FROM performance_seats ps
+            JOIN performance_details pd ON pd.id = ps.performance_detail_id
+            WHERE pd.performance_general_id = :performanceId
+              AND ps.seat_id IN (:seatIds)
+              AND ps.status IN ('HELD', 'SOLD')
+            """, nativeQuery = true)
+    long countHeldOrSold(Long performanceId, List<Long> seatIds);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats ps
+               SET status = 'AVAILABLE', held_by = NULL, held_until = NULL, updated_at = now()
+              FROM performance_details pd
+             WHERE pd.id = ps.performance_detail_id
+               AND pd.performance_general_id = :performanceId
+               AND ps.status = 'BLOCKED'
+            """, nativeQuery = true)
+    int unblockAll(Long performanceId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats ps
+               SET status = 'BLOCKED', held_by = NULL, held_until = NULL, updated_at = now()
+              FROM performance_details pd
+             WHERE pd.id = ps.performance_detail_id
+               AND pd.performance_general_id = :performanceId
+               AND ps.seat_id IN (:seatIds)
+               AND ps.status = 'AVAILABLE'
+            """, nativeQuery = true)
+    int blockAvailable(Long performanceId, List<Long> seatIds);
+
     /**
      * 이 회차에 좌석 행이 이미 만들어져 있는지 (공연 도메인의 회차 좌석 생성 API-269 가 중복 생성을 막는 데 쓴다).
      * performance_seats 엔티티·저장소는 이 하나만 둔다 — 같은 테이블을 두 엔티티로 매핑하면 빈·엔티티 이름이 충돌한다.
      */
     boolean existsByIdPerformanceDetailId(Long performanceDetailId);
+
+    /**
+     * 회차의 좌석 상태 전체 (좌석맵 조회).
+     *
+     * <p>좌표·열·번호는 여기 없다. 그건 공연장 좌석(seats)의 것이고, 이 테이블은
+     * "이 회차에서 그 좌석이 지금 어떤 상태인가" 만 안다. 서비스가 둘을 합친다.
+     *
+     * <p>🔴 만료 판정을 <b>SQL 안에서</b> 한다. 자바에서 {@code LocalDateTime.now()} 로
+     * 비교하면 안 된다 — 위 {@link #hold} 가 {@code held_until < now()} 로 DB 시계를 쓰는데,
+     * 앱 컨테이너는 {@code TZ=Asia/Seoul} 이고 DB 컨테이너는 UTC 라 두 시계가 9시간 어긋난다.
+     * 시계가 다르면 <b>좌석맵은 "고를 수 있다" 고 그리는데 선점 API 는 거절하는</b>
+     * 구간이 생긴다 (사용자에게는 "눌러도 안 되는 좌석" 으로 보인다).
+     * 같은 시계로 판단해야 화면과 동작이 어긋나지 않는다.
+     */
+    @Query(value = """
+            SELECT ps.seat_id AS seatId,
+                   CASE WHEN ps.status = 'HELD' AND ps.held_until < now()
+                        THEN 'AVAILABLE'
+                        ELSE ps.status::text
+                   END AS status
+              FROM performance_seats ps
+             WHERE ps.performance_detail_id = :performanceDetailId
+            """, nativeQuery = true)
+    List<SeatStatusView> findEffectiveStatuses(@Param("performanceDetailId") Long performanceDetailId);
+
+    /** {@link #findEffectiveStatuses} 결과 한 줄 */
+    interface SeatStatusView {
+        Long getSeatId();
+
+        /** {@code seat_booking_status} 값의 문자열. 만료된 HELD 는 AVAILABLE 로 바뀐 뒤 */
+        String getStatus();
+    }
 
     /**
      * 같은 회차에서 이 유저가 쥐고 있던 <b>만료된</b> 선점을 해제한다. 새 좌석을 선점하기 직전에 호출한다.

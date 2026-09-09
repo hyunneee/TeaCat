@@ -9,11 +9,14 @@ import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
 import com.teacat.server.performance.dto.request.ScheduleCreateRequest;
 import com.teacat.server.performance.dto.response.ConcertCreateResponse;
+import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertStatusResponse;
+import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
 import com.teacat.server.performance.dto.response.ConcertVisibilityResponse;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.PresignedUploadResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
+import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
@@ -27,6 +30,8 @@ import com.teacat.server.stadium.entity.Area;
 import com.teacat.server.stadium.entity.Stadium;
 import com.teacat.server.stadium.repository.AreaRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
+import com.teacat.server.stadium.repository.StadiumLayoutRepository;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -66,6 +71,7 @@ public class AdminPerformanceService {
     private final AreaRepository areaRepository;
     private final TicketRepository ticketRepository;
     private final StadiumRepository stadiumRepository;
+    private final StadiumLayoutRepository stadiumLayoutRepository;
     private final FileStorageService fileStorageService;
     private final PerformanceImageProperties imageProperties;
 
@@ -82,6 +88,9 @@ public class AdminPerformanceService {
         List<LocalDateTime> performanceDates = normalizePerformanceDates(
                 request.performanceDatesOrEmpty(), request.ticketingStartAt());
 
+        StadiumLayout stadiumLayout = stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
+                .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+
         String posterKey = uploadIfPresent(request.poster(), POSTER_DIRECTORY, imageProperties.posterMaxSize());
         String detailImageKey = uploadIfPresent(
                 request.detailImage(), DETAIL_IMAGE_DIRECTORY, imageProperties.detailMaxSize());
@@ -89,6 +98,7 @@ public class AdminPerformanceService {
         PerformanceGeneral performance = performanceGeneralRepository.save(
                 PerformanceGeneral.create(
                         stadium,
+                        stadiumLayout,
                         request.title(),
                         request.ticketingStartAt(),
                         request.visibleFrom(),
@@ -152,7 +162,16 @@ public class AdminPerformanceService {
             throw new BusinessException(PerformanceErrorCode.INVALID_VISIBLE_FROM);
         }
 
+        StadiumLayout defaultLayout = null;
+        if (stadium != null) {
+            defaultLayout = stadiumLayoutRepository.findDefaultByStadiumId(stadium.getId())
+                    .orElseThrow(() -> new BusinessException(PerformanceErrorCode.STADIUM_LAYOUT_NOT_FOUND));
+        }
+
         performance.update(request.title(), stadium, request.ticketingStartAt(), request.visibleFrom());
+        if (defaultLayout != null) {
+            performance.updateLayout(defaultLayout, java.util.List.of(), java.util.List.of());
+        }
 
         replaceImagesIfPresent(performance, request.posterImageKey(), request.detailImageKey());
     }
@@ -286,6 +305,37 @@ public class AdminPerformanceService {
     }
 
     /**
+     * 내가 등록한 공연 목록 — 비공개 포함.
+     *
+     * 클라이언트 목록(API-201)은 비공개를 숨기므로, 비공개로 돌린 공연을 되돌릴 입구가 여기다.
+     */
+    public List<ConcertSummaryResponse> getMyConcerts(Long userId) {
+        return performanceGeneralRepository.findAllByCreatedById(userId).stream()
+                .map(p -> ConcertSummaryResponse.of(p, fileStorageService.presignedUrl(p.getPosterImageKey())))
+                .toList();
+    }
+
+    /**
+     * 내가 등록한 공연 상세 — 비공개여도 준다 (등록자 본인만).
+     * 수정 화면이 클라이언트 상세(API-202)를 쓰면 비공개 공연은 404 라 수정할 수 없어서 따로 둔다.
+     */
+    public ConcertDetailResponse getMyConcert(Long concertId, Long userId) {
+        PerformanceGeneral performance = getOwnedPerformance(concertId, userId);
+        LocalDateTime now = LocalDateTime.now();
+
+        List<ScheduleSummaryResponse> schedules = performanceDetailRepository
+                .findByPerformanceIdOrderByPerformanceNumAsc(concertId).stream()
+                .map(detail -> ScheduleSummaryResponse.of(detail, now))
+                .toList();
+
+        return ConcertDetailResponse.of(
+                performance,
+                schedules,
+                fileStorageService.presignedUrl(performance.getPosterImageKey()),
+                fileStorageService.presignedUrl(performance.getDetailImageKey()));
+    }
+
+    /**
      * 공연 상태 전환 (API-264).
      *
      * 전이 규칙은 {@link PerformanceStatus#canTransitionTo} 에 있다.
@@ -350,7 +400,9 @@ public class AdminPerformanceService {
         }
 
         // 남의 공연장 구역을 붙이면 배치도와 좌석이 어긋난다
-        Map<Long, Area> stadiumAreas = areaRepository.findByStadiumId(performance.getStadium().getId()).stream()
+        Map<Long, Area> stadiumAreas = areaRepository
+                .findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(performance.getStadiumLayout().getId())
+                .stream()
                 .collect(Collectors.toMap(Area::getId, Function.identity()));
 
         if (!stadiumAreas.keySet().containsAll(requestedAreaIds)) {

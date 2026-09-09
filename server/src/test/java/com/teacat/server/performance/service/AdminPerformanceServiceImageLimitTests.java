@@ -12,7 +12,9 @@ import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.repository.AreaRepository;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
+import com.teacat.server.stadium.repository.StadiumLayoutRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +51,9 @@ class AdminPerformanceServiceImageLimitTests {
     @Mock private PerformanceDetailRepository performanceDetailRepository;
     @Mock private PerformanceAreaRepository performanceAreaRepository;
     @Mock private AreaRepository areaRepository;
+    @Mock private TicketRepository ticketRepository;
     @Mock private StadiumRepository stadiumRepository;
+    @Mock private StadiumLayoutRepository stadiumLayoutRepository;
     @Mock private FileStorageService fileStorageService;
 
     private AdminPerformanceService service;
@@ -59,8 +63,7 @@ class AdminPerformanceServiceImageLimitTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, mock(com.teacat.server.ticket.repository.TicketRepository.class),
-                stadiumRepository, fileStorageService,
+                areaRepository, ticketRepository, stadiumRepository, stadiumLayoutRepository, fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다

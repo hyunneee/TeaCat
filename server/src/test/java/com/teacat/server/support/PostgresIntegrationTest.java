@@ -48,6 +48,8 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("nft.auction.sweep-enabled", () -> "false");
+        // 도안 등록 확정 감시도 끈다. 확정은 테스트가 직접 confirm 을 불러 검증한다
+        registry.add("nft.design.confirm-enabled", () -> "false");
     }
 
     @Autowired
@@ -118,15 +120,20 @@ public abstract class PostgresIntegrationTest {
         Long stadiumId = jdbcTemplate.queryForObject("""
                 INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id
                 """, Long.class);
-        Long areaId = jdbcTemplate.queryForObject("""
-                INSERT INTO areas (stadium_id, area_code, type, max_seat)
-                VALUES (?, 'A', 'SEATED', 1000) RETURNING id
+        Long layoutId = jdbcTemplate.queryForObject("""
+                INSERT INTO stadium_layouts
+                    (stadium_id, name, width, height, is_default, status)
+                VALUES (?, '기본 배치', 1000, 1000, true, 'ACTIVE') RETURNING id
                 """, Long.class, stadiumId);
+        Long areaId = jdbcTemplate.queryForObject("""
+                INSERT INTO areas (stadium_id, stadium_layout_id, area_code, type, max_seat)
+                VALUES (?, ?, 'A', 'SEATED', 1000) RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_general
-                    (stadium_id, visible_from, title, ticketing_start_at, status)
-                VALUES (?, CURRENT_DATE, '테스트 공연', now(), 'UPCOMING') RETURNING id
-                """, Long.class, stadiumId);
+                    (stadium_id, stadium_layout_id, visible_from, title, ticketing_start_at, status)
+                VALUES (?, ?, CURRENT_DATE, '테스트 공연', now(), 'UPCOMING') RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceDetailId = jdbcTemplate.queryForObject("""
                 INSERT INTO performance_details
                     (performance_general_id, performance_num, performance_date, status)

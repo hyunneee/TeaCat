@@ -642,15 +642,21 @@ class TicketOrderServiceIntegrationTests {
     private Fixture insertPerformanceFixture() {
         Long stadiumId = jdbcTemplate.queryForObject(
                 "INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id", Long.class);
+        // 구역과 공연은 배치도에 매인다 (S15P21A402-53)
+        Long layoutId = jdbcTemplate.queryForObject("""
+                INSERT INTO stadium_layouts (stadium_id, name, width, height, is_default, status)
+                VALUES (?, '기본 배치', 1000, 1000, true, 'ACTIVE') RETURNING id
+                """, Long.class, stadiumId);
         Long areaId = jdbcTemplate.queryForObject("""
-                INSERT INTO areas (stadium_id, area_code, type, max_seat)
-                VALUES (?, 'A', 'SEATED', 1000) RETURNING id
-                """, Long.class, stadiumId);
+                INSERT INTO areas (stadium_id, stadium_layout_id, area_code, type, max_seat)
+                VALUES (?, ?, 'A', 'SEATED', 1000) RETURNING id
+                """, Long.class, stadiumId, layoutId);
         Long performanceId = jdbcTemplate.queryForObject("""
-                INSERT INTO performance_general (stadium_id, visible_from, title, ticketing_start_at, status)
-                VALUES (?, now(), '테아캣 콘서트', now() - interval '1 day', 'UPCOMING'::performance_status)
+                INSERT INTO performance_general
+                    (stadium_id, stadium_layout_id, visible_from, title, ticketing_start_at, status)
+                VALUES (?, ?, now(), '테아캣 콘서트', now() - interval '1 day', 'UPCOMING'::performance_status)
                 RETURNING id
-                """, Long.class, stadiumId);
+                """, Long.class, stadiumId, layoutId);
         jdbcTemplate.update("""
                 INSERT INTO performance_areas (performance_general_id, area_id, grade, price, max_cnt)
                 VALUES (?, ?, 'VIP', ?, 100)

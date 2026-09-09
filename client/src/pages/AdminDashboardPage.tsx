@@ -1,4 +1,4 @@
-import { Activity, CalendarPlus, ScanFace, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Armchair, CalendarPlus, ScanFace, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { ROUTES } from '@/shared/constants';
 import { Badge } from '@/shared/components/ui';
 import {
@@ -22,6 +22,7 @@ import { can, useAuth } from '@/features/auth';
 export function AdminDashboardPage() {
   const { user } = useAuth();
   const canManageUsers = can.manageUsers(user);
+  const canManageStadiumLayouts = can.manageStadiumLayouts(user);
 
   // 회원 통계는 ADMIN 전용 API 입니다. 다른 역할이 부르면 403 이라 아예 안 부릅니다
   const { data: stats } = useAdminUserStats();
@@ -82,11 +83,20 @@ export function AdminDashboardPage() {
                    넘으면 자동으로 다음 줄로 넘어갑니다. */}
             <BentoTile
               span={6}
-              title="다음 관리 기능"
-              description="공연·예매·정산 관리가 여기에 붙습니다. 사이드바 메뉴는 AdminSidebar 의 ADMIN_MENU 에 한 줄 추가하면 됩니다."
-              icon={Activity}
+              title="좌석 배치 관리"
+              description="공연장을 검색하고 Excel 좌석표에서 구역·좌석·고정 요소를 검수해 새 배치를 생성합니다."
+              icon={Armchair}
+              to={ROUTES.ADMIN_STADIUM}
             />
           </>
+        ) : canManageStadiumLayouts ? (
+          <BentoTile
+            span={12}
+            title="좌석 배치 관리"
+            description="담당 공연장의 좌석 배치를 조회하고 Excel 기반 새 배치를 생성합니다."
+            icon={Armchair}
+            to={ROUTES.ADMIN_STADIUM}
+          />
         ) : (
           <BentoTile
             span={12}

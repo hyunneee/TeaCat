@@ -6,7 +6,12 @@ import type { HealthReport } from '../services/health.service';
 import type { WalletResult } from '../services/wallet.service';
 import type { TxReport } from '../services/tx.service';
 import { txParams } from '../controllers/tx.controller';
-import { balanceQuery, burnBody, mintBody } from '../controllers/catMoney.controller';
+import {
+  balanceQuery,
+  burnBody,
+  mintBody,
+  transferBody,
+} from '../controllers/catMoney.controller';
 import type { BalanceResult, WriteResult } from '../services/catMoney.service';
 import { issueBody, ticketKeyQuery, ticketParams } from '../controllers/ticket.controller';
 import {
@@ -14,6 +19,7 @@ import {
   designBody,
   issueBody as photocardIssueBody,
   photocardKeyQuery,
+  transferBody as photocardTransferBody,
 } from '../controllers/photocard.controller';
 import { assignBody, drawParams, openBody } from '../controllers/draw.controller';
 import type {
@@ -21,6 +27,7 @@ import type {
   IssueBatchResult,
   PhotocardBalanceResult,
   PhotocardLookupResult,
+  PhotocardTransferResult,
 } from '../services/photocard.service';
 import type {
   DrawAssignResult,
@@ -34,7 +41,6 @@ import type {
   TicketLookupResult,
   TicketResult,
 } from '../services/ticket.service';
-import { registerPlannedPaths } from './planned';
 
 // `.openapi()` 를 쓰려면 zod 를 먼저 확장해야 합니다. 스키마 정의보다 앞서야 합니다.
 extendZodWithOpenApi(z);
@@ -409,6 +415,82 @@ registry.registerPath({
     },
     503: {
       description: 'CatMoney 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/tokens/catmoney/transfer',
+  tags: ['캣머니'],
+  summary: '캣머니 전송 (포카 마켓 정산)',
+  description:
+    '유저 → 유저로 캣머니를 옮깁니다. 포카 마켓에서 **구매자가 판매자에게 낼 때** 씁니다.\n\n' +
+    '**발행도 소각도 아닙니다.** `totalSupply` 는 그대로고 소유자만 바뀝니다 — ' +
+    '그래서 이 값이 여전히 미사용 캣머니 총량입니다.\n\n' +
+    '컨트랙트의 `transferWithKey` 를 부릅니다. 표준 `transfer` 를 쓰지 않는 이유는 ' +
+    '거기엔 `operationKey` 를 걸 자리가 없어서입니다 — 응답을 못 받고 재시도하면 ' +
+    '**구매자가 두 번 냅니다.**\n\n' +
+    '서버가 `derivationIndex` 로 보내는 유저의 키를 파생해 서명합니다. ' +
+    '계산한 주소가 `from` 과 다르면 `400` 입니다. `from` 과 `to` 가 같아도 `400` 입니다 — ' +
+    '컨트랙트는 통과시키지만 **키만 태우고 아무것도 옮기지 않아** 그 거래를 다시 시도할 ' +
+    '수 없게 됩니다.\n\n' +
+    '같은 `operationKey` 가 다시 오면 `200` + `ALREADY_DONE` 입니다. 재시도가 안전합니다.\n\n' +
+    '### ⚠️ 이 API 는 돈만 옮깁니다\n\n' +
+    'NFT 소유권 이전(`POST /internal/photocards/transfer`)은 **별개의 트랜잭션**이고 ' +
+    '둘은 원자적이지 않습니다. 한쪽만 성공할 수 있습니다.\n\n' +
+    '```\n' +
+    '① 캣머니 전송 (구매자 → 판매자)   ← 여기. 확정까지 기다리세요\n' +
+    '② 카드 이전   (판매자 → 구매자)\n' +
+    '   실패하면 → 캣머니를 되돌립니다 (판매자 → 구매자, 별도 operationKey 로)\n' +
+    '```\n\n' +
+    '**이 순서와 보상은 Spring 이 소유합니다.** 되돌릴 수 있는 쪽을 나중에 두는 것이 ' +
+    '이유입니다 — 카드가 먼저 넘어가면 구매자가 그 사이 되팔았을 때 방법이 없습니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: registry.register(
+            'CatMoneyTransferRequest',
+            transferBody.openapi({
+              example: {
+                operationKey: 'poca_trade_20260908_00001',
+                from: ADDRESS_EXAMPLE,
+                derivationIndex: 42,
+                to: '0x82b00adc4bb58753d25b860204f378065172a950',
+                amount: '3000',
+                tradeId: 'trade_00001',
+              },
+            }),
+          ),
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      description: '전송했습니다. 확정은 `GET /internal/tx/{txHash}`',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    200: {
+      description: '이미 처리된 `operationKey` 입니다. 새 트랜잭션을 보내지 않았습니다',
+      content: { 'application/json': { schema: writeResponse } },
+    },
+    400: {
+      description:
+        '본문 형식 오류, `to` 의 EIP-55 체크섬 불일치(`INVALID_ADDRESS`), ' +
+        '`derivationIndex` 로 만든 주소가 `from` 과 다름, 또는 `from` 과 `to` 가 같음',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    422: {
+      description: '보내는 유저의 잔액 부족 (`INSUFFICIENT_BALANCE`)',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'CatMoney 미배포, 또는 정지 스위치가 켜져 있음 (`CONTRACT_PAUSED`)',
       content: { 'application/json': { schema: errorResponse } },
     },
   },
@@ -1008,6 +1090,108 @@ registry.registerPath({
   },
 });
 
+const photocardTransferResponse = registry.register(
+  'PhotocardTransferResult',
+  z.object({
+    status: z.enum(['PENDING', 'ALREADY_DONE']).openapi({
+      description:
+        '`ALREADY_DONE` 은 **그 판매자가 그 키로 이미 옮겼다**는 뜻입니다 — 새 트랜잭션을 ' +
+        '보내지 않았습니다. 재시도가 안전한 이유입니다.',
+    }),
+    txHash: z.string().nullable().openapi({ description: '`ALREADY_DONE` 이면 null' }),
+  }),
+);
+
+type _PhotocardTransferMatches = Assert<
+  Exact<z.infer<typeof photocardTransferResponse>, PhotocardTransferResult>
+>;
+
+registry.registerPath({
+  method: 'post',
+  path: '/internal/photocards/transfer',
+  tags: ['포토카드'],
+  summary: '포토카드 소유권 이전 (마켓 정산)',
+  description:
+    '판매자 → 구매자로 카드를 옮깁니다.\n\n' +
+    '컨트랙트의 `transferWithKey` 를 부릅니다. 표준 `safeTransferFrom` 을 쓰지 않는 ' +
+    '이유는 거기엔 `operationKey` 를 걸 자리가 없어서입니다 — 응답을 못 받고 ' +
+    '재시도하면 **카드가 두 장 넘어갑니다.**\n\n' +
+    '서버가 `derivationIndex` 로 **판매자 본인의 키를 파생해 서명합니다.** ' +
+    '오퍼레이터가 남의 카드를 옮기는 함수는 컨트랙트에 두지 않았습니다 — 캣머니에 ' +
+    '`burnFrom` 을 안 둔 것과 같은 이유입니다. 계산한 주소가 `from` 과 다르면 `400`, ' +
+    '`from` 과 `to` 가 같아도 `400` 입니다.\n\n' +
+    '같은 `operationKey` 가 다시 오면 `200` + `ALREADY_DONE` 입니다.\n\n' +
+    '### 캣머니 전송과 순서가 있습니다\n\n' +
+    '**둘은 원자적이지 않습니다.** 서로 다른 컨트랙트의 서로 다른 트랜잭션입니다.\n\n' +
+    '```\n' +
+    '① 캣머니 전송 (구매자 → 판매자)   확정까지 기다림\n' +
+    '② 카드 이전   (판매자 → 구매자)   ← 여기\n' +
+    '   실패하면 → 캣머니를 되돌립니다 (판매자 → 구매자, 별도 operationKey 로)\n' +
+    '```\n\n' +
+    '반대로 하면 카드가 먼저 넘어간 뒤 결제가 실패했을 때 되돌릴 방법이 없습니다 — ' +
+    '구매자가 그 사이 다시 팔아버리면 끝입니다. **이 순서는 Spring 이 소유합니다.**\n\n' +
+    '### 이 서비스는 거래 상태를 기록하지 않습니다\n\n' +
+    '발행과 다른 지점입니다. 발행은 확정을 감시해 `nft_photocards` 를 직접 갱신하지만, ' +
+    '이전은 `202` + `txHash` 만 돌려주고 끝납니다. `nft_photocard_trades` 에 ' +
+    '`settle_tx_hash`·`transfer_tx_hash` 와 거래 상태 컬럼이 아직 없기 때문입니다 ' +
+    '— **두 다리 사이의 미확정 구간은 Spring 이 소유합니다.**\n\n' +
+    '### `amount` 는 항상 `"1"` 입니다\n\n' +
+    '컨트랙트는 ERC-1155 라 수량을 받지만 마켓 거래는 카드 한 장 단위입니다.\n\n' +
+    '### 발행 정지는 이전에 걸리지 않습니다\n\n' +
+    '유저가 자기 카드를 옮기는 것은 발행 사고와 무관합니다. `issuePaused` 가 켜져 있어도 ' +
+    '이 API 는 동작합니다.',
+  security: [{ [internalKey.name]: [] }],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: registry.register(
+            'PhotocardTransferRequest',
+            photocardTransferBody.openapi({
+              example: {
+                operationKey: 'poca_trade_20260908_00001',
+                from: ADDRESS_EXAMPLE,
+                derivationIndex: 42,
+                to: '0x82b00adc4bb58753d25b860204f378065172a950',
+                designId: DESIGN_ID_EXAMPLE,
+                amount: '1',
+                tradeId: 'trade_00001',
+              },
+            }),
+          ),
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      description: '전송했습니다. 확정은 `GET /internal/tx/{txHash}`',
+      content: { 'application/json': { schema: photocardTransferResponse } },
+    },
+    200: {
+      description: '이미 처리된 `operationKey` 입니다. 새 트랜잭션을 보내지 않았습니다',
+      content: { 'application/json': { schema: photocardTransferResponse } },
+    },
+    400: {
+      description:
+        '본문 형식 오류, `to` 의 EIP-55 체크섬 불일치(`INVALID_ADDRESS`), ' +
+        '`derivationIndex` 로 만든 주소가 `from` 과 다름, 또는 `from` 과 `to` 가 같음',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    422: {
+      description:
+        '판매자가 그 도안을 그만큼 갖고 있지 않습니다 (`INSUFFICIENT_BALANCE`). ' +
+        '등록되지 않은 도안도 보유 장수가 0 이라 여기로 옵니다',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+    503: {
+      description: 'PhotocardNFT 미배포',
+      content: { 'application/json': { schema: errorResponse } },
+    },
+  },
+});
+
 /* ── /internal/draws ───────────────────────────────────────────── */
 
 /* 커밋-리빌 + 블록해시. **체인이 만드는 것은 난수 하나뿐이고**, 배정은 그 난수로부터
@@ -1384,12 +1568,6 @@ registry.registerPath({
   },
 });
 
-/* ── 아직 구현되지 않은 것 ─────────────────────────────────────── */
-
-// Spring 팀이 붙일 자리를 미리 볼 수 있게 계약만 적어둡니다.
-// 태그와 summary 에 [미구현] 이 붙습니다 — 호출하면 404 입니다.
-registerPlannedPaths(registry, internalKey.name);
-
 /* ── 문서 조립 ─────────────────────────────────────────────────── */
 
 export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateDocument']> {
@@ -1400,9 +1578,8 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateD
       version: '0.1.0',
       description:
         'Spring 이 호출하는 내부 API 입니다. **프론트엔드가 직접 호출하지 않습니다.**\n\n' +
-        '### 태그에 `(예정)` 이 붙은 것은 아직 만들지 않았습니다\n\n' +
-        '계약을 먼저 확정해 Spring 이 병렬로 붙일 수 있게 적어둔 것입니다. ' +
-        '**지금 호출하면 404 가 납니다.** 구현되면 `(예정)` 태그에서 빠집니다.\n\n' +
+        '여기 있는 것은 전부 구현돼 있습니다. 계약만 먼저 올려두던 `(예정)` 태그는 ' +
+        '마켓 정산이 붙으면서 없어졌습니다.\n\n' +
         '### 규칙\n\n' +
         '- 쓰기는 블록 확정을 기다리지 않고 `202` + `txHash` 를 돌려줍니다. ' +
         '확정은 `GET /internal/tx/{txHash}` 로 확인합니다 (DESIGN.md 4-2)\n' +
@@ -1418,8 +1595,12 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateD
       { name: '상태', description: '인증 없이 열려 있습니다' },
       { name: '회원', description: '지갑 파생' },
       { name: '티켓', description: '양도할 수 없습니다. 취소는 소각입니다' },
-      { name: '캣머니', description: '발행·소각으로만 움직입니다 (트레저리 없음)' },
-      { name: '캣머니 (예정)', description: '아직 만들지 않았습니다 — 호출하면 404' },
+      {
+        name: '캣머니',
+        description:
+          '**발행·소각으로만 움직입니다** (트레저리 없음). 예외는 포카 마켓 정산의 ' +
+          '유저 간 전송 하나인데, 그것도 `totalSupply` 는 건드리지 않습니다',
+      },
       {
         name: '포토카드',
         description:
@@ -1432,10 +1613,6 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV3['generateD
         description:
           '커밋-리빌 + 블록해시. **체인이 만드는 것은 난수 하나뿐이고** 배정은 그 난수로부터 ' +
           '계산되는 순수 함수라 누가 계산하든 같습니다. 공개는 서버가 자동으로 합니다',
-      },
-      {
-        name: '포토카드 (예정)',
-        description: '마켓 정산만 남았습니다 — 호출하면 404',
       },
       { name: '트랜잭션', description: '모든 쓰기의 확정 확인' },
     ],

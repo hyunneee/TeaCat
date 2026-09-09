@@ -7,6 +7,7 @@ import {
   operatorSigner,
   provider,
 } from '../provider';
+import { userSigner } from '../keys/hdWallet';
 import { ensureLocalGas } from '../localGas';
 import { sendSerialized } from '../nonce';
 import { hashOf } from '../hash';
@@ -131,6 +132,16 @@ export async function isIssuePaused(): Promise<boolean> {
   return read().issuePaused();
 }
 
+/**
+ * 그 주소가 그 키로 이미 옮겼는가. 응답을 못 받았을 때의 복구 조회입니다. (4-3)
+ *
+ * 전송 기록은 **호출자별**입니다 — 전역이었다면 카드 한 장 가진 아무나 남의 거래 키를
+ * 미리 태워 그 정산을 영구히 막을 수 있습니다. (PhotocardNFT.sol `_slot`)
+ */
+export async function isTransferExecuted(account: string, operationKey: string): Promise<boolean> {
+  return read().isTransferExecuted(account, hashOf(operationKey));
+}
+
 /** 컨트랙트가 받는 한 배치의 상한. 서비스가 이 값으로 요청을 미리 막습니다. */
 export async function maxBatch(): Promise<number> {
   return Number(await read().MAX_BATCH());
@@ -186,6 +197,46 @@ export async function issueBatch(items: IssueItem[]): Promise<string> {
 
   return sendSerialized(operatorAddress, async (nonce) => {
     const tx = await asMinter().issueBatch(to, tokenIds, keys, { nonce });
+    return tx.hash;
+  });
+}
+
+/**
+ * 멱등 이동 — 마켓 정산. **판매자 본인의 파생 키로 서명합니다.**
+ *
+ * 표준 `safeTransferFrom` 을 쓰지 않는 이유는 거기엔 `operationKey` 를 걸 자리가
+ * 없어서입니다. 응답을 못 받고 재시도하면 **카드가 두 장 넘어갑니다.**
+ *
+ * 오퍼레이터가 남의 카드를 옮기는 함수는 컨트랙트에 두지 않았습니다 — 캣머니에
+ * `burnFrom` 을 안 둔 것과 같은 이유입니다. 그래서 여기는 `asMinter()` 도
+ * `asOperator()` 도 쓰지 않고 유저 키를 파생해 붙입니다.
+ *
+ * 발행 정지(`issuePaused`)는 이동에 걸리지 않습니다. 유저가 자기 카드를 옮기는 것은
+ * 발행 사고와 무관합니다. (PhotocardNFT.sol)
+ */
+export async function transferAs(
+  derivationIndex: number,
+  to: string,
+  designId: bigint,
+  amount: bigint,
+  operationKey: string,
+): Promise<string> {
+  const signer = userSigner(derivationIndex);
+  const address = await signer.getAddress();
+
+  // 로컬 체인에서만 동작합니다. SSAFY 체인은 가스가 무료라 아무것도 하지 않습니다.
+  await ensureLocalGas(address);
+
+  /* 논스는 판매자 주소로 셉니다. 오퍼레이터 큐와 섞어 세면 주소마다 다른 논스가
+     뒤엉켜 트랜잭션 하나가 통째로 사라집니다. (chain/nonce.ts) */
+  return sendSerialized(address, async (nonce) => {
+    const tx = await PhotocardNFT__factory.connect(requireAddress(), signer).transferWithKey(
+      to,
+      designId,
+      amount,
+      hashOf(operationKey),
+      { nonce },
+    );
     return tx.hash;
   });
 }

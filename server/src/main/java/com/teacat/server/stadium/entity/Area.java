@@ -19,12 +19,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 
-/**
- * 공연장 구역 (areas).
- *
- * 공연이 구역에 등급·가격을 매기고(API-268) 좌석을 만들어야 해서(API-269) 필요하다.
- * 공연장 도메인(API-3xx)이 붙으면 그쪽 정의로 합치면 된다.
- */
 @Entity
 @Table(name = "areas")
 @Getter
@@ -39,17 +33,23 @@ public class Area {
     @JoinColumn(name = "stadium_id", nullable = false)
     private Stadium stadium;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stadium_layout_id", nullable = false)
+    private StadiumLayout stadiumLayout;
+
     @Column(name = "area_code", nullable = false, length = 20)
     private String areaCode;
+
+    @Column(name = "level_code", nullable = false, length = 20)
+    private String levelCode;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "type", nullable = false, columnDefinition = "area_type")
     private AreaType type;
 
-    /** 스탠딩 구역의 수용 인원. 좌석제 구역은 seats 행 수가 기준이라 비어 있을 수 있다 */
-    @Column(name = "max_seat")
-    private Integer maxSeat;
+    @Column(name = "max_seat", nullable = false)
+    private int maxSeat;
 
     @Column(name = "area_x")
     private BigDecimal areaX;
@@ -62,6 +62,62 @@ public class Area {
 
     @Column(name = "width")
     private BigDecimal width;
+
+    private Area(Stadium stadium, StadiumLayout stadiumLayout, String levelCode,
+                 String areaCode, AreaType type, int maxSeat,
+                 BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
+        this.stadium = stadium;
+        this.stadiumLayout = stadiumLayout;
+        this.levelCode = levelCode;
+        this.areaCode = areaCode;
+        this.type = type;
+        this.maxSeat = maxSeat;
+        this.areaX = areaX;
+        this.areaY = areaY;
+        this.height = height;
+        this.width = width;
+    }
+
+    public static Area create(Stadium stadium, StadiumLayout stadiumLayout, String areaCode, AreaType type, int maxSeat,
+                              BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
+        return create(stadium, stadiumLayout, "1F", areaCode, type, maxSeat,
+                areaX, areaY, height, width);
+    }
+
+    public static Area create(Stadium stadium, StadiumLayout stadiumLayout, String levelCode,
+                              String areaCode, AreaType type, int maxSeat,
+                              BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
+        return new Area(stadium, stadiumLayout, levelCode, areaCode, type, maxSeat,
+                areaX, areaY, height, width);
+    }
+
+    public void update(String areaCode, String levelCode, AreaType type, Integer maxSeat,
+                       BigDecimal areaX, BigDecimal areaY, BigDecimal height, BigDecimal width) {
+        if (areaCode != null) {
+            this.areaCode = areaCode;
+        }
+        if (levelCode != null) {
+            this.levelCode = levelCode;
+        }
+        if (type != null) {
+            this.type = type;
+        }
+        if (maxSeat != null) {
+            this.maxSeat = maxSeat;
+        }
+        if (areaX != null) {
+            this.areaX = areaX;
+        }
+        if (areaY != null) {
+            this.areaY = areaY;
+        }
+        if (height != null) {
+            this.height = height;
+        }
+        if (width != null) {
+            this.width = width;
+        }
+    }
 
     public boolean isSeated() {
         return this.type == AreaType.SEATED;

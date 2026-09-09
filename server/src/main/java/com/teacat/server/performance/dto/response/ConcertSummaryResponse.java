@@ -25,7 +25,11 @@ public record ConcertSummaryResponse(
         PerformanceStatus status,
 
         @Schema(description = "포스터 조회 URL. 유효시간이 지나면 만료되므로 저장하지 말 것")
-        String posterUrl
+        String posterUrl,
+
+        @Schema(description = "비공개 상태인가. 클라이언트 목록에서는 항상 false 다(비공개는 목록에서 빠짐). "
+                + "등록자용 목록(/admin/concerts/mine)에서만 true 가 올 수 있다", example = "false")
+        boolean hidden
 ) {
 
     public static ConcertSummaryResponse of(PerformanceGeneral performance, String posterUrl) {
@@ -35,7 +39,8 @@ public record ConcertSummaryResponse(
                 performance.getStadium().getName(),
                 performance.getTicketingStartAt(),
                 performance.getStatus(),
-                posterUrl
+                posterUrl,
+                performance.isHidden()
         );
     }
 }

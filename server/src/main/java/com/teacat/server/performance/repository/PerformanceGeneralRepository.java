@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface PerformanceGeneralRepository extends JpaRepository<PerformanceGeneral, Long> {
 
+    @Query("SELECT p FROM PerformanceGeneral p JOIN FETCH p.stadium JOIN FETCH p.stadiumLayout WHERE p.id = :performanceId")
+    Optional<PerformanceGeneral> findByIdWithStadiumAndLayout(Long performanceId);
+
     /**
      * 공연 목록 조회 (API-201).
      *
@@ -66,6 +69,20 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
 
     /** 공개 상태인 공연이 존재하는지 (API-204, API-205) */
     boolean existsByIdAndHiddenAtIsNull(Long concertId);
+
+    /**
+     * 이 관리자가 등록한 공연 전부 — **비공개 포함**.
+     *
+     * 관리자가 비공개로 돌린 공연을 다시 찾아 공개로 되돌리려면 어딘가에는 보여야 한다.
+     * 클라이언트 목록(findPage)은 비공개를 숨기므로 여기서 따로 준다. 최근 등록순.
+     */
+    @Query("""
+            SELECT p FROM PerformanceGeneral p
+            JOIN FETCH p.stadium
+            WHERE p.createdById = :userId
+            ORDER BY p.id DESC
+            """)
+    List<PerformanceGeneral> findAllByCreatedById(@Param("userId") Long userId);
 
     /**
      * 이 공연에 예매 이력이 있는지 (API-263).

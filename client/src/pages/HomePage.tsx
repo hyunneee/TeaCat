@@ -87,14 +87,18 @@ export function HomePage() {
    */
   const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
 
-  /** 배너를 눌렀을 때 어디로 갈지는 배너 데이터가 알려줍니다 (linkType). */
+  /**
+   * 배너를 눌렀을 때 어디로 갈지.
+   *
+   * 공연 배너는 공연 ID 만 오므로 여기서 경로를 만듭니다 — 서버가 `/concerts/3` 같은
+   * 문자열을 주면 프론트에서 경로를 바꿀 때 서버까지 고쳐야 합니다. (CLAUDE.md 3-5)
+   * 나머지는 관리자가 적어 둔 서비스 내 경로로 그대로 이동합니다. 둘 다 없으면 안내용이라 가만히 둡니다.
+   */
   const openBanner = (banner: Banner) => {
-    if (banner.linkType === 'CONCERT' && banner.linkId) {
-      navigate(ROUTES.CONCERT_DETAIL(banner.linkId));
-    } else if (banner.linkType === 'NFT') {
-      navigate(ROUTES.NFT_MARKET);
-    } else if (banner.linkType === 'TOKEN') {
-      navigate(ROUTES.TOKEN);
+    if (banner.performanceId !== null) {
+      navigate(ROUTES.CONCERT_DETAIL(String(banner.performanceId)));
+    } else if (banner.linkPath) {
+      navigate(banner.linkPath);
     }
   };
 

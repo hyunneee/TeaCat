@@ -107,6 +107,37 @@ nft:
     sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
     sweep-batch-size: 100
     sweep-enabled: true
+  design:
+    # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
+    #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.
+    #   경매 마감과 달리 사용자가 기다리는 값이 아니라 넉넉히 잡는다 (SSAFY 체인은 블록이 10초).
+    confirm-interval: ${NFT_DESIGN_CONFIRM_INTERVAL:PT30S}
+    confirm-batch-size: 50
+    confirm-enabled: true
+
+ipfs:
+  # 포토카드 도안의 그림과 메타데이터 JSON 을 핀하는 곳. 도안 생성 API 에서만 쓴다.
+  #   🔴 CID 는 영원히 남지만 데이터는 누군가 핀하고 있어야 남는다. 이 계정이 만료되면
+  #      이미 발행된 카드의 그림이 지갑에서 깨진다 (blockchain/PHOTOCARD_PLAN.md 3장).
+  pinata:
+    # jwt 는 이 파일에 적지 말고 환경변수(PINATA_JWT)로만 주입한다.
+    #   비어 있으면 도안 생성만 IPFS_001 로 거절되고 나머지 기능은 그대로 동작한다.
+    jwt: ${PINATA_JWT:}
+    # Pinata 는 레거시 pinning API 와 v3 Files API 를 같이 굴리고 있다. 기본값은 v3 이고,
+    #   계정·요금제 때문에 레거시를 써야 하면 주소만 바꾸면 된다 — 응답에서 CID 를 꺼내는 쪽이
+    #   두 모양({ data.cid } / { IpfsHash })을 모두 읽는다.
+    #   레거시: https://api.pinata.cloud/pinning/pinFileToIPFS (이때 network 는 비운다)
+    upload-url: ${PINATA_UPLOAD_URL:https://uploads.pinata.cloud/v3/files}
+    # v3 Files API 의 필수 필드. public 이어야 게이트웨이로 열린다
+    network: ${PINATA_NETWORK:public}
+    # designs.image_url 에 넣을 주소를 만든다. ipfs:// 는 브라우저가 못 열기 때문이다.
+    #   체인에 올라가는 값은 어디까지나 ipfs://<cid> 라, 게이트웨이를 바꿔도 온체인 값은 그대로다.
+    gateway-url: ${PINATA_GATEWAY_URL:https://gateway.pinata.cloud}
+    connect-timeout: 3s
+    # 이미지 바이트를 통째로 올리므로 넉넉히 잡는다
+    read-timeout: 30s
+    # 도안 이미지 용량 한도. 지갑과 목록에서 함께 뜨므로 포스터급으로 잡는다
+    image-max-size: 5MB
 
 minio:
   # 코드가 붙는 포트는 9000 이다. 브라우저로 보는 관리 콘솔(9001)이 아니다.
@@ -117,6 +148,11 @@ minio:
   bucket: ${MINIO_BUCKET:teacat}
   # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
   presigned-url-validity: 10m
+  # 브라우저가 MinIO 에 닿는 주소. endpoint 가 컨테이너 내부 주소(http://minio:9000)인 배포 환경에서
+  # presigned URL 을 그대로 내려주면 브라우저가 열 수 없어 이미지가 깨진다.
+  # 비어 있으면 endpoint 그대로 쓴다 (로컬은 http://localhost:9000 이 브라우저에서도 열린다).
+  # 배포: https://dev.teacat.site/storage — nginx 가 /storage/ 를 MinIO 로 넘긴다 (docker/nginx/conf.d).
+  public-base-url: ${MINIO_PUBLIC_BASE_URL:}
 
 performance:
   image:
@@ -183,3 +219,9 @@ blockchain:
   confirm-poll:
     interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
     initial-delay: 20s
+
+banner:
+  image:
+    # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.
+    #   업로드 URL 을 내줄 때와 key 를 넘겨받을 때 똑같이 걸린다.
+    max-size: 10MB

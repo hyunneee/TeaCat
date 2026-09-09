@@ -12,8 +12,11 @@ import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.entity.Stadium;
+import com.teacat.server.stadium.entity.StadiumLayout;
 import com.teacat.server.stadium.repository.AreaRepository;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
+import com.teacat.server.stadium.repository.StadiumLayoutRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +52,9 @@ class AdminPerformanceServiceCreateTests {
     @Mock private PerformanceDetailRepository performanceDetailRepository;
     @Mock private PerformanceAreaRepository performanceAreaRepository;
     @Mock private AreaRepository areaRepository;
+    @Mock private TicketRepository ticketRepository;
     @Mock private StadiumRepository stadiumRepository;
+    @Mock private StadiumLayoutRepository stadiumLayoutRepository;
     @Mock private FileStorageService fileStorageService;
 
     private AdminPerformanceService service;
@@ -58,13 +63,16 @@ class AdminPerformanceServiceCreateTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, mock(com.teacat.server.ticket.repository.TicketRepository.class),
-                stadiumRepository, fileStorageService,
+                areaRepository, ticketRepository, stadiumRepository, stadiumLayoutRepository, fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
     }
 
     private void givenStadiumAndSave() {
-        given(stadiumRepository.findById(1L)).willReturn(Optional.of(mock(Stadium.class)));
+        Stadium stadium = mock(Stadium.class);
+        given(stadium.getId()).willReturn(1L);
+        given(stadiumRepository.findById(1L)).willReturn(Optional.of(stadium));
+        given(stadiumLayoutRepository.findDefaultByStadiumId(1L))
+                .willReturn(Optional.of(mock(StadiumLayout.class)));
         given(performanceGeneralRepository.save(any(PerformanceGeneral.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
         given(performanceDetailRepository.saveAll(anyList()))

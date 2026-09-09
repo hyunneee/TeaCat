@@ -2,6 +2,7 @@ package com.teacat.server.performance.controller;
 
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.performance.dto.response.BookingPolicyResponse;
+import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertListResponse;
 import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
@@ -76,5 +77,21 @@ public class PerformanceController {
     public ResponseEntity<BaseResponse<BookingPolicyResponse>> getBookingPolicy(
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
         return ResponseEntity.ok(BaseResponse.success(performanceService.getBookingPolicy(concertId)));
+    }
+
+    @Operation(summary = "공연 구역 등급·가격 조회",
+            description = """
+                    구역 선택 화면이 쓰는 값입니다. 구역별 등급·가격과 판매 수량을 조회합니다.
+
+                    - `grade` 와 `price` 는 **null 일 수 있습니다** — 구역만 만들고 등급·가격을
+                      아직 설정하지 않은 상태입니다. 가격이 없으면 결제 금액을 정할 수 없으므로
+                      클라이언트는 그 구역을 예매 불가로 처리해야 합니다.
+                    - 좌석 좌표까지 함께 필요하면 `GET /schedules/{scheduleId}/seats` 를 쓰세요.
+                      이 API 는 좌석 없이 구역만 보여주는 화면을 위한 가벼운 응답입니다.
+                    """)
+    @GetMapping("/{concertId}/areas")
+    public ResponseEntity<BaseResponse<List<PerformanceAreaResponse>>> getAreas(
+            @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
+        return ResponseEntity.ok(BaseResponse.success(performanceService.getAreas(concertId)));
     }
 }
