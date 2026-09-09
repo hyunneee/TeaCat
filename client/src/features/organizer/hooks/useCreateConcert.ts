@@ -14,6 +14,28 @@ import {
   type PhotocardDesignForm,
 } from '../model/organizer.types';
 
+/**
+ * 성공 뒤 어디로 보낼지.
+ *
+ * 공연 관리 입구가 둘입니다 — 앱 화면(`/concerts/...`)과 어드민 콘솔(`/admin/concerts/...`).
+ * 훅이 한쪽 경로를 박아두면 다른 쪽에서 저장한 뒤 화면이 통째로 튑니다.
+ * 넘기지 않으면 앱 화면으로 갑니다(기존 동작).
+ */
+export interface ConcertRedirect {
+  /** 등록·수정 성공 뒤 갈 곳 */
+  detail?: (concertId: string) => string;
+  /** 등록은 됐는데 구역 가격 저장이 실패했을 때 갈 곳 (거기서 다시 저장해야 합니다) */
+  edit?: (concertId: string) => string;
+  /** 삭제 성공 뒤 갈 곳 */
+  list?: string;
+}
+
+const afterWrite = (redirect: ConcertRedirect | undefined, concertId: string) =>
+  redirect?.detail?.(concertId) ?? ROUTES.CONCERT_DETAIL(concertId);
+
+const afterPartialWrite = (redirect: ConcertRedirect | undefined, concertId: string) =>
+  redirect?.edit?.(concertId) ?? ROUTES.CONCERT_EDIT(concertId);
+
 /** 공연장 목록 — 정적 데이터라 오래 캐시합니다 */
 export function useStadiums() {
   return useQuery({
@@ -49,7 +71,7 @@ export function useStadiums() {
  * 순차로 보내는 이유는 도안 하나가 Pinata 를 두 번 부르고 체인 트랜잭션까지 보내기 때문입니다 —
  * 한꺼번에 던지면 실패했을 때 <b>어디까지 올라갔는지</b> 알기 어려워집니다.
  */
-export function useCreateConcert() {
+export function useCreateConcert(redirect?: ConcertRedirect) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   /** 도안 몇 개째 올리는 중인지. 버튼 옆 진행 표시에 씁니다 */
@@ -100,7 +122,7 @@ export function useCreateConcert() {
             ? `공연은 등록됐지만 구역 가격 저장에 실패했어요: ${areaError.message}`
             : '공연은 등록됐지만 구역 가격 저장에 실패했어요. 수정 화면에서 다시 저장해 주세요.',
         );
-        navigate(ROUTES.CONCERT_EDIT(id), { replace: true });
+        navigate(afterPartialWrite(redirect, id), { replace: true });
         return;
       }
 
@@ -113,7 +135,7 @@ export function useCreateConcert() {
         toast.success('공연이 등록되었어요.');
       }
 
-      navigate(ROUTES.CONCERT_DETAIL(id), { replace: true });
+      navigate(afterWrite(redirect, id), { replace: true });
     },
     onError: (error) => {
       setDesignProgress(null);
@@ -146,7 +168,11 @@ export interface DesignProgress {
  * @param beforeNavigate 저장 뒤 상세로 이동하기 **직전**에 부릅니다. 나가기 방지(useUnsavedChangesGuard)를
  *                       풀어주는 용도입니다 — 안 풀면 저장 성공 뒤의 이동을 우리가 막아버립니다.
  */
-export function useUpdateConcert(concertId: string, beforeNavigate?: () => void) {
+export function useUpdateConcert(
+  concertId: string,
+  beforeNavigate?: () => void,
+  redirect?: ConcertRedirect,
+) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -177,7 +203,7 @@ export function useUpdateConcert(concertId: string, beforeNavigate?: () => void)
         toast.info('바뀐 내용이 없어요.');
       }
       beforeNavigate?.();
-      navigate(ROUTES.CONCERT_DETAIL(concertId), { replace: true });
+      navigate(afterWrite(redirect, concertId), { replace: true });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '공연을 수정하지 못했어요.');
@@ -189,7 +215,7 @@ export function useUpdateConcert(concertId: string, beforeNavigate?: () => void)
  * 공연 삭제 — 되돌릴 수 없습니다. 호출부는 반드시 `danger` 확인 모달을 먼저 띄웁니다.
  * 예매 이력이 있으면 서버가 거절하고(PERFORMANCE_017) 그 메시지를 그대로 보여줍니다.
  */
-export function useDeleteConcert() {
+export function useDeleteConcert(redirect?: ConcertRedirect) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -199,7 +225,7 @@ export function useDeleteConcert() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
       toast.success('공연을 삭제했어요.');
-      navigate(ROUTES.CONCERTS, { replace: true });
+      navigate(redirect?.list ?? ROUTES.CONCERTS, { replace: true });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '공연을 삭제하지 못했어요.');

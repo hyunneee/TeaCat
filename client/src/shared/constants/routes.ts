@@ -99,6 +99,10 @@ export const ROUTES = {
   ADMIN_INQUIRIES: '/admin/inquiries',
   ADMIN_BANNERS: '/admin/banners',
   ADMIN_ANALYTICS: '/admin/analytics',
+  ADMIN_CONCERTS: '/admin/concerts',
+  /** 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 (CONCERT_CREATE 와 같은 이유) */
+  ADMIN_CONCERT_CREATE: '/admin/concerts/new',
+  ADMIN_CONCERT_EDIT: (concertId: string) => `/admin/concerts/${concertId}`,
 
   /**
    * 개발용 얼굴 인식 검증 화면.
