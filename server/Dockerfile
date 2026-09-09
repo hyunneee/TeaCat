@@ -11,17 +11,12 @@ COPY gradle gradle
 RUN chmod +x gradlew
 
 # 의존성을 먼저 받아둔다. src 만 바뀌면 이 레이어는 캐시되어 빌드가 빨라진다.
-#
-# 캐시 마운트에는 Gradle 배포본(9.7.1, 약 130MB)과 받아둔 의존성이 함께 남는다.
-# build.gradle 이 바뀌어 아래 레이어가 깨져도 다시 내려받지 않는다.
 COPY build.gradle settings.gradle ./
-RUN --mount=type=cache,target=/root/.gradle,sharing=locked \
-    ./gradlew --no-daemon -q dependencies >/dev/null 2>&1 || true
+RUN ./gradlew --no-daemon -q dependencies >/dev/null 2>&1 || true
 
 COPY src src
 # 테스트는 Testcontainers 를 써서 도커가 또 필요하다. CI 에서 따로 돌린다.
-RUN --mount=type=cache,target=/root/.gradle,sharing=locked \
-    ./gradlew --no-daemon -x test bootJar
+RUN ./gradlew --no-daemon -x test bootJar
 
 # jar 를 레이어별로 분해한다. 코드만 바뀐 재배포에서 의존성 레이어를 다시 안 밀어도 된다.
 RUN JAR=$(ls build/libs/*.jar | grep -v plain | head -1) \
