@@ -105,4 +105,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".stadium")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi inquiryApi() {
+        return GroupedOpenApi.builder()
+                .group("08-inquiry")
+                .displayName("문의")
+                .packagesToScan(BASE_PACKAGE + ".inquiry")
+                .build();
+    }
 }
