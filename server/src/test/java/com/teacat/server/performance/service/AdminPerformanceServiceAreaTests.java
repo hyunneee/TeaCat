@@ -1,6 +1,8 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.performance.dto.request.PerformanceAreaSaveRequest;
 import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
@@ -45,7 +47,9 @@ import static org.mockito.Mockito.mock;
 @ExtendWith(MockitoExtension.class)
 class AdminPerformanceServiceAreaTests {
 
-    private static final Long OWNER = 6L;
+    private static final Long OWNER_ID = 6L;
+    /** 공연 주최자 — 자기가 등록한 공연만 다룰 수 있다 */
+    private static final AuthUser OWNER = new AuthUser(OWNER_ID, UserRole.PERFORMANCE);
     private static final Long CONCERT_ID = 1L;
     private static final Long AREA_ID = 10L;
     private static final Long STANDING_AREA_ID = 11L;
@@ -99,7 +103,7 @@ class AdminPerformanceServiceAreaTests {
         // 구역 목록은 공연장이 아니라 그 공연이 쓰는 배치도 기준이다
         performance = PerformanceGeneral.create(
                 stadium, layout, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
-                LocalDate.of(2026, 9, 1), null, null, OWNER);
+                LocalDate.of(2026, 9, 1), null, null, OWNER_ID);
         ReflectionTestUtils.setField(performance, "id", CONCERT_ID);
 
         performanceArea = PerformanceArea.create(performance, area, "VIP", 88_000, 100, AreaType.SEATED);

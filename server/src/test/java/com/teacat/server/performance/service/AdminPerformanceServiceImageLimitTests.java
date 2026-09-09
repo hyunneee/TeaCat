@@ -1,7 +1,9 @@
 package com.teacat.server.performance.service;
 
 import com.teacat.server.common.config.PerformanceImageProperties;
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
@@ -45,7 +47,9 @@ class AdminPerformanceServiceImageLimitTests {
 
     private static final String POSTER_KEY = "performance/poster/2026/09/a.png";
     private static final String DETAIL_KEY = "performance/detail/2026/09/b.png";
-    private static final Long OWNER = 6L;
+    private static final Long OWNER_ID = 6L;
+    /** 공연 주최자 — 자기가 등록한 공연만 다룰 수 있다 */
+    private static final AuthUser OWNER = new AuthUser(OWNER_ID, UserRole.PERFORMANCE);
 
     @Mock private PerformanceGeneralRepository performanceGeneralRepository;
     @Mock private PerformanceDetailRepository performanceDetailRepository;
@@ -68,7 +72,7 @@ class AdminPerformanceServiceImageLimitTests {
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다
         performance = PerformanceGeneral.create(
-                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null, OWNER);
+                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null, OWNER_ID);
     }
 
     private void givenPerformanceExists() {

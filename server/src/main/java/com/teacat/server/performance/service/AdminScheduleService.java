@@ -1,5 +1,6 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.performance.dto.request.ScheduleUpdateRequest;
 import com.teacat.server.performance.dto.response.SeatGenerateResponse;
@@ -34,12 +35,12 @@ public class AdminScheduleService {
 
     /** 회차 수정 (API-266) */
     @Transactional
-    public void update(Long scheduleId, ScheduleUpdateRequest request, Long userId) {
+    public void update(Long scheduleId, ScheduleUpdateRequest request, AuthUser actor) {
         if (request.isEmpty()) {
             throw new BusinessException(PerformanceErrorCode.NOTHING_TO_UPDATE);
         }
 
-        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (request.performanceDate() != null
                 && request.performanceDate().isBefore(detail.getPerformance().getTicketingStartAt())) {
@@ -57,8 +58,8 @@ public class AdminScheduleService {
      * 지운 뒤에는 남은 회차 번호를 일시 순으로 다시 매겨 1, 3 처럼 구멍이 남지 않게 한다.
      */
     @Transactional
-    public void delete(Long scheduleId, Long userId) {
-        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
+    public void delete(Long scheduleId, AuthUser actor) {
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (performanceDetailRepository.existsTicketByScheduleId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SCHEDULE_HAS_TICKETS);
@@ -83,8 +84,8 @@ public class AdminScheduleService {
      * 이 API 를 돌리지 않으면 좌석 조회(API-302)가 읽을 데이터가 없다.
      */
     @Transactional
-    public SeatGenerateResponse generateSeats(Long scheduleId, Long userId) {
-        PerformanceDetail detail = getOwnedDetail(scheduleId, userId);
+    public SeatGenerateResponse generateSeats(Long scheduleId, AuthUser actor) {
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (performanceSeatRepository.existsByIdPerformanceDetailId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SEATS_ALREADY_GENERATED);
@@ -125,12 +126,16 @@ public class AdminScheduleService {
         return SeatGenerateResponse.of(scheduleId, performanceSeats.size(), seatedAreaIds.size());
     }
 
-    /** 회차는 공연에 속한다. 그 공연을 등록한 관리자만 회차를 다룰 수 있다 (AdminPerformanceService 와 같은 규칙) */
-    private PerformanceDetail getOwnedDetail(Long scheduleId, Long userId) {
+    /**
+     * 회차는 공연에 속하므로 그 공연을 다룰 수 있는 사람만 회차를 다룰 수 있다.
+     * ADMIN 은 전체, PERFORMANCE 는 자기가 등록한 공연만
+     * (AdminPerformanceService.getManageablePerformance 와 같은 규칙).
+     */
+    private PerformanceDetail getManageableDetail(Long scheduleId, AuthUser actor) {
         PerformanceDetail detail = performanceDetailRepository.findWithPerformanceById(scheduleId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.SCHEDULE_NOT_FOUND));
 
-        if (!detail.getPerformance().isOwnedBy(userId)) {
+        if (!actor.isAdmin() && !detail.getPerformance().isOwnedBy(actor.id())) {
             throw new BusinessException(PerformanceErrorCode.NOT_OWNER);
         }
 

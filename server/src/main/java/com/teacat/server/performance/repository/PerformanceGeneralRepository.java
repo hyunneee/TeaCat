@@ -85,6 +85,19 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     List<PerformanceGeneral> findAllByCreatedById(@Param("userId") Long userId);
 
     /**
+     * 등록자를 가리지 않은 공연 전부 — **비공개 포함**. 전체 관리자(ADMIN)의 관리 목록이다.
+     *
+     * ADMIN 은 남이 등록한 공연도 수정·삭제할 수 있으므로 그 공연들이 목록에 보여야 한다.
+     * 특히 남이 비공개로 돌린 공연은 클라이언트 목록에 없어서, 여기 말고는 찾아갈 길이 없다.
+     */
+    @Query("""
+            SELECT p FROM PerformanceGeneral p
+            JOIN FETCH p.stadium
+            ORDER BY p.id DESC
+            """)
+    List<PerformanceGeneral> findAllForAdmin();
+
+    /**
      * 이 공연에 예매 이력이 있는지 (API-263).
      *
      * 티켓 도메인 엔티티가 아직 없어서 네이티브 쿼리로 확인한다.

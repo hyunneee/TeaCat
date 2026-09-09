@@ -15,7 +15,7 @@ import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
-import { ScheduleList, isConcertOwner, posterSeedOf, useConcertDetail } from '@/features/concert';
+import { ScheduleList, posterSeedOf, useConcertDetail } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -27,9 +27,10 @@ export function ConcertDetailPage() {
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
-  /** 헤더 오른쪽의 수정 버튼은 **이 공연을 등록한 사람**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020).
+  /** 헤더 오른쪽의 수정 버튼 — 주최자는 **자기가 등록한 공연**에만, 전체 관리자(ADMIN)는 모든 공연에 보입니다.
+      서버도 같은 기준으로 거절합니다(PERFORMANCE_020).
       비공개 전환·삭제는 수정 화면 안의 "공연 관리" 에 있습니다 — 상세는 관람객이 보는 화면이라 관리 버튼을 늘리지 않습니다. */
-  const canManage = can.manageConcert(user) && !!concert && isConcertOwner(concert, user?.userId);
+  const canManage = !!concert && can.manageThisConcert(user, concert);
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
@@ -107,9 +108,10 @@ export function ConcertDetailPage() {
       </Lightbox>
 
       <div className="space-y-6 p-4">
-        {/* 헤드 — 제목은 포스터 위쪽에, 장소·오픈 시각은 **포스터 아래쪽에** 맞춥니다.
+        {/* 헤드 — 제목은 포스터 위쪽에, 장소는 **포스터 아래쪽에** 맞춥니다.
             제목 바로 밑에 붙이면 한 덩어리로 뭉쳐 제목이 묻히고,
-            포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다. */}
+            포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다.
+            오픈 시각은 좁아서 잘리던 탓에 아래 한 줄로 뺐습니다. */}
         <section className="flex gap-4">
           {/* 눌러서 크게 봅니다 (포토카드와 같은 방식 — Lightbox).
               포스터는 정보가 아니라 그림이라, 작게 보고 넘어가면 다시 못 봅니다. */}
@@ -124,20 +126,29 @@ export function ConcertDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
 
-            <ul className="text-muted space-y-1 text-[0.8125rem]">
-              <li className="flex items-start gap-1.5">
-                <MapPin size={13} className="mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block truncate">{concert.stadium.name}</span>
-                  <span className="text-subtle block truncate text-xs">{concert.stadium.address}</span>
-                </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <CalendarDays size={13} className="shrink-0" />
-                <span className="truncate">티켓 오픈 {formatDateTime(concert.ticketingStartAt)}</span>
-              </li>
-            </ul>
+            <p className="text-muted flex items-start gap-1.5 text-[0.8125rem]">
+              <MapPin size={13} className="mt-0.5 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{concert.stadium.name}</span>
+                <span className="text-subtle block truncate text-xs">{concert.stadium.address}</span>
+              </span>
+            </p>
           </div>
+        </section>
+
+        {/* 티켓 오픈 시각은 **한 줄을 통째로** 씁니다.
+            포스터 옆 칸은 176px 밖에 안 돼서 날짜가 딱 맞게 들어가 있었고,
+            하루만 두 자리가 되면(12. 1. → 12. 12.) 바로 잘렸습니다.
+            이 화면에서 가장 중요한 정보라 잘려서는 안 됩니다. */}
+        <section className="surface-2 flex items-center gap-2 rounded-xl px-3.5 py-3">
+          <CalendarDays size={15} className="text-ink-muted shrink-0" />
+          <span className="text-subtle text-[0.8125rem]">티켓 오픈</span>
+          <time
+            dateTime={concert.ticketingStartAt}
+            className="ml-auto text-right text-[0.8125rem] font-bold"
+          >
+            {formatDateTime(concert.ticketingStartAt)}
+          </time>
         </section>
 
         {/* 소개 — 회차보다 **먼저** 옵니다.
