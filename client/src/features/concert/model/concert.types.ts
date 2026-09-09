@@ -91,6 +91,12 @@ export interface ConcertDetail {
    * 관람객용 상세(API-202)는 항상 빈 배열이고, 가격이 필요하면 `GET /concerts/{id}/areas` 를 쓰세요.
    */
   areas: PerformanceArea[];
+  /**
+   * 이 공연이 쓰는 무대 형식(배치). 같은 공연장도 형식마다 구역이 다르게 나뉩니다.
+   * 구역 목록은 **이 형식 기준**으로 불러와야 합니다 — 공연장 기준으로 불러오면
+   * 기본 배치의 구역이 와서 저장이 거절됩니다 (PERFORMANCE_010).
+   */
+  layout: { layoutId: number; name: string };
   /** 등록한 관리자의 userId. 서버는 이 사람에게만 수정·삭제를 허용합니다. 옛 데이터는 null */
   createdBy: number | null;
   /** 비공개 상태. 클라이언트 상세에서는 항상 false, 등록자용 상세(/admin/concerts/{id})에서만 true 가 옵니다 */

@@ -90,9 +90,10 @@ export function needsSeatWarning(row: Pick<AreaPricingRow, 'saleType' | 'seatCou
  * 충돌해 저장 자체가 막힙니다 (validateAreaRows 주석 참고). 그래서 경고만 띄웁니다.
  */
 export function exceedsVenueCapacity(
-  row: Pick<AreaPricingRow, 'enabled' | 'maxCnt' | 'maxSeat'>,
+  row: Pick<AreaPricingRow, 'enabled' | 'saleType' | 'maxCnt' | 'maxSeat'>,
 ): boolean {
-  if (!row.enabled) return false;
+  // 좌석제는 수량을 적지 않으니 넘을 일이 없습니다
+  if (!row.enabled || row.saleType !== 'STANDING') return false;
   const maxCnt = Number(row.maxCnt);
   return Number.isInteger(maxCnt) && maxCnt > row.maxSeat;
 }
@@ -168,13 +169,15 @@ export function validateAreaRows(rows: AreaPricingRow[]): (string | undefined)[]
     const price = toNonNegativeInt(row.price);
     if (price == null) return '가격을 0 이상 정수로 입력해 주세요.';
 
+    /* 좌석제는 수량을 적지 않습니다 — 배치도에 등록된 좌석 행 수가 곧 팔 수 있는 티켓 수입니다.
+       그 값을 화면에서 고치게 하면 좌석 수와 어긋나 어느 쪽이 진짜인지 알 수 없게 됩니다 */
+    if (row.saleType === 'SEATED') return undefined;
+
     const maxCnt = toNonNegativeInt(row.maxCnt);
-    if (maxCnt == null) return '받을 인원 상한을 0 이상 정수로 입력해 주세요.';
+    if (maxCnt == null) return '받을 인원을 정수로 입력해 주세요.';
     /* 스탠딩은 좌석 행이 없어 이 값이 인원을 제한하는 유일한 근거입니다.
        비워 두면 무제한이 되므로 1명 이상을 받습니다 (서버 PERFORMANCE_024 와 같은 규칙) */
-    if (row.saleType === 'STANDING' && maxCnt < 1) {
-      return '스탠딩으로 팔 구역은 받을 인원을 1명 이상으로 정해 주세요.';
-    }
+    if (maxCnt < 1) return '스탠딩으로 팔 구역은 받을 인원을 1명 이상으로 정해 주세요.';
     if (maxCnt < row.soldCnt) {
       return `전 회차 합계로 이미 ${row.soldCnt}장 팔려서 그보다 적게 줄일 수 없어요.`;
     }
@@ -200,7 +203,10 @@ export function toAreaSaveRequest(rows: AreaPricingRow[]): AreaSaveRequest | nul
       areaId: r.areaId,
       grade: r.grade.trim() || null,
       price: Number(r.price),
-      maxCnt: Number(r.maxCnt),
+      /* 좌석제는 수량을 보내지 않습니다 — 배치도의 좌석 행 수가 곧 팔 수 있는 티켓 수입니다.
+         숫자를 함께 보내면 좌석 수와 어긋날 수 있고, 회차가 여러 개면 회차 합산 판매량이
+         좌석 수를 넘어 "판매량보다 적게 못 줄임"(409)에 걸려 저장 자체가 막힙니다 */
+      maxCnt: r.saleType === 'STANDING' ? Number(r.maxCnt) : null,
       saleType: r.saleType,
     }));
   return areas.length === 0 ? null : { areas };
@@ -211,7 +217,8 @@ export interface AreaSaveRequest {
     areaId: number;
     grade: string | null;
     price: number;
-    maxCnt: number;
+    /** 스탠딩은 받을 인원 상한(필수), 좌석제는 null — 좌석 행 수가 곧 상한입니다 */
+    maxCnt: number | null;
     /** 생략하면 서버가 저장된 방식을 그대로 둡니다. 화면은 항상 채워 보냅니다 */
     saleType: AreaType;
   }[];

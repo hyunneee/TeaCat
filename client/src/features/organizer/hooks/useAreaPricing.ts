@@ -12,29 +12,52 @@ import {
   type AreaSaveRequest,
 } from '../model/areaPricing';
 
-/** 공연장 구역 목록 — 배치도는 자주 바뀌지 않아 오래 캐시합니다. 공연장을 고르기 전에는 부르지 않습니다 */
-export function useStadiumAreas(stadiumId: string) {
-  return useQuery({
-    queryKey: organizerKeys.stadiumAreas(stadiumId),
-    queryFn: () => organizerApi.listStadiumAreas(stadiumId),
+/**
+ * 공연장의 무대 형식 목록 — U형·O형처럼 무대를 바꾼 형식들입니다.
+ * 공연에 쓸 수 있는 것은 `ACTIVE` 뿐입니다 (서버도 같은 규칙: PERFORMANCE_LAYOUT_005).
+ */
+export function useStadiumLayouts(stadiumId: string) {
+  const query = useQuery({
+    queryKey: organizerKeys.stadiumLayouts(stadiumId),
+    queryFn: () => organizerApi.listStadiumLayouts(stadiumId),
     staleTime: STALE_TIME.LONG,
     enabled: !!stadiumId,
+  });
+
+  const usable = useMemo(
+    () => (query.data ?? []).filter((layout) => layout.status === 'ACTIVE'),
+    [query.data],
+  );
+
+  return { ...query, usable };
+}
+
+/**
+ * 무대 형식별 구역 목록 — 형식마다 구역이 다르게 나뉩니다.
+ * 배치는 자주 바뀌지 않아 오래 캐시합니다. 형식을 고르기 전에는 부르지 않습니다.
+ */
+export function useLayoutAreas(layoutId: string) {
+  return useQuery({
+    queryKey: organizerKeys.layoutAreas(layoutId),
+    queryFn: () => organizerApi.listLayoutAreas(layoutId),
+    staleTime: STALE_TIME.LONG,
+    enabled: !!layoutId,
   });
 }
 
 /**
  * 구역별 등급·가격 편집 줄.
  *
- * 공연장이 바뀌면 그 공연장의 구역으로 줄을 다시 만듭니다 (앞 공연장에서 적은 값은 버립니다 —
+ * 무대 형식이 바뀌면 그 형식의 구역으로 줄을 다시 만듭니다 (앞 형식에서 적은 값은 버립니다 —
  * 구역 자체가 다르니 남겨둘 수 없습니다). 이미 저장된 설정(`existing`)이 있으면 그 값으로 채웁니다.
  */
-export function useAreaPricingRows(stadiumId: string, existing: PerformanceArea[] = []) {
-  const { data: stadiumAreas, isPending, isError } = useStadiumAreas(stadiumId);
+export function useAreaPricingRows(layoutId: string, existing: PerformanceArea[] = []) {
+  const { data: stadiumAreas, isPending, isError } = useLayoutAreas(layoutId);
   const [rows, setRows] = useState<AreaPricingRow[]>([]);
 
   useEffect(() => {
     setRows(stadiumAreas ? buildAreaRows(stadiumAreas, existing) : []);
-    // existing 은 공연 상세에서 오는 배열이라 렌더마다 같은 참조입니다. 공연장·구역 목록이 바뀔 때만 다시 만듭니다.
+    // existing 은 공연 상세에서 오는 배열이라 렌더마다 같은 참조입니다. 형식·구역 목록이 바뀔 때만 다시 만듭니다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stadiumAreas]);
 
@@ -50,8 +73,8 @@ export function useAreaPricingRows(stadiumId: string, existing: PerformanceArea[
     errors,
     valid,
     hasAny: hasEnabledArea(rows),
-    /* 공연장을 아직 안 골랐으면 "로딩" 이 아니라 "대기" 입니다 */
-    loading: !!stadiumId && isPending,
+    /* 무대 형식을 아직 안 골랐으면 "로딩" 이 아니라 "대기" 입니다 */
+    loading: !!layoutId && isPending,
     error: isError,
   };
 }

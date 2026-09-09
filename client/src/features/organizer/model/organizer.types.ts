@@ -15,6 +15,23 @@ export interface StadiumSummary {
   phone: string | null;
 }
 
+/**
+ * 공연장의 무대 형식(배치).
+ *
+ * 한 공연장이 무대를 U형·O형처럼 바꿀 수 있고, 형식마다 구역이 다르게 나뉩니다.
+ * 형식과 그 구역·좌석은 공연장 관리에서 미리 저장해 두고, 공연은 그중 하나를 골라 씁니다.
+ */
+export interface StadiumLayoutSummary {
+  layoutId: number;
+  name: string;
+  /** 공연장이 이 형식을 기본으로 씁니다. 형식을 안 고르면 서버가 이걸 씁니다 */
+  isDefault: boolean;
+  /** `ACTIVE` 만 공연에 쓸 수 있습니다. `DRAFT`·`ARCHIVED` 는 서버가 거절합니다 (PERFORMANCE_LAYOUT_005) */
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  areaCount: number;
+  seatCount: number;
+}
+
 /** 공연 등록 응답 (API-261) */
 export interface ConcertCreateResponse {
   concertId: number;
@@ -62,6 +79,12 @@ export interface ConcertCreateForm {
   title: string;
   /** `<select>` 값. 비어 있으면 미선택 */
   stadiumId: string;
+  /**
+   * 무대 형식(배치) `<select>` 값. 공연장을 고르면 그 공연장의 형식 목록에서 고릅니다.
+   * 이 형식의 구역만 이 공연에서 팔 수 있습니다. 등록에서만 씁니다 —
+   * 수정에서 형식을 바꾸면 저장해 둔 구역 설정과 생성한 좌석이 전부 어긋납니다.
+   */
+  stadiumLayoutId: string;
   /** `datetime-local` 값 — `2026-10-01T20:00` */
   ticketingStartAt: string;
   /** `date` 값 — `2026-09-20` */
@@ -84,6 +107,7 @@ export type ConcertCreateErrors = Partial<Record<keyof ConcertCreateForm, string
 export const EMPTY_CONCERT_CREATE: ConcertCreateForm = {
   title: '',
   stadiumId: '',
+  stadiumLayoutId: '',
   ticketingStartAt: '',
   visibleFrom: '',
   poster: null,
@@ -149,6 +173,11 @@ export function validateConcertCreate(
 
   if (!form.stadiumId) errors.stadiumId = '공연장을 선택해 주세요.';
 
+  /* 형식은 등록에서만 고릅니다. 공연장을 골랐으면 형식도 골라야 구역이 정해집니다 */
+  if (mode === 'create' && form.stadiumId && !form.stadiumLayoutId) {
+    errors.stadiumLayoutId = '무대 형식을 선택해 주세요.';
+  }
+
   if (!form.ticketingStartAt) errors.ticketingStartAt = '티켓팅 오픈 시각을 입력해 주세요.';
 
   if (!form.visibleFrom) {
@@ -204,6 +233,8 @@ export function toConcertCreateFormData(form: ConcertCreateForm): FormData {
   const body = new FormData();
   body.append('title', form.title.trim());
   body.append('stadiumId', form.stadiumId);
+  /* 비우면 서버가 공연장의 기본 배치를 씁니다. 빈 문자열을 보내면 Long 변환이 실패해 400 이라 아예 뺍니다 */
+  if (form.stadiumLayoutId) body.append('stadiumLayoutId', form.stadiumLayoutId);
   body.append('ticketingStartAt', toServerDateTime(form.ticketingStartAt));
   body.append('visibleFrom', form.visibleFrom);
   if (form.poster) body.append('poster', form.poster);
@@ -220,6 +251,8 @@ export function concertToForm(concert: ConcertDetail): ConcertCreateForm {
   return {
     title: concert.title,
     stadiumId: String(concert.stadium.stadiumId),
+    /* 수정 폼은 형식을 바꾸지 않지만, 구역 목록을 이 형식 기준으로 불러와야 합니다 */
+    stadiumLayoutId: String(concert.layout.layoutId),
     ticketingStartAt: toDateTimeLocal(concert.ticketingStartAt),
     visibleFrom: concert.visibleFrom,
     poster: null,

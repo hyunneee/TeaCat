@@ -17,6 +17,24 @@ const SALE_TYPES = [
   { value: 'STANDING', label: '스탠딩', Icon: Users },
 ] as const satisfies readonly { value: AreaType; label: string; Icon: typeof Armchair }[];
 
+/**
+ * 파는 방식 줄의 설명. 방식을 바꿀 수 없는 줄이면 **그 이유**를 먼저 말합니다.
+ *
+ * 예전에는 버튼의 `title` 만 있었는데, 마우스를 올려야 보여서 폰에서는 왜 눌리지 않는지
+ * 알 방법이 없었습니다 — "스탠딩으로 두면 좌석으로 되돌릴 수 없다" 로 읽히던 문제입니다.
+ */
+function saleTypeHint(row: AreaPricingRow): string {
+  if (row.soldCnt > 0) {
+    return `이미 ${row.soldCnt}장 팔려서 파는 방식을 바꿀 수 없어요`;
+  }
+  if (!canSellSeated(row)) {
+    return '공연장이 스탠딩으로 등록한 구역이라 좌석 지정으로는 팔 수 없어요';
+  }
+  return row.saleType === 'SEATED'
+    ? `등록된 좌석 ${capacityOf(row)}석만큼 팝니다`
+    : '좌석 없이 받을 인원만 정해서 팝니다';
+}
+
 interface Props {
   rows: AreaPricingRow[];
   /** 줄마다의 에러. 인덱스는 rows 와 같습니다 */
@@ -138,11 +156,10 @@ export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: 
                     );
                   })}
                 </div>
+                {/* 방식을 못 바꾸는 줄에서는 그 이유를 글로 보여줍니다.
+                    버튼의 title 은 마우스를 올려야 보여서 폰에서는 아예 읽을 수 없습니다 */}
                 <span className={cn('text-xs', warning ? 'text-warning' : 'text-subtle')}>
-                  {warning ??
-                    (row.saleType === 'SEATED'
-                      ? `좌석 ${capacityOf(row)}석을 그대로 팝니다`
-                      : '좌석 없이 받을 인원만 정해서 팝니다')}
+                  {warning ?? saleTypeHint(row)}
                 </span>
               </div>
             )}
@@ -165,14 +182,25 @@ export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: 
                   disabled={disabled}
                   onChange={(e) => onChange(index, { price: e.target.value.replace(/[^\d]/g, '') })}
                 />
-                <Input
-                  aria-label={`${row.label} ${row.saleType === 'STANDING' ? '받을 인원' : '최대 판매수량'}`}
-                  placeholder={row.saleType === 'STANDING' ? '받을 인원(명)' : '최대 수량'}
-                  inputMode="numeric"
-                  value={row.maxCnt}
-                  disabled={disabled}
-                  onChange={(e) => onChange(index, { maxCnt: e.target.value.replace(/[^\d]/g, '') })}
-                />
+                {/* 좌석제는 배치도에 등록된 좌석 수가 곧 팔 수 있는 티켓 수라 적을 것이 없습니다.
+                    스탠딩만 받을 인원을 직접 정합니다 — 좌석 행이 없어 이 값이 유일한 상한입니다 */}
+                {row.saleType === 'STANDING' ? (
+                  <Input
+                    aria-label={`${row.label} 받을 인원`}
+                    placeholder="받을 인원(명)"
+                    inputMode="numeric"
+                    value={row.maxCnt}
+                    disabled={disabled}
+                    onChange={(e) => onChange(index, { maxCnt: e.target.value.replace(/[^\d]/g, '') })}
+                  />
+                ) : (
+                  <p
+                    aria-label={`${row.label} 판매 가능 좌석`}
+                    className="surface-sunken border-line text-subtle flex h-11 items-center justify-center rounded-xl border text-xs"
+                  >
+                    좌석 {row.seatCount}석
+                  </p>
+                )}
               </div>
             )}
 

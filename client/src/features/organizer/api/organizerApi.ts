@@ -11,6 +11,7 @@ import {
   type ImageType,
   type PresignedUpload,
   type ScheduleCreateResponse,
+  type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
 
@@ -50,9 +51,23 @@ export const organizerApi = {
   /** 내가 등록한 공연 상세 — 비공개여도 옵니다. 수정 화면이 씁니다 */
   myConcert: (concertId: string) => http.get<ConcertDetail>(`/admin/concerts/${concertId}`),
 
-  /** 공연장 구역 목록 (API-253). 구역별 등급·가격을 정할 때 줄을 만드는 바탕입니다 */
-  listStadiumAreas: async (stadiumId: string) => {
-    const response = await http.get<StadiumAreaListResponse>(`/stadiums/${stadiumId}/areas`);
+  /** 공연장의 무대 형식(배치) 목록. 공연을 등록할 때 어느 형식으로 팔지 고릅니다 */
+  listStadiumLayouts: async (stadiumId: string) => {
+    const response = await http.get<{ stadiumId: number; layouts: StadiumLayoutSummary[] }>(
+      `/stadiums/${stadiumId}/layouts`,
+    );
+    return response.layouts;
+  },
+
+  /**
+   * 무대 형식별 구역 목록. 구역별 등급·가격을 정할 때 줄을 만드는 바탕입니다.
+   *
+   * ⚠️ 공연장 기준(`/stadiums/{id}/areas`)이 아니라 **형식 기준**으로 부릅니다.
+   * 공연장 기준은 기본 배치의 구역만 주므로, 기본이 아닌 형식으로 등록한 공연에서는
+   * 다른 형식의 구역이 떠서 저장이 거절됩니다 (PERFORMANCE_010).
+   */
+  listLayoutAreas: async (layoutId: string) => {
+    const response = await http.get<StadiumAreaListResponse>(`/stadium-layouts/${layoutId}/areas`);
     return response.areas;
   },
 
@@ -99,5 +114,8 @@ export const organizerKeys = {
   stadiums: () => [...organizerKeys.all, 'stadiums'] as const,
   myConcerts: () => [...organizerKeys.all, 'myConcerts'] as const,
   myConcert: (concertId: string) => [...organizerKeys.all, 'myConcert', concertId] as const,
-  stadiumAreas: (stadiumId: string) => [...organizerKeys.all, 'stadiumAreas', stadiumId] as const,
+  stadiumLayouts: (stadiumId: string) => [...organizerKeys.all, 'stadiumLayouts', stadiumId] as const,
+  /* 구역은 공연장이 아니라 **무대 형식**에 딸려 있습니다. 형식마다 구역이 다르게 나뉘어서,
+     공연장 id 로 캐시하면 형식을 바꿔도 앞 형식의 구역이 그대로 남습니다 */
+  layoutAreas: (layoutId: string) => [...organizerKeys.all, 'layoutAreas', layoutId] as const,
 };

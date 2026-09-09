@@ -12,7 +12,12 @@ export {
 } from './hooks/useCreateConcert';
 export { useAddSchedule, useDeleteSchedule } from './hooks/useManageSchedules';
 export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
-export { useStadiumAreas, useAreaPricingRows, useSaveAreas } from './hooks/useAreaPricing';
+export {
+  useStadiumLayouts,
+  useLayoutAreas,
+  useAreaPricingRows,
+  useSaveAreas,
+} from './hooks/useAreaPricing';
 export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 // View

@@ -147,7 +147,10 @@ function Schedules({ concert }: { concert: ConcertDetail }) {
  */
 function AreaPricing({ concert }: { concert: ConcertDetail }) {
   const { open } = useModal();
-  const pricing = useAreaPricingRows(String(concert.stadium.stadiumId), concert.areas);
+  /* 구역은 공연장이 아니라 이 공연이 쓰는 **무대 형식**에 딸려 있습니다.
+     공연장 기준으로 불러오면 기본 배치의 구역이 와서, 다른 형식으로 등록한 공연은
+     저장할 때마다 거절됩니다 (PERFORMANCE_010). */
+  const pricing = useAreaPricingRows(String(concert.layout.layoutId), concert.areas);
   const save = useSaveAreas(String(concert.concertId));
 
   const body = toAreaSaveRequest(pricing.rows);
