@@ -1,0 +1,45 @@
+# 로컬 확인용 스크레이프 설정. 운영용은 prometheus.yml 이다.
+#
+# 다른 점은 **타겟 주소뿐**이다. 운영에서는 앱이 컨테이너라 컨테이너 이름으로 찾지만,
+# 로컬에서는 보통 ./gradlew bootRun / npx tsx 로 **호스트에서** 직접 띄우기 때문에
+# 컨테이너 안의 Prometheus 가 호스트로 되짚어 나가야 한다 — 그 주소가
+# host.docker.internal 이다 (Docker Desktop 이 제공한다).
+#
+# 🔴 호스트 앱이 127.0.0.1 에만 바인딩되어 있으면 이 주소로 닿지 않는다.
+#    Spring 은 기본이 0.0.0.0 이라 그냥 되고, 블록체인 서비스는 HOST=0.0.0.0 이 필요하다.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: local
+
+# 운영과 같은 규칙을 읽는다. 로컬에서는 알림을 보낼 곳이 없어 그냥 UI 에만 뜨는데,
+# 규칙이 문법적으로 맞는지와 어떤 조건에서 켜지는지를 눈으로 보기에는 오히려 편하다.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: 'spring-server'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+        labels:
+          service: server
+
+  - job_name: 'blockchain-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:4000']
+        labels:
+          service: blockchain
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: postgres
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
