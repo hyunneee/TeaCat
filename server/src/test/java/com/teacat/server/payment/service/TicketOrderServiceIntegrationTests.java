@@ -10,6 +10,7 @@ import com.teacat.server.ticket.client.TicketIssueResult;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.client.TossPaymentsClient;
 import com.teacat.server.payment.dto.request.TicketOrderConfirmRequest;
+import com.teacat.server.payment.service.TicketCancelService;
 import com.teacat.server.payment.dto.response.TicketOrderResponse;
 import com.teacat.server.wallet.client.CatMoneyBalanceResult;
 import com.teacat.server.wallet.client.CatMoneyWriteResult;
@@ -86,6 +87,15 @@ class TicketOrderServiceIntegrationTests {
     private TicketOrderService ticketOrderService;
 
     @Autowired
+    private TicketCancelService ticketCancelService;
+
+    @Autowired
+    private com.teacat.server.ticket.service.TicketQueryService ticketQueryService;
+
+    @Autowired
+    private com.teacat.server.payment.service.TicketCancelRecorder ticketCancelRecorder;
+
+    @Autowired
     private com.teacat.server.ticket.service.TicketIssueService ticketIssueService;
 
     @Autowired
@@ -99,7 +109,7 @@ class TicketOrderServiceIntegrationTests {
     void setUp() {
         jdbcTemplate.execute("""
                 TRUNCATE TABLE users, faces, stadiums, performance_general, wallet_owners, wallets,
-                               cat_money_holds, cat_transactions, payments, ticket_orders, tickets, nft_tickets
+                               cat_money_holds, cat_transactions, payments, payment_cancels, ticket_orders, tickets, nft_tickets
                 RESTART IDENTITY CASCADE""");
         userId = insertUserWithFaceAndWallet();
         Fixture fixture = insertPerformanceFixture();
@@ -374,12 +384,214 @@ class TicketOrderServiceIntegrationTests {
                 .isEqualTo(PaymentErrorCode.PAYMENT_OWNER_MISMATCH);
     }
 
+    @Test
+    void 취소하면_예매가_무효화되고_좌석이_풀린다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        // 무효화가 환불보다 먼저다. 응답 시점에 좌석은 이미 남이 살 수 있어야 한다
+        assertThat(ticketStatus(paid.ticketId())).isEqualTo("CANCELLED");
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(seatStatus()).isEqualTo("AVAILABLE");
+    }
+
+    @Test
+    void 취소하면_카드가_취소되고_캣머니가_환급된다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        assertThat(paymentStatusOf(paid.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(canceledAmountOf(paid.ticketOrderId())).isEqualTo(PRICE - 11_401);
+        assertThat(countPaymentCancels()).isEqualTo(1L);
+        // 환급은 소각이 아니라 발행이다 — 캣머니는 트레저리를 두지 않는다
+        assertThat(countCatTransactions("MINT", "REFUND")).isEqualTo(1L);
+    }
+
+    @Test
+    void 취소하면_NFT_가_소각됨으로_표시된다() {
+        TicketOrderResponse paid = payTicket();
+        // 발행이 확정된 상태여야 태울 수 있다. 실제로는 블록체인 서비스가 상태와 tokenId 를
+        // 함께 쓰므로, tokenId 없이 MINTED 만 있는 행은 생기지 않는다
+        jdbcTemplate.update("UPDATE nft_tickets SET status = 'MINTED'::nft_mint_status,"
+                + " token_id = 12, mint_tx_hash = '0x11'");
+        givenTossCancels();
+        givenRefundAccepted();
+        willReturn(new TicketIssueResult("PENDING", "0x55", "12"))
+                .given(blockchainTicketClient).burn(anyString());
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        // MINTED 로 남으면 응답만 보고는 소각 여부를 알 수 없다
+        assertThat(nftStatus()).isEqualTo("BURNED");
+        assertThat(ticketQueryService.getMyTicket(userId, paid.ticketId()).nftStatus())
+                .isEqualTo("BURNED");
+    }
+
+    @Test
+    void 같은_예매를_두_번_취소할_수_없다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        assertThatThrownBy(() -> ticketCancelService.cancel(userId, paid.ticketOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PaymentErrorCode.ALREADY_CANCELED);
+
+        // 두 번 환불되면 안 된다
+        assertThat(countPaymentCancels()).isEqualTo(1L);
+        assertThat(countCatTransactions("MINT", "REFUND")).isEqualTo(1L);
+    }
+
+    @Test
+    void 카드_취소가_실패해도_예매는_취소되고_재시도_대상으로_남는다() {
+        TicketOrderResponse paid = payTicket();
+        givenRefundAccepted();
+        willThrow(new TossPaymentException("ALREADY_CANCELED_PAYMENT", "취소 실패"))
+                .given(tossPaymentsClient).cancel(anyString(), anyString(), any(), anyString());
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        // 사용자에게 "취소 실패" 를 보여주면 다시 누른다. 취소는 성공이어야 한다
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(seatStatus()).isEqualTo("AVAILABLE");
+        assertThat(countPaymentCancels()).isZero();
+        // 돌려줘야 할 돈이 남았다는 사실이 조회로 잡혀야 한다
+        assertThat(ticketCancelRecorder.findUnrefundedCards(org.springframework.data.domain.Limit.of(10)))
+                .contains(paid.ticketOrderId());
+
+        givenTossCancels();
+        ticketCancelService.cancelCard(paid.ticketOrderId());
+        assertThat(countPaymentCancels()).isEqualTo(1L);
+    }
+
+    @Test
+    void 캣머니_환급이_실패해도_예매는_취소되고_재시도_대상으로_남는다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        willThrow(new IllegalStateException("체인 연결 실패"))
+                .given(catMoneyClient).mint(anyString(), anyString(), any(), any());
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(countCatTransactions("MINT", "REFUND")).isZero();
+        assertThat(ticketCancelRecorder.findUnrefundedTokens(org.springframework.data.domain.Limit.of(10)))
+                .contains(paid.ticketOrderId());
+
+        givenRefundAccepted();
+        ticketCancelService.refundToken(paid.ticketOrderId());
+        assertThat(countCatTransactions("MINT", "REFUND")).isEqualTo(1L);
+    }
+
+    @Test
+    void 공연이_시작된_뒤에는_취소할_수_없다() {
+        TicketOrderResponse paid = payTicket();
+        jdbcTemplate.update("UPDATE performance_details SET performance_date = now() - interval '1 minute'"
+                + " WHERE id = ?", detailId);
+
+        assertThatThrownBy(() -> ticketCancelService.cancel(userId, paid.ticketOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PaymentErrorCode.CANCEL_DEADLINE_PASSED);
+
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("PAID");
+        assertThat(seatStatus()).isEqualTo("SOLD");
+    }
+
+    @Test
+    void 남의_예매는_취소할_수_없다() {
+        TicketOrderResponse paid = payTicket();
+        Long otherUserId = insertOtherUser();
+
+        assertThatThrownBy(() -> ticketCancelService.cancel(otherUserId, paid.ticketOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PaymentErrorCode.PAYMENT_OWNER_MISMATCH);
+
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("PAID");
+    }
+
+    @Test
+    void 취소된_좌석을_다시_살_수_있다() {
+        TicketOrderResponse first = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        ticketCancelService.cancel(userId, first.ticketOrderId());
+
+        // 좌석이 풀렸으니 같은 좌석을 다시 살 수 있어야 한다.
+        // (회차, 좌석)에 통째로 걸린 유니크 제약이 있으면 여기서 발권이 깨진다 —
+        // 결제는 끝났는데 티켓이 없는 상태가 된다
+        holdSeat(userId, detailId, seatId);
+        givenChainBalance(0);
+        var order = ticketOrderService.open(userId, detailId, seatId);
+        givenTossApproves(order.orderId(), order.cashAmount());
+        givenIssueAccepted();
+
+        TicketOrderResponse second = ticketOrderService.confirm(userId, confirmRequest(order));
+
+        assertThat(second.ticketId()).isNotEqualTo(first.ticketId());
+        assertThat(seatStatus()).isEqualTo("SOLD");
+        // 취소된 티켓은 이력으로 남는다
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM tickets", Long.class)).isEqualTo(2L);
+    }
+
+    @Test
+    void 승인은_됐는데_처리가_실패한_결제를_다시_승인해서_되살릴_수_있다() {
+        givenChainBalance(0);
+        var order = ticketOrderService.open(userId, detailId, seatId);
+        givenTossApproves(order.orderId(), order.cashAmount());
+        givenIssueAccepted();
+
+        // 토스 승인은 나갔는데 그 뒤 처리가 실패해 IN_PROGRESS 로 굳은 상태를 만든다.
+        // (실제로 발권이 유니크 제약에 걸려 이렇게 남는 것을 실결제에서 겪었다)
+        jdbcTemplate.update("UPDATE payments SET status = 'IN_PROGRESS'::payment_status"
+                + " WHERE order_id = ?", order.orderId());
+
+        // 다시 선점할 수 없으면 "돈은 빠졌는데 티켓이 없는" 상태가 영구히 굳는다.
+        // 재승인이 안전한 이유는 주문번호를 멱등 키로 보내 토스가 두 번 승인하지 않기 때문이다
+        TicketOrderResponse recovered = ticketOrderService.confirm(userId, confirmRequest(order));
+
+        assertThat(recovered.ticketId()).isNotNull();
+        assertThat(paymentStatus(order.orderId())).isEqualTo("DONE");
+        assertThat(seatStatus()).isEqualTo("SOLD");
+    }
+
     // ── 대역 ────────────────────────────────────────────────
 
     private void givenTossApproves(String orderId, int amount) {
         willReturn(new TossPaymentResult("pk-" + orderId, orderId, "DONE", amount, "카드",
                 OffsetDateTime.now(), new TossPaymentResult.Receipt("https://receipt.example/1")))
                 .given(tossPaymentsClient).confirm(anyString(), anyString(), anyInt(), anyString());
+    }
+
+    private void givenTossCancels() {
+        willReturn(new TossPaymentResult("pk-canceled", "order", "CANCELED", PRICE - 11_401, "카드",
+                OffsetDateTime.now(), null))
+                .given(tossPaymentsClient).cancel(anyString(), anyString(), any(), anyString());
+    }
+
+    private void givenRefundAccepted() {
+        willReturn(new CatMoneyWriteResult("PENDING",
+                "0x4444444444444444444444444444444444444444444444444444444444444444"))
+                .given(catMoneyClient).mint(anyString(), anyString(), any(), any());
+    }
+
+    /** 카드+캣머니로 결제를 끝낸 티켓 하나 */
+    private TicketOrderResponse payTicket() {
+        givenChainBalance(11_401);
+        var order = ticketOrderService.open(userId, detailId, seatId);
+        givenTossApproves(order.orderId(), order.cashAmount());
+        givenBurnAccepted();
+        givenIssueAccepted();
+        return ticketOrderService.confirm(userId, confirmRequest(order));
     }
 
     private void givenIssueAccepted() {
@@ -490,6 +702,36 @@ class TicketOrderServiceIntegrationTests {
                 VALUES ('other@test.com', 'x', '남', '남', '010-1111-1111', 'USER'::user_role, ?)
                 RETURNING id
                 """, Long.class, faceId);
+    }
+
+    private String ticketStatus(Long ticketId) {
+        return jdbcTemplate.queryForObject("SELECT status::text FROM tickets WHERE id = ?",
+                String.class, ticketId);
+    }
+
+    private String paymentStatusOf(Long ticketOrderId) {
+        return jdbcTemplate.queryForObject("SELECT p.status::text FROM payments p"
+                + " JOIN ticket_orders o ON o.payment_id = p.id WHERE o.id = ?",
+                String.class, ticketOrderId);
+    }
+
+    private Integer canceledAmountOf(Long ticketOrderId) {
+        return jdbcTemplate.queryForObject("SELECT p.canceled_amount FROM payments p"
+                + " JOIN ticket_orders o ON o.payment_id = p.id WHERE o.id = ?",
+                Integer.class, ticketOrderId);
+    }
+
+    private Long countPaymentCancels() {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM payment_cancels", Long.class);
+    }
+
+    private String nftStatus() {
+        return jdbcTemplate.queryForObject("SELECT status::text FROM nft_tickets", String.class);
+    }
+
+    private String paymentStatus(String orderId) {
+        return jdbcTemplate.queryForObject("SELECT status::text FROM payments WHERE order_id = ?",
+                String.class, orderId);
     }
 
     private String seatStatus() {
