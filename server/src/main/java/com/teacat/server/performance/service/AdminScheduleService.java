@@ -40,7 +40,7 @@ public class AdminScheduleService {
             throw new BusinessException(PerformanceErrorCode.NOTHING_TO_UPDATE);
         }
 
-        PerformanceDetail detail = getOwnedDetail(scheduleId, actor);
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (request.performanceDate() != null
                 && request.performanceDate().isBefore(detail.getPerformance().getTicketingStartAt())) {
@@ -59,7 +59,7 @@ public class AdminScheduleService {
      */
     @Transactional
     public void delete(Long scheduleId, AuthUser actor) {
-        PerformanceDetail detail = getOwnedDetail(scheduleId, actor);
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (performanceDetailRepository.existsTicketByScheduleId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SCHEDULE_HAS_TICKETS);
@@ -85,7 +85,7 @@ public class AdminScheduleService {
      */
     @Transactional
     public SeatGenerateResponse generateSeats(Long scheduleId, AuthUser actor) {
-        PerformanceDetail detail = getOwnedDetail(scheduleId, actor);
+        PerformanceDetail detail = getManageableDetail(scheduleId, actor);
 
         if (performanceSeatRepository.existsByIdPerformanceDetailId(scheduleId)) {
             throw new BusinessException(PerformanceErrorCode.SEATS_ALREADY_GENERATED);
@@ -98,10 +98,11 @@ public class AdminScheduleService {
             throw new BusinessException(PerformanceErrorCode.AREA_NOT_CONFIGURED);
         }
 
+        // 공연장 구역의 형태가 아니라 **이 공연에서 파는 방식**을 본다.
+        // 좌석제 구역을 스탠딩으로 팔기로 했으면 좌석을 만들지 않는다 (수량은 max_cnt 로 관리)
         List<Long> seatedAreaIds = configuredAreas.stream()
-                .map(PerformanceArea::getArea)
-                .filter(Area::isSeated)
-                .map(Area::getId)
+                .filter(PerformanceArea::isSoldAsSeated)
+                .map(pa -> pa.getArea().getId())
                 .toList();
 
         if (seatedAreaIds.isEmpty()) {
@@ -125,8 +126,12 @@ public class AdminScheduleService {
         return SeatGenerateResponse.of(scheduleId, performanceSeats.size(), seatedAreaIds.size());
     }
 
-    /** 회차는 공연에 속한다. 그 공연을 등록한 관리자(또는 ADMIN)만 회차를 다룰 수 있다 (AdminPerformanceService 와 같은 규칙) */
-    private PerformanceDetail getOwnedDetail(Long scheduleId, AuthUser actor) {
+    /**
+     * 회차는 공연에 속하므로 그 공연을 다룰 수 있는 사람만 회차를 다룰 수 있다.
+     * ADMIN 은 전체, PERFORMANCE 는 자기가 등록한 공연만
+     * (AdminPerformanceService.getManageablePerformance 와 같은 규칙).
+     */
+    private PerformanceDetail getManageableDetail(Long scheduleId, AuthUser actor) {
         PerformanceDetail detail = performanceDetailRepository.findWithPerformanceById(scheduleId)
                 .orElseThrow(() -> new BusinessException(PerformanceErrorCode.SCHEDULE_NOT_FOUND));
 

@@ -2,14 +2,17 @@ import { ImagePlus, Lock, Plus, X } from 'lucide-react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import { Button, IconButton, Input } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
+import type { AreaPricingRow } from '../model/areaPricing';
 import {
   ACCEPTED_IMAGE_TYPES,
   TITLE_MAX_LENGTH,
   type ConcertCreateErrors,
   type ConcertCreateForm as FormValues,
   type PhotocardDesignForm,
+  type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
+import { AreaPricingEditor } from './AreaPricingEditor';
 import { PhotocardDesignEditor } from './PhotocardDesignEditor';
 
 interface Props {
@@ -27,6 +30,29 @@ interface Props {
   lockedReason?: string;
   /** 수정 화면이면 이미지 칸의 안내가 "바꾸려면 고르세요" 로 달라집니다 */
   editing?: boolean;
+  /**
+   * 무대 형식 선택 (등록 화면). 공연장을 고르면 그 공연장의 형식 목록이 뜹니다.
+   *
+   * 수정 화면은 넘기지 않습니다 — 형식을 바꾸면 구역 자체가 달라져서 저장해 둔
+   * 등급·가격과 생성한 회차 좌석이 전부 어긋납니다. 서버도 티켓팅 이후에는 거절합니다
+   * (PERFORMANCE_LAYOUT_003).
+   */
+  layouts?: {
+    /** 고를 수 있는 형식 — `ACTIVE` 만 담아 넘깁니다 */
+    options: StadiumLayoutSummary[];
+    loading: boolean;
+  };
+  /**
+   * 구역별 등급·가격 (등록 화면). 무대 형식을 고르면 그 형식의 구역이 줄로 뜹니다.
+   * 수정 화면은 구역 설정을 별도 섹션에서 저장하므로 넘기지 않습니다.
+   */
+  areaPricing?: {
+    rows: AreaPricingRow[];
+    errors: (string | undefined)[];
+    loading: boolean;
+    error: boolean;
+    onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
+  };
   /**
    * 공연과 함께 등록할 포토카드 도안. **등록 화면에서만** 넘깁니다 —
    * 도안 API 가 `performanceId` 를 요구해서 공연이 만들어진 뒤에야 보낼 수 있고,
@@ -58,6 +84,8 @@ export function ConcertForm({
   submitLabel,
   lockedReason,
   editing = false,
+  layouts,
+  areaPricing,
   designs,
   onDesignsChange,
   showDesignErrors = false,
@@ -134,6 +162,74 @@ export function ConcertForm({
           ))}
         </select>
       </Field>
+
+      {/* 무대 형식 — 공연장 바로 아래. 같은 공연장도 무대를 U형·O형처럼 바꾸면 구역이 다르게 나뉘어서,
+          형식을 먼저 골라야 어떤 구역을 팔지가 정해집니다. 등록에서만 고릅니다 (아래 layouts 주석 참고) */}
+      {layouts && (
+        <Field
+          label="무대 형식"
+          required
+          error={errors.stadiumLayoutId}
+          hint="같은 공연장도 무대 형식에 따라 구역이 다르게 나뉘어요. 등록 후에는 바꿀 수 없습니다."
+        >
+          {!form.stadiumId ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              공연장을 먼저 선택하면 무대 형식이 나타나요.
+            </p>
+          ) : layouts.loading ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">무대 형식을 불러오는 중…</p>
+          ) : layouts.options.length === 0 ? (
+            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">
+              이 공연장에 쓸 수 있는 무대 형식이 없어요. 공연장 관리에서 형식을 활성 상태로 만들어 주세요.
+            </p>
+          ) : (
+            <select
+              value={form.stadiumLayoutId}
+              onChange={(e) => onChange({ stadiumLayoutId: e.target.value })}
+              onBlur={() => onBlur('stadiumLayoutId')}
+              className={cn(
+                'surface-2 h-11 w-full rounded-xl px-3 text-[0.9375rem] outline-none',
+                'focus:ring-brand-500 focus:ring-2 disabled:opacity-50',
+                errors.stadiumLayoutId && 'ring-danger ring-2',
+              )}
+            >
+              <option value="">무대 형식을 선택하세요</option>
+              {layouts.options.map((layout) => (
+                <option key={layout.layoutId} value={String(layout.layoutId)}>
+                  {layout.name}
+                  {layout.isDefault && ' (기본)'} · 구역 {layout.areaCount}개
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
+
+      {/* 구역 등급·가격 — 고른 형식의 구역이 줄로 뜨고, 팔 구역을 켜서 등급·가격을 적습니다.
+          예매 화면이 보여주는 가격의 출처입니다. */}
+      {areaPricing && (
+        <Field
+          label="구역 등급·가격"
+          hint="판매할 구역을 켜고 등급·가격을 적어요. 좌석 지정은 등록된 좌석 수만큼 팔고, 스탠딩은 받을 인원을 정합니다. 끈 구역은 이 공연에서 팔지 않아요."
+          error={areaPricing.errors.some(Boolean) ? '구역 설정을 확인해 주세요.' : undefined}
+        >
+          {!form.stadiumLayoutId ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              무대 형식을 먼저 선택하면 구역이 나타나요.
+            </p>
+          ) : areaPricing.loading ? (
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">구역을 불러오는 중…</p>
+          ) : areaPricing.error ? (
+            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">구역 목록을 불러오지 못했어요.</p>
+          ) : (
+            <AreaPricingEditor
+              rows={areaPricing.rows}
+              errors={areaPricing.errors}
+              onChange={areaPricing.onChange}
+            />
+          )}
+        </Field>
+      )}
 
       <Input
         label="티켓팅 오픈 시각"

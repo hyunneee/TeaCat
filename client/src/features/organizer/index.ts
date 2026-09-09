@@ -1,11 +1,6 @@
 /**
- * organizer feature 의 공개 API — 공연 관리(등록·수정·삭제·회차·구역 가격).
- *
- * 서버의 `/admin/concerts/**` 는 **ADMIN 과 공연 주최자(PERFORMANCE)** 가 함께 씁니다.
- * 다루는 범위는 다릅니다 — PERFORMANCE 는 본인이 등록한 공연만, ADMIN 은 전체.
- *
- * 화면 입구가 둘입니다. 앱(`/concerts/...`)과 어드민 콘솔(`/admin/concerts/...`) 이
- * **같은 훅과 폼**을 씁니다 — 저장 뒤 갈 곳만 `ConcertRedirect` 로 달리 넘깁니다.
+ * organizer feature 의 공개 API — 공연 관리(등록·수정·삭제·회차·구역 가격·노출).
+ * 관리자 API(`/admin/concerts/**` 등)는 서버에서 ADMIN·PERFORMANCE 역할만 허용합니다.
  */
 
 // Controller
@@ -18,10 +13,13 @@ export {
 export { useAddSchedule, useDeleteSchedule } from './hooks/useManageSchedules';
 export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
 export {
-  useManagedConcerts,
-  useConcertAreas,
-  useSaveConcertAreas,
-} from './hooks/useManagedConcerts';
+  useStadiumLayouts,
+  useLayoutAreas,
+  useAreaPricingRows,
+  useSaveAreas,
+} from './hooks/useAreaPricing';
+/** 어드민 콘솔의 공연 관리 목록 — /mine 을 그대로 쓰고 검색만 화면에서 거릅니다 */
+export { useManagedConcerts } from './hooks/useManagedConcerts';
 export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 // View
@@ -32,6 +30,24 @@ export { PhotocardDesignEditor } from './components/PhotocardDesignEditor';
 
 // Model
 export { organizerApi, organizerKeys } from './api/organizerApi';
+export {
+  buildAreaRows,
+  validateAreaRows,
+  toAreaSaveRequest,
+  hasEnabledArea,
+  capacityOf,
+  canSellSeated,
+  canSellStanding,
+  sellableTypes,
+  isUnsellable,
+  pickSaleType,
+  changeSaleType,
+
+  exceedsVenueCapacity,
+  type AreaPricingRow,
+  type StadiumArea,
+  type AreaSaveRequest,
+} from './model/areaPricing';
 export {
   EMPTY_CONCERT_CREATE,
   validateConcertCreate,
@@ -51,9 +67,6 @@ export {
   type ConcertUpdateRequest,
   type ConcertVisibilityResponse,
   type StadiumSummary,
-  type ConcertArea,
-  type ConcertAreaRow,
-  type ConcertAreaSetting,
   type PhotocardDesignForm,
   type PhotocardDesignResponse,
 } from './model/organizer.types';

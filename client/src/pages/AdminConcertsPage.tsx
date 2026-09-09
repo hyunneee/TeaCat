@@ -4,20 +4,28 @@ import { Badge, Button, Card, Input, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
-import { CONCERT_STATUS_LABEL, type ConcertSummary } from '@/features/concert';
+import type { ConcertStatus, ConcertSummary } from '@/features/concert';
 import { useManagedConcerts } from '@/features/organizer';
+
+/** 공연 진행 상태 표시명 */
+const STATUS_LABEL: Record<ConcertStatus, string> = {
+  UPCOMING: '예정',
+  ONGOING: '진행 중',
+  ENDED: '종료',
+  CANCELLED: '취소',
+};
 
 /**
  * 공연 관리 목록 (어드민 콘솔).
  *
  * 페이지는 조립만 합니다 — 훅을 불러 컴포넌트에 내려줍니다 (CLAUDE.md 3-6).
  *
- * 🔴 보이는 범위가 역할마다 다릅니다 — ADMIN 은 전체, 공연 주최자(PERFORMANCE)는 본인 것만.
- *    판단은 `useManagedConcerts` 안에 있고 서버 권한과 같습니다.
+ * 🔴 보이는 범위는 **서버가 역할로 정합니다** — ADMIN 이면 전체, 공연 주최자(PERFORMANCE)면
+ *    본인이 등록한 것만 (`/admin/concerts/mine`). 화면은 그 구분을 하지 않습니다.
  */
 export function AdminConcertsPage() {
   const navigate = useNavigate();
-  const { data: concerts, isPending, keyword, setKeyword, searchable } = useManagedConcerts();
+  const { concerts, isPending, keyword, setKeyword } = useManagedConcerts();
 
   return (
     <div className="flex flex-col gap-4">
@@ -25,9 +33,7 @@ export function AdminConcertsPage() {
         <div>
           <h1 className="text-ink text-lg font-bold">공연 관리</h1>
           <p className="text-ink-muted text-sm">
-            {searchable
-              ? '등록된 모든 공연입니다. 비공개 공연도 여기서 다시 찾을 수 있어요.'
-              : '내가 등록한 공연입니다. 비공개 공연도 여기서 다시 찾을 수 있어요.'}
+            관리할 수 있는 공연입니다. 비공개 공연도 여기서 다시 찾을 수 있어요.
           </p>
         </div>
         <Button
@@ -39,18 +45,16 @@ export function AdminConcertsPage() {
         </Button>
       </div>
 
-      {/* 검색은 서버가 하고 ADMIN 목록에만 있습니다 — 내 공연 목록은 짧아 서버 검색이 없습니다 */}
-      {searchable && (
-        <Input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          onClear={() => setKeyword('')}
-          placeholder="공연명으로 검색"
-          leftIcon={<Search size={17} />}
-          type="search"
-          tone="contrast"
-        />
-      )}
+      {/* 목록이 한 번에 다 오므로 서버에 다시 묻지 않고 화면에서 거릅니다 (useManagedConcerts) */}
+      <Input
+        value={keyword}
+        onChange={(event) => setKeyword(event.target.value)}
+        onClear={() => setKeyword('')}
+        placeholder="공연명으로 검색"
+        leftIcon={<Search size={17} />}
+        type="search"
+        tone="contrast"
+      />
 
       {isPending ? (
         <div className="flex flex-col gap-2">
@@ -118,7 +122,7 @@ function ConcertRow({ concert, onEdit }: { concert: ConcertSummary; onEdit: () =
       </div>
 
       <Badge tone={concert.status === 'UPCOMING' ? 'accent' : 'quiet'}>
-        {CONCERT_STATUS_LABEL[concert.status]}
+        {STATUS_LABEL[concert.status]}
       </Badge>
 
       <Button variant="soft" size="md" leftIcon={<Pencil size={15} />} onClick={onEdit}>

@@ -82,6 +82,20 @@ services:
       CHAIN_ID: ${CHAIN_ID:-31221}
       RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+
+      # 🔴 아래 셋은 없어도 컨테이너가 뜬다. 대신 해당 기능만 조용히 죽는다.
+      #    필수값이 아니라 더 위험하다 — 로그에 에러가 안 나고 /health 만 경고한다.
+      #
+      #    DATABASE_URL                  없으면 확정 기록이 안 돼 티켓이 영원히 PENDING
+      #    CONTRACT_OPERATOR_PRIVATE_KEY 없으면 도안 등록·정지·추첨 서명 불가
+      #    DRAW_SEED_SECRET              없으면 추첨 경로가 안 돈다
+      #
+      # DATABASE_URL 은 **우리 DB 가 아니라 Spring 이 쓰는 그 postgres** 다.
+      # 확정 결과 컬럼 몇 개만 갱신한다 (blockchain/DESIGN.md 1장).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-teacat}
+
+      # CONTRACT_OPERATOR_PRIVATE_KEY 와 DRAW_SEED_SECRET 은 개인키·시드라
+      # 니모닉과 같이 .env.dev.chain 에 두고 env_file 로 들어온다.
     mem_limit: 512m
     networks: [teacat-net]
     # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.

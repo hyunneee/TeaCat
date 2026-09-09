@@ -19,6 +19,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
@@ -43,6 +44,10 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // 메트릭. actuator 가 /actuator/prometheus 를 열고, 이 레지스트리가 Prometheus 형식으로 뱉는다.
+    // 넣기만 하면 JVM/GC/HikariCP/톰캣/HTTP 지연이 코드 한 줄 없이 따라온다.
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
     // 벡터
     implementation 'org.hibernate.orm:hibernate-vector'

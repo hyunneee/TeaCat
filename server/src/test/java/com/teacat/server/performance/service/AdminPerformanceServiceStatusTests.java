@@ -1,6 +1,8 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.performance.dto.response.ConcertStatusResponse;
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.entity.PerformanceStatus;
@@ -20,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 /**
  * 공연 상태 전환 (API-264) 과 등록자 확인.
@@ -27,8 +30,13 @@ import static org.mockito.BDDMockito.given;
 @ExtendWith(MockitoExtension.class)
 class AdminPerformanceServiceStatusTests {
 
-    private static final Long OWNER = 6L;
-    private static final Long OTHER_ADMIN = 7L;
+    private static final Long OWNER_ID = 6L;
+    /** 공연 주최자 — 자기가 등록한 공연만 다룰 수 있다 */
+    private static final AuthUser OWNER = new AuthUser(OWNER_ID, UserRole.PERFORMANCE);
+    /** 다른 주최자 — 남의 공연은 못 다룬다 */
+    private static final AuthUser OTHER_ORGANIZER = new AuthUser(7L, UserRole.PERFORMANCE);
+    /** 전체 관리자 — 남이 등록한 공연도 다룰 수 있다 */
+    private static final AuthUser ADMIN = new AuthUser(8L, UserRole.ADMIN);
 
     @Mock
     private PerformanceGeneralRepository performanceGeneralRepository;
@@ -42,7 +50,7 @@ class AdminPerformanceServiceStatusTests {
     void setUp() {
         performance = PerformanceGeneral.create(
                 null, "테스트 공연", LocalDateTime.of(2026, 10, 1, 20, 0),
-                LocalDate.of(2026, 9, 1), null, null, OWNER);
+                LocalDate.of(2026, 9, 1), null, null, OWNER_ID);
     }
 
     private void givenPerformanceExists() {
@@ -98,7 +106,7 @@ class AdminPerformanceServiceStatusTests {
     void 다른_관리자가_등록한_공연은_403으로_거절하고_상태를_바꾸지_않는다() {
         givenPerformanceExists();
 
-        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ONGOING, OTHER_ADMIN))
+        assertThatThrownBy(() -> service.changeStatus(1L, PerformanceStatus.ONGOING, OTHER_ORGANIZER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.NOT_OWNER);
@@ -107,14 +115,48 @@ class AdminPerformanceServiceStatusTests {
     }
 
     @Test
-    void 등록자를_알_수_없는_공연은_누구도_관리할_수_없다() {
-        PerformanceGeneral legacy = PerformanceGeneral.create(
-                null, "옛 공연", LocalDateTime.of(2026, 10, 1, 20, 0), LocalDate.of(2026, 9, 1), null, null, null);
-        given(performanceGeneralRepository.findById(2L)).willReturn(Optional.of(legacy));
+    void 등록자를_알_수_없는_공연은_주최자가_관리할_수_없다() {
+        given(performanceGeneralRepository.findById(2L)).willReturn(Optional.of(legacyPerformance()));
 
         assertThatThrownBy(() -> service.delete(2L, OWNER))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(PerformanceErrorCode.NOT_OWNER);
+    }
+
+    @Test
+    void 전체_관리자는_남이_등록한_공연의_상태를_바꿀_수_있다() {
+        givenPerformanceExists();
+
+        service.changeStatus(1L, PerformanceStatus.ONGOING, ADMIN);
+
+        assertThat(performance.getStatus()).isEqualTo(PerformanceStatus.ONGOING);
+    }
+
+    @Test
+    void 전체_관리자는_남이_등록한_공연을_삭제할_수_있다() {
+        givenPerformanceExists();
+        given(performanceGeneralRepository.existsTicketByPerformanceId(1L)).willReturn(false);
+
+        service.delete(1L, ADMIN);
+
+        verify(performanceGeneralRepository).delete(performance);
+    }
+
+    @Test
+    void 전체_관리자는_등록자를_알_수_없는_옛_공연도_관리할_수_있다() {
+        PerformanceGeneral legacy = legacyPerformance();
+        given(performanceGeneralRepository.findById(2L)).willReturn(Optional.of(legacy));
+        given(performanceGeneralRepository.existsTicketByPerformanceId(2L)).willReturn(false);
+
+        // 등록자가 null 인 옛 데이터는 주최자 누구도 손댈 수 없어 방치됐다. ADMIN 이 정리할 수 있어야 한다
+        service.delete(2L, ADMIN);
+
+        verify(performanceGeneralRepository).delete(legacy);
+    }
+
+    private PerformanceGeneral legacyPerformance() {
+        return PerformanceGeneral.create(
+                null, "옛 공연", LocalDateTime.of(2026, 10, 1, 20, 0), LocalDate.of(2026, 9, 1), null, null, null);
     }
 }

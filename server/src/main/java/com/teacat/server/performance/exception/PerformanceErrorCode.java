@@ -29,10 +29,18 @@ public enum PerformanceErrorCode implements ErrorCode {
     IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "PERFORMANCE_019", "업로드한 이미지가 용량 제한을 초과했습니다."),
     NOT_OWNER(HttpStatus.FORBIDDEN, "PERFORMANCE_020", "본인이 등록한 공연만 관리할 수 있습니다."),
     DUPLICATE_PERFORMANCE_DATE(HttpStatus.BAD_REQUEST, "PERFORMANCE_021", "같은 일시의 회차가 두 번 포함되었습니다."),
+    AREA_SALE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "PERFORMANCE_022",
+            "의자가 설치된 구역은 스탠딩으로 판매할 수 없습니다. 의자를 치운 배치를 무대 형식으로 따로 만들어 주세요."),
+    AREA_SALE_TYPE_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_023",
+            "판매 이력이 있는 구역은 판매 방식을 바꿀 수 없습니다."),
+    AREA_MAX_CNT_REQUIRED(HttpStatus.BAD_REQUEST, "PERFORMANCE_024",
+            "스탠딩으로 파는 구역은 받을 인원 상한을 1명 이상으로 정해야 합니다."),
     STADIUM_LAYOUT_NOT_FOUND(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_001", "공연장에 활성 기본 배치가 없습니다."),
     PERFORMANCE_LAYOUT_MISMATCH(HttpStatus.BAD_REQUEST, "PERFORMANCE_LAYOUT_002", "공연장과 선택한 배치가 일치하지 않습니다."),
     PERFORMANCE_LAYOUT_LOCKED(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_003", "예매 시작 이후에는 공연 배치를 변경할 수 없습니다."),
-    BLOCKED_SEAT_CONFLICT(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_004", "점유 또는 판매된 좌석은 차단할 수 없습니다.");
+    BLOCKED_SEAT_CONFLICT(HttpStatus.CONFLICT, "PERFORMANCE_LAYOUT_004", "점유 또는 판매된 좌석은 차단할 수 없습니다."),
+    STADIUM_LAYOUT_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "PERFORMANCE_LAYOUT_005",
+            "사용할 수 있는 무대 형식이 아닙니다. 공연장 관리에서 활성 상태로 바꿔 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

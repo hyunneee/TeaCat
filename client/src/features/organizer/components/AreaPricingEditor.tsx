@@ -1,179 +1,241 @@
-import { useMemo, useState } from 'react';
-import { Armchair, Info, Users } from 'lucide-react';
-import { Button, Input } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { Armchair, Users } from 'lucide-react';
+import type { AreaType } from '@/features/concert';
+import { Badge, Input } from '@/shared/components/ui';
+import { cn } from '@/shared/lib';
 import {
-  AREA_GRADE_MAX_LENGTH,
-  areAreaRowsValid,
-  toAreaRows,
-  validateAreaRows,
-  type ConcertArea,
-  type ConcertAreaRow,
-} from '../model/organizer.types';
+  GRADE_MAX_LENGTH,
+  canSellSeated,
+  canSellStanding,
+  sellableTypes,
+  isUnsellable,
+  capacityOf,
+  changeSaleType,
+  exceedsVenueCapacity,
+  type AreaPricingRow,
+} from '../model/areaPricing';
+
+const SALE_TYPES = [
+  { value: 'SEATED', label: '좌석 지정', Icon: Armchair },
+  { value: 'STANDING', label: '스탠딩', Icon: Users },
+] as const satisfies readonly { value: AreaType; label: string; Icon: typeof Armchair }[];
 
 /**
- * 공연 구역 등급·가격 편집 (View 레이어).
+ * 파는 방식 줄의 설명. 방식을 바꿀 수 없는 줄이면 **그 이유**를 먼저 말합니다.
  *
- * 공연장 배치도에 있는 구역을 전부 늘어놓고, **팔 구역만 체크**해서 등급·가격·수량을 매깁니다.
- * 저장은 PUT 이라 체크를 푼 구역은 서버에서 지워집니다 — 그래서 "저장하면 무엇이 사라지는지" 를
- * 버튼 옆에 적어 둡니다.
- *
- * 🔴 이미 팔린 구역은 체크를 풀 수 없게 막습니다. 서버도 거절하지만(AREA_MAX_CNT_BELOW_SOLD),
- *    누를 수 있게 두면 저장 버튼을 누른 뒤에야 알게 됩니다.
+ * 예전에는 버튼의 `title` 만 있었는데, 마우스를 올려야 보여서 폰에서는 왜 눌리지 않는지
+ * 알 방법이 없었습니다 — 잠긴 버튼이 "이 구역은 방식을 못 바꾼다" 로만 읽히던 문제입니다.
  */
-export interface AreaPricingEditorProps {
-  areas: ConcertArea[];
-  saving: boolean;
-  onSave: (rows: ConcertAreaRow[]) => void;
+function saleTypeHint(row: AreaPricingRow): string {
+  if (row.soldCnt > 0) {
+    return `이미 ${row.soldCnt}장 팔려서 파는 방식을 바꿀 수 없어요`;
+  }
+  /* 고를 수 있는 방식이 하나뿐이면 왜 하나뿐인지를 말해 줍니다 */
+  if (sellableTypes(row).length === 1) {
+    return canSellSeated(row)
+      ? `의자가 설치된 구역이라 좌석 ${row.seatCount}석만큼만 팝니다`
+      : '등록된 좌석이 없어 스탠딩으로만 팝니다';
+  }
+  return row.saleType === 'SEATED'
+    ? `등록된 좌석 ${capacityOf(row)}석만큼 팝니다`
+    : '좌석 없이 받을 인원만 정해서 팝니다';
 }
 
-export function AreaPricingEditor({ areas, saving, onSave }: AreaPricingEditorProps) {
-  /* 서버 값이 바뀌면(저장 성공 후 재조회) 폼도 새로 맞춥니다.
-     areas 의 정체성은 공연 + 구역 구성이라 그것으로 키를 만듭니다. */
-  const initialKey = useMemo(() => areas.map((a) => a.areaId).join(','), [areas]);
-  const [rows, setRows] = useState<ConcertAreaRow[]>(() => toAreaRows(areas));
-  const [loadedKey, setLoadedKey] = useState(initialKey);
+/**
+ * 공연장이 이 구역에 **무엇을 등록해 뒀는지**. 그게 고를 수 있는 방식을 정합니다.
+ *
+ * 좌석과 수용 인원이 둘 다 등록된 구역은 둘 다 적어 줍니다 — 그래야 두 버튼이
+ * 왜 모두 눌리는지가 보입니다.
+ */
+function registeredSummary(row: AreaPricingRow): string {
+  const seats = canSellSeated(row) ? `좌석 ${row.seatCount}석` : null;
+  const standing = canSellStanding(row) ? `스탠딩 최대 ${row.maxSeat}명` : null;
+  const parts = [seats, standing].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : `좌석 0석 · 최대 ${row.maxSeat}명`;
+}
 
-  if (loadedKey !== initialKey) {
-    setLoadedKey(initialKey);
-    setRows(toAreaRows(areas));
+/** 방식 버튼이 눌리지 않는 이유. 없으면 눌립니다 */
+function unavailableReason(row: AreaPricingRow, value: AreaType): string | undefined {
+  if (value === 'STANDING' && !canSellStanding(row)) {
+    return '의자가 설치된 구역이라 사람을 세울 수 없어요.';
   }
+  if (value === 'SEATED' && !canSellSeated(row)) {
+    return '이 구역에 등록된 좌석이 없어요.';
+  }
+  return undefined;
+}
 
-  const errors = validateAreaRows(rows);
-  const valid = areAreaRowsValid(rows);
-  const sellingCount = rows.filter((row) => row.selling).length;
-  const removedCount = areas.filter(
-    (area) => area.selling && !rows.find((row) => row.areaId === area.areaId)?.selling,
-  ).length;
+interface Props {
+  rows: AreaPricingRow[];
+  /** 줄마다의 에러. 인덱스는 rows 와 같습니다 */
+  errors: (string | undefined)[];
+  onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
+  disabled?: boolean;
+}
 
-  const patch = (areaId: number, next: Partial<ConcertAreaRow>) =>
-    setRows((prev) => prev.map((row) => (row.areaId === areaId ? { ...row, ...next } : row)));
-
-  /* 처음 여는 구역은 배치도 좌석 수를 채워 줍니다. 대개 그 값이 맞고, 틀리면 고치면 됩니다 */
-  const toggleSelling = (row: ConcertAreaRow, selling: boolean) =>
-    patch(row.areaId, {
-      selling,
-      maxCnt: selling && row.maxCnt.trim() === '' ? String(row.capacity) : row.maxCnt,
-    });
-
-  if (areas.length === 0) {
+/**
+ * 구역별 등급·가격 편집 (순수 View).
+ *
+ * 한 줄 = **공연장에 이미 등록된** 구역 하나. 구역과 좌석은 공연장의 것이라 여기서 만들지 않습니다.
+ * 체크를 켜면 이 공연에서 판매하는 구역이 되고, 이 공연에서만 쓰는 등급·가격·수량을 적습니다.
+ *
+ * ⚠️ 저장은 PUT 이라 **목록에서 빠지면 삭제**입니다. 그래서 이미 팔린 구역은 체크를 잠가
+ * 실수로 빠뜨려 저장 전체가 거절되는 일(AREA_MAX_CNT_BELOW_SOLD, 409)을 막습니다.
+ * 티켓팅 시작 후 잠기는 항목을 다루는 ConcertForm 과 같은 방식입니다.
+ *
+ * 파는 방식은 **공연장이 무엇을 등록해 뒀는지**로 정해집니다. 좌석까지 그려 뒀으면 둘 다 되고,
+ * 한쪽만 등록했으면 그 하나로 자동 고정됩니다 (areaPricing.ts 의 `sellableTypes` 표 참고).
+ * 눌리지 않는 버튼은 이유를 글로 함께 보여줍니다.
+ *
+ * 팔린 뒤에는 방식을 바꿀 수 없어(PERFORMANCE_023) 체크와 함께 잠급니다.
+ *
+ * 세 번째 칸은 **스탠딩에만** 있습니다. 좌석제는 배치도에 등록된 좌석 수가 곧 팔 수 있는
+ * 티켓 수라 적을 것이 없어 좌석 수를 읽기 전용으로 보여줍니다. 스탠딩은 좌석 행이 없어
+ * 이 값이 인원을 제한하는 유일한 근거이므로 1명 이상이 필수입니다(서버 PERFORMANCE_024).
+ *
+ * 스탠딩 기본값은 구역의 최대 수용 인원입니다. 다만 정원을 상한으로 걸지는 않고
+ * 경고만 띄웁니다 — 이유는 areaPricing.ts 의 검증 주석 참고.
+ */
+export function AreaPricingEditor({ rows, errors, onChange, disabled = false }: Props) {
+  if (rows.length === 0) {
     return (
-      <EmptyState
-        icon={Armchair}
-        title="이 공연장에 구역이 없어요"
-        description="좌석 배치 관리에서 구역을 먼저 만들어야 등급과 가격을 매길 수 있어요."
-      />
+      <p className="text-subtle py-3 text-center text-sm">
+        이 공연장에 등록된 구역이 없어요. 공연장 관리에서 구역을 먼저 만들어 주세요.
+      </p>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="text-ink-muted border-line border-b text-left text-xs">
-              <th className="w-16 py-2 pr-2 font-medium">판매</th>
-              <th className="py-2 pr-2 font-medium">구역</th>
-              <th className="w-32 py-2 pr-2 font-medium">등급</th>
-              <th className="w-36 py-2 pr-2 font-medium">가격 (원)</th>
-              <th className="w-36 py-2 pr-2 font-medium">최대 판매수량</th>
-              <th className="w-24 py-2 font-medium">판매됨</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const error = errors[row.areaId];
-              const sold = row.soldCnt > 0;
+    <ul className="space-y-2">
+      {rows.map((row, index) => {
+        const error = errors[index];
+        /* 팔 방법이 없는 구역은 켤 수 없습니다. 이미 팔린 구역은 끌 수 없습니다 */
+        const unsellable = isUnsellable(row);
+        const locked = disabled || row.soldCnt > 0;
+        /* 저장을 막지 않는 주의사항. 막는 것은 error 로 따로 내려옵니다 */
+        const warning = exceedsVenueCapacity(row)
+          ? `공연장 구역 정원(${row.maxSeat}명)보다 많아요. 회차가 여러 개면 정상입니다.`
+          : null;
 
-              return (
-                <tr key={row.areaId} className="border-line/60 border-b align-top">
-                  <td className="py-2.5 pr-2">
-                    <input
-                      type="checkbox"
-                      checked={row.selling}
-                      /* 판매 이력이 있는 구역을 빼면 그 티켓의 가격 근거가 사라집니다 */
-                      disabled={sold}
-                      aria-label={`${row.areaCode} 구역 판매`}
-                      onChange={(event) => toggleSelling(row, event.target.checked)}
-                    />
-                  </td>
+        return (
+          <li
+            key={row.areaId}
+            className={cn(
+              'surface-2 rounded-2xl p-3.5 transition-opacity',
+              !row.enabled && 'opacity-70',
+              error && 'ring-danger ring-2',
+            )}
+          >
+            <label className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="size-4 shrink-0 accent-current"
+                checked={row.enabled}
+                disabled={locked || unsellable}
+                title={unsellable ? '등록된 좌석이 없어 팔 수 없는 구역이에요.' : undefined}
+                onChange={(e) => onChange(index, { enabled: e.target.checked })}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">{row.label}</span>
+                <span className="text-subtle mt-0.5 flex items-center gap-1 text-xs">
+                  {row.type === 'SEATED' ? <Armchair size={12} /> : <Users size={12} />}
+                  {/* 공연장이 등록해 둔 것입니다. 이 공연에서 파는 방식은 아래 버튼으로 따로 고릅니다 */}
+                  {registeredSummary(row)}
+                  {row.soldCnt > 0 && ` · 전 회차 합계 ${row.soldCnt}장 판매됨`}
+                  {unsellable && ' · 좌석이 없어 팔 수 없어요'}
+                </span>
+              </span>
+              <Badge tone={row.enabled ? 'success' : 'neutral'}>{row.enabled ? '판매' : '판매 안 함'}</Badge>
+            </label>
 
-                  <td className="py-2.5 pr-2">
-                    <p className="text-ink font-medium">{row.areaCode}</p>
-                    <p className="text-ink-subtle text-xs">
-                      {row.levelCode ? `${row.levelCode} · ` : ''}
-                      {row.areaType === 'SEATED' ? '좌석' : '스탠딩'} · {row.capacity}석
-                    </p>
-                  </td>
+            {row.enabled && (
+              <div
+                className="mt-3 flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label={`${row.label} 파는 방식`}
+              >
+                <span className="text-subtle text-xs font-medium">파는 방식</span>
+                <div className="surface-sunken border-line flex rounded-xl border p-0.5">
+                  {SALE_TYPES.map(({ value, label, Icon }) => {
+                    const active = row.saleType === value;
+                    /* 공연장이 등록해 둔 것으로 되는 방식만 눌립니다 */
+                    const unavailable = unavailableReason(row, value);
 
-                  <td className="py-2.5 pr-2">
-                    <Input
-                      aria-label={`${row.areaCode} 구역 등급`}
-                      value={row.grade}
-                      disabled={!row.selling}
-                      maxLength={AREA_GRADE_MAX_LENGTH}
-                      placeholder="VIP"
-                      onChange={(event) => patch(row.areaId, { grade: event.target.value })}
-                    />
-                  </td>
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={locked || !!unavailable}
+                        title={
+                          unavailable ??
+                          (row.soldCnt > 0 ? '판매 이력이 있어 방식을 바꿀 수 없어요.' : undefined)
+                        }
+                        onClick={() => onChange(index, changeSaleType(row, value))}
+                        className={cn(
+                          'flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold',
+                          'transition-colors duration-150',
+                          active ? 'surface-strong' : 'text-ink-subtle hover:text-ink-muted',
+                          (locked || unavailable) && 'cursor-not-allowed opacity-40',
+                        )}
+                      >
+                        <Icon size={12} />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* 방식을 못 바꾸는 줄에서는 그 이유를 글로 보여줍니다.
+                    버튼의 title 은 마우스를 올려야 보여서 폰에서는 아예 읽을 수 없습니다 */}
+                <span className={cn('text-xs', warning ? 'text-warning' : 'text-subtle')}>
+                  {warning ?? saleTypeHint(row)}
+                </span>
+              </div>
+            )}
 
-                  <td className="py-2.5 pr-2">
-                    <Input
-                      aria-label={`${row.areaCode} 구역 가격`}
-                      value={row.price}
-                      disabled={!row.selling}
-                      inputMode="numeric"
-                      placeholder="165000"
-                      onChange={(event) =>
-                        patch(row.areaId, { price: event.target.value.replace(/\D/g, '') })
-                      }
-                    />
-                  </td>
+            {row.enabled && (
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <Input
+                  aria-label={`${row.label} 등급`}
+                  placeholder="등급 (VIP)"
+                  value={row.grade}
+                  maxLength={GRADE_MAX_LENGTH}
+                  disabled={disabled}
+                  onChange={(e) => onChange(index, { grade: e.target.value })}
+                />
+                <Input
+                  aria-label={`${row.label} 가격`}
+                  placeholder="가격(원)"
+                  inputMode="numeric"
+                  value={row.price}
+                  disabled={disabled}
+                  onChange={(e) => onChange(index, { price: e.target.value.replace(/[^\d]/g, '') })}
+                />
+                {/* 좌석제는 배치도에 등록된 좌석 수가 곧 팔 수 있는 티켓 수라 적을 것이 없습니다.
+                    스탠딩만 받을 인원을 직접 정합니다 — 좌석 행이 없어 이 값이 유일한 상한입니다 */}
+                {row.saleType === 'STANDING' ? (
+                  <Input
+                    aria-label={`${row.label} 받을 인원`}
+                    placeholder="받을 인원(명)"
+                    inputMode="numeric"
+                    value={row.maxCnt}
+                    disabled={disabled}
+                    onChange={(e) => onChange(index, { maxCnt: e.target.value.replace(/[^\d]/g, '') })}
+                  />
+                ) : (
+                  <p
+                    aria-label={`${row.label} 판매 가능 좌석`}
+                    className="surface-sunken border-line text-subtle flex h-11 items-center justify-center rounded-xl border text-xs"
+                  >
+                    좌석 {row.seatCount}석
+                  </p>
+                )}
+              </div>
+            )}
 
-                  <td className="py-2.5 pr-2">
-                    <Input
-                      aria-label={`${row.areaCode} 구역 최대 판매수량`}
-                      value={row.maxCnt}
-                      disabled={!row.selling}
-                      inputMode="numeric"
-                      placeholder={String(row.capacity)}
-                      onChange={(event) =>
-                        patch(row.areaId, { maxCnt: event.target.value.replace(/\D/g, '') })
-                      }
-                    />
-                  </td>
-
-                  <td className="text-ink-muted py-2.5 text-xs tabular-nums">
-                    {row.soldCnt}장
-                    {error && <p className="text-danger mt-1 leading-snug">{error}</p>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 좌석은 회차마다 따로 만듭니다. 구역만 열어두고 좌석 생성을 잊으면
-          예매 화면에 좌석이 하나도 안 뜨는데, 그 원인을 찾기가 아주 어렵습니다. */}
-      <p className="text-ink-subtle flex items-start gap-1.5 text-xs leading-relaxed">
-        <Info size={14} className="mt-px shrink-0" aria-hidden />
-        구역을 새로 열었다면 회차별로 <b className="font-semibold">좌석 생성</b>을 다시 돌려야
-        예매 화면에 좌석이 나타납니다.
-      </p>
-
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-ink-muted flex items-center gap-1.5 text-xs">
-          <Users size={14} aria-hidden />
-          {sellingCount}개 구역 판매
-          {removedCount > 0 && (
-            <span className="text-danger">· 저장하면 {removedCount}개 구역이 내려갑니다</span>
-          )}
-        </p>
-        <Button size="md" loading={saving} disabled={!valid} onClick={() => onSave(rows)}>
-          구역 설정 저장
-        </Button>
-      </div>
-    </div>
+            {error && <p className="text-danger mt-2 text-xs">{error}</p>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

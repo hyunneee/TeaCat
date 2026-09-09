@@ -85,21 +85,17 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
     List<PerformanceGeneral> findAllByCreatedById(@Param("userId") Long userId);
 
     /**
-     * 등록자와 무관하게 <b>모든</b> 공연 — 비공개 포함 (어드민 콘솔의 공연 관리 목록).
+     * 등록자를 가리지 않은 공연 전부 — **비공개 포함**. 전체 관리자(ADMIN)의 관리 목록이다.
      *
-     * <p>🔴 ADMIN 전용이다. 운영자는 공연 주최자(PERFORMANCE)가 올린 공연도 봐야 하고,
-     * {@code created_by} 가 NULL 인 옛 공연도 여기서만 찾을 수 있다.
-     *
-     * <p>titlePattern 은 LIKE 패턴을 그대로 받는다. 검색어가 없으면 {@code '%'} 를 넘긴다 —
-     * null 을 넘기면 PostgreSQL 이 파라미터 타입을 추론하지 못한다 ({@code findPage} 주석 참고).
+     * ADMIN 은 남이 등록한 공연도 수정·삭제할 수 있으므로 그 공연들이 목록에 보여야 한다.
+     * 특히 남이 비공개로 돌린 공연은 클라이언트 목록에 없어서, 여기 말고는 찾아갈 길이 없다.
      */
     @Query("""
             SELECT p FROM PerformanceGeneral p
             JOIN FETCH p.stadium
-            WHERE LOWER(p.title) LIKE LOWER(:titlePattern) ESCAPE '\\'
             ORDER BY p.id DESC
             """)
-    List<PerformanceGeneral> findAllForAdmin(@Param("titlePattern") String titlePattern);
+    List<PerformanceGeneral> findAllForAdmin();
 
     /**
      * 이 공연에 예매 이력이 있는지 (API-263).

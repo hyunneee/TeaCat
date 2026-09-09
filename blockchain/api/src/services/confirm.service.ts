@@ -10,6 +10,7 @@ import {
   missingColumns,
 } from '../db/ticketRepo';
 import { logger, short } from '../shared/logger';
+import { confirmDuration, sweepProcessed, txDropped, watchingCount } from '../metrics';
 
 /**
  * 티켓 확정 감시 — 체인에 실린 걸 확인해서 Spring DB 에 기록합니다. (DESIGN.md 1장 예외)
@@ -84,6 +85,7 @@ export async function watchIssue(
   if (!dbEnabled()) return;
 
   watching.set(txHash, { ticketKey, tokenId, since: Date.now() });
+  watchingCount.set({ kind: 'ticket' }, watching.size);
 
   const address = contractAddress();
   if (address === null) return;
@@ -173,11 +175,13 @@ async function tick(): Promise<void> {
             `추적 포기 (${DROP_AFTER_MS / 1000}초 초과) tx=${short(txHash)} — 훑기로 넘깁니다`,
           );
           watching.delete(txHash);
+          watchingCount.set({ kind: 'ticket' }, watching.size);
         }
         continue;
       }
 
       watching.delete(txHash);
+      watchingCount.set({ kind: 'ticket' }, watching.size);
 
       /* `AlreadyIssued` 는 실패가 아닙니다. 같은 티켓을 다른 트랜잭션이 이미
          발행했다는 뜻이라, 결과적으로 그 티켓은 체인에 있습니다. (tx.service 와 같은 판단) */
@@ -188,6 +192,12 @@ async function tick(): Promise<void> {
           `발행 실패 ticket=${item.ticketKey} tx=${short(txHash)} — ${chain.revertReason ?? '사유 불명'}`,
         );
       }
+      // 전송부터 영수증 확인까지. 블록이 10초라 20~30초가 정상 범위다
+      confirmDuration.observe(
+        { kind: 'ticket', result: done ? 'minted' : 'failed' },
+        (Date.now() - item.since) / 1000,
+      );
+
       await write(item.ticketKey, done ? 'MINTED' : 'FAILED', item.tokenId, txHash);
     }
   } finally {
@@ -217,6 +227,8 @@ async function sweep(): Promise<void> {
 
       const probe = await issuedTicket(hashOf(row.ticketKey));
       if (probe.issued) {
+        // 추적이 놓친 것을 훑기가 주웠다. 이 값이 꾸준히 오르면 ①이 제 몫을 못 하고 있다는 뜻이다
+        sweepProcessed.inc({ kind: 'ticket' });
         await write(row.ticketKey, 'MINTED', probe.tokenId.toString(), row.mintTxHash);
         continue;
       }
@@ -230,6 +242,8 @@ async function sweep(): Promise<void> {
       if (chain.found) continue; // 아직 살아 있습니다
 
       logger.error(`트랜잭션 드롭 ticket=${row.ticketKey} tx=${short(row.mintTxHash)}`);
+      // 🔴 0 이어야 정상인 값. 1건이라도 오르면 티켓이 유실된 것이라 알림 대상이다
+      txDropped.inc({ kind: 'ticket' });
       await write(row.ticketKey, 'FAILED', tokenIdText(row.ticketKey), row.mintTxHash);
     }
   } catch (error) {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Eye, EyeOff, Tag, Trash2, TriangleAlert } from 'lucide-react';
 import { Badge, Button, Card, SectionTitle, Skeleton } from '@/shared/components/ui';
-import { EmptyState } from '@/shared/components/common';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useModal } from '@/app/providers';
 import type { ConcertDetail } from '@/features/concert';
@@ -14,12 +14,13 @@ import {
   isConcertCreateValid,
   isConcertFormDirty,
   isTicketingStarted,
+  toAreaSaveRequest,
   useAddSchedule,
-  useConcertAreas,
+  useAreaPricingRows,
   useDeleteConcert,
   useDeleteSchedule,
   useMyConcert,
-  useSaveConcertAreas,
+  useSaveAreas,
   useSetVisibility,
   useStadiums,
   useUnsavedChangesGuard,
@@ -31,18 +32,23 @@ import {
 } from '@/features/organizer';
 
 /** 등록·수정 뒤 이 화면으로 되돌아옵니다 (앱 화면은 공개 상세로 갑니다) */
-const REDIRECT = { detail: ROUTES.ADMIN_CONCERT_EDIT, list: ROUTES.ADMIN_CONCERTS };
+const REDIRECT = {
+  detail: ROUTES.ADMIN_CONCERT_EDIT,
+  edit: ROUTES.ADMIN_CONCERT_EDIT,
+  list: ROUTES.ADMIN_CONCERTS,
+};
 
 /**
  * 공연 관리 (어드민 콘솔).
  *
- * 앱의 `ConcertEditPage` 와 같은 조각(ConcertForm·ScheduleEditor)을 쓰되
- * **구역 등급·가격**이 하나 더 있습니다 — 앱 화면에는 없는 기능입니다.
+ * 앱의 `ConcertEditPage` 와 **같은 조각**(ConcertForm·ScheduleEditor·AreaPricingEditor)을
+ * 데스크톱 폭에 맞춰 다시 배치한 화면입니다. 규칙과 검증은 전부 `features/organizer` 에 있고
+ * 여기서는 조립만 합니다 (CLAUDE.md 3-6).
  *
  * 네 부분으로 나뉩니다.
  * - **회차**: 추가·삭제가 누르는 즉시 서버에 반영됩니다.
+ * - **구역 등급·가격**: 팔 구역과 파는 방식·가격. 이걸 채워야 예매가 열립니다.
  * - **공연 정보**: "저장하기" 를 눌러야 반영되고 **바뀐 필드만** 보냅니다.
- * - **구역 등급·가격**: 팔 구역과 가격. 이걸 채워야 예매가 열립니다.
  * - **공연 관리**: 공개·비공개 전환과 삭제.
  */
 export function AdminConcertEditPage() {
@@ -87,41 +93,39 @@ export function AdminConcertEditPage() {
         {concert.hidden && <Badge tone="quiet">비공개</Badge>}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="col-span-2">
-          <SectionTitle>회차</SectionTitle>
-          <div className="mt-3">
-            <Schedules concert={concert} />
-          </div>
-        </Card>
+      <Card>
+        <SectionTitle>회차</SectionTitle>
+        <div className="mt-3">
+          <Schedules concert={concert} />
+        </div>
+      </Card>
 
-        <Card className="col-span-2">
-          <div className="flex items-center gap-2">
-            <Tag size={16} className="text-ink-subtle" aria-hidden />
-            <SectionTitle>구역 등급·가격</SectionTitle>
-          </div>
-          <p className="text-ink-subtle mt-1 text-xs">
-            가격이 없는 구역은 예매할 수 없어요. 팔 구역만 체크하고 값을 채워 주세요.
-          </p>
-          <div className="mt-3">
-            <Areas concertId={concertId} />
-          </div>
-        </Card>
+      <Card>
+        <div className="flex items-center gap-2">
+          <Tag size={16} className="text-ink-subtle" aria-hidden />
+          <SectionTitle>구역 등급·가격</SectionTitle>
+        </div>
+        <p className="text-ink-subtle mt-1 text-xs">
+          가격이 없는 구역은 예매할 수 없어요. 팔 구역만 켜고 값을 채워 주세요.
+        </p>
+        <div className="mt-3">
+          <AreaPricing concert={concert} />
+        </div>
+      </Card>
 
-        <Card className="col-span-2 max-w-3xl">
-          <SectionTitle>공연 정보</SectionTitle>
-          <div className="mt-3">
-            <EditForm concert={concert} stadiums={stadiums} />
-          </div>
-        </Card>
+      <Card className="max-w-3xl">
+        <SectionTitle>공연 정보</SectionTitle>
+        <div className="mt-3">
+          <EditForm concert={concert} stadiums={stadiums} />
+        </div>
+      </Card>
 
-        <Card className="col-span-2">
-          <SectionTitle>공연 관리</SectionTitle>
-          <div className="mt-3">
-            <Management concert={concert} />
-          </div>
-        </Card>
-      </div>
+      <Card>
+        <SectionTitle>공연 관리</SectionTitle>
+        <div className="mt-3">
+          <Management concert={concert} />
+        </div>
+      </Card>
     </div>
   );
 }
@@ -158,25 +162,58 @@ function Schedules({ concert }: { concert: ConcertDetail }) {
   );
 }
 
-/* 구역 등급·가격. 저장은 PUT 이라 체크를 푼 구역이 사라지는데, 그 경고는 편집기가 합니다 */
-function Areas({ concertId }: { concertId: string }) {
-  const { data: areas, isPending, isError } = useConcertAreas(concertId);
-  const save = useSaveConcertAreas(concertId);
+/**
+ * 구역별 등급·가격. PUT 이라 목록 전체를 한 번에 저장하므로 저장 버튼을 둡니다.
+ * 이미 팔린 구역은 끌 수 없고 판매량보다 적게 줄일 수 없습니다 — 줄 검증과 서버(PERFORMANCE_012)가 함께 막습니다.
+ */
+function AreaPricing({ concert }: { concert: ConcertDetail }) {
+  const { open } = useModal();
+  /* 구역은 공연장이 아니라 이 공연이 쓰는 **무대 형식**에 딸려 있습니다.
+     공연장 기준으로 불러오면 기본 배치의 구역이 와서, 다른 형식으로 등록한 공연은
+     저장할 때마다 거절됩니다 (PERFORMANCE_010). */
+  const pricing = useAreaPricingRows(String(concert.layout.layoutId), concert.areas);
+  const save = useSaveAreas(String(concert.concertId));
 
-  if (isPending) return <Skeleton className="h-40 w-full" />;
+  const body = toAreaSaveRequest(pricing.rows);
 
-  if (isError || !areas) {
-    return (
-      <EmptyState
-        icon={TriangleAlert}
-        title="구역을 불러오지 못했어요"
-        description="잠시 후 다시 시도해 주세요."
-      />
-    );
+  const confirmSave = () => {
+    if (!pricing.valid || !body) return;
+    open('common/confirm', {
+      title: '구역 등급·가격을 저장할까요?',
+      message:
+        '끈 구역은 이 공연에서 판매하지 않는 것으로 처리됩니다. 예매 화면의 가격이 바로 바뀝니다.',
+      confirmText: '저장',
+      onConfirm: () => save.mutate(body),
+    });
+  };
+
+  if (pricing.loading) return <Loading label="구역을 불러오는 중" className="min-h-0 py-6" />;
+  if (pricing.error) {
+    return <p className="text-danger py-3 text-center text-sm">구역 목록을 불러오지 못했어요.</p>;
   }
 
   return (
-    <AreaPricingEditor areas={areas} saving={save.isPending} onSave={(rows) => save.mutate(rows)} />
+    <div className="space-y-3">
+      <AreaPricingEditor rows={pricing.rows} errors={pricing.errors} onChange={pricing.setRow} />
+      {pricing.rows.length > 0 && (
+        <div className="flex justify-end">
+          <Button
+            variant="dark"
+            size="md"
+            loading={save.isPending}
+            disabled={!pricing.valid || !body}
+            onClick={confirmSave}
+          >
+            구역 설정 저장
+          </Button>
+        </div>
+      )}
+      {!body && pricing.rows.length > 0 && (
+        <p className="text-subtle text-right text-xs">
+          판매할 구역을 하나 이상 켜야 저장할 수 있어요.
+        </p>
+      )}
+    </div>
   );
 }
 

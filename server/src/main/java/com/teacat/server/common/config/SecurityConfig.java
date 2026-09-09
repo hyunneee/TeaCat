@@ -8,8 +8,10 @@ import com.teacat.server.auth.security.JwtAuthenticationFilter;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.user.entity.UserRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -60,6 +62,30 @@ public class SecurityConfig {
     private final ObjectMapper objectMapper;
     private final DailyActiveUserRecorder dailyActiveUserRecorder;
 
+    /**
+     * 액추에이터 전용 체인. <b>아래 기본 체인보다 먼저 잡아야 한다</b> —
+     * 기본 체인의 {@code anyRequest().authenticated()} 가 /actuator/prometheus 까지 막아
+     * Prometheus 스크레이프가 통째로 401 이 된다.
+     *
+     * <p>인증 없이 여는 근거는 <b>포트가 다르기 때문</b>이다. 액추에이터는
+     * {@code management.server.port}(8081)에만 뜨고, compose 가 그 포트를 호스트로 열지 않아
+     * teacat-net 안에서만 닿는다. 블록체인 서비스의 {@code /health} 와 같은 취급이다.
+     *
+     * <p>🔴 8081 을 호스트나 nginx 로 내보내는 순간 이 permitAll 이 인터넷에 열린다.
+     *    포트를 열어야 하면 여기에 인증을 붙이고 Prometheus 스크레이프에도 자격증명을 넣어야 한다.
+     */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .build();
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
@@ -86,14 +112,8 @@ public class SecurityConfig {
                                 "/nft-market/auctions", "/auctions/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
-                        // 전체 공연 목록은 운영자만 본다. 공연 주최자에게는 /admin/concerts/mine 이 있다.
-                        //
-                        // 🔴 아래 /admin/concerts/** 보다 먼저 와야 한다 — /** 는 빈 경로도 삼켜서
-                        //    순서를 바꾸면 PERFORMANCE 도 남의 공연 목록을 보게 된다.
-                        .requestMatchers(HttpMethod.GET, "/admin/concerts").hasRole(UserRole.ADMIN.name())
                         // 공연 관리(등록·수정·회차·구역·이미지)는 공연 주최자(PERFORMANCE)도 쓴다.
                         // 등록자 본인 것만 다룰 수 있는 건 서비스가 따로 검사한다(PERFORMANCE_020).
-                        // ADMIN 은 그 검사에서 예외라 남이 등록한 공연도 다룰 수 있다.
                         .requestMatchers("/admin/concerts/**", "/admin/schedules/**", "/admin/uploads/**")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         // 공연장·구역·좌석 배치 관리는 공연장 운영자(STADIUM)도 쓴다

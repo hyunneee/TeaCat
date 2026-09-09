@@ -1,0 +1,72 @@
+# Loki 단일 바이너리 설정. 한 대짜리 배포에 맞춘 최소 구성이다.
+#
+# 로그 본문은 압축해서 파일로 쌓고, 인덱스는 라벨만 만든다. 그래서 ELK 대비
+# 메모리가 한 자릿수 배로 적게 든다 — 대신 전문검색은 못 하고, 라벨로 좁힌 뒤
+# 훑는 방식이다.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  # 기본 로그가 요청마다 한 줄씩 나와 시끄럽다. 경고 이상만 본다
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # 🔴 컨테이너 시계가 어긋나거나 재시작 직후 옛 로그가 밀려올 때를 위해 넉넉히 둔다.
+  #    이 창을 벗어난 줄은 조용히 버려진다 — "로그가 일부만 들어온다" 의 흔한 원인이다.
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # 한 스트림(=라벨 조합)당 초당 유입 상한. 티켓 오픈에 로그가 몰릴 때 여유가 필요하다
+  per_stream_rate_limit: 8MB
+  per_stream_rate_limit_burst: 16MB
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  # 🔴 라벨 수를 제한한다. 라벨에 txHash 나 userId 가 섞이면 스트림이 무한히 늘어
+  #    Loki 가 가벼운 이유 자체가 사라진다 (alloy/config.alloy 주석 참고)
+  max_label_names_per_series: 15
+  # 보관 기간. 단일 호스트라 디스크가 유한하다 — 14일이면 회고에 충분하고,
+  # 그보다 오래된 로그를 볼 일은 실제로 거의 없다.
+  # 🔴 tsdb 스토어에서 보관 기간을 실제로 적용하는 건 **여기(limits_config) + compactor** 다.
+  #    table_manager 는 옛 스토어용이라 tsdb 에서는 값을 읽지 않는다 — 거기에 적어두면
+  #    설정은 통과하는데 삭제는 영영 일어나지 않고, 기본값(31일)으로 디스크가 찬다.
+  retention_period: 336h
+
+# 보관 기간을 실제로 집행하는 쪽. 위 limits_config.retention_period 를 읽어 지운다.
+compactor:
+  working_directory: /loki/compactor
+  delete_request_store: filesystem
+  retention_enabled: true
+  # 지우기 전 유예. 잘못 지운 것을 눈치챌 시간이다
+  retention_delete_delay: 2h
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+
+analytics:
+  reporting_enabled: false

@@ -1,4 +1,4 @@
-import type { ConcertDetail, ConcertStatus, ConcertSummary } from './concert.types';
+import type { ConcertDetail, ConcertSummary } from './concert.types';
 
 /**
  * 티켓팅이 열렸는가 (목록 카드의 "예매중" / "오픈 예정" 칩).
@@ -19,35 +19,5 @@ export function posterSeedOf(concert: Pick<ConcertSummary | ConcertDetail, 'conc
   return `concert-${concert.concertId}`;
 }
 
-/**
- * 이 사용자가 등록한 공연인가.
- *
- * 서버가 관리자 API 를 등록자 본인에게만 허용하므로(PERFORMANCE_020), 화면도 같은 기준으로
- * 수정·삭제 버튼을 보여줍니다. 남의 공연에 버튼을 보이면 눌러도 403 만 납니다.
- */
-export function isConcertOwner(concert: Pick<ConcertDetail, 'createdBy'>, userId: number | undefined): boolean {
-  return concert.createdBy != null && concert.createdBy === userId;
-}
-
-/**
- * 이 사용자가 이 공연을 관리할 수 있는가.
- *
- * 🔴 서버 규칙과 **같아야** 합니다 (`AdminPerformanceService.getOwnedPerformance`) —
- * 등록자 본인, 그리고 **ADMIN 은 남이 등록한 공연도** 관리합니다. 운영자가 손댈 수 없는
- * 공연이 남으면 안 되고, `createdBy` 가 null 인 옛 공연은 ADMIN 만 고칠 수 있습니다.
- */
-export function canManageConcert(
-  concert: Pick<ConcertDetail, 'createdBy'>,
-  user: { userId: number; role: string } | null | undefined,
-): boolean {
-  if (!user) return false;
-  return user.role === 'ADMIN' || isConcertOwner(concert, user.userId);
-}
-
-/** 공연 진행 상태 표시명 */
-export const CONCERT_STATUS_LABEL: Record<ConcertStatus, string> = {
-  UPCOMING: '예정',
-  ONGOING: '진행 중',
-  ENDED: '종료',
-  CANCELLED: '취소',
-};
+/* 수정·삭제 버튼을 보일지는 역할까지 봐야 해서 `features/auth` 의 `can.manageThisConcert` 에 있습니다
+   — ADMIN 은 남의 공연도 다루고, PERFORMANCE 는 자기가 등록한 것만 다룹니다. */
