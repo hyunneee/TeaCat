@@ -1,0 +1,149 @@
+package com.teacat.server.banner.entity;
+
+import com.teacat.server.performance.entity.PerformanceGeneral;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
+
+import java.time.LocalDateTime;
+
+/**
+ * 메인 슬라이드.
+ *
+ * 만드는 방법이 둘이다.
+ *   IMAGE       이미지를 직접 올리고, 누르면 갈 상대 경로를 적는다 (비우면 이동 없음)
+ *   PERFORMANCE 공연을 고르면 이미지는 그 공연 포스터를 쓰고 링크는 공연 상세로 간다
+ *
+ * 타입마다 채우는 칸이 달라 섞이면 화면이 무엇을 그릴지 알 수 없다. DB CHECK 으로도 막아 둔다.
+ */
+@Entity
+@Table(name = "main_banners")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class MainBanner {
+
+    public static final int TITLE_MAX_LENGTH = 60;
+    public static final int SUBTITLE_MAX_LENGTH = 100;
+    public static final int LABEL_MAX_LENGTH = 20;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "type", nullable = false, columnDefinition = "main_banner_type")
+    private MainBannerType type;
+
+    @Column(name = "title", nullable = false, length = TITLE_MAX_LENGTH)
+    private String title;
+
+    @Column(name = "subtitle", length = SUBTITLE_MAX_LENGTH)
+    private String subtitle;
+
+    @Column(name = "label", length = LABEL_MAX_LENGTH)
+    private String label;
+
+    /** 스토리지 key. URL 은 조회할 때 만든다 — 서명이 붙은 주소라 저장하면 곧 만료된다 */
+    @Column(name = "image_key", length = 255)
+    private String imageKey;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "performance_general_id")
+    private PerformanceGeneral performance;
+
+    @Column(name = "link_path", length = 255)
+    private String linkPath;
+
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder;
+
+    @Column(name = "active", nullable = false)
+    private boolean active;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    private MainBanner(MainBannerType type, String title, String subtitle, String label,
+                       String imageKey, PerformanceGeneral performance, String linkPath,
+                       int sortOrder, boolean active) {
+        this.type = type;
+        this.title = title;
+        this.subtitle = subtitle;
+        this.label = label;
+        this.imageKey = imageKey;
+        this.performance = performance;
+        this.linkPath = linkPath;
+        this.sortOrder = sortOrder;
+        this.active = active;
+    }
+
+    /** 이미지를 직접 올려 만드는 슬라이드 */
+    public static MainBanner ofImage(String title, String subtitle, String label,
+                                     String imageKey, String linkPath, int sortOrder, boolean active) {
+        return new MainBanner(MainBannerType.IMAGE, title, subtitle, label,
+                imageKey, null, linkPath, sortOrder, active);
+    }
+
+    /** 공연을 지정해 만드는 슬라이드. 이미지·링크는 그 공연을 따라간다 */
+    public static MainBanner ofPerformance(String title, String subtitle, String label,
+                                           PerformanceGeneral performance, int sortOrder, boolean active) {
+        return new MainBanner(MainBannerType.PERFORMANCE, title, subtitle, label,
+                null, performance, null, sortOrder, active);
+    }
+
+    /** 문구는 타입과 무관하게 고칠 수 있다 */
+    public void editText(String title, String subtitle, String label) {
+        this.title = title;
+        this.subtitle = subtitle;
+        this.label = label;
+    }
+
+    /** IMAGE 로 바꾸거나, IMAGE 인 채로 이미지·링크를 고친다 */
+    public void changeToImage(String imageKey, String linkPath) {
+        this.type = MainBannerType.IMAGE;
+        this.imageKey = imageKey;
+        this.linkPath = linkPath;
+        this.performance = null;
+    }
+
+    /** PERFORMANCE 로 바꾸거나, 가리키는 공연을 고친다 */
+    public void changeToPerformance(PerformanceGeneral performance) {
+        this.type = MainBannerType.PERFORMANCE;
+        this.performance = performance;
+        this.imageKey = null;
+        this.linkPath = null;
+    }
+
+    public void changeActive(boolean active) {
+        this.active = active;
+    }
+
+    public void changeSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public boolean isImageType() {
+        return this.type == MainBannerType.IMAGE;
+    }
+}

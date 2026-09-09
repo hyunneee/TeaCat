@@ -1,5 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { Armchair, LayoutDashboard, MessagesSquare, Users, type LucideIcon } from 'lucide-react';
+import {
+  Armchair,
+  GalleryHorizontalEnd,
+  LayoutDashboard,
+  MessagesSquare,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/shared/lib';
 import { ROUTES } from '@/shared/constants';
 import { Logo } from '@/shared/components/ui';
@@ -40,6 +47,13 @@ const ADMIN_MENU: AdminMenuItem[] = [
     matchNested: true,
   },
   { to: ROUTES.ADMIN_USERS, label: '유저 관리', icon: Users, visible: can.manageUsers, matchNested: true },
+  {
+    to: ROUTES.ADMIN_BANNERS,
+    label: '메인 배너 관리',
+    icon: GalleryHorizontalEnd,
+    visible: can.manageBanners,
+    matchNested: true,
+  },
   {
     to: ROUTES.ADMIN_INQUIRIES,
     label: '문의 관리',

@@ -96,11 +96,12 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
         style={{ transform: `translateX(-${index * 100}%)` }}
       >
         {banners.map((banner, i) => {
-          const h = hueOf(banner.artSeed);
+          /* 이미지가 없을 때만 쓰는 폴백 색. 같은 배너는 항상 같은 색이 나옵니다 */
+          const h = hueOf(String(banner.bannerId));
 
           return (
             <button
-              key={banner.id}
+              key={banner.bannerId}
               type="button"
               // 화면에 안 보이는 슬라이드는 탭 순서에서 빼야 키보드가 헤매지 않습니다.
               tabIndex={i === index ? 0 : -1}
@@ -123,13 +124,17 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
               />
 
               <span className="relative min-w-0 pb-4">
-                <span className="inline-flex rounded bg-white px-2 py-0.5 text-[0.6875rem] font-bold text-black">
-                  {banner.label}
-                </span>
+                {banner.label && (
+                  <span className="inline-flex rounded bg-white px-2 py-0.5 text-[0.6875rem] font-bold text-black">
+                    {banner.label}
+                  </span>
+                )}
                 <span className="mt-2.5 block text-xl leading-tight font-bold text-white">
                   {banner.title}
                 </span>
-                <span className="mt-1 block text-[0.8125rem] text-white/85">{banner.subtitle}</span>
+                {banner.subtitle && (
+                  <span className="mt-1 block text-[0.8125rem] text-white/85">{banner.subtitle}</span>
+                )}
               </span>
             </button>
           );
@@ -147,7 +152,7 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
           <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
             {banners.map((banner, i) => (
               <button
-                key={banner.id}
+                key={banner.bannerId}
                 type="button"
                 aria-label={`${i + 1}번째 배너 보기`}
                 aria-current={i === index}

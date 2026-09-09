@@ -42,6 +42,13 @@ export const can = {
   manageUsers: (user: User | null): boolean => user?.role === 'ADMIN',
 
   /**
+   * 메인 배너 관리 메뉴.
+   *
+   * 서버의 `/admin/banners/**` 는 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
+   */
+  manageBanners: (user: User | null): boolean => user?.role === 'ADMIN',
+
+  /**
    * 문의 관리 메뉴 — 답변·해결 처리.
    *
    * 서버의 `/admin/inquiries/**` 는 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
