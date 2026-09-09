@@ -17,6 +17,7 @@ export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 // View
 export { ConcertForm } from './components/ConcertForm';
 export { ScheduleEditor } from './components/ScheduleEditor';
+export { PhotocardDesignEditor } from './components/PhotocardDesignEditor';
 
 // Model
 export { organizerApi, organizerKeys } from './api/organizerApi';
@@ -28,6 +29,10 @@ export {
   isTicketingStarted,
   isConcertFormDirty,
   validateNewScheduleDate,
+  arePhotocardDesignsValid,
+  validatePhotocardDesign,
+  filledPhotocardDesigns,
+  EMPTY_PHOTOCARD_DESIGN,
   type ConcertCreateForm as ConcertCreateFormValues,
   type ConcertCreateErrors,
   type ConcertFormMode,
@@ -35,4 +40,6 @@ export {
   type ConcertUpdateRequest,
   type ConcertVisibilityResponse,
   type StadiumSummary,
+  type PhotocardDesignForm,
+  type PhotocardDesignResponse,
 } from './model/organizer.types';
