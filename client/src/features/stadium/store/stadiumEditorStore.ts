@@ -16,6 +16,7 @@ import type {
   ExcelAnalysis,
   LayoutRect,
   StadiumAreaType,
+  StadiumEditorDraftData,
   StadiumInfoDraft,
   StadiumLayoutEditorTool,
 } from '../model/stadium.types';
@@ -26,6 +27,7 @@ interface StadiumEditorState {
   stadiumId: number | null;
 
   analysis: ExcelAnalysis | null;
+  analysisExpiresAt: number | null;
   selectedSheet: string | null;
   layoutName: string;
   isDefault: boolean;
@@ -34,6 +36,7 @@ interface StadiumEditorState {
 
   tool: StadiumLayoutEditorTool;
   areas: DraftArea[];
+  unassignedSeats: DraftManualSeat[];
   selectedAreaId: string | null;
   layoutElements: DraftLayoutElement[];
   selectedElementId: string | null;
@@ -50,6 +53,7 @@ interface StadiumEditorState {
     areas: DraftArea[];
     layoutElements: DraftLayoutElement[];
   }) => void;
+  restoreDraft: (draft: StadiumEditorDraftData) => void;
   setSelectedSheet: (sheet: string) => void;
   setLayoutName: (name: string) => void;
   setIsDefault: (value: boolean) => void;
@@ -57,7 +61,13 @@ interface StadiumEditorState {
 
   addArea: (rect: LayoutRect) => void;
   selectArea: (areaId: string | null) => void;
-  updateArea: (areaId: string, values: Partial<Pick<DraftArea, 'areaCode' | 'type' | 'maxSeat'>>) => void;
+  updateArea: (
+    areaId: string,
+    values: Partial<Pick<DraftArea, 'areaCode' | 'type' | 'maxSeat'>>,
+  ) => void;
+  updateAreaBounds: (areaId: string, bounds: LayoutRect) => void;
+  autoFitAreaBounds: (areaId: string) => void;
+  splitArea: (areaId: string, selection: LayoutRect) => void;
   updateLabelingRule: (areaId: string, values: Partial<DraftLabelingRule>) => void;
   removeArea: (areaId: string) => void;
 
@@ -72,10 +82,14 @@ interface StadiumEditorState {
   ) => void;
   removeManualSeat: (areaId: string, seatClientId: string) => void;
   removeManualSeats: (areaId: string, seatClientIds: string[]) => void;
+  assignManualSeats: (areaId: string, seatClientIds: string[]) => void;
 
   addElement: (rect: LayoutRect) => void;
   selectElement: (elementId: string | null) => void;
-  updateElement: (elementId: string, values: Partial<Pick<DraftLayoutElement, 'type' | 'label'>>) => void;
+  updateElement: (
+    elementId: string,
+    values: Partial<Pick<DraftLayoutElement, 'type' | 'label'>>,
+  ) => void;
   removeElement: (elementId: string) => void;
 
   reset: () => void;
@@ -87,6 +101,7 @@ const initial = {
   stadiumId: null as number | null,
 
   analysis: null as ExcelAnalysis | null,
+  analysisExpiresAt: null as number | null,
   selectedSheet: null as string | null,
   layoutName: '기본 배치',
   isDefault: true,
@@ -95,10 +110,68 @@ const initial = {
 
   tool: 'draw-area' as StadiumLayoutEditorTool,
   areas: [] as DraftArea[],
+  unassignedSeats: [] as DraftManualSeat[],
   selectedAreaId: null as string | null,
   layoutElements: [] as DraftLayoutElement[],
   selectedElementId: null as string | null,
 };
+
+function fitAreaBounds(
+  area: DraftArea,
+  analysis: ExcelAnalysis | null,
+  layoutWidth: number,
+  layoutHeight: number,
+  padding = 8,
+): LayoutRect | null {
+  const candidateById = new Map(
+    (analysis?.seatCandidates ?? []).map((candidate) => [candidate.candidateId, candidate]),
+  );
+  const extents = area.acceptedCandidateIds.flatMap((candidateId) => {
+    const candidate = candidateById.get(candidateId);
+    return candidate
+      ? [
+          {
+            left: candidate.x,
+            top: candidate.y,
+            right: candidate.x + candidate.width,
+            bottom: candidate.y + candidate.height,
+          },
+        ]
+      : [];
+  });
+  for (const seat of area.manualSeats) {
+    extents.push({
+      left: seat.seatX - 4,
+      top: seat.seatY - 4,
+      right: seat.seatX + 4,
+      bottom: seat.seatY + 4,
+    });
+  }
+  if (extents.length === 0) return null;
+
+  const left = Math.max(0, Math.min(...extents.map((extent) => extent.left)) - padding);
+  const top = Math.max(0, Math.min(...extents.map((extent) => extent.top)) - padding);
+  const right = Math.min(layoutWidth, Math.max(...extents.map((extent) => extent.right)) + padding);
+  const bottom = Math.min(
+    layoutHeight,
+    Math.max(...extents.map((extent) => extent.bottom)) + padding,
+  );
+  return {
+    x: roundCoordinate(left),
+    y: roundCoordinate(top),
+    width: roundCoordinate(Math.max(5, right - left)),
+    height: roundCoordinate(Math.max(5, bottom - top)),
+  };
+}
+
+function nextAvailableAreaCode(areas: DraftArea[], sourceSheet: string): string {
+  const used = new Set(
+    areas.filter((area) => area.sourceSheet === sourceSheet).map((area) => area.areaCode.trim()),
+  );
+  let index = 0;
+  while (used.has(nextAreaCode(index))) index += 1;
+  return nextAreaCode(index);
+}
 
 export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
   ...initial,
@@ -114,10 +187,12 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
     const size = computeLayoutSize([...analysis.seatCandidates, ...analysis.elementCandidates]);
     set({
       analysis,
+      analysisExpiresAt: Date.now() + analysis.expiresIn * 1000,
       selectedSheet: firstSheet,
       layoutWidth: size.width,
       layoutHeight: size.height,
       areas: [],
+      unassignedSeats: [],
       selectedAreaId: null,
       layoutElements: [],
       selectedElementId: null,
@@ -128,17 +203,21 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
   startFromExistingLayout: (payload) =>
     set({
       analysis: null,
+      analysisExpiresAt: null,
       selectedSheet: payload.areas[0]?.levelCode ?? payload.layoutElements[0]?.levelCode ?? '1F',
       layoutName: payload.suggestedName,
       isDefault: false,
       layoutWidth: payload.layoutWidth,
       layoutHeight: payload.layoutHeight,
       areas: payload.areas,
+      unassignedSeats: [],
       layoutElements: payload.layoutElements,
       selectedAreaId: null,
       selectedElementId: null,
       tool: 'draw-area',
     }),
+
+  restoreDraft: (draft) => set({ ...draft }),
 
   setSelectedSheet: (selectedSheet) =>
     set({
@@ -194,10 +273,14 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
   selectArea: (selectedAreaId) => set({ selectedAreaId, selectedElementId: null }),
 
   updateArea: (areaId, values) =>
-    set((state) => ({
-      areas: state.areas.map((area) => {
+    set((state) => {
+      const newlyUnassigned: DraftManualSeat[] = [];
+      const areas = state.areas.map((area) => {
         if (area.clientId !== areaId) return area;
         const type = (values.type ?? area.type) as StadiumAreaType;
+        if (area.type === 'SEATED' && type === 'STANDING') {
+          newlyUnassigned.push(...area.manualSeats);
+        }
         return {
           ...area,
           ...values,
@@ -206,8 +289,112 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
           acceptedCandidateIds: type === 'STANDING' ? [] : area.acceptedCandidateIds,
           manualSeats: type === 'STANDING' ? [] : area.manualSeats,
         };
+      });
+      return {
+        areas,
+        unassignedSeats: [...state.unassignedSeats, ...newlyUnassigned],
+      };
+    }),
+
+  updateAreaBounds: (areaId, bounds) =>
+    set((state) => {
+      const candidateById = new Map(
+        (state.analysis?.seatCandidates ?? []).map((candidate) => [
+          candidate.candidateId,
+          candidate,
+        ]),
+      );
+      const releasedSeats: DraftManualSeat[] = [];
+      return {
+        areas: state.areas.map((area) => {
+          if (area.clientId !== areaId) return area;
+          const manualSeats = area.manualSeats.filter((seat) => {
+            const inside = isInsideRect({ x: seat.seatX, y: seat.seatY }, bounds);
+            if (!inside) releasedSeats.push(seat);
+            return inside;
+          });
+          const acceptedCandidateIds = area.acceptedCandidateIds.filter((candidateId) => {
+            const candidate = candidateById.get(candidateId);
+            return !candidate || isInsideRect(candidateCenter(candidate), bounds);
+          });
+          return { ...area, bounds, manualSeats, acceptedCandidateIds };
+        }),
+        unassignedSeats: [...state.unassignedSeats, ...releasedSeats],
+      };
+    }),
+
+  autoFitAreaBounds: (areaId) =>
+    set((state) => ({
+      areas: state.areas.map((area) => {
+        if (area.clientId !== areaId) return area;
+        const bounds = fitAreaBounds(area, state.analysis, state.layoutWidth, state.layoutHeight);
+        return bounds ? { ...area, bounds } : area;
       }),
     })),
+
+  splitArea: (areaId, selection) =>
+    set((state) => {
+      const source = state.areas.find((area) => area.clientId === areaId);
+      if (!source || source.type !== 'SEATED') return state;
+      const candidateById = new Map(
+        (state.analysis?.seatCandidates ?? []).map((candidate) => [
+          candidate.candidateId,
+          candidate,
+        ]),
+      );
+      const movedCandidateIds = source.acceptedCandidateIds.filter((candidateId) => {
+        const candidate = candidateById.get(candidateId);
+        return candidate ? isInsideRect(candidateCenter(candidate), selection) : false;
+      });
+      const movedCandidateSet = new Set(movedCandidateIds);
+      const movedManualSeats = source.manualSeats.filter((seat) =>
+        isInsideRect({ x: seat.seatX, y: seat.seatY }, selection),
+      );
+      const movedSeatCount = movedCandidateIds.length + movedManualSeats.length;
+      const totalSeatCount = source.acceptedCandidateIds.length + source.manualSeats.length;
+      if (movedSeatCount === 0 || movedSeatCount >= totalSeatCount) return state;
+      const movedManualSeatIds = new Set(movedManualSeats.map((seat) => seat.clientId));
+      const remainingArea: DraftArea = {
+        ...source,
+        acceptedCandidateIds: source.acceptedCandidateIds.filter(
+          (candidateId) => !movedCandidateSet.has(candidateId),
+        ),
+        manualSeats: source.manualSeats.filter((seat) => !movedManualSeatIds.has(seat.clientId)),
+      };
+      const clientId = crypto.randomUUID();
+      const newArea: DraftArea = {
+        ...source,
+        clientId,
+        areaCode: nextAvailableAreaCode(state.areas, source.sourceSheet),
+        acceptedCandidateIds: movedCandidateIds,
+        manualSeats: movedManualSeats,
+        bounds: selection,
+      };
+      const fittedRemaining = fitAreaBounds(
+        remainingArea,
+        state.analysis,
+        state.layoutWidth,
+        state.layoutHeight,
+        2,
+      );
+      const fittedNew = fitAreaBounds(
+        newArea,
+        state.analysis,
+        state.layoutWidth,
+        state.layoutHeight,
+        2,
+      );
+      return {
+        areas: [
+          ...state.areas.filter((area) => area.clientId !== areaId),
+          { ...remainingArea, bounds: fittedRemaining ?? remainingArea.bounds },
+          { ...newArea, bounds: fittedNew ?? newArea.bounds },
+        ],
+        selectedAreaId: clientId,
+        selectedElementId: null,
+        tool: 'pick-seats',
+      };
+    }),
 
   updateLabelingRule: (areaId, values) =>
     set((state) => ({
@@ -219,10 +406,14 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
     })),
 
   removeArea: (areaId) =>
-    set((state) => ({
-      areas: state.areas.filter((area) => area.clientId !== areaId),
-      selectedAreaId: state.selectedAreaId === areaId ? null : state.selectedAreaId,
-    })),
+    set((state) => {
+      const removedArea = state.areas.find((area) => area.clientId === areaId);
+      return {
+        areas: state.areas.filter((area) => area.clientId !== areaId),
+        unassignedSeats: [...state.unassignedSeats, ...(removedArea?.manualSeats ?? [])],
+        selectedAreaId: state.selectedAreaId === areaId ? null : state.selectedAreaId,
+      };
+    }),
 
   acceptCandidates: (areaId, candidateIds) =>
     set((state) => ({
@@ -234,7 +425,9 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
         if (candidateIds.some((id) => area.acceptedCandidateIds.includes(id))) {
           return {
             ...area,
-            acceptedCandidateIds: area.acceptedCandidateIds.filter((id) => !candidateIds.includes(id)),
+            acceptedCandidateIds: area.acceptedCandidateIds.filter(
+              (id) => !candidateIds.includes(id),
+            ),
           };
         }
         return area;
@@ -261,8 +454,15 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
   toggleCandidate: (areaId, candidateId) =>
     set((state) => ({
       areas: state.areas.map((area) => {
-        if (area.clientId !== areaId) return area;
         const has = area.acceptedCandidateIds.includes(candidateId);
+        if (area.clientId !== areaId) {
+          return has
+            ? {
+                ...area,
+                acceptedCandidateIds: area.acceptedCandidateIds.filter((id) => id !== candidateId),
+              }
+            : area;
+        }
         return {
           ...area,
           acceptedCandidateIds: has
@@ -276,9 +476,11 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
     set((state) => ({
       areas: state.areas.map((area) => {
         if (area.clientId !== areaId || area.type !== 'SEATED') return area;
-        const nextNumber = area.manualSeats.reduce((max, seat) => Math.max(max, seat.seatNumber), 0) + 1;
+        const nextNumber =
+          area.manualSeats.reduce((max, seat) => Math.max(max, seat.seatNumber), 0) + 1;
         const seat: DraftManualSeat = {
           clientId: crypto.randomUUID(),
+          sourceSheet: area.sourceSheet,
           rowLabel: '수동',
           seatNumber: nextNumber,
           seatX: roundCoordinate(x),
@@ -310,17 +512,31 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
     })),
 
   removeManualSeat: (areaId, seatClientId) =>
-    set((state) => ({
-      areas: state.areas.map((area) =>
-        area.clientId === areaId
-          ? { ...area, manualSeats: area.manualSeats.filter((seat) => seat.clientId !== seatClientId) }
-          : area,
-      ),
-    })),
+    set((state) => {
+      const seat = state.areas
+        .find((area) => area.clientId === areaId)
+        ?.manualSeats.find((item) => item.clientId === seatClientId);
+      if (!seat) return state;
+      return {
+        areas: state.areas.map((area) =>
+          area.clientId === areaId
+            ? {
+                ...area,
+                manualSeats: area.manualSeats.filter((item) => item.clientId !== seatClientId),
+              }
+            : area,
+        ),
+        unassignedSeats: [...state.unassignedSeats, seat],
+      };
+    }),
 
   removeManualSeats: (areaId, seatClientIds) =>
     set((state) => {
       const removing = new Set(seatClientIds);
+      const releasedSeats =
+        state.areas
+          .find((area) => area.clientId === areaId)
+          ?.manualSeats.filter((seat) => removing.has(seat.clientId)) ?? [];
       return {
         areas: state.areas.map((area) =>
           area.clientId === areaId
@@ -330,6 +546,29 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
               }
             : area,
         ),
+        unassignedSeats: [...state.unassignedSeats, ...releasedSeats],
+      };
+    }),
+
+  assignManualSeats: (areaId, seatClientIds) =>
+    set((state) => {
+      const targetArea = state.areas.find((area) => area.clientId === areaId);
+      if (!targetArea || targetArea.type !== 'SEATED') return state;
+      const requested = new Set(seatClientIds);
+      const movable = [...state.unassignedSeats, ...state.areas.flatMap((area) => area.manualSeats)]
+        .filter((seat) => requested.has(seat.clientId))
+        .filter((seat) => isInsideRect({ x: seat.seatX, y: seat.seatY }, targetArea.bounds));
+      const movingIds = new Set(movable.map((seat) => seat.clientId));
+      if (movingIds.size === 0) return state;
+      return {
+        unassignedSeats: state.unassignedSeats.filter((seat) => !movingIds.has(seat.clientId)),
+        areas: state.areas.map((area) => ({
+          ...area,
+          manualSeats:
+            area.clientId === areaId
+              ? [...area.manualSeats.filter((seat) => !movingIds.has(seat.clientId)), ...movable]
+              : area.manualSeats.filter((seat) => !movingIds.has(seat.clientId)),
+        })),
       };
     }),
 

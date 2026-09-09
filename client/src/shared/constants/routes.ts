@@ -94,6 +94,8 @@ export const ROUTES = {
   ADMIN_USERS: '/admin/users',
   MONITORING: '/admin/monitoring',
   ADMIN_STADIUM: '/admin/stadium',
+  ADMIN_STADIUMS: '/admin/stadiums',
+  ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
   ADMIN_INQUIRIES: '/admin/inquiries',
   ADMIN_BANNERS: '/admin/banners',
 

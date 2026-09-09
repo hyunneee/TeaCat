@@ -26,10 +26,7 @@ const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'Conce
 const ConcertCreatePage = page(() => import('@/pages/ConcertCreatePage'), 'ConcertCreatePage');
 const ConcertEditPage = page(() => import('@/pages/ConcertEditPage'), 'ConcertEditPage');
 
-const BookingVerifyPage = page(
-  () => import('@/pages/BookingVerifyPage'),
-  'BookingVerifyPage',
-);
+const BookingVerifyPage = page(() => import('@/pages/BookingVerifyPage'), 'BookingVerifyPage');
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
@@ -54,33 +51,29 @@ const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
-const PasswordChangePage = page(
-  () => import('@/pages/PasswordChangePage'),
-  'PasswordChangePage',
-);
-const NicknameChangePage = page(
-  () => import('@/pages/NicknameChangePage'),
-  'NicknameChangePage',
-);
+const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
+const NicknameChangePage = page(() => import('@/pages/NicknameChangePage'), 'NicknameChangePage');
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
 
-const OauthCallbackPage = page(
-  () => import('@/pages/OauthCallbackPage'),
-  'OauthCallbackPage',
-);
+const OauthCallbackPage = page(() => import('@/pages/OauthCallbackPage'), 'OauthCallbackPage');
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
 const AdminStadiumPage = page(() => import('@/pages/AdminStadiumPage'), 'AdminStadiumPage');
+const AdminStadiumListPage = page(
+  () => import('@/pages/AdminStadiumListPage'),
+  'AdminStadiumListPage',
+);
+const AdminStadiumDetailPage = page(
+  () => import('@/pages/AdminStadiumDetailPage'),
+  'AdminStadiumDetailPage',
+);
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
 /* 어드민 대시보드. 껍데기까지 lazy 로 쪼갭니다 —
    일반 사용자는 평생 이 코드를 받지 않습니다. */
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
-const AdminDashboardPage = page(
-  () => import('@/pages/AdminDashboardPage'),
-  'AdminDashboardPage',
-);
+const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
 const AdminInquiriesPage = page(
@@ -142,7 +135,9 @@ const devRoutes: RouteObject[] = IS_DEV_BUILD
   ? [
       {
         path: ROUTES.DEV_FACE,
-        element: withBoundary(createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage'))),
+        element: withBoundary(
+          createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage')),
+        ),
       },
     ]
   : [];
@@ -175,6 +170,11 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN', 'STADIUM']} />,
                 children: [
                   { path: ROUTES.ADMIN_STADIUM, element: withBoundary(<AdminStadiumPage />) },
+                  { path: ROUTES.ADMIN_STADIUMS, element: withBoundary(<AdminStadiumListPage />) },
+                  {
+                    path: ROUTES.ADMIN_STADIUM_DETAIL(':stadiumId'),
+                    element: withBoundary(<AdminStadiumDetailPage />),
+                  },
                 ],
               },
               {
@@ -331,7 +331,6 @@ const routes: RouteObject[] = [
       { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
     ],
   },
-
 ];
 
 export const router = createBrowserRouter(routes);
