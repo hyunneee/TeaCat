@@ -62,6 +62,7 @@
 | 라우팅 | React Router v7 (`createBrowserRouter`) | |
 | HTTP | axios (`shared/api/client.ts` 래퍼만 사용) | 컴포넌트에서 `fetch` 직접 호출 |
 | 아이콘 | **lucide-react** | emoji 하드코딩, 다른 아이콘 팩 |
+| 차트 | **recharts** — 어드민(`/admin`) 전용 | 사용자 화면에 차트 넣기, 두 번째 차트 라이브러리 |
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
 | 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
 | 얼굴 인식 | **onnxruntime-web** (`/wasm` 빌드 하나만) + INT8 ONNX 모델 | MediaPipe·tfjs 등 **두 번째 런타임**, FP32 모델 |
@@ -607,3 +608,8 @@ npm run typecheck && npm run lint
 - 2026-09-08 포카 경매 프론트 착수. `features/auction` 추가(포카와 나란히, 카드 그림만 배럴로 공유),
   마켓 구매 탭 안에 상점·경매 **글자 탭**(DESIGN.md 10장), 잔액 표시를 `available` 로 전환,
   `shared/lib/parseServerTime` 추가(서버가 타임존 없는 KST 를 주므로 카운트다운이 어긋나지 않게)
+- 2026-09-09 **recharts 추가** (1장 기술 스택). 어드민 통계 대시보드의 꺾은선 그래프용입니다.
+  자체 SVG 로도 선은 그리지만 툴팁·축 라벨·배포 마커선(`ReferenceLine`)까지 직접 만들면
+  지표가 늘 때마다 유지비가 붙습니다. **어드민(`/admin`) 화면에서만** 씁니다 —
+  사용자 화면에 넣지 마세요(데스크톱 전용이라 번들 부담을 감수한 것입니다).
+  차트는 `features/admin/components` 안에만 두고, 페이지는 그걸 조립만 합니다. 사용자 승인

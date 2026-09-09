@@ -76,6 +76,7 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
 const AdminInquiriesPage = page(
   () => import('@/pages/AdminInquiriesPage'),
   'AdminInquiriesPage',
@@ -185,6 +186,7 @@ const routes: RouteObject[] = [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
+                  { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
               },
               /* 모니터링(/admin/monitoring)은 아직 앱(모바일) 레이아웃에 있습니다.

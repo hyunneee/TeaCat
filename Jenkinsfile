@@ -59,6 +59,8 @@ pipeline {
                     env.ENV_FILE   = "${DEPLOY_DIR}/.env.${resolved}"
                     env.COMPOSE    = "${DEPLOY_DIR}/docker-compose.${resolved}.yml"
                     env.TAG        = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    // 배포 마커에 쓴다 (post.success 의 recordDeployment)
+                    env.DEPLOY_BRANCH = branch
 
                     echo "브랜치 ${branch} → ${resolved} 배포 (${env.TAG})"
                 }
@@ -308,7 +310,12 @@ pipeline {
                       done || true
             '''
         }
-        success { script { notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공 — 빌드: ${env.BUILT_SUMMARY ?: '?'}") } }
+        success {
+            script {
+                recordDeployment()
+                notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공 — 빌드: ${env.BUILT_SUMMARY ?: '?'}")
+            }
+        }
         failure {
             sh '''
                 echo "── 실패 직전 상태 ──"
@@ -320,6 +327,44 @@ pipeline {
             '''
             script { notifyMM('#D24B4E', "❌ ${env.DEPLOY_ENV ?: '?'} 배포 실패") }
         }
+    }
+}
+
+// 어드민 통계 차트의 세로 마커선.
+//
+// "어떤 기능이 사람을 끌어들였나" 를 보려고 배포 시점을 기록한다.
+//
+// 🔴 운영(master)만 보낸다. dev 는 하루에도 여러 번 나가서 마커가 빽빽해지면 차트가 읽히지 않는다.
+// 🔴 여기서 무슨 일이 나도 배포는 성공이다. 이미 컨테이너가 다 뜬 뒤이고, 통계 한 점 때문에
+//    초록불을 빨간불로 바꿀 이유가 없다. 그래서 통째로 try 로 감싸고 curl 에도 || 를 붙인다.
+// 🔴 배포 시각은 보내지 않는다. 서버가 받은 시각으로 찍는다 —
+//    젠킨스(UTC)와 서버(Asia/Seoul)의 시간대가 달라 마커가 9시간 밀리는 걸 막는다.
+//
+// 같은 커밋을 다시 배포하면 서버가 무시한다(멱등). 재실행을 걱정하지 않아도 된다.
+def recordDeployment() {
+    if (env.DEPLOY_ENV != 'prod') {
+        return
+    }
+
+    try {
+        // 커밋 제목 한 줄. JSON 을 깨뜨리는 따옴표·역슬래시를 지우고 길이를 자른다
+        // (서버 쪽 summary 는 varchar(200))
+        def subject = sh(returnStdout: true,
+            script: "git log -1 --pretty=%s | tr -d '\\\\\"' | cut -c1-190").trim()
+
+        def payload = """{"environment":"${env.DEPLOY_ENV}","branch":"${env.DEPLOY_BRANCH}","commitHash":"${env.TAG}","summary":"${subject}","buildNumber":${env.BUILD_NUMBER}}"""
+
+        withCredentials([string(credentialsId: 'teacat-analytics-key', variable: 'ANALYTICS_KEY')]) {
+            sh """
+                curl -sS -m 10 -X POST 'https://teacat.site/api/internal/deployments' \
+                    -H 'Content-Type: application/json' \
+                    -H "X-Internal-Api-Key: \$ANALYTICS_KEY" \
+                    -d '${payload}' || echo '⚠️  배포 마커 기록 실패 (배포에는 영향 없음)'
+            """
+        }
+    } catch (e) {
+        // 자격증명(teacat-analytics-key)이 아직 없으면 여기로 온다
+        echo "⚠️  배포 마커를 남기지 못했습니다: ${e.message}"
     }
 }
 

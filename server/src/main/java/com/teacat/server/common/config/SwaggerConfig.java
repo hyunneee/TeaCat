@@ -141,4 +141,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".banner")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi analyticsApi() {
+        return GroupedOpenApi.builder()
+                .group("10-analytics")
+                .displayName("운영 통계")
+                .packagesToScan(BASE_PACKAGE + ".analytics")
+                .build();
+    }
 }
