@@ -10,9 +10,9 @@
 #
 # 구분은 env 라벨로 한다. 대시보드에서 env="prod" 로 좁히면 운영만 보인다.
 #
-# 🔴 dev 스택이 안 떠 있으면 그쪽 타겟은 DOWN 으로 남는다. 정상이다 —
-#    다만 TargetDown 알림이 계속 울리므로, dev 를 상시 띄우지 않는다면
-#    아래 dev 블록을 지우는 편이 낫다.
+# 🔴 아직 배포되지 않은 환경의 타겟은 DOWN 으로 보인다. 정상이다 — TargetDown 은
+#    "최근 하루 안에 살아있던 타겟" 만 울리므로(rules/alerts.yml) 조용하고, 그 환경이
+#    뜨는 순간 자동으로 감시 대상이 된다. 지금은 dev 만 살아 있다 (운영은 배포 전, 2026-09-09).
 
 global:
   # 15초. 이보다 촘촘하게 해도 얻는 게 없다 — 앱 게이지 갱신 주기가 30초다
@@ -56,7 +56,12 @@ scrape_configs:
   #    여기서 보인다 (BookingService 의 hold — 행 락과 커넥션 풀).
   - job_name: 'postgres'
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      # exporter 는 환경마다 하나다 (DB 비밀번호가 다르다). prod 쪽은 compose profile 로
+      # 운영이 뜰 때 켠다 — 그전까지 이 타겟은 DOWN 으로 보이지만, TargetDown 은
+      # "최근 하루 안에 살아있던 타겟" 만 보므로 울리지 않는다 (rules/alerts.yml).
+      - targets: ['postgres-exporter-dev:9187']
+        labels: { service: postgres, env: dev }
+      - targets: ['postgres-exporter-prod:9187']
         labels: { service: postgres, env: prod }
 
   # ── 인프라 ────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ scrape_configs:
       - targets: ['host.docker.internal:8081']
         labels:
           service: server
+          env: local
 
   - job_name: 'blockchain-api'
     metrics_path: /metrics
@@ -33,12 +34,14 @@ scrape_configs:
       - targets: ['host.docker.internal:4000']
         labels:
           service: blockchain
+          env: local
 
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres-exporter:9187']
         labels:
           service: postgres
+          env: local
 
   - job_name: 'prometheus'
     static_configs:

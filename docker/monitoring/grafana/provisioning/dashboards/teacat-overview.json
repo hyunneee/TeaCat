@@ -80,7 +80,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_nft_photocard_stuck_age_seconds",
+          "expr": "teacat_nft_photocard_stuck_age_seconds{env=~\"$env\"}",
           "legendFormat": "체류",
           "range": true,
           "refId": "A"
@@ -150,7 +150,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_nft_ticket_stuck_age_seconds",
+          "expr": "teacat_nft_ticket_stuck_age_seconds{env=~\"$env\"}",
           "legendFormat": "체류",
           "range": true,
           "refId": "A"
@@ -216,7 +216,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_bc_chain_up",
+          "expr": "teacat_bc_chain_up{env=~\"$env\"}",
           "legendFormat": "chain",
           "range": true,
           "refId": "A"
@@ -282,7 +282,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(hikaricp_connections_pending)",
+          "expr": "sum(hikaricp_connections_pending{env=~\"$env\"})",
           "legendFormat": "pending",
           "range": true,
           "refId": "A"
@@ -379,7 +379,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_nft_photocard_count",
+          "expr": "teacat_nft_photocard_count{env=~\"$env\"}",
           "legendFormat": "{{status}}",
           "range": true,
           "refId": "A"
@@ -463,7 +463,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_nft_ticket_count",
+          "expr": "teacat_nft_ticket_count{env=~\"$env\"}",
           "legendFormat": "티켓 {{status}}",
           "range": true,
           "refId": "A"
@@ -474,7 +474,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_nft_design_count",
+          "expr": "teacat_nft_design_count{env=~\"$env\"}",
           "legendFormat": "도안 {{status}}",
           "range": true,
           "refId": "B"
@@ -558,7 +558,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "teacat_bc_tx_queue_depth",
+          "expr": "teacat_bc_tx_queue_depth{env=~\"$env\"}",
           "legendFormat": "큐 깊이",
           "range": true,
           "refId": "A"
@@ -569,7 +569,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.9, rate(teacat_bc_tx_queue_wait_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.9, rate(teacat_bc_tx_queue_wait_seconds_bucket{env=~\"$env\"}[5m]))",
           "legendFormat": "대기 p90 (초)",
           "range": true,
           "refId": "B"
@@ -653,7 +653,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "increase(teacat_bc_tx_dropped_total[10m])",
+          "expr": "increase(teacat_bc_tx_dropped_total{env=~\"$env\"}[10m])",
           "legendFormat": "드롭 {{kind}}",
           "range": true,
           "refId": "A"
@@ -664,7 +664,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "increase(teacat_bc_nonce_reset_total[10m])",
+          "expr": "increase(teacat_bc_nonce_reset_total{env=~\"$env\"}[10m])",
           "legendFormat": "논스 재조회",
           "range": true,
           "refId": "B"
@@ -675,7 +675,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "increase(teacat_bc_sweep_processed_total[10m])",
+          "expr": "increase(teacat_bc_sweep_processed_total{env=~\"$env\"}[10m])",
           "legendFormat": "훑기가 주움 {{kind}}",
           "range": true,
           "refId": "C"
@@ -772,7 +772,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{env=~\"$env\"}[5m])))",
           "legendFormat": "{{uri}}",
           "range": true,
           "refId": "A"
@@ -856,7 +856,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (code) (rate(teacat_business_error_total[5m])) * 60",
+          "expr": "sum by (code) (rate(teacat_business_error_total{env=~\"$env\"}[5m])) * 60",
           "legendFormat": "{{code}}",
           "range": true,
           "refId": "A"
@@ -940,7 +940,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "hikaricp_connections_active",
+          "expr": "hikaricp_connections_active{env=~\"$env\"}",
           "legendFormat": "사용 중",
           "range": true,
           "refId": "A"
@@ -951,7 +951,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "hikaricp_connections_idle",
+          "expr": "hikaricp_connections_idle{env=~\"$env\"}",
           "legendFormat": "유휴",
           "range": true,
           "refId": "B"
@@ -962,7 +962,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "hikaricp_connections_pending",
+          "expr": "hikaricp_connections_pending{env=~\"$env\"}",
           "legendFormat": "대기",
           "range": true,
           "refId": "C"
@@ -973,7 +973,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "hikaricp_connections_max",
+          "expr": "hikaricp_connections_max{env=~\"$env\"}",
           "legendFormat": "최대",
           "range": true,
           "refId": "D"
@@ -1057,7 +1057,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(pg_locks_count)",
+          "expr": "sum(pg_locks_count{env=~\"$env\"})",
           "legendFormat": "락",
           "range": true,
           "refId": "A"
@@ -1068,7 +1068,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "increase(pg_stat_database_deadlocks{datname=\"teacat\"}[5m])",
+          "expr": "increase(pg_stat_database_deadlocks{env=~\"$env\",datname=\"teacat\"}[5m])",
           "legendFormat": "데드락 (5분)",
           "range": true,
           "refId": "B"
@@ -1165,7 +1165,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})",
+          "expr": "sum(jvm_memory_used_bytes{env=~\"$env\",area=\"heap\"})",
           "legendFormat": "사용",
           "range": true,
           "refId": "A"
@@ -1176,7 +1176,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(jvm_memory_max_bytes{area=\"heap\"})",
+          "expr": "sum(jvm_memory_max_bytes{env=~\"$env\",area=\"heap\"})",
           "legendFormat": "최대",
           "range": true,
           "refId": "B"
@@ -1260,7 +1260,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(jvm_gc_pause_seconds_sum[5m]) / clamp_min(rate(jvm_gc_pause_seconds_count[5m]), 0.001)",
+          "expr": "rate(jvm_gc_pause_seconds_sum{env=~\"$env\"}[5m]) / clamp_min(rate(jvm_gc_pause_seconds_count{env=~\"$env\"}[5m]), 0.001)",
           "legendFormat": "평균 정지",
           "range": true,
           "refId": "A"
@@ -1344,7 +1344,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "nodejs_eventloop_lag_seconds",
+          "expr": "nodejs_eventloop_lag_seconds{env=~\"$env\"}",
           "legendFormat": "lag",
           "range": true,
           "refId": "A"
@@ -1360,7 +1360,29 @@
     "teacat"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "env",
+        "label": "환경",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(up, env)",
+        "definition": "label_values(up, env)",
+        "refresh": 1,
+        "sort": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": false,
+          "text": "dev",
+          "value": "dev"
+        },
+        "description": "감시 중인 환경. 스택 하나가 dev 와 prod 를 함께 긁으므로 여기서 고른다"
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
