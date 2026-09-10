@@ -15,13 +15,14 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     /**
      * 내 티켓 목록.
      *
-     * <p>공연·구역·좌석을 함께 읽는다. 응답에 전부 필요한 값이라 지연 로딩으로 두면 티켓 수만큼
-     * 쿼리가 늘어난다. 좌석은 스탠딩이면 없으므로 LEFT JOIN 이다.
+     * <p>공연·공연장·구역·좌석을 함께 읽는다. 응답에 전부 필요한 값이라 지연 로딩으로 두면
+     * 티켓 수만큼 쿼리가 늘어난다. 좌석은 스탠딩이면 없으므로 LEFT JOIN 이다.
      */
     @Query("""
             SELECT t FROM Ticket t
             JOIN FETCH t.performanceDetail pd
-            JOIN FETCH pd.performance
+            JOIN FETCH pd.performance p
+            JOIN FETCH p.stadium
             JOIN FETCH t.area
             LEFT JOIN FETCH t.seat
             WHERE t.user.id = :userId
@@ -33,7 +34,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Query("""
             SELECT t FROM Ticket t
             JOIN FETCH t.performanceDetail pd
-            JOIN FETCH pd.performance
+            JOIN FETCH pd.performance p
+            JOIN FETCH p.stadium
             JOIN FETCH t.area
             LEFT JOIN FETCH t.seat
             WHERE t.id = :ticketId
