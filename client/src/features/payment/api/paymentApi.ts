@@ -18,7 +18,6 @@ export const paymentApi = {
     http.post<PaymentConfirmResponse>('/payments/ticket-orders/confirm', body, {
       idempotencyKey,
     }),
-
 };
 
 export const paymentKeys = {
