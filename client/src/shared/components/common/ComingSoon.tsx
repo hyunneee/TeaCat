@@ -21,7 +21,7 @@ export function ComingSoon({ description, className }: Props) {
   return (
     <EmptyState
       mood="sleep"
-      title="2차 배포 때 만나요 💗😺"
+      title="2차 배포 때 만냐옹 💗😺"
       description={description}
       className={className}
     />
