@@ -52,6 +52,8 @@ public abstract class PostgresIntegrationTest {
         registry.add("nft.design.confirm-enabled", () -> "false");
         // 회차 자동 발급 스케줄러도 끈다. 발급은 테스트가 직접 불러 검증한다
         registry.add("nft.photocard.issue.scheduler-enabled", () -> "false");
+        // 뽑기 카드 재전송 스위퍼도 끈다. 전송은 테스트가 직접 검증한다
+        registry.add("nft.photocard.draw.sweep-enabled", () -> "false");
     }
 
     @Autowired
@@ -65,7 +67,9 @@ public abstract class PostgresIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbcTemplate.execute("TRUNCATE TABLE users, faces, stadiums RESTART IDENTITY CASCADE");
+        // nft_photocard_designs: 뽑기 풀 도안은 공연이 없어 stadiums 의 CASCADE 로 지워지지 않는다
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE users, faces, stadiums, nft_photocard_designs RESTART IDENTITY CASCADE");
     }
 
     protected Long insertUser(String email, String nickname) {
@@ -169,6 +173,25 @@ public abstract class PostgresIntegrationTest {
                     (performance_general_id, name, image_url, total_supply)
                 VALUES (?, ?, '/test.png', ?) RETURNING id
                 """, Long.class, performanceId, name, totalSupply);
+    }
+
+    /** 체인 등록까지 끝난 뽑기 풀 도안. 뽑기 후보 조건(draw_pool · REGISTERED)을 그대로 만족한다 */
+    protected Long insertDrawPoolDesign(String name, int totalSupply, String groupName, String grade) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_designs
+                    (performance_general_id, name, image_url, total_supply, image_cid, metadata_cid,
+                     chain_status, draw_pool, group_name, grade)
+                VALUES (NULL, ?, '/draw.png', ?, 'bafyIMG', 'bafyMETA',
+                        'REGISTERED', true, ?, ?::nft_photocard_grade) RETURNING id
+                """, Long.class, name, totalSupply, groupName, grade);
+    }
+
+    /** 안 쓴 이벤트 팩 하나 */
+    protected Long insertPack(Long userId, String sourceRef) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_packs (user_id, source, source_ref)
+                VALUES (?, 'EVENT', ?) RETURNING id
+                """, Long.class, userId, sourceRef);
     }
 
     protected Long insertPhotocard(Long designId, Long ticketId, Long ownerId) {
