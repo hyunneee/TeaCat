@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +23,17 @@ public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> 
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<TicketOrder> findWithLockById(Long id);
+
+    /**
+     * 이 티켓을 만든 주문. 티켓 화면이 금액·취소로 넘어가는 열쇠다.
+     *
+     * <p>취소된 주문도 {@code ticket_id} 를 그대로 들고 있어(제약 {@code chk_ticket_orders_paid})
+     * 취소 뒤에도 같은 주문을 찾을 수 있다.
+     */
+    Optional<TicketOrder> findByTicketId(Long ticketId);
+
+    /** 목록용. 티켓마다 따로 조회하면 N+1 이 된다 */
+    List<TicketOrder> findByTicketIdIn(Collection<Long> ticketIds);
 
     /** 이 좌석에 결제 대기 중인 주문. 부분 유니크 인덱스가 있어 최대 하나다 */
     Optional<TicketOrder> findByPerformanceDetail_IdAndSeat_IdAndStatus(

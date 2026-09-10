@@ -41,7 +41,9 @@ public class TicketController {
                       여도 예매는 유효하니 실패로 보여주지 마세요. 체인 확정에 보통 10초쯤 걸립니다.
                     - 취소된 예매는 `status`가 `CANCELLED`로 함께 내려갑니다.
                     - `posterUrl`은 유효시간이 있는 임시 주소라 캐시하지 마세요.
-                    - 결제 금액은 여기 없습니다. 주문 조회(`GET /payments/ticket-orders/{id}`)에 있습니다.
+                    - 결제 금액은 여기 없습니다. `ticketOrderId`로 주문 조회
+                      (`GET /payments/ticket-orders/{id}`)를 부르세요. **예매 취소**
+                      (`POST /payments/ticket-orders/{id}/cancel`)도 같은 ID 를 씁니다.
                     """
     )
     @ApiResponses({

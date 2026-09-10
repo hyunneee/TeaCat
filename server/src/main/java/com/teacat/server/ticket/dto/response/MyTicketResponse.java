@@ -12,13 +12,21 @@ import java.util.UUID;
  * 내 티켓 한 장.
  *
  * <p>결제 금액은 여기 없습니다 — 주문에 속한 정보라 {@code GET /payments/ticket-orders/{id}} 에
- * 있습니다. 티켓은 "무엇을 보러 가는가" 만 답합니다.
+ * 있습니다. 티켓은 "무엇을 보러 가는가" 만 답합니다. 대신 그 주문으로 가는 열쇠
+ * ({@code ticketOrderId})는 함께 줍니다 — 금액 조회도 <b>예매 취소</b>도 주문에 걸려 있어서,
+ * 이게 없으면 티켓 화면에서 취소 버튼을 걸 방법이 없습니다.
  */
 @Schema(description = "내 티켓")
 public record MyTicketResponse(
 
         @Schema(description = "티켓 ID", example = "1")
         Long ticketId,
+
+        @Schema(description = """
+                이 티켓을 만든 주문 ID. 결제 금액 조회(`GET /payments/ticket-orders/{id}`)와
+                예매 취소(`POST /payments/ticket-orders/{id}/cancel`)에 씁니다.
+                """, example = "31")
+        Long ticketOrderId,
 
         @Schema(description = "예매 상태. CANCELLED 면 취소된 예매입니다.", example = "CONFIRMED")
         String status,
@@ -34,6 +42,12 @@ public record MyTicketResponse(
 
         @Schema(description = "공연 일시", example = "2026-10-08T19:00:00")
         LocalDateTime performanceDate,
+
+        @Schema(description = "공연장 이름", example = "테아캣 아레나")
+        String stadiumName,
+
+        @Schema(description = "공연장 주소", example = "서울 송파구 올림픽로 25")
+        String stadiumAddress,
 
         @Schema(description = "구역 코드", example = "A")
         String areaCode,
@@ -62,19 +76,24 @@ public record MyTicketResponse(
 ) {
 
     /**
-     * @param nftTicket 발행 대상이 아직 안 만들어졌으면 null (결제 직후 짧은 구간)
-     * @param posterUrl 발급된 임시 URL. 키가 없으면 null
+     * @param ticketOrderId 이 티켓의 주문. 결제를 거치지 않고 만들어진 티켓이면 null
+     * @param nftTicket     발행 대상이 아직 안 만들어졌으면 null (결제 직후 짧은 구간)
+     * @param posterUrl     발급된 임시 URL. 키가 없으면 null
      */
-    public static MyTicketResponse of(Ticket ticket, NftTicket nftTicket, String posterUrl) {
+    public static MyTicketResponse of(Ticket ticket, Long ticketOrderId, NftTicket nftTicket,
+            String posterUrl) {
         PerformanceDetail detail = ticket.getPerformanceDetail();
 
         return new MyTicketResponse(
                 ticket.getId(),
+                ticketOrderId,
                 ticket.getStatus().name(),
                 detail.getPerformance().getTitle(),
                 posterUrl,
                 detail.getPerformanceNum(),
                 detail.getPerformanceDate(),
+                detail.getPerformance().getStadium().getName(),
+                detail.getPerformance().getStadium().getAddress(),
                 ticket.getArea().getAreaCode(),
                 ticket.getSeat() == null ? null : ticket.getSeat().getRowLabel(),
                 ticket.getSeat() == null ? null : ticket.getSeat().getSeatNumber(),

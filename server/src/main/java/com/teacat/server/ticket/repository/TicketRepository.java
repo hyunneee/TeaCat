@@ -21,7 +21,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Query("""
             SELECT t FROM Ticket t
             JOIN FETCH t.performanceDetail pd
-            JOIN FETCH pd.performance
+            JOIN FETCH pd.performance pg
+            JOIN FETCH pg.stadium
             JOIN FETCH t.area
             LEFT JOIN FETCH t.seat
             WHERE t.user.id = :userId
@@ -33,7 +34,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Query("""
             SELECT t FROM Ticket t
             JOIN FETCH t.performanceDetail pd
-            JOIN FETCH pd.performance
+            JOIN FETCH pd.performance pg
+            JOIN FETCH pg.stadium
             JOIN FETCH t.area
             LEFT JOIN FETCH t.seat
             WHERE t.id = :ticketId
