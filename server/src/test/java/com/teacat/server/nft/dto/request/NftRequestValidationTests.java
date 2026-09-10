@@ -26,10 +26,17 @@ class NftRequestValidationTests {
     }
 
     @Test
-    void 판매자_설명은_공백일_수_없고_500자를_넘을_수_없다() {
+    void 판매자_설명은_생략하거나_비워둘_수_있다() {
+        assertThat(validator.validate(new NftListingCreateRequest(1L, null)))
+                .isEmpty();
+        assertThat(validator.validate(new NftListingCreateRequest(1L, "")))
+                .isEmpty();
         assertThat(validator.validate(new NftListingCreateRequest(1L, "   ")))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .contains("description");
+                .isEmpty();
+    }
+
+    @Test
+    void 판매자_설명은_500자를_넘을_수_없다() {
         assertThat(validator.validate(new NftListingCreateRequest(1L, "가".repeat(501))))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .contains("description");

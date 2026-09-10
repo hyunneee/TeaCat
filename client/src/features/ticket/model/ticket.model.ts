@@ -1,4 +1,11 @@
-import type { Ticket } from './ticket.types';
+import type { NftStatus, Ticket } from './ticket.types';
+
+/**
+ * 내 티켓 규칙 (순수 도메인 로직).
+ *
+ * 컴포넌트가 아니라 여기 모아둡니다 — 규칙이 바뀌어도 화면 코드를 안 건드리고,
+ * 렌더링 없이 테스트할 수 있습니다. (booking 의 `seat.model.ts` 와 같은 방식)
+ */
 
 /** 공연이 이미 지났는가 */
 export function isPast(ticket: Ticket): boolean {
@@ -10,21 +17,16 @@ export function isPast(ticket: Ticket): boolean {
  *
  * 얼굴 등록 여부는 사용자 속성이라 여기서 판단하지 않습니다.
  * (features/auth 의 `can.useTicket(user)` 와 조합해서 씁니다)
- *
- * 🔴 NFT 발행 상태는 보지 않습니다. 발행이 밀려도(`PENDING`) 예매는 유효합니다.
  */
 export function isUsable(ticket: Ticket): boolean {
   return ticket.status === 'CONFIRMED' && !isPast(ticket);
 }
 
-/** 관람 예정 — 내 티켓 목록의 첫 탭 */
-export function isUpcoming(ticket: Ticket): boolean {
-  return isUsable(ticket);
-}
-
 /**
- * 취소 가능 여부 — 공연이 시작되면 취소할 수 없습니다 (서버 `PAYMENT_014` 와 같은 규칙).
- * 주문을 모르는 티켓은 취소할 방법이 없습니다 (`ticket.types` 의 orderId 주석).
+ * 취소할 수 있는가.
+ *
+ * 🔴 `orderId` 를 함께 봅니다. 취소는 주문 단위라 주문을 모르면 **요청 자체를 못 보냅니다.**
+ *    (결제 직후 아주 짧은 구간이나 옛 데이터에서 주문이 비어 있을 수 있습니다)
  */
 export function isCancelable(ticket: Ticket): boolean {
   return ticket.status === 'CONFIRMED' && !isPast(ticket) && ticket.orderId !== null;
@@ -41,36 +43,29 @@ export function ticketTone(ticket: Ticket) {
   return 'brand' as const;
 }
 
-/** 'A 12열 5번' — 스탠딩이면 열·번호가 없습니다 */
+/** 'A구역 3열 12번' — 스탠딩 구역은 열·번호가 없습니다 */
 export function seatText(ticket: Ticket): string {
-  if (ticket.row === null || ticket.number === null) return `${ticket.sectionName} 스탠딩`;
-  return `${ticket.sectionName} ${ticket.row}열 ${ticket.number}번`;
+  if (ticket.row === null || ticket.number === null) return `${ticket.sectionName}구역 스탠딩`;
+  return `${ticket.sectionName}구역 ${ticket.row}열 ${ticket.number}번`;
 }
 
 /**
- * NFT 발행이 아직 끝나지 않았을 때만 한 줄 알려줍니다.
+ * NFT 발행 상태 문구. 발행 전이거나 상태를 모르면 null 이라 화면에서 줄을 통째로 뺍니다.
  *
- * 🔴 예매 상태와 **다른 축**입니다. 발행이 밀렸다고 예매가 실패한 것처럼 보이면 안 됩니다 —
- *    그래서 경고가 아니라 안내 문구이고, `MINTED`·`BURNED` 면 아무것도 말하지 않습니다.
+ * 🔴 실패를 "예매 실패" 로 읽히게 쓰지 마세요 — 서버가 재시도하는 중이고 예매는 유효합니다.
  */
-export function nftIssueNote(ticket: Ticket): string | null {
-  switch (ticket.nftStatus) {
+export function nftStatusLabel(status: NftStatus | null): string | null {
+  switch (status) {
     case 'PENDING':
     case 'MINTING':
-      return 'NFT 티켓을 발행하는 중이에요. 예매는 이미 확정됐습니다.';
+      return '발행 중';
+    case 'MINTED':
+      return '발행 완료';
+    case 'BURNED':
+      return '소각됨';
     case 'FAILED':
-      return 'NFT 발행이 지연되고 있어요. 예매와 입장에는 영향이 없습니다.';
+      return '발행 재시도 중';
     default:
       return null;
   }
-}
-
-/**
- * 입장 QR 에 실을 값.
- *
- * ⚠️ QR 규격은 **아직 백엔드와 정해지지 않았습니다** (CLAUDE.md 8장).
- *    지금은 티켓 ID 만 담고, 규격이 정해지면 이 함수 하나만 고칩니다.
- */
-export function qrPayload(ticket: Ticket): string {
-  return `TICKET:${ticket.id}`;
 }

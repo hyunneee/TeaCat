@@ -1,5 +1,6 @@
 import { createElement, lazy, type ComponentType, type ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { wrapCreateBrowserRouter } from '@sentry/react';
 import { ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
@@ -23,8 +24,6 @@ const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
 const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
-const ConcertCreatePage = page(() => import('@/pages/ConcertCreatePage'), 'ConcertCreatePage');
-const ConcertEditPage = page(() => import('@/pages/ConcertEditPage'), 'ConcertEditPage');
 
 const BookingVerifyPage = page(() => import('@/pages/BookingVerifyPage'), 'BookingVerifyPage');
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
@@ -232,14 +231,9 @@ const routes: RouteObject[] = [
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
-      /* 공연 등록·수정 — 관리자와 공연 주최자. 서버 /admin/concerts/** 가 받는 역할과 같습니다 */
-      {
-        element: <RequireRole roles={['ADMIN', 'PERFORMANCE']} />,
-        children: [
-          { path: ROUTES.CONCERT_CREATE, element: withBoundary(<ConcertCreatePage />) },
-          { path: ROUTES.CONCERT_EDIT(':concertId'), element: withBoundary(<ConcertEditPage />) },
-        ],
-      },
+      /* 공연 등록·수정은 어드민 콘솔(/admin/concerts)에 있습니다.
+         여기 앱 화면에도 같은 기능이 한 벌 더 있었는데, 관람객 화면에 관리 기능이 섞여
+         있었고 화면이 두 벌이라 한쪽만 고치면 어긋났습니다. */
       { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
       { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
 
@@ -363,4 +357,8 @@ const routes: RouteObject[] = [
   },
 ];
 
-export const router = createBrowserRouter(routes);
+/* Sentry 가 라우트를 알아보게 감쌉니다.
+   이게 없으면 성능 지표가 `/concerts/1`, `/concerts/2` … 로 흩어져서
+   "공연 상세가 느리다" 를 볼 수 없습니다 (`/concerts/:id` 하나로 묶임).
+   Sentry 가 꺼져 있으면 감싼 함수가 원본을 그대로 부릅니다. */
+export const router = wrapCreateBrowserRouter(createBrowserRouter)(routes);

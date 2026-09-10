@@ -24,3 +24,4 @@ export {
   dialogTransition,
   reduceIfNeeded,
 } from './motion';
+export { initSentry, reportError, setSentryUser } from './sentry';

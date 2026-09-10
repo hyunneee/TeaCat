@@ -5,7 +5,7 @@ import { Header } from '@/shared/components/layout';
 import { Segmented } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { TicketCard, isUpcoming, useMyTickets } from '@/features/ticket';
+import { TicketCard, isPast, useMyTickets } from '@/features/ticket';
 
 const TABS = [
   { value: 'UPCOMING', label: '관람 예정' },
@@ -19,8 +19,12 @@ export function MyTicketsPage() {
   const [tab, setTab] = useState<Tab>('UPCOMING');
   const { data: tickets, isPending } = useMyTickets();
 
+  /* "관람 예정" 은 아직 유효한 예매만입니다. 취소된 예매와 지난 공연은 함께 뒤로 보냅니다 —
+     둘 다 "이제 와서 할 일이 없는" 티켓이라 사용자 입장에서 같은 서랍입니다 */
   const filtered = (tickets ?? []).filter((ticket) =>
-    tab === 'UPCOMING' ? isUpcoming(ticket) : !isUpcoming(ticket),
+    tab === 'UPCOMING'
+      ? ticket.status === 'CONFIRMED' && !isPast(ticket)
+      : ticket.status !== 'CONFIRMED' || isPast(ticket),
   );
 
   return (

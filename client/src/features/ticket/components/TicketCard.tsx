@@ -29,7 +29,9 @@ export function TicketCard({ ticket, onClick }: Props) {
     >
       <PosterImage
         src={ticket.posterUrl}
-        seed={ticket.id}
+        /* 포스터가 없는 공연은 시드 그라데이션으로 대체됩니다. 공연명을 시드로 쓰면
+           같은 공연이 목록 어디에 있든 늘 같은 색으로 보입니다 */
+        seed={ticket.concertTitle}
         alt={`${ticket.concertTitle} 포스터`}
         className="w-16 shrink-0"
       />
@@ -46,6 +48,7 @@ export function TicketCard({ ticket, onClick }: Props) {
           <p className="flex items-center gap-1 truncate">
             <CalendarDays size={13} className="shrink-0" />
             {formatDateTime(ticket.startAt)}
+            <span className="text-muted">· {ticket.performanceNum}회차</span>
           </p>
           <p className="flex items-center gap-1 truncate">
             <MapPin size={13} className="shrink-0" />

@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 @Slf4j
@@ -83,6 +84,26 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(BaseResponse.fail("요청 본문을 읽을 수 없습니다."));
+    }
+
+    /**
+     * 경로·쿼리 파라미터를 선언한 타입으로 바꾸지 못했다 — {@code /concerts/new},
+     * {@code /concerts?size=abc} 처럼.
+     *
+     * <p>{@link HttpMessageNotReadableException} 과 같은 이유로 400 이다. 본문이 아니라
+     * 주소에서 왔을 뿐 <b>클라이언트가 잘못 보낸 것</b>이고, 포괄 핸들러에 맡기면 500 이 나가
+     * 프론트가 서버 장애로 보고 재시도한다. 지워진 화면의 옛 링크(`/concerts/new`)가 남아
+     * 있을 때 실제로 이 경로로 500 이 나갔다.
+     *
+     * <p>파라미터 이름까지만 알려준다. 값과 대상 타입(클래스명)은 붙이지 않는다 —
+     * 값에는 사용자 입력이, 타입에는 내부 구조가 섞인다. 자세한 내용은 로그에만 남긴다.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<BaseResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("요청 파라미터 형식이 올바르지 않습니다: name={}", e.getName());
+
+        return ResponseEntity.badRequest()
+                .body(BaseResponse.fail("%s 값의 형식이 올바르지 않습니다.".formatted(e.getName())));
     }
 
     /**

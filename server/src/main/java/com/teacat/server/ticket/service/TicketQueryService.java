@@ -34,8 +34,8 @@ public class TicketQueryService {
     private static final Limit MAX_TICKETS = Limit.of(100);
 
     private final TicketRepository ticketRepository;
-    private final TicketOrderRepository ticketOrderRepository;
     private final NftTicketRepository nftTicketRepository;
+    private final TicketOrderRepository ticketOrderRepository;
     private final FileStorageService fileStorageService;
 
     public List<MyTicketResponse> getMyTickets(Long userId) {
@@ -51,15 +51,16 @@ public class TicketQueryService {
         nftTicketRepository.findByTicketIdIn(ticketIds)
                 .forEach(nft -> nftByTicketId.put(nft.getTicket().getId(), nft));
 
-        Map<Long, Long> orderIdByTicketId = new HashMap<>();
+        // 금액과 취소 버튼이 주문에 달려 있다 (MyTicketResponse 주석 참고)
+        Map<Long, TicketOrder> orderByTicketId = new HashMap<>();
         ticketOrderRepository.findByTicketIdIn(ticketIds)
-                .forEach(order -> orderIdByTicketId.put(order.getTicket().getId(), order.getId()));
+                .forEach(order -> orderByTicketId.put(order.getTicket().getId(), order));
 
         return tickets.stream()
                 .map(ticket -> MyTicketResponse.of(
                         ticket,
-                        orderIdByTicketId.get(ticket.getId()),
                         nftByTicketId.get(ticket.getId()),
+                        orderByTicketId.get(ticket.getId()),
                         posterUrl(ticket)))
                 .toList();
     }
@@ -74,8 +75,8 @@ public class TicketQueryService {
 
         return MyTicketResponse.of(
                 ticket,
-                ticketOrderRepository.findByTicketId(ticketId).map(TicketOrder::getId).orElse(null),
                 nftTicketRepository.findByTicketId(ticketId).orElse(null),
+                ticketOrderRepository.findByTicketId(ticketId).orElse(null),
                 posterUrl(ticket));
     }
 

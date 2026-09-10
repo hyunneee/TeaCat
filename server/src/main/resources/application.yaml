@@ -235,6 +235,17 @@ admin:
     nickname: ${ADMIN_SEED_NICKNAME:관리자}
     phone: ${ADMIN_SEED_PHONE:010-0000-0000}
 
+# 에러 리포팅 (Sentry). "무엇이 왜 터졌나"를 스택트레이스로 본다.
+# 지연·처리량은 Prometheus 가 보고, 여기는 예외만 본다 — 역할이 겹치지 않는다.
+#
+# 🔴 dsn 이 비어 있으면 아예 켜지지 않는다. 로컬은 그대로 두면 된다.
+#    프론트 DSN 과 다른 값이다 (Sentry 프로젝트가 다름). 값은 docker/.env.dev 에 둔다.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  # 배포마다 바뀌어야 의미가 있다. CI 가 커밋 해시를 넣어주면 가장 좋다.
+  release: ${SENTRY_RELEASE:teacat-server@local}
+
 app:
   # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}

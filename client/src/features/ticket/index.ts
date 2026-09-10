@@ -1,15 +1,15 @@
-export { useMyTickets, useTicketDetail } from './hooks/useTickets';
+export { useMyTickets, useTicketDetail, useCancelTicket } from './hooks/useTickets';
 export { TicketCard } from './components/TicketCard';
 export { TicketQr } from './components/TicketQr';
 export { ticketApi, ticketKeys } from './api/ticketApi';
+export type { CancelResult } from './api/ticketApi';
 export {
   isUsable,
-  isUpcoming,
   isCancelable,
   isPast,
+  nftStatusLabel,
   seatText,
   ticketStatusLabel,
-  nftIssueNote,
-  qrPayload,
+  ticketTone,
 } from './model/ticket.model';
-export type { Ticket, TicketStatus, NftStatus } from './model/ticket.types';
+export type { NftStatus, Ticket, TicketStatus } from './model/ticket.types';

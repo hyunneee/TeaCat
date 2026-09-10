@@ -18,22 +18,27 @@ public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> 
     Optional<TicketOrder> findByPaymentId(Long paymentId);
 
     /**
-     * 승인 선점용 조회. 행을 잠그고 읽어야 두 요청이 동시에 PENDING 을 보고 둘 다 승인을
-     * 보내는 일을 막을 수 있다.
-     */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<TicketOrder> findWithLockById(Long id);
-
-    /**
-     * 이 티켓을 만든 주문. 티켓 화면이 금액·취소로 넘어가는 열쇠다.
+     * 발권된 티켓으로 주문을 되찾는다.
      *
-     * <p>취소된 주문도 {@code ticket_id} 를 그대로 들고 있어(제약 {@code chk_ticket_orders_paid})
+     * <p>내 티켓 화면이 결제 금액을 보여주고 <b>취소 버튼을 만들 때</b> 쓴다. 취소는 티켓이
+     * 아니라 주문 단위라({@code POST /payments/ticket-orders/{id}/cancel}) 티켓만 알아서는
+     * 취소를 걸 수 없다.
+     *
+     * <p>티켓 하나에 주문도 하나다 — 주문이 PAID 가 될 때 그 주문이 티켓을 발권한다.
+     * 취소된 주문도 {@code ticket_id} 를 그대로 들고 있어(제약 {@code chk_ticket_orders_paid})
      * 취소 뒤에도 같은 주문을 찾을 수 있다.
      */
     Optional<TicketOrder> findByTicketId(Long ticketId);
 
     /** 목록용. 티켓마다 따로 조회하면 N+1 이 된다 */
     List<TicketOrder> findByTicketIdIn(Collection<Long> ticketIds);
+
+    /**
+     * 승인 선점용 조회. 행을 잠그고 읽어야 두 요청이 동시에 PENDING 을 보고 둘 다 승인을
+     * 보내는 일을 막을 수 있다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<TicketOrder> findWithLockById(Long id);
 
     /** 이 좌석에 결제 대기 중인 주문. 부분 유니크 인덱스가 있어 최대 하나다 */
     Optional<TicketOrder> findByPerformanceDetail_IdAndSeat_IdAndStatus(

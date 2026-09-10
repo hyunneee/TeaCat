@@ -20,8 +20,18 @@ COPY . .
 #    CI 에서 --build-arg VITE_USE_MOCK=false 로 넘긴다.
 ARG VITE_USE_MOCK=true
 ARG VITE_ENABLE_DEVTOOLS=false
+
+# 🔴 dev 배포도 `vite build --mode production` 으로 빌드한다. 그래서 .env.production 의
+#    VITE_APP_ENV 를 그대로 쓰면 **dev 에서 난 에러가 대시보드에 production 으로 찍힌다.**
+#    CI 가 DEPLOY_ENV(dev/prod)를 여기로 넘겨 구분한다. (Jenkinsfile '빌드: 프론트')
+ARG VITE_SENTRY_ENVIRONMENT=production
+# 어느 커밋에서 난 에러인지. CI 가 짧은 커밋 해시를 넣는다.
+ARG VITE_SENTRY_RELEASE=
+
 ENV VITE_USE_MOCK=$VITE_USE_MOCK \
-    VITE_ENABLE_DEVTOOLS=$VITE_ENABLE_DEVTOOLS
+    VITE_ENABLE_DEVTOOLS=$VITE_ENABLE_DEVTOOLS \
+    VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT \
+    VITE_SENTRY_RELEASE=$VITE_SENTRY_RELEASE
 
 # models(ONNX 내려받기) → tsc → vite build → wasm gzip
 # 🔴 모델을 받아야 해서 빌드에 네트워크가 필요하다.

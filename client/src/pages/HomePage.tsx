@@ -18,7 +18,7 @@ import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHold } from '@/features/booking';
-import { isTicketingOpen, posterSeedOf, useConcerts } from '@/features/concert';
+import { isConcertOpen, posterSeedOf, useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
@@ -73,7 +73,7 @@ export function HomePage() {
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const { hold: activeHold, remainSeconds: holdRemainSeconds } = useActiveHold();
 
-  const open = concerts?.filter((c) => isTicketingOpen(c)).slice(0, RAIL_LIMIT) ?? [];
+  const open = concerts?.filter((c) => isConcertOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
      두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼

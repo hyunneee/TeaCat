@@ -18,6 +18,7 @@ import com.teacat.server.performance.dto.response.PerformanceAreaResponse;
 import com.teacat.server.performance.dto.response.PresignedUploadResponse;
 import com.teacat.server.performance.dto.response.ScheduleCreateResponse;
 import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
+import com.teacat.server.performance.entity.BookingOpenStatus;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
@@ -325,8 +326,29 @@ public class AdminPerformanceService {
                 ? performanceGeneralRepository.findAllForAdmin()
                 : performanceGeneralRepository.findAllByCreatedById(actor.id());
 
+        if (performances.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 회차는 한 번에 읽어 나눈다. 공연마다 따로 읽으면 목록 크기만큼 쿼리가 늘어난다
+        Map<Long, List<PerformanceDetail>> schedulesByConcert =
+                performanceDetailRepository.findByPerformanceIdIn(
+                                performances.stream().map(PerformanceGeneral::getId).toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(detail -> detail.getPerformance().getId()));
+
         return performances.stream()
-                .map(p -> ConcertSummaryResponse.of(p, fileStorageService.presignedUrl(p.getPosterImageKey())))
+                .map(p -> ConcertSummaryResponse.of(
+                        p,
+                        fileStorageService.presignedUrl(p.getPosterImageKey()),
+                        BookingOpenStatus.aggregate(
+                                schedulesByConcert.getOrDefault(p.getId(), List.of()).stream()
+                                        .map(detail -> detail.bookingStatus(now))
+                                        .toList(),
+                                p.getTicketingStartAt(),
+                                now)))
                 .toList();
     }
 
