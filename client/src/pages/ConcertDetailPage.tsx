@@ -22,7 +22,11 @@ export function ConcertDetailPage() {
   const { open } = useModal();
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
-  const { data: concert, isPending, isError } = useConcertDetail(concertId);
+  /* `/concerts/무엇이든` 이 전부 여기로 들어옵니다. 숫자가 아니면 공연 ID 가 아니라
+     없는 주소입니다 — 예전 `/concerts/new`(등록 화면, 지금은 어드민으로 옮김) 같은
+     오래된 링크가 여기로 떨어집니다. 서버에 물어봐야 500 만 받으므로 묻지 않습니다. */
+  const isConcertId = /^\d+$/.test(concertId);
+  const { data: concert, isPending, isError } = useConcertDetail(isConcertId ? concertId : '');
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
@@ -48,6 +52,20 @@ export function ConcertDetailPage() {
     }
     navigate(ROUTES.BOOKING_VERIFY(scheduleId));
   };
+
+  /* 쿼리를 끄면 `isPending` 이 계속 true 라 로딩 화면에서 멈춥니다. 로딩 분기보다 먼저 빠져나옵니다 */
+  if (!isConcertId) {
+    return (
+      <>
+        <Header showBack />
+        <EmptyState
+          mood="sad"
+          title="페이지를 찾을 수 없어요"
+          description="주소가 바뀌었거나 삭제된 페이지입니다."
+        />
+      </>
+    );
+  }
 
   if (isPending) {
     return (
