@@ -15,20 +15,10 @@ import type { Recipient, SeatHold } from '../model/booking.types';
  *   (서버 시각을 클라이언트 시계와 직접 비교하면 기기 시각이 틀어진 사용자에게
  *    엉뚱한 타이머가 보입니다)
  *
- * `holdId` / `seatIds` — 🔴 **임시 호환 필드입니다. 서버에 없습니다.**
- *   서버 선점은 (회차, 좌석, 사용자) 로 식별되고 holdId 라는 개념이 없습니다.
- *   그런데 결제가 아직 목업이고 그 목업이 holdId + seatIds 를 요구합니다.
- *   결제 화면을 이번 작업 범위에서 제외했으므로, 그쪽 코드를 건드리지 않기 위해
- *   여기서 합성해 둡니다.
- *   TODO(backend): 실제 결제 API 가 나오면 이 두 필드와 `features/payment` 의
- *   holdId 사용처를 함께 지우고 (회차, 좌석) 기준으로 바꾸세요.
+ * 서버 선점은 (회차, 좌석, 사용자)로 식별합니다. 서버에 없는 별도 holdId는 만들지 않습니다.
  */
 export type HoldSession = SeatHold & {
   receivedAt: number;
-  /** @deprecated 서버에 없는 합성값 — 결제 목업 호환용 */
-  holdId: string;
-  /** @deprecated 1인 1좌석이라 항상 길이 1 — 결제 목업 호환용 */
-  seatIds: string[];
 };
 
 interface BookingState {
@@ -84,8 +74,6 @@ function toSession(hold: SeatHold): HoldSession {
   return {
     ...hold,
     receivedAt: Date.now(),
-    holdId: `${hold.scheduleId}:${hold.seatId}`,
-    seatIds: [hold.seatId],
   };
 }
 

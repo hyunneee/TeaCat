@@ -119,27 +119,8 @@ export interface BookingPolicy {
   cancelableUntilPerformanceStart: boolean;
 }
 
-/* ── 결제(목업) 전용 ────────────────────────────────────────────
-   🔴 아래 타입들은 아직 **서버에 대응하는 API 가 없습니다.**
-      `payment` · `ticket` 도메인이 백엔드에 없어서 결제는 목업으로 돕니다.
-      실제 결제 API 가 나오면 그 응답에 맞춰 다시 정의하세요 —
-      특히 `holdId` 는 서버에 없는 개념입니다 (store 의 HoldSession 주석 참고). */
-
 /** 좌석 하나당 티켓을 받을 사람 */
 export interface Recipient {
   seatId: string;
   loginId: string;
-}
-
-export interface CreateOrderRequest {
-  holdId: string;
-  /** 단순 양도 방지 — 결제 시점에 티켓을 받을 사람의 아이디를 확정 */
-  recipients: Recipient[];
-}
-
-export interface Order {
-  orderId: string;
-  ticketIds: string[];
-  totalPrice: number;
-  paidAt: string;
 }
