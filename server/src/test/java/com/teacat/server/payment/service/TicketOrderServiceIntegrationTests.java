@@ -90,6 +90,9 @@ class TicketOrderServiceIntegrationTests {
     private TicketCancelService ticketCancelService;
 
     @Autowired
+    private TicketOrderScheduler ticketOrderScheduler;
+
+    @Autowired
     private com.teacat.server.ticket.service.TicketQueryService ticketQueryService;
 
     @Autowired
@@ -210,6 +213,90 @@ class TicketOrderServiceIntegrationTests {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(BookingErrorCode.SEAT_HOLD_EXPIRED);
+    }
+
+    @Test
+    void 결제창을_닫았다가_다시_결제해도_주문은_하나다() {
+        givenChainBalance(11_401);
+        TicketOrderPrepareResponse first = ticketOrderService.open(userId, detailId, seatId);
+
+        // 결제를 다시 누르면 프론트가 준비 API 를 또 부른다.
+        // 주문을 새로 만들려 하면 uq_ticket_orders_pending_seat 에 걸려 터진다
+        TicketOrderPrepareResponse again = ticketOrderService.open(userId, detailId, seatId);
+
+        assertThat(again.ticketOrderId()).isEqualTo(first.ticketOrderId());
+        assertThat(again.orderId()).isEqualTo(first.orderId());
+        assertThat(again.tokenAmount()).isEqualTo(first.tokenAmount());
+        assertThat(countTicketOrders()).isEqualTo(1);
+        // 같은 돈이 두 번 묶이면 쓸 수 있는 잔액만 사라진다
+        assertThat(countActiveHolds()).isEqualTo(1);
+    }
+
+    @Test
+    void 선점을_잃은_남의_주문은_정리되고_그_좌석으로_다시_주문할_수_있다() {
+        givenChainBalance(0);
+        // 남이 주문을 열어둔 채 사라졌고, 그 선점이 만료돼 좌석은 내가 잡았다
+        Long staleOrderId = insertPendingOrderOf(insertOtherUser());
+
+        TicketOrderPrepareResponse mine = ticketOrderService.open(userId, detailId, seatId);
+
+        assertThat(mine.ticketOrderId()).isNotEqualTo(staleOrderId);
+        assertThat(orderStatus(staleOrderId)).isEqualTo("FAILED");
+        assertThat(paymentStatusOf(staleOrderId)).isEqualTo("ABORTED");
+    }
+
+    @Test
+    void 버려진_주문은_배치가_닫고_묶인_캣머니를_풀어준다() {
+        givenChainBalance(11_401);
+        TicketOrderPrepareResponse order = ticketOrderService.open(userId, detailId, seatId);
+        expireHold();
+
+        ticketOrderScheduler.expireStalePendingOrders();
+
+        assertThat(orderStatus(order.ticketOrderId())).isEqualTo("FAILED");
+        assertThat(holdStatus(order.ticketOrderId())).isEqualTo("RELEASED");
+        assertThat(paymentStatusOf(order.ticketOrderId())).isEqualTo("ABORTED");
+    }
+
+    @Test
+    void 선점이_살아있는_주문은_배치가_건드리지_않는다() {
+        givenChainBalance(11_401);
+        TicketOrderPrepareResponse order = ticketOrderService.open(userId, detailId, seatId);
+
+        ticketOrderScheduler.expireStalePendingOrders();
+
+        assertThat(orderStatus(order.ticketOrderId())).isEqualTo("PENDING");
+        assertThat(holdStatus(order.ticketOrderId())).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void 승인을_보낸_주문은_선점이_만료돼도_배치가_건드리지_않는다() {
+        givenChainBalance(0);
+        TicketOrderPrepareResponse order = ticketOrderService.open(userId, detailId, seatId);
+        // 승인은 보냈는데 그 뒤 처리가 실패한 주문. 닫아 버리면 다시 승인해 되살릴 길이 막힌다
+        jdbcTemplate.update("UPDATE payments SET status = 'IN_PROGRESS'::payment_status"
+                + " WHERE order_id = ?", order.orderId());
+        expireHold();
+
+        ticketOrderScheduler.expireStalePendingOrders();
+
+        assertThat(orderStatus(order.ticketOrderId())).isEqualTo("PENDING");
+    }
+
+    @Test
+    void 판매에서_빠진_좌석으로는_주문할_수_없다() {
+        givenChainBalance(0);
+        // 선점한 뒤 운영이 좌석을 막은 상황. 선점이 남아 있어도 팔 수 있는 좌석이 아니다
+        jdbcTemplate.update("UPDATE performance_seats SET status = 'BLOCKED'::seat_booking_status"
+                + " WHERE performance_detail_id = ? AND seat_id = ?", detailId, seatId);
+
+        assertThatThrownBy(() -> ticketOrderService.open(userId, detailId, seatId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(BookingErrorCode.SEAT_ALREADY_SOLD);
+
+        assertThat(countPayments()).isZero();
+        assertThat(countTicketOrders()).isZero();
     }
 
     @Test
@@ -690,6 +777,29 @@ class TicketOrderServiceIntegrationTests {
                 """, detailId, seatId);
     }
 
+    /** 선점이 만료된 상황 */
+    private void expireHold() {
+        jdbcTemplate.update("UPDATE performance_seats SET held_until = now() - interval '1 minute'"
+                + " WHERE performance_detail_id = ? AND seat_id = ?", detailId, seatId);
+    }
+
+    /** 결제창을 닫고 사라진 남의 주문. 그 선점은 이미 만료됐다 */
+    private Long insertPendingOrderOf(Long ownerId) {
+        Long paymentId = jdbcTemplate.queryForObject("""
+                INSERT INTO payments (order_id, user_id, purpose, amount, status)
+                VALUES ('tc_stale', ?, 'TICKET'::payment_purpose, ?, 'READY'::payment_status)
+                RETURNING id
+                """, Long.class, ownerId, PRICE);
+        Long areaId = jdbcTemplate.queryForObject("SELECT id FROM areas LIMIT 1", Long.class);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO ticket_orders
+                    (user_id, performance_detail_id, area_id, seat_id,
+                     total_amount, token_amount, cash_amount, status, payment_id)
+                VALUES (?, ?, ?, ?, ?, 0, ?, 'PENDING'::ticket_order_status, ?)
+                RETURNING id
+                """, Long.class, ownerId, detailId, areaId, seatId, PRICE, PRICE, paymentId);
+    }
+
     private void holdSeat(Long userId, Long detailId, Long seatId) {
         jdbcTemplate.update("""
                 UPDATE performance_seats
@@ -764,6 +874,15 @@ class TicketOrderServiceIntegrationTests {
         return jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM cat_transactions WHERE direction::text = ? AND reason::text = ?",
                 Long.class, direction, reason);
+    }
+
+    private Long countTicketOrders() {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM ticket_orders", Long.class);
+    }
+
+    private Long countActiveHolds() {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM cat_money_holds WHERE status = 'ACTIVE'", Long.class);
     }
 
     private Long countPayments() {
