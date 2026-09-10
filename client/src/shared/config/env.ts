@@ -124,6 +124,31 @@ function sentryConfig() {
   } as const;
 }
 
+/**
+ * 행동 분석 (Microsoft Clarity).
+ *
+ * 프로젝트 ID 가 비어 있으면 **아예 켜지 않습니다.** Sentry 의 DSN 과 같은 규칙입니다 —
+ * 로컬 개발에서 아무 설정 없이 받아도 조용히 꺼진 채로 돌아가고, 팀원 노트북의
+ * 세션이 히트맵을 오염시키지 않습니다.
+ *
+ * ⚠️ 프로젝트 ID 는 브라우저에 노출되는 **공개 값**입니다 (스크립트 주소에 그대로 실립니다).
+ *    대시보드를 읽는 권한이 아닙니다. 데이터 내보내기용 API 토큰은 전혀 다른 물건이고,
+ *    절대 `VITE_` 로 두면 안 됩니다.
+ *
+ * 🔴 Clarity 에는 Sentry 의 `environment` 같은 태그가 **없습니다.** dev·prod 를
+ *    가르려면 **프로젝트를 환경별로 하나씩** 만들고 CI 가 서로 다른 ID 를 넘겨야 합니다.
+ *    같은 ID 를 쓰면 히트맵이 섞입니다. (shared/lib/clarity.ts 주석)
+ */
+function clarityConfig() {
+  const projectId = optionalString('VITE_CLARITY_PROJECT_ID', '').trim();
+
+  return {
+    projectId,
+    /** 프로젝트 ID 가 있어야만 켜집니다 */
+    enabled: projectId.length > 0,
+  } as const;
+}
+
 export const env = {
   /** 'development' | 'production' */
   name: (import.meta.env.VITE_APP_ENV ?? import.meta.env.MODE) as AppEnvName,
@@ -150,6 +175,11 @@ export const env = {
   /* ── 에러 리포팅 (Sentry) ────────────────────────────────
      DSN 이 없으면 꺼진 채로 동작합니다. shared/lib/sentry.ts 참고. */
   sentry: sentryConfig(),
+
+  /* ── 행동 분석 (Microsoft Clarity) ───────────────────────
+     프로젝트 ID 가 없으면 꺼진 채로 동작합니다.
+     🔴 켜기 전에 대시보드 마스킹을 Strict 로 바꿔야 합니다 — shared/lib/clarity.ts 참고. */
+  clarity: clarityConfig(),
 
   /* ── 얼굴 등록 ───────────────────────────────────────────
      🔴 모델 파일은 **브라우저에서만** 씁니다. 서버로 얼굴 이미지를 보내는 설정은

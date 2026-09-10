@@ -19,6 +19,14 @@
  * 확인하는 법: 대시보드에서 지표 하나를 열어 `source` 가 `route` 인지 보세요.
  * `url` 이면 이 순서가 깨진 것입니다.
  */
-import { initSentry } from '@/shared/lib';
+import { initClarity, initSentry } from '@/shared/lib';
 
 initSentry();
+
+/* 행동 분석 (Clarity). Sentry 와 달리 **순서 제약이 없습니다** — 라우터를 감싸지 않고
+   DOM 만 봅니다. 계측 초기화를 한 곳에 모아 두려고 여기 있을 뿐입니다.
+   `async` 스크립트를 꽂는 것뿐이라 첫 페인트를 막지 않습니다.
+
+   🔴 이게 기록하는 DOM 은 `index.html` 의 `data-clarity-mask` 로 **전부 가려집니다.**
+      그 속성을 지우면 화면 내용이 그대로 올라갑니다. shared/lib/clarity.ts 를 읽으세요. */
+initClarity();

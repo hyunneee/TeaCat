@@ -27,9 +27,23 @@
     <title>티캣</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- 🔴 data-clarity-mask 를 지우지 마세요 (0번 절차). CLAUDE.md 7장.
+         Microsoft Clarity 가 화면 내용을 업로드하지 못하게 막는 **기본 차단**입니다.
+         이 속성이 붙은 노드와 그 자식은 통째로 마스킹되고 서버로 가지 않습니다.
+
+         왜 여기(React 밖)에 두는가:
+           - 화면을 새로 만들 때 아무것도 안 해도 가려집니다. 페이지마다 붙이는 방식은
+             새 화면이 생길 때마다 빠뜨립니다 (sentry.ts 의 httpBodies: [] 와 같은 발상).
+           - React 리팩터링으로 사라지지 않습니다.
+
+         🔴 #modal-root 는 #root 의 자식이 **아닙니다.** 따로 적어야 합니다.
+            빠뜨리면 모달·토스트 내용만 그대로 올라갑니다.
+
+         마스킹해도 히트맵·rage click 은 그대로 나옵니다 (클릭 집계는 텍스트와 무관).
+         읽기 어려워지는 건 리플레이 화면뿐입니다. 자세한 건 shared/lib/clarity.ts. -->
+    <div id="root" data-clarity-mask="true"></div>
     <!-- 전역 모달/토스트가 붙는 포탈 루트 -->
-    <div id="modal-root"></div>
+    <div id="modal-root" data-clarity-mask="true"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
