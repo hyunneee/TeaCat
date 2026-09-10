@@ -91,6 +91,10 @@ const toSection = (area: ApiSeatArea): Section => ({
   price: area.price,
   totalSeats: area.seatCount,
   availableSeats: area.availableCount,
+  /* 서버는 "좌석이 준비됐는지" 를 따로 알려주지 않습니다. 회차 좌석을 만들지 않았으면
+     전 좌석이 BLOCKED 로 오므로, BLOCKED 가 아닌 좌석을 세어 그걸 구분합니다.
+     (안 세면 아직 열지도 않은 구역이 "매진" 으로 보입니다 — sellableSeats 주석 참고) */
+  sellableSeats: area.seats.filter((seat) => seat.status !== 'BLOCKED').length,
   bounds: { x: area.areaX, y: area.areaY, width: area.width, height: area.height },
 });
 

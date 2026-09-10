@@ -10,7 +10,11 @@ export {
   useDeleteConcert,
   useStadiums,
 } from './hooks/useCreateConcert';
-export { useAddSchedule, useDeleteSchedule } from './hooks/useManageSchedules';
+export {
+  useAddSchedule,
+  useDeleteSchedule,
+  useGenerateSeats,
+} from './hooks/useManageSchedules';
 export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
 export {
   useStadiumLayouts,
@@ -18,6 +22,8 @@ export {
   useAreaPricingRows,
   useSaveAreas,
 } from './hooks/useAreaPricing';
+/** 어드민 콘솔의 공연 관리 목록 — /mine 을 그대로 쓰고 검색만 화면에서 거릅니다 */
+export { useManagedConcerts } from './hooks/useManagedConcerts';
 export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 // View

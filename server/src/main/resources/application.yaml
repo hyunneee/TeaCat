@@ -13,6 +13,46 @@ server:
   #    이 값을 켜면 스프링이 https://dev.teacat.site 로 인식해 CORS 검사를 아예 타지 않는다.
   forward-headers-strategy: framework
 
+# 모니터링 노출. Prometheus 가 긁어간다.
+#
+# 🔴 반드시 별도 포트여야 한다. 8080 에 두면 server.servlet.context-path 때문에
+#    /api/actuator/... 가 되고, nginx 가 /api 를 그대로 프록시하므로 액추에이터가
+#    인터넷에 열린다. 힙 덤프까지는 안 열리더라도 환경변수·빈 목록이 새는 건 확정이다.
+#    8081 은 compose 에서 호스트로 열지 않으므로 teacat-net 안에서만 닿는다.
+#    (관리 포트에는 context-path 가 적용되지 않는다 — management.server.base-path 가 따로다)
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        # 필요한 것만 연다. env / heapdump / loggers 는 켜지 않는다
+        include: health,prometheus
+  endpoint:
+    health:
+      # 컨테이너 헬스체크가 아니라 사람이 보는 용도다. 상세를 켜면 DB/Redis 개별 상태가 보인다
+      show-details: when-authorized
+  metrics:
+    tags:
+      # 나중에 서버가 여러 대가 돼도 시계열이 섞이지 않게 이름을 붙인다
+      application: ${spring.application.name}
+    distribution:
+      # 🔴 p95/p99 를 PromQL 로 계산하려면 히스토그램(버킷)이 필요하다. 이게 없으면
+      #    http_server_requests 는 count/sum 만 나와서 평균밖에 못 본다 —
+      #    티켓 오픈처럼 꼬리가 중요한 상황에서 평균은 아무것도 말해주지 않는다.
+      percentiles-histogram:
+        http.server.requests: true
+      # 버킷 범위. 좌석 선점은 100ms 안쪽이 정상이고 1s 를 넘으면 이미 사고다.
+      # 범위를 넓게 두면 버킷 수가 늘어 시계열이 불어나므로 이만큼으로 자른다
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 spring:
   application:
     name: teacat
@@ -114,6 +154,16 @@ nft:
     confirm-interval: ${NFT_DESIGN_CONFIRM_INTERVAL:PT30S}
     confirm-batch-size: 50
     confirm-enabled: true
+  photocard:
+    issue:
+      # 회차 시작이 임박한 공연 회차의 확정 티켓 보유자에게 포토카드를 자동 발급하는 스케줄러.
+      #   @Scheduled(cron) 이 그대로 읽으므로 6필드 cron 표기여야 한다 (기본: 매시 정각).
+      scheduler-cron: ${NFT_PHOTOCARD_ISSUE_CRON:0 0 * * * *}
+      # 회차 시작(performance_date)이 지금부터 이 시간 이내면 발급 대상으로 본다.
+      lead-time: ${NFT_PHOTOCARD_ISSUE_LEAD_TIME:1h}
+      # 한 주기에 처리할 최대 회차 수. 나머지는 다음 주기에 다시 잡힌다.
+      batch-size: 20
+      scheduler-enabled: true
 
 ipfs:
   # 포토카드 도안의 그림과 메타데이터 JSON 을 핀하는 곳. 도안 생성 API 에서만 쓴다.

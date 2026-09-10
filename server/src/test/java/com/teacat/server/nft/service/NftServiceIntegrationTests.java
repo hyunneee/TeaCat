@@ -88,6 +88,12 @@ class NftServiceIntegrationTests {
     @Autowired
     private NftPhotocardIssuer photocardIssuer;
 
+    @Autowired
+    private NftPhotocardIssueScheduler photocardIssueScheduler;
+
+    @Autowired
+    private com.teacat.server.nft.repository.NftMarketQueryRepository nftMarketQueryRepository;
+
     /*
      * 체인은 붙이지 않는다. server/.env 가 테스트에서도 로드되므로 스텁으로 막지 않으면
      * 진짜 블록체인 서비스로 발행 요청이 나가 실제 체인에 카드가 민팅된다.
@@ -899,6 +905,147 @@ class NftServiceIntegrationTests {
         verify(photocardChainClient, times(2)).issuePhotocards(sent.capture());
         assertThat(sent.getAllValues().get(0)).hasSize(200);
         assertThat(sent.getAllValues().get(1)).hasSize(1);
+    }
+
+    // ── 회차(performance_detail) 단위 자동 발급 ────────────────────────────────
+
+    @Test
+    void 회차_자동발급은_그_회차의_티켓에만_카드를_만든다() {
+        Fixture fixture = insertPerformanceFixture();
+        Long scheduleA = fixture.performanceDetailId();
+        Long scheduleB = insertSchedule(fixture.performanceId(), 2, "now() + interval '2 hours'");
+        Long ticketA = insertTicketOnSchedule(insertUser("a@test.com", "가"), scheduleA, fixture.areaId());
+        Long ticketB = insertTicketOnSchedule(insertUser("b@test.com", "나"), scheduleB, fixture.areaId());
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 10);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issueForSchedule(scheduleA);
+
+        assertThat(response.issuedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT ticket_id FROM nft_photocards", Long.class)).isEqualTo(ticketA);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards WHERE ticket_id = ?", Long.class, ticketB)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT issued_supply FROM nft_photocard_designs WHERE id = ?", Integer.class, designId))
+                .isEqualTo(1);
+        verify(photocardChainClient, times(1)).issuePhotocards(any());
+    }
+
+    @Test
+    void 이미_발급된_회차를_다시_부르면_카드를_더_만들지_않는다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicketOnSchedule(insertUser("a@test.com", "가"), fixture.performanceDetailId(), fixture.areaId());
+        insertDesign(fixture.performanceId(), "한정 포토카드", 10);
+
+        assertThat(photocardIssuer.issueForSchedule(fixture.performanceDetailId()).issuedCount()).isEqualTo(1);
+        // 블록체인 서비스가 요청을 받은 자리에서 MINTING 으로 옮긴다
+        jdbcTemplate.update("UPDATE nft_photocards SET status = 'MINTING'");
+
+        assertThat(photocardIssuer.issueForSchedule(fixture.performanceDetailId()).issuedCount()).isZero();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isEqualTo(1L);
+        // 첫 발급 때 한 번만 나갔다. 두 번째 호출은 새 카드도, 새 전송도 만들지 않는다
+        verify(photocardChainClient, times(1)).issuePhotocards(any());
+    }
+
+    @Test
+    void 회차_자동발급은_지갑_없는_수령자를_건너뛰고_나머지로_발급한다() {
+        Fixture fixture = insertPerformanceFixture();
+        Long withWallet = insertTicketOnSchedule(
+                insertUser("has@test.com", "지갑있음"), fixture.performanceDetailId(), fixture.areaId());
+        Long noWallet = insertTicketOnSchedule(
+                insertWalletlessUser("none@test.com", "지갑없음", "USER"),
+                fixture.performanceDetailId(), fixture.areaId());
+        insertDesign(fixture.performanceId(), "한정 포토카드", 10);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issueForSchedule(fixture.performanceDetailId());
+
+        assertThat(response.issuedCount()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT ticket_id FROM nft_photocards", Long.class)).isEqualTo(withWallet);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards WHERE ticket_id = ?", Long.class, noWallet)).isZero();
+    }
+
+    @Test
+    void 회차_자동발급은_온체인_미등록_도안만_있으면_발급하지_않는다() {
+        Fixture fixture = insertPerformanceFixture();
+        insertTicketOnSchedule(insertUser("a@test.com", "가"), fixture.performanceDetailId(), fixture.areaId());
+        insertUnregisteredDesign(fixture.performanceId(), "미등록 도안", 10);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issueForSchedule(fixture.performanceDetailId());
+
+        assertThat(response.issuedCount()).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isZero();
+        verifyNoInteractions(photocardChainClient);
+    }
+
+    @Test
+    void 회차_자동발급은_도안_재고가_수령자보다_적으면_재고만큼만_발급한다() {
+        Fixture fixture = insertPerformanceFixture();
+        for (int i = 0; i < 3; i++) {
+            insertTicketOnSchedule(insertUser("u" + i + "@test.com", "수령자" + i),
+                    fixture.performanceDetailId(), fixture.areaId());
+        }
+        Long designId = insertDesign(fixture.performanceId(), "재고 2장", 2);
+
+        NftPhotocardIssueResponse response = photocardIssuer.issueForSchedule(fixture.performanceDetailId());
+
+        assertThat(response.issuedCount()).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isEqualTo(2L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT issued_supply FROM nft_photocard_designs WHERE id = ?", Integer.class, designId))
+                .isEqualTo(2);
+    }
+
+    @Test
+    void 스케줄러는_시작_1시간_이내_회차만_발급하고_지난_회차와_먼_회차는_건드리지_않는다() {
+        Fixture fixture = insertPerformanceFixture();
+        Long dueSoon = insertSchedule(fixture.performanceId(), 2, "now() + interval '30 minutes'");
+        Long farOff = insertSchedule(fixture.performanceId(), 3, "now() + interval '5 hours'");
+        Long past = insertSchedule(fixture.performanceId(), 4, "now() - interval '10 minutes'");
+        Long dueTicket = insertTicketOnSchedule(insertUser("due@test.com", "임박"), dueSoon, fixture.areaId());
+        insertTicketOnSchedule(insertUser("far@test.com", "먼회차"), farOff, fixture.areaId());
+        insertTicketOnSchedule(insertUser("past@test.com", "지난회차"), past, fixture.areaId());
+        insertDesign(fixture.performanceId(), "한정 포토카드", 50);
+
+        // 발급 전: 임박 회차만 대상이다 (지난 회차·먼 회차·과거 fixture 회차는 빠진다)
+        assertThat(nftMarketQueryRepository.findScheduleIdsDueForIssue(
+                java.time.LocalDateTime.now(), java.time.LocalDateTime.now().plusHours(1), 20))
+                .containsExactly(dueSoon);
+
+        photocardIssueScheduler.issueDuePhotocards();
+
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT ticket_id FROM nft_photocards", Long.class)).isEqualTo(dueTicket);
+        // 발급 뒤: 임박 회차의 확정 티켓이 전부 카드를 받아 더는 대상이 아니다
+        assertThat(nftMarketQueryRepository.findScheduleIdsDueForIssue(
+                java.time.LocalDateTime.now(), java.time.LocalDateTime.now().plusHours(1), 20))
+                .isEmpty();
+    }
+
+    private Long insertSchedule(Long performanceId, int performanceNum, String performanceDateSql) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO performance_details
+                    (performance_general_id, performance_num, performance_date, status)
+                VALUES (?, ?, %s, 'SCHEDULED') RETURNING id
+                """.formatted(performanceDateSql), Long.class, performanceId, performanceNum);
+    }
+
+    private Long insertTicketOnSchedule(Long userId, Long scheduleId, Long areaId) {
+        Long faceId = insertFace();
+        Integer seatNumber = jdbcTemplate.queryForObject(
+                "SELECT count(*)::int + 1 FROM seats WHERE area_id = ?", Integer.class, areaId);
+        Long seatId = jdbcTemplate.queryForObject("""
+                INSERT INTO seats (area_id, row_label, seat_number)
+                VALUES (?, '3', ?) RETURNING id
+                """, Long.class, areaId, seatNumber);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                """, Long.class, userId, scheduleId, areaId, seatId, faceId);
     }
 
     private Long insertUser(String email, String nickname) {

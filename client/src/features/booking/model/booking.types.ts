@@ -30,6 +30,15 @@ export interface Section {
   price: number | null;
   totalSeats: number;
   availableSeats: number;
+  /**
+   * 팔 수 있는 상태로 준비된 좌석 수 (AVAILABLE + HELD + SOLD).
+   *
+   * 🔴 `totalSeats` 와 다릅니다. 회차 좌석을 아직 만들지 않았으면
+   *    (`POST /admin/schedules/{id}/seats`) 서버가 전 좌석을 `BLOCKED` 로 내려주는데,
+   *    그때 `totalSeats` 는 그대로고 이 값만 0 입니다. 이 둘을 구분하지 않으면
+   *    **아직 열지 않은 구역이 "매진" 으로 보입니다.**
+   */
+  sellableSeats: number;
   /** 공연장 도면에서 이 구역이 차지하는 사각형 — 서버가 알려줍니다 */
   bounds: { x: number; y: number; width: number; height: number };
 }

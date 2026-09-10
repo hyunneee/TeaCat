@@ -5,13 +5,24 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { Button, Stepper } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
-import { SectionGrid, VenueMap, useBookingStore, useSections } from '@/features/booking';
-import { useSchedule } from '@/features/concert';
+import {
+  HeldSeatNotice,
+  SectionGrid,
+  VenueMap,
+  VenueMapLegend,
+  useBookingStore,
+  useSeatHold,
+  useSeatMap,
+  useSections,
+} from '@/features/booking';
+import { useConcertLayout, useSchedule } from '@/features/concert';
+import { useModal } from '@/app/providers';
 
 /** 플로우: 봇 확인 → **구역** → 좌석 선택 */
 export function SectionSelectPage() {
   const navigate = useNavigate();
   const { scheduleId = '' } = useParams();
+  const { open } = useModal();
 
   const startSession = useBookingStore((s) => s.startSession);
   const sectionId = useBookingStore((s) => s.sectionId);
@@ -21,6 +32,22 @@ export function SectionSelectPage() {
 
   const { data: schedule } = useSchedule(scheduleId);
   const { data: sections, isPending, isError } = useSections(scheduleId);
+  const { data: seatMap } = useSeatMap(scheduleId);
+  const hold = useBookingStore((s) => s.hold);
+  const { remainSeconds, releaseHold, isReleasing } = useSeatHold(scheduleId);
+  /* 배치도(도면 크기 + 기둥·출입구)는 좌석맵에 없어 따로 부릅니다.
+     실패해도 화면은 그려집니다 — VenueMap 이 구역만으로 좌표계를 잡습니다 */
+  const { data: layout } = useConcertLayout(schedule ? String(schedule.concertId) : undefined);
+
+  /* 자리를 놓으면 남이 바로 가져갈 수 있어 되돌릴 수 없습니다 → 붉은 확인 모달 (CLAUDE.md 4-7) */
+  const confirmRelease = () =>
+    open('common/confirm', {
+      title: '잡아둔 자리를 놓을까요?',
+      message: '자리가 바로 풀려서 다른 분이 가져갈 수 있어요. 되돌릴 수 없습니다.',
+      confirmText: '놓기',
+      danger: true,
+      onConfirm: releaseHold,
+    });
 
   if (isPending) return <PageLoader />;
   if (isError || !sections) {
@@ -45,11 +72,25 @@ export function SectionSelectPage() {
           </p>
         </div>
 
+        {/* 결제까지 갔다가 돌아온 경우 — 쥔 자리로 되돌아가거나 놓을 길을 함께 줍니다.
+            다른 구역을 그냥 골라도 되지만, 그때는 쥔 자리가 풀린다는 걸 미리 알려야 합니다 */}
+        <HeldSeatNotice
+          hold={hold}
+          seatMap={seatMap}
+          remainSeconds={remainSeconds}
+          onContinue={() => navigate(ROUTES.BOOKING_REVIEW(scheduleId))}
+          onRelease={confirmRelease}
+          releasing={isReleasing}
+        />
+
         <VenueMap
           sections={sections}
           selectedId={sectionId}
           onSelect={(s) => selectSection(s.id)}
+          layout={layout}
         />
+
+        <VenueMapLegend layout={layout} />
 
         <SectionGrid sections={sections} selectedId={sectionId} onSelect={(s) => selectSection(s.id)} />
 

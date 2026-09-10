@@ -4,6 +4,7 @@ export { ScheduleList } from './components/ScheduleList';
 export { concertApi, concertKeys } from './api/concertApi';
 export { isBookable, canWaitlist, scheduleStatusLabel, scheduleTone } from './model/schedule.model';
 export { isTicketingOpen, posterSeedOf } from './model/concert.model';
+export { useConcertLayout } from './hooks/useConcerts';
 export type {
   ConcertSummary,
   ConcertListPage,
@@ -16,4 +17,6 @@ export type {
   Stadium,
   AreaType,
   PerformanceArea,
+  ConcertLayout,
+  LayoutElement,
 } from './model/concert.types';

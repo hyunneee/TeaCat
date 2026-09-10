@@ -6,6 +6,7 @@ import {
   GalleryHorizontalEnd,
   LayoutDashboard,
   MessagesSquare,
+  Music,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -46,6 +47,13 @@ const ADMIN_MENU: AdminMenuItem[] = [
     label: '운영 통계',
     icon: ChartLine,
     visible: can.viewAnalytics,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_CONCERTS,
+    label: '공연 관리',
+    icon: Music,
+    visible: can.manageConcert,
     matchNested: true,
   },
   {
@@ -124,8 +132,8 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
       </nav>
 
       {items.length === 1 && (
-        /* 대시보드만 보이는 역할(STADIUM·PERFORMANCE)에게 빈 사이드바를 설명 없이
-           보여주면 고장으로 읽힙니다. */
+        /* 대시보드만 보이는 역할에게 빈 사이드바를 설명 없이 보여주면 고장으로 읽힙니다.
+           (STADIUM 은 공연장·좌석 배치, PERFORMANCE 는 공연 관리가 보입니다) */
         <p className="mt-3 px-3 text-xs leading-relaxed text-white/50">
           이 계정으로 쓸 수 있는 관리 메뉴가 아직 없어요. 기능이 추가되면 여기에 나타납니다.
         </p>

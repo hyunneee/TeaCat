@@ -67,4 +67,24 @@ public class NftAdminController {
                 "포토카드 발행 요청을 보냈습니다.",
                 photocardIssuer.mintPending(performanceId)));
     }
+
+    @Operation(
+            summary = "회차 포토카드 자동 발급 수동 실행",
+            description = """
+                    ADMIN 전용 API입니다. 평소 매시 정각 스케줄러가 하는 "회차 시작 임박 자동 발급" 을 지금 한 번
+                    실행합니다. 스케줄러를 기다리지 않고 특정 회차를 발급하거나, 실패한 회차를 다시 시도할 때 씁니다.
+
+                    수량 중심 배정입니다 — 공연에 등록된 도안 재고만큼만 발급하고, 재고가 모자라면 일부 확정 티켓
+                    보유자는 카드를 못 받습니다. 지갑이 없는 회원과 온체인 미등록 도안은 대상에서 빠집니다.
+                    이미 발급된 회차면 `issuedCount`가 0으로 돌아옵니다(오류 아님).
+                    """
+    )
+    @PostMapping("/{performanceId}/schedules/{scheduleId}/photocards/issue")
+    public ResponseEntity<BaseResponse<NftPhotocardIssueResponse>> issueSchedulePhotocards(
+            @PathVariable Long performanceId,
+            @PathVariable Long scheduleId) {
+        return ResponseEntity.ok(BaseResponse.success(
+                "회차 포토카드 발급을 실행했습니다.",
+                photocardIssuer.issueForSchedule(scheduleId)));
+    }
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { internalAuth } from '../middlewares/internalAuth';
 import { getHealth } from '../controllers/health.controller';
+import { getMetrics } from '../controllers/metrics.controller';
 import { createWallet } from '../controllers/wallet.controller';
 import { getTx } from '../controllers/tx.controller';
 import {
@@ -35,8 +36,10 @@ import { asyncHandler } from '../shared/http';
  */
 export const router = Router();
 
-// 헬스체크만 인증 없이 열어둡니다.
+// 헬스체크와 지표만 인증 없이 열어둡니다. 둘 다 포트가 호스트로 나가지 않아
+// teacat-net 안(= Prometheus 컨테이너)에서만 닿습니다.
 router.get('/health', asyncHandler(getHealth));
+router.get('/metrics', asyncHandler(getMetrics));
 
 // 나머지는 전부 Spring 전용입니다.
 const internal = Router();

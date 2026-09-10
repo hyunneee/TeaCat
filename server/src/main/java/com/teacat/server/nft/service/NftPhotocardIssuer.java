@@ -56,6 +56,27 @@ public class NftPhotocardIssuer {
     }
 
     /**
+     * 회차 하나를 자동 발급하고 곧바로 체인에 보낸다. <b>스케줄러가 부른다.</b>
+     *
+     * <p>{@link #issue} 와 흐름은 같지만 대상이 회차(performance_detail)다. 체인 전송이 실패해도
+     * 카드 행은 PENDING 으로 남고, 다음 스케줄러 주기가 {@code mintPendingForSchedule} 로 이어 보낸다.
+     * 이미 발급된 회차면 {@code issuePhotocardsForSchedule} 이 조용히 0 을 돌려준다(예외 아님).
+     */
+    public NftPhotocardIssueResponse issueForSchedule(Long scheduleId) {
+        NftPhotocardIssueResponse created = nftService.issuePhotocardsForSchedule(scheduleId);
+
+        int sent = 0;
+        try {
+            sent = minter.mintPendingForSchedule(scheduleId);
+        } catch (RuntimeException e) {
+            log.error("회차 카드는 만들었지만 체인 발행에 실패했습니다. 다음 주기가 재시도합니다 scheduleId={}",
+                    scheduleId, e);
+        }
+
+        return new NftPhotocardIssueResponse(created.issuedCount(), created.issuedCount() - sent);
+    }
+
+    /**
      * 아직 안 보낸 카드를 이어서 보낸다. 발급은 그대로 두고 발행만 다시 하는 경로다.
      *
      * <p>여기서는 예외를 삼키지 않는다 — 어드민이 직접 누른 요청이라 실패를 알아야 한다.

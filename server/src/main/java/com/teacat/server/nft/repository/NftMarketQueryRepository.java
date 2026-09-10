@@ -294,6 +294,107 @@ public class NftMarketQueryRepository {
                 ));
     }
 
+    /* ── 회차(performance_detail) 단위 자동 발급 ────────────────────────────────
+       발급 로직 자체는 공연(performance_general) 단위지만, 스케줄러는 "회차 시작
+       1시간 전" 이라는 회차 시각을 기준으로 대상을 고른다. 그래서 티켓·카드를
+       performance_detail_id 로 좁힌 조회가 따로 필요하다. */
+
+    /**
+     * 지금부터 {@code until} 사이에 시작하는 회차 중, <b>아직 포토카드를 못 받은 확정 티켓이
+     * 남아 있는</b> 회차 id. 발급이 끝났거나 확정 티켓이 없는 회차는 빠진다.
+     *
+     * <p>{@code from} 을 하한으로 둬서 이미 시작한(지난) 회차는 대상에서 제외한다 —
+     * 시작 시각이 지나면 발급할 이유가 없다.
+     */
+    public List<Long> findScheduleIdsDueForIssue(LocalDateTime from, LocalDateTime until, int limit) {
+        String sql = """
+                SELECT pd.id
+                FROM performance_details pd
+                WHERE pd.performance_date > :from
+                  AND pd.performance_date <= :until
+                  AND EXISTS (
+                        SELECT 1 FROM tickets t
+                        WHERE t.performance_detail_id = pd.id
+                          AND t.status = 'CONFIRMED'
+                          AND NOT EXISTS (
+                                SELECT 1 FROM nft_photocards p WHERE p.ticket_id = t.id))
+                ORDER BY pd.performance_date, pd.id
+                LIMIT :limit
+                """;
+        return jdbcTemplate.queryForList(sql,
+                new MapSqlParameterSource()
+                        .addValue("from", from)
+                        .addValue("until", until)
+                        .addValue("limit", limit),
+                Long.class);
+    }
+
+    /** 동시에 도는 스케줄러 tick·수동 트리거를 한 회차 안에서 직렬화한다. 회차가 없으면 false */
+    public boolean lockSchedule(Long scheduleId) {
+        String sql = "SELECT id FROM performance_details WHERE id = :scheduleId FOR UPDATE";
+        return !jdbcTemplate.queryForList(sql,
+                new MapSqlParameterSource("scheduleId", scheduleId), Long.class).isEmpty();
+    }
+
+    /** 회차가 속한 공연 id. 도안은 공연 단위라 부모 공연을 알아야 배정할 수 있다 */
+    public Optional<Long> findPerformanceIdBySchedule(Long scheduleId) {
+        String sql = "SELECT performance_general_id FROM performance_details WHERE id = :scheduleId";
+        return jdbcTemplate.queryForList(sql,
+                        new MapSqlParameterSource("scheduleId", scheduleId), Long.class)
+                .stream().findFirst();
+    }
+
+    public List<TicketRecipientRow> findConfirmedTicketRecipientsForSchedule(Long scheduleId) {
+        String sql = """
+                SELECT t.id AS ticket_id, t.user_id
+                FROM tickets t
+                WHERE t.performance_detail_id = :scheduleId
+                  AND t.status = 'CONFIRMED'
+                ORDER BY t.id
+                """;
+        return jdbcTemplate.query(sql, new MapSqlParameterSource("scheduleId", scheduleId),
+                (rs, rowNum) -> new TicketRecipientRow(
+                        rs.getLong("ticket_id"),
+                        rs.getLong("user_id")
+                ));
+    }
+
+    /** 이 회차의 티켓으로 이미 만들어진 포토카드가 하나라도 있는지. 스케줄러 재실행의 이중 발급을 막는다 */
+    public boolean existsPhotocardForSchedule(Long scheduleId) {
+        String sql = """
+                SELECT EXISTS (
+                    SELECT 1 FROM nft_photocards p
+                    JOIN tickets t ON t.id = p.ticket_id
+                    WHERE t.performance_detail_id = :scheduleId)
+                """;
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                sql, new MapSqlParameterSource("scheduleId", scheduleId), Boolean.class));
+    }
+
+    /** {@link #findPendingMints} 의 회차 스코프 버전. 이 회차 티켓의 PENDING 카드만 고른다 */
+    public List<PendingMintRow> findPendingMintsForSchedule(Long scheduleId, int limit) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.design_id, w.address
+                FROM nft_photocards p
+                JOIN tickets t ON t.id = p.ticket_id
+                JOIN wallets w ON w.id = p.wallet_id
+                WHERE t.performance_detail_id = :scheduleId
+                  AND p.status = 'PENDING'
+                  AND p.wallet_id IS NOT NULL
+                ORDER BY p.id
+                LIMIT :limit
+                """;
+        return jdbcTemplate.query(sql,
+                new MapSqlParameterSource()
+                        .addValue("scheduleId", scheduleId)
+                        .addValue("limit", limit),
+                (rs, rowNum) -> new PendingMintRow(
+                        rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
+                        rs.getString("address").trim()
+                ));
+    }
+
     private List<UserTradeRow> findUserTradeHistory(String userColumn,
                                                     String counterpartyColumn,
                                                     Long userId,
