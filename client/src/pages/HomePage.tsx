@@ -17,7 +17,7 @@ import { ROUTES } from '@/shared/constants';
 import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
-import { isTicketingOpen, posterSeedOf, useConcerts } from '@/features/concert';
+import { isConcertOpen, posterSeedOf, useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
@@ -69,7 +69,7 @@ export function HomePage() {
   /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
   const { data: newPocas } = useNftMarket();
 
-  const open = concerts?.filter((c) => isTicketingOpen(c)).slice(0, RAIL_LIMIT) ?? [];
+  const open = concerts?.filter((c) => isConcertOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
      두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
