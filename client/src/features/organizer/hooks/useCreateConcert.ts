@@ -17,9 +17,10 @@ import {
 /**
  * 성공 뒤 어디로 보낼지.
  *
- * 공연 관리 입구가 둘입니다 — 앱 화면(`/concerts/...`)과 어드민 콘솔(`/admin/concerts/...`).
- * 훅이 한쪽 경로를 박아두면 다른 쪽에서 저장한 뒤 화면이 통째로 튑니다.
- * 넘기지 않으면 앱 화면으로 갑니다(기존 동작).
+ * 공연 관리 입구는 어드민 콘솔(`/admin/concerts/...`) 하나입니다.
+ * 넘기지 않으면 그쪽으로 갑니다. (예전에는 앱 화면에도 등록·수정이 한 벌 더 있어서
+ * 훅이 한쪽 경로를 박아두면 다른 쪽에서 저장한 뒤 화면이 튀었고, 그래서 생긴 구멍입니다.
+ * 지금은 화면이 하나뿐이라 굳이 넘기지 않아도 됩니다.)
  */
 export interface ConcertRedirect {
   /** 등록·수정 성공 뒤 갈 곳 */
@@ -31,10 +32,10 @@ export interface ConcertRedirect {
 }
 
 const afterWrite = (redirect: ConcertRedirect | undefined, concertId: string) =>
-  redirect?.detail?.(concertId) ?? ROUTES.CONCERT_DETAIL(concertId);
+  redirect?.detail?.(concertId) ?? ROUTES.ADMIN_CONCERT_EDIT(concertId);
 
 const afterPartialWrite = (redirect: ConcertRedirect | undefined, concertId: string) =>
-  redirect?.edit?.(concertId) ?? ROUTES.CONCERT_EDIT(concertId);
+  redirect?.edit?.(concertId) ?? ROUTES.ADMIN_CONCERT_EDIT(concertId);
 
 /** 공연장 목록 — 정적 데이터라 오래 캐시합니다 */
 export function useStadiums() {
@@ -225,7 +226,7 @@ export function useDeleteConcert(redirect?: ConcertRedirect) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
       toast.success('공연을 삭제했어요.');
-      navigate(redirect?.list ?? ROUTES.CONCERTS, { replace: true });
+      navigate(redirect?.list ?? ROUTES.ADMIN_CONCERTS, { replace: true });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '공연을 삭제하지 못했어요.');

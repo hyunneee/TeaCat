@@ -25,11 +25,9 @@ export const ROUTES = {
 
   /* ── 공연 ── */
   CONCERTS: '/concerts',
-  /** 공연 등록 (관리자). 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 */
-  CONCERT_CREATE: '/concerts/new',
   CONCERT_DETAIL: (concertId: string) => `/concerts/${concertId}`,
-  /** 공연 수정 (관리자) */
-  CONCERT_EDIT: (concertId: string) => `/concerts/${concertId}/edit`,
+  /* 공연 등록·수정은 관리자 기능이라 어드민 콘솔에 있습니다 (ADMIN_CONCERT_* 참고).
+     예전에는 여기에도 `/concerts/new`·`/concerts/:id/edit` 가 있었습니다. */
 
   /* ── 예매 플로우 ──
      공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */
