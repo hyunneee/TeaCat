@@ -66,8 +66,12 @@ export function Lightbox({ open, onClose, label, caption, children }: LightboxPr
       transition={{ duration: DURATION.base, ease: EASE.out }}
       onClick={onClose}
       /* overscroll-contain — 오버레이 위에서 손가락을 움직여도 뒤 페이지가
-         고무줄처럼 딸려 오지 않게 (iOS) */
-      className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col items-center justify-center gap-5 overscroll-contain bg-black/92 p-6"
+         고무줄처럼 딸려 오지 않게 (iOS)
+
+         🔴 overflow-y-auto — 내용이 화면보다 길면 **닫기 버튼이 화면 밖으로 잘려
+         나가 누를 수가 없습니다.** justify-center 는 넘칠 때 위아래로 똑같이
+         흘려보내서, 스크롤이 없으면 되돌아갈 길이 사라집니다. */
+      className="pt-safe pb-safe fixed inset-0 z-[60] flex flex-col items-center justify-center gap-5 overflow-y-auto overscroll-contain bg-black/92 p-6"
     >
       <motion.div
         initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.94 }}

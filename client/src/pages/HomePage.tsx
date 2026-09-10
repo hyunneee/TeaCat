@@ -1,6 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronRight, Hourglass, Coins, Images, ScanFace, Search, Ticket, UserRound } from 'lucide-react';
+import {
+  ChevronRight,
+  Hourglass,
+  Coins,
+  Images,
+  ScanFace,
+  Search,
+  Ticket,
+  UserRound,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -270,7 +279,9 @@ export function HomePage() {
                       </div>
 
                       <p className="mt-2 truncate text-[0.875rem] font-bold">{concert.title}</p>
-                      <p className="text-ink-muted truncate text-[0.8125rem]">{concert.stadiumName}</p>
+                      <p className="text-ink-muted truncate text-[0.8125rem]">
+                        {concert.stadiumName}
+                      </p>
                     </motion.button>
                   </li>
                 ))}

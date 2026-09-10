@@ -1,4 +1,5 @@
 import type {
+  MyPhotocard,
   PhotocardDetail,
   PhotocardMintStatus,
   PhotocardOrigin,
@@ -93,6 +94,34 @@ export function formatOrigin(origin: PhotocardOrigin): string {
       ? `${origin.rowLabel}열 ${origin.seatNumber}번`
       : '스탠딩';
   return `${grade} ${origin.areaCode}구역 ${seat}`;
+}
+
+/** 같은 도안을 묶은 한 칸 */
+export interface PhotocardGroup {
+  /** 대표 카드 — 눌렀을 때 이 카드의 상세로 갑니다 */
+  card: MyPhotocard;
+  /** 같은 도안을 몇 장 갖고 있는지. 1 이면 묶은 것이 아닙니다 */
+  count: number;
+}
+
+/**
+ * 내 포카 목록에서 **같은 도안을 한 칸으로** 묶습니다. 뽑기로 같은 카드가 여러 장 나오면
+ * 똑같은 칸이 줄줄이 늘어서서 무엇을 몇 장 가졌는지가 오히려 안 보입니다.
+ *
+ * 🔴 판매 중과 보관 중은 섞지 않습니다 — 한 칸에 담으면 "판매 중 ×3" 이 거짓말이 됩니다.
+ * 서버가 준 순서는 그대로 둡니다(먼저 나온 카드가 그 묶음의 대표).
+ */
+export function groupPhotocards(cards: MyPhotocard[]): PhotocardGroup[] {
+  const groups = new Map<string, PhotocardGroup>();
+
+  for (const card of cards) {
+    const key = `${card.designName}|${card.listed}`;
+    const found = groups.get(key);
+    if (found) found.count += 1;
+    else groups.set(key, { card, count: 1 });
+  }
+
+  return [...groups.values()];
 }
 
 /** 발행이 끝나지 않은 카드에만 한 줄. MINTED 면 null (아무것도 안 보임) */
