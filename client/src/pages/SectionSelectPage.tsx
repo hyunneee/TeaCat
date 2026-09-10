@@ -11,6 +11,7 @@ import {
   VenueMap,
   VenueMapLegend,
   useBookingStore,
+  useResumeHold,
   useSeatHold,
   useSeatMap,
   useSections,
@@ -29,6 +30,11 @@ export function SectionSelectPage() {
   const selectSection = useBookingStore((s) => s.selectSection);
 
   useEffect(() => startSession(scheduleId), [scheduleId, startSession]);
+
+  /* 탭을 닫았다 왔거나 봇 확인을 다시 통과해 스토어가 비었어도, 서버에 남아 있는
+     선점을 되살립니다. 안 그러면 내가 잡아둔 자리가 남의 자리처럼 보입니다.
+     (startSession 뒤에 둡니다 — 스토어를 비우는 쪽이 먼저여야 합니다) */
+  useResumeHold(scheduleId);
 
   const { data: schedule } = useSchedule(scheduleId);
   const { data: sections, isPending, isError } = useSections(scheduleId);

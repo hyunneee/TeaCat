@@ -17,6 +17,7 @@ import { ROUTES } from '@/shared/constants';
 import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
+import { ResumeBookingCard, useActiveHold } from '@/features/booking';
 import { isTicketingOpen, posterSeedOf, useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
@@ -68,6 +69,9 @@ export function HomePage() {
   const { data: banners, isPending: bannersPending } = useBanners();
   /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
   const { data: newPocas } = useNftMarket();
+  /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
+     본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
+  const { hold: activeHold, remainSeconds: holdRemainSeconds } = useActiveHold();
 
   const open = concerts?.filter((c) => isTicketingOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
@@ -168,6 +172,15 @@ export function HomePage() {
             </Stagger.Item>
           ))}
         </Stagger>
+
+        {/* 시간이 걸린 일이라 얼굴 등록 안내보다 위입니다 */}
+        {activeHold && (
+          <ResumeBookingCard
+            hold={activeHold}
+            remainSeconds={holdRemainSeconds}
+            onContinue={() => navigate(ROUTES.BOOKING_REVIEW(activeHold.scheduleId))}
+          />
+        )}
 
         {isLoggedIn && user && !user.faceRegistered && (
           <Card
