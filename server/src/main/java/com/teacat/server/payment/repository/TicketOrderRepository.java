@@ -23,8 +23,37 @@ public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<TicketOrder> findWithLockById(Long id);
 
-    /** 결제가 끝나지 않은 채 남은 주문. 좌석 선점이 만료되면 정리 대상이다 */
-    List<TicketOrder> findByStatusOrderByIdAsc(TicketOrderStatus status, Limit limit);
+    /** 이 좌석에 결제 대기 중인 주문. 부분 유니크 인덱스가 있어 최대 하나다 */
+    Optional<TicketOrder> findByPerformanceDetail_IdAndSeat_IdAndStatus(
+            Long performanceDetailId, Long seatId, TicketOrderStatus status);
+
+    /**
+     * 좌석 선점을 잃은 채 남은 결제 대기 주문. 정리 배치가 따라간다.
+     *
+     * <p>정리하지 않으면 두 가지가 굳는다 — 묶어둔 캣머니가 영영 풀리지 않고,
+     * {@code uq_ticket_orders_pending_seat} 때문에 <b>그 좌석으로는 누구도 주문을 열 수 없다.</b>
+     *
+     * <p>승인을 한 번이라도 보낸 주문(payments 가 READY 가 아니다)은 건드리지 않는다. 승인은 됐는데
+     * 발권이 막힌 주문을 다시 승인해 되살리는 길이 있는데, FAILED 로 닫아 버리면 그 길이 막힌다.
+     *
+     * <p>좌석이 없는 주문(스탠딩)은 선점으로 판단할 수 없어 JOIN 에서 빠진다.
+     */
+    @Query(value = """
+            SELECT o.id
+              FROM ticket_orders o
+              JOIN performance_seats ps
+                ON ps.performance_detail_id = o.performance_detail_id
+               AND ps.seat_id = o.seat_id
+              LEFT JOIN payments p ON p.id = o.payment_id
+             WHERE o.status = 'PENDING'
+               AND (p.id IS NULL OR p.status = 'READY')
+               AND (ps.status <> 'HELD'
+                    OR ps.held_by <> o.user_id
+                    OR ps.held_until < now())
+             ORDER BY o.id
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findStalePendingOrderIds(@Param("limit") int limit);
 
     /** 소각을 못 보낸 결제 완료 주문 (재시도 대상) */
     List<TicketOrder> findByStatusAndBurnTxIsNullAndTokenAmountGreaterThanOrderByIdAsc(

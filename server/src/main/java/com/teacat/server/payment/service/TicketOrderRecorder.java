@@ -40,6 +40,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TicketOrderRecorder {
 
+    /** 선점을 잃어 정리하는 주문의 사유. 토스가 준 코드가 아니라 우리가 붙이는 값이다 */
+    private static final String HOLD_EXPIRED_CODE = "SEAT_HOLD_EXPIRED";
+    private static final String HOLD_EXPIRED_MESSAGE = "좌석 선점이 만료되어 주문을 정리했습니다.";
+
     private final TicketOrderRepository ticketOrderRepository;
     private final PaymentRepository paymentRepository;
     private final PerformanceSeatRepository performanceSeatRepository;
@@ -154,10 +158,21 @@ public class TicketOrderRecorder {
         return ticket.getId();
     }
 
-    /** 승인이 거절됐다. 묶어둔 캣머니를 풀어주고 좌석 선점은 그대로 둔다(만료가 정리한다) */
+    /**
+     * 주문을 실패로 닫는다. 묶어둔 캣머니를 풀어주고 좌석 선점은 그대로 둔다(만료가 정리한다).
+     *
+     * <p>PENDING 일 때만 닫는다. 발권까지 끝난 주문을 실패로 되돌리면 안 된다.
+     *
+     * <p>변경을 바로 flush 한다. 부르는 쪽이 이어서 같은 좌석으로 새 주문을 INSERT 하는데,
+     * Hibernate 는 INSERT 를 UPDATE 보다 먼저 내보내므로 그대로 두면 이 주문이 아직 PENDING 인
+     * 채로 {@code uq_ticket_orders_pending_seat} 와 부딪힌다.
+     */
     @Transactional
     public void abort(Long ticketOrderId, String failureCode, String failureMessage) {
         ticketOrderRepository.findById(ticketOrderId).ifPresent(order -> {
+            if (!order.isPending()) {
+                return;
+            }
             if (order.getPayment() != null) {
                 order.getPayment().abort(failureCode, failureMessage);
             }
@@ -165,7 +180,20 @@ public class TicketOrderRecorder {
                 catMoneyHoldService.release(CatMoneyHoldRefType.TICKET_ORDER, order.getId());
             }
             order.markFailed();
+            ticketOrderRepository.flush();
         });
+    }
+
+    /**
+     * 좌석 선점을 잃은 결제 대기 주문을 닫는다 (결제창을 닫고 돌아오지 않은 주문).
+     *
+     * <p>이 메서드에 {@code @Transactional} 을 다는 이유: 안에서 부르는 {@link #abort} 는 같은
+     * 빈의 메서드라 프록시를 거치지 않는다. 여기가 트랜잭션 경계여야 배치에서 불러도 동작한다.
+     */
+    @Transactional
+    public void expireStale(Long ticketOrderId) {
+        abort(ticketOrderId, HOLD_EXPIRED_CODE, HOLD_EXPIRED_MESSAGE);
+        log.info("선점을 잃은 결제 대기 주문을 정리했습니다. ticketOrderId={}", ticketOrderId);
     }
 
     /** 소각을 보낼 때 필요한 값. 트랜잭션 밖에서 쓰므로 엔티티가 아니라 값으로 꺼낸다 */

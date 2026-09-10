@@ -19,15 +19,17 @@ import java.util.List;
 /**
  * 결제가 끝난 뒤 뒤따라가야 할 일들을 되살립니다.
  *
- * <p>둘 다 <b>사용자를 기다리게 하지 않으려고</b> 결제 응답 밖으로 뺀 작업입니다. 그래서 그때
- * 실패하면 아무도 다시 시도하지 않습니다 — 여기가 그 자리입니다.
+ * <p>결제 응답 안에서 할 수 없는 일들입니다 — 앞의 둘은 <b>사용자를 기다리게 하지 않으려고</b>
+ * 밖으로 뺐고, 마지막은 사용자가 아예 돌아오지 않는 경우입니다. 아무도 다시 시도하지 않으므로
+ * 여기가 그 자리입니다.
  *
  * <ol>
  *   <li><b>캣머니 소각</b> — 결제는 끝났는데 체인 요청이 실패했거나 그 사이 서버가 죽은 경우
  *   <li><b>NFT 티켓 발행</b> — 같은 이유. 발행 안 된 티켓도 예매 자체는 유효하다
+ *   <li><b>버려진 주문 정리</b> — 결제창을 닫고 돌아오지 않아 PENDING 으로 남은 주문
  * </ol>
  *
- * <p>둘 다 멱등 키가 있어 다시 보내도 두 번 실행되지 않습니다.
+ * <p>모두 멱등이라 다시 실행해도 두 번 반영되지 않습니다.
  * {@code CatTransactionScheduler} 와 마찬가지로 <b>인스턴스가 하나라는 전제</b>입니다.
  */
 @Slf4j
@@ -39,6 +41,7 @@ public class TicketOrderScheduler {
 
     private final TicketOrderRepository ticketOrderRepository;
     private final TicketOrderService ticketOrderService;
+    private final TicketOrderRecorder ticketOrderRecorder;
     private final TicketIssueService ticketIssueService;
     private final TicketBurnService ticketBurnService;
     private final TicketCancelService ticketCancelService;
@@ -74,6 +77,24 @@ public class TicketOrderScheduler {
 
         for (Long ticketId : unissued) {
             ticketIssueService.requestIssue(ticketId);
+        }
+    }
+
+    /**
+     * 좌석 선점을 잃은 채 남은 결제 대기 주문을 닫는다.
+     *
+     * <p>결제창을 닫고 돌아오지 않으면 주문이 PENDING 으로 남는다. 그대로 두면 묶어둔 캣머니가
+     * 풀리지 않아 그 사람 가용 잔액이 계속 깎이고, {@code uq_ticket_orders_pending_seat} 때문에
+     * <b>그 좌석으로는 누구도 주문을 열 수 없다</b>.
+     *
+     * <p>선점이 살아 있는 주문은 건드리지 않으므로 결제 중인 사람을 끊지 않는다.
+     */
+    @Scheduled(
+            fixedDelayString = "${payment.recovery.interval}",
+            initialDelayString = "${payment.recovery.initial-delay}")
+    public void expireStalePendingOrders() {
+        for (Long ticketOrderId : ticketOrderRepository.findStalePendingOrderIds(BATCH_SIZE.max())) {
+            ticketOrderRecorder.expireStale(ticketOrderId);
         }
     }
 
