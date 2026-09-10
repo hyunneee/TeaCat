@@ -91,6 +91,14 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
 
     long countByStadiumLayoutId(Long layoutId);
 
+    @Query(value = """
+            SELECT COALESCE(SUM(a.max_seat), 0)
+              FROM areas a
+             WHERE a.stadium_layout_id = :layoutId
+               AND a.type = 'STANDING'
+            """, nativeQuery = true)
+    long sumStandingCapacityByLayoutId(Long layoutId);
+
     List<Area> findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(Long layoutId);
 
     @Modifying

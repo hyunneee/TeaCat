@@ -728,7 +728,8 @@ class TicketOrderServiceIntegrationTests {
 
     private Fixture insertPerformanceFixture() {
         Long stadiumId = jdbcTemplate.queryForObject(
-                "INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id", Long.class);
+                "INSERT INTO stadiums (name, address, max_capacity) "
+                        + "VALUES ('테스트 공연장', '서울', 100000) RETURNING id", Long.class);
         // 구역과 공연은 배치도에 매인다 (S15P21A402-53)
         Long layoutId = jdbcTemplate.queryForObject("""
                 INSERT INTO stadium_layouts (stadium_id, name, width, height, is_default, status)

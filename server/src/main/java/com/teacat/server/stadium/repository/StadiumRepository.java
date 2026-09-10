@@ -14,14 +14,15 @@ public interface StadiumRepository extends JpaRepository<Stadium, Long> {
                    s.name AS "name",
                    s.address AS "address",
                    s.phone AS "phone",
+                   s.max_capacity AS "maxCapacity",
                    s.layout_image_key AS "layoutImageKey",
                    s.layout_width AS "layoutWidth",
                    s.layout_height AS "layoutHeight",
-                   COUNT(a.id) AS "areaCount",
-                   COALESCE(SUM(a.max_seat), 0) AS "totalCapacity"
+                   COUNT(a.id) AS "areaCount"
               FROM stadiums s
-              LEFT JOIN areas a ON a.stadium_id = s.id
-             GROUP BY s.id, s.name, s.address, s.phone,
+              LEFT JOIN stadium_layouts sl ON sl.stadium_id = s.id AND sl.is_default = true
+              LEFT JOIN areas a ON a.stadium_layout_id = sl.id
+             GROUP BY s.id, s.name, s.address, s.phone, s.max_capacity,
                       s.layout_image_key, s.layout_width, s.layout_height
              ORDER BY s.id
             """, nativeQuery = true)
@@ -32,15 +33,16 @@ public interface StadiumRepository extends JpaRepository<Stadium, Long> {
                    s.name AS "name",
                    s.address AS "address",
                    s.phone AS "phone",
+                   s.max_capacity AS "maxCapacity",
                    s.layout_image_key AS "layoutImageKey",
                    s.layout_width AS "layoutWidth",
                    s.layout_height AS "layoutHeight",
-                   COUNT(a.id) AS "areaCount",
-                   COALESCE(SUM(a.max_seat), 0) AS "totalCapacity"
+                   COUNT(a.id) AS "areaCount"
               FROM stadiums s
-              LEFT JOIN areas a ON a.stadium_id = s.id
+              LEFT JOIN stadium_layouts sl ON sl.stadium_id = s.id AND sl.is_default = true
+              LEFT JOIN areas a ON a.stadium_layout_id = sl.id
              WHERE s.id = :stadiumId
-             GROUP BY s.id, s.name, s.address, s.phone,
+             GROUP BY s.id, s.name, s.address, s.phone, s.max_capacity,
                       s.layout_image_key, s.layout_width, s.layout_height
             """, nativeQuery = true)
     Optional<StadiumStats> findWithStatsById(Long stadiumId);
@@ -111,6 +113,8 @@ public interface StadiumRepository extends JpaRepository<Stadium, Long> {
 
         String getPhone();
 
+        int getMaxCapacity();
+
         String getLayoutImageKey();
 
         Integer getLayoutWidth();
@@ -119,6 +123,5 @@ public interface StadiumRepository extends JpaRepository<Stadium, Long> {
 
         long getAreaCount();
 
-        long getTotalCapacity();
     }
 }

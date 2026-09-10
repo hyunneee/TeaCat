@@ -136,7 +136,7 @@ public class StadiumService {
         }
 
         Stadium stadium = stadiumRepository.save(Stadium.create(
-                request.name(), request.address(), request.phone(), manager));
+                request.name(), request.address(), request.phone(), request.maxCapacity(), manager));
         return new StadiumCreateResponse(stadium.getId(), managedByRequester);
     }
 
@@ -147,7 +147,17 @@ public class StadiumService {
         }
         Stadium stadium = getStadiumEntity(stadiumId);
         ensureCanManage(stadium, authUser);
-        stadium.update(request.name(), request.address(), request.phone());
+        if (request.maxCapacity() != null) {
+            long largestLayoutCapacity = stadiumLayoutRepository
+                    .findAllByStadiumIdOrderByDefaultLayoutDescCreatedAtAsc(stadiumId).stream()
+                    .mapToLong(layout -> getLayoutCapacity(layout.getId()))
+                    .max()
+                    .orElse(0);
+            if (request.maxCapacity() < largestLayoutCapacity) {
+                throw new BusinessException(StadiumErrorCode.MAX_CAPACITY_BELOW_LAYOUT);
+            }
+        }
+        stadium.update(request.name(), request.address(), request.phone(), request.maxCapacity());
     }
 
     @Transactional
@@ -222,6 +232,11 @@ public class StadiumService {
         StadiumLayout layout = stadiumLayoutRepository.findDefaultByStadiumId(stadiumId)
                 .orElseThrow(() -> new BusinessException(StadiumErrorCode.LAYOUT_NOT_FOUND));
         validateAreaBatch(stadium, layout, request.areas());
+        long addedCapacity = request.areas().stream()
+                .mapToLong(area -> area.type() == AreaType.SEATED
+                        ? area.seatsOrEmpty().size() : area.maxSeat())
+                .sum();
+        validateLayoutCapacity(stadium, getLayoutCapacity(layout.getId()) + addedCapacity);
 
         List<CreatedAreaResponse> createdAreas = new ArrayList<>();
         List<SeatBatchRepository.SeatBatchRow> seatsToInsert = new ArrayList<>();
@@ -272,6 +287,14 @@ public class StadiumService {
             throw new BusinessException(StadiumErrorCode.AREA_STRUCTURE_LOCKED);
         }
 
+        AreaType updatedType = request.type() == null ? area.getType() : request.type();
+        int updatedMaxSeat = request.maxSeat() == null ? area.getMaxSeat() : request.maxSeat();
+        long currentAreaCapacity = area.getType() == AreaType.SEATED ? currentSeatCount : area.getMaxSeat();
+        long updatedAreaCapacity = updatedType == AreaType.SEATED ? currentSeatCount : updatedMaxSeat;
+        long updatedLayoutCapacity = getLayoutCapacity(area.getStadiumLayout().getId())
+                - currentAreaCapacity + updatedAreaCapacity;
+        validateLayoutCapacity(area.getStadium(), updatedLayoutCapacity);
+
         LayoutRect updatedLayout = mergeAreaLayout(area, request);
         validateAreaLayout(area.getStadium(), updatedLayout);
         for (Seat seat : seatRepository.findAllByAreaIdOrderByRowLabelAscSeatNumberAsc(areaId)) {
@@ -308,6 +331,8 @@ public class StadiumService {
         if ((long) existingSeats.size() + request.seats().size() > area.getMaxSeat()) {
             throw new BusinessException(StadiumErrorCode.MAX_SEAT_EXCEEDED);
         }
+        validateLayoutCapacity(area.getStadium(),
+                getLayoutCapacity(area.getStadiumLayout().getId()) + request.seats().size());
         Set<SeatKey> keys = new HashSet<>();
         existingSeats.forEach(seat -> keys.add(new SeatKey(seat.getRowLabel(), seat.getSeatNumber())));
         validateUniqueSeatKeys(request.seats(), keys);
@@ -569,13 +594,24 @@ public class StadiumService {
 
     private StadiumSummaryResponse toStadiumSummaryResponse(StadiumRepository.StadiumStats stadium) {
         return new StadiumSummaryResponse(stadium.getStadiumId(), stadium.getName(), stadium.getAddress(),
-                stadium.getPhone(), stadium.getAreaCount(), stadium.getTotalCapacity());
+                stadium.getPhone(), stadium.getAreaCount(), stadium.getMaxCapacity());
     }
 
     private StadiumResponse toStadiumResponse(StadiumRepository.StadiumStats stadium, String layoutImageUrl) {
         return new StadiumResponse(stadium.getStadiumId(), stadium.getName(), stadium.getAddress(),
                 stadium.getPhone(), layoutImageUrl, stadium.getLayoutWidth(), stadium.getLayoutHeight(),
-                stadium.getAreaCount(), stadium.getTotalCapacity());
+                stadium.getAreaCount(), stadium.getMaxCapacity());
+    }
+
+    private long getLayoutCapacity(Long layoutId) {
+        return seatRepository.countByLayoutId(layoutId)
+                + areaRepository.sumStandingCapacityByLayoutId(layoutId);
+    }
+
+    private void validateLayoutCapacity(Stadium stadium, long layoutCapacity) {
+        if (layoutCapacity > stadium.getMaxCapacity()) {
+            throw new BusinessException(StadiumErrorCode.LAYOUT_CAPACITY_EXCEEDED);
+        }
     }
 
     private AreaSummaryResponse toAreaSummaryResponse(AreaRepository.AreaStats area) {
