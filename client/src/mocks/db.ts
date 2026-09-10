@@ -89,14 +89,6 @@ export interface MockSeat {
   ownerId: string | null;
 }
 
-export interface MockHold {
-  holdId: string;
-  scheduleId: string;
-  seatIds: string[];
-  userId: string;
-  expiresAt: string;
-}
-
 export interface MockTicket {
   id: string;
   orderId: string;
@@ -380,8 +372,6 @@ export const seats: MockSeat[] = sections.flatMap((section) => {
   }
   return result;
 });
-
-export const holds: MockHold[] = [];
 
 export const tickets: MockTicket[] = [
   {

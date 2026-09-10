@@ -241,7 +241,8 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
      */
     @Query(value = """
             SELECT pd.status::text        AS "ticketingStatus",
-                   pg.ticketing_start_at  AS "ticketingStartAt"
+                   pg.ticketing_start_at  AS "ticketingStartAt",
+                   pd.performance_date    AS "performanceDate"
               FROM performance_details pd
               JOIN performance_general pg ON pg.id = pd.performance_general_id
              WHERE pd.id = :performanceDetailId
@@ -291,6 +292,9 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
 
         /** performance_general.ticketing_start_at */
         LocalDateTime getTicketingStartAt();
+
+        /** performance_details.performance_date */
+        LocalDateTime getPerformanceDate();
     }
 
     /**

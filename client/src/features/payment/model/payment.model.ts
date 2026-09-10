@@ -43,6 +43,6 @@ export function usesGateway(method: PayMethod): method is GatewayPayMethod {
 
 /** 화면 표시용 이름. PG 코드를 화면에 그대로 쓰지 않기 위해 여기서 변환합니다. */
 export const PAY_METHOD_LABEL: Record<PayMethod, string> = {
-  EASY_PAY: '간편결제 (토스)',
+  EASY_PAY: '캣머니 + 간편결제',
   POINT: '캣머니 결제',
 };

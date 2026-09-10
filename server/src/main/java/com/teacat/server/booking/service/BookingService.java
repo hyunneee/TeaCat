@@ -9,6 +9,8 @@ import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.TicketingWindow;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.performance.entity.BookingOpenStatus;
+import com.teacat.server.performance.entity.TicketingStatus;
 import com.teacat.server.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
@@ -26,9 +28,6 @@ public class BookingService {
 
     /** 1인 1매 제약을 강제하는 부분 유니크 인덱스 이름 (V20260903_1705 마이그레이션) */
     private static final String HELD_BY_UNIQUE_INDEX = "uq_performance_seats_held_by";
-
-    /** performance_details.status 가 이 값일 때만 예매를 받는다 */
-    private static final String TICKETING_STATUS_OPEN = "OPEN";
 
     private final PerformanceSeatRepository performanceSeatRepository;
     private final UserRepository userRepository;
@@ -143,8 +142,13 @@ public class BookingService {
      * 종료 시각이 추가되면 상한도 시각으로 검증한다.
      */
     private void validateTicketingOpen(TicketingWindow ticketingWindow) {
-        if (!TICKETING_STATUS_OPEN.equals(ticketingWindow.getTicketingStatus())
-                || ticketingWindow.getTicketingStartAt().isAfter(LocalDateTime.now())) {
+        BookingOpenStatus status = BookingOpenStatus.resolve(
+                TicketingStatus.valueOf(ticketingWindow.getTicketingStatus()),
+                ticketingWindow.getTicketingStartAt(),
+                ticketingWindow.getPerformanceDate(),
+                LocalDateTime.now());
+
+        if (status != BookingOpenStatus.OPEN) {
             throw new BusinessException(BookingErrorCode.TICKETING_NOT_AVAILABLE);
         }
     }

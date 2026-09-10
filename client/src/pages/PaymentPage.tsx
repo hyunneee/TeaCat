@@ -3,7 +3,7 @@ import { Navigate, useParams } from 'react-router-dom';
 import { Coins, ShieldCheck, Smartphone } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/components/ui';
-import { BOOKING_STEPS, ROUTES, toPoints } from '@/shared/constants';
+import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { env } from '@/shared/config';
 import { cn, formatPoints, formatPrice } from '@/shared/lib';
 import {
@@ -20,13 +20,18 @@ import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment
 /**
  * 결제수단 — 지금은 둘뿐입니다.
  *
- *   간편결제 — 토스 통합결제창. 카드·토스페이·네이버페이가 한 창에 나옵니다.
+ *   간편결제 — 캣머니를 먼저 사용하고 부족분만 토스 결제창에서 결제합니다.
  *   캣머니   — 앱 안의 포인트. 결제창 없이 서버가 잔액을 차감합니다.
  *
  * 수단을 늘리기 전에 계약된 결제수단인지 확인하세요.
  */
 const METHODS: { id: PayMethod; label: string; hint: string; icon: typeof Coins }[] = [
-  { id: 'EASY_PAY', label: '간편결제 (토스)', hint: '카드 · 토스페이 · 네이버페이', icon: Smartphone },
+  {
+    id: 'EASY_PAY',
+    label: '캣머니 + 간편결제',
+    hint: '캣머니 우선 사용 · 부족분만 결제',
+    icon: Smartphone,
+  },
   { id: 'POINT', label: '캣머니로 결제', hint: '결제창 없이 바로 차감', icon: Coins },
 ];
 
@@ -51,28 +56,23 @@ export function PaymentPage() {
   const { data: token } = useTokenBalance();
 
   const section = seatMap?.sections.find((s) => s.id === sectionId);
-  const heldSeatIds = hold?.seatIds ?? [];
+  const heldSeatIds = hold ? [hold.seatId] : [];
   const seats = seatMap?.seats.filter((s) => heldSeatIds.includes(s.id)) ?? [];
   const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
-  const fee = 2000 * seats.length;
 
-  /* 캣머니 표시용 어림값입니다. 실제 차감량은 서버가 다시 계산합니다.
-     (프론트가 계산한 숫자를 그대로 결제에 쓰면 공짜 티켓이 나옵니다) */
-  const pointsNeeded = toPoints(total + fee);
+  /* 서버 결제 정책은 1캣머니를 결제 금액 1원과 같은 단위로 계산합니다.
+     실제 사용액은 주문 준비 응답의 tokenAmount가 최종 기준입니다. */
+  const pointsNeeded = total;
   /* 경매 입찰로 묶인 돈은 결제에 쓸 수 없습니다 — 보여주는 것도 판단하는 것도 available 입니다 */
   const pointBalance = token?.available ?? 0;
   const payingWithPoints = payMethod === 'POINT';
   const shortOfPoints = payingWithPoints && pointBalance < pointsNeeded;
-
-  /* 수수료 줄은 **총액에서 빼서** 구합니다. 각 줄을 따로 올림하면
-     두 줄의 합이 총액과 1 캣머니씩 어긋날 수 있습니다. */
-  const ticketPoints = toPoints(total);
-  const feePoints = pointsNeeded - ticketPoints;
+  const estimatedCashAmount = Math.max(total - pointBalance, 0);
 
   /* 위젯 키(test_gck_)면 결제수단 UI 가 페이지에 삽입되므로 시트에 담아 띄웁니다.
      개별 연동 키(test_ck_)면 토스가 새 창을 띄우니 시트가 필요 없습니다. */
   const usesSheet = env.payment.mode === 'toss' && env.payment.widgetKey;
-  const needsSheet = payMethod === 'EASY_PAY' && usesSheet;
+  const needsSheet = payMethod === 'EASY_PAY' && usesSheet && estimatedCashAmount > 0;
 
   // 선점이 없으면 결제할 게 없습니다. (만료·직접 진입)
   if (!hold) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
@@ -147,11 +147,7 @@ export function PaymentPage() {
           <Card flat className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">티켓 금액</span>
-              <span>{payingWithPoints ? formatPoints(ticketPoints) : formatPrice(total)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">예매 수수료</span>
-              <span>{payingWithPoints ? formatPoints(feePoints) : formatPrice(fee)}</span>
+              <span>{payingWithPoints ? formatPoints(pointsNeeded) : formatPrice(total)}</span>
             </div>
             <div className="mt-2 flex justify-between border-t pt-2 font-bold">
               <span>총 결제금액</span>
@@ -161,7 +157,7 @@ export function PaymentPage() {
                   <span className="ml-1">캣머니</span>
                 </span>
               ) : (
-                <AnimatedNumber value={total + fee} format="price" className="text-base" />
+                <AnimatedNumber value={total} format="price" className="text-base" />
               )}
             </div>
           </Card>
@@ -197,14 +193,14 @@ export function PaymentPage() {
               ? '캣머니가 부족해요'
               : payingWithPoints
                 ? `${formatPoints(pointsNeeded)}로 결제`
-                : `${formatPrice(total + fee)} 결제하기`}
+                : `${formatPrice(total)} 결제하기`}
         </Button>
       </BottomBar>
 
       {/* 토스 결제위젯 — 결제할 때만 화면을 덮습니다 */}
       <TossPaymentSheet
         open={sheetOpen}
-        amount={total + fee}
+        amount={estimatedCashAmount}
         paying={isPaying}
         stageLabel={STAGE_LABEL[stage]}
         onClose={() => setSheetOpen(false)}

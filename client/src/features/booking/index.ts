@@ -48,6 +48,4 @@ export type {
   MyHold,
   BookingPolicy,
   Recipient,
-  Order,
-  CreateOrderRequest,
 } from './model/booking.types';

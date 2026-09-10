@@ -29,7 +29,7 @@ export function BookingReviewPage() {
   const { remainSeconds } = useSeatHold(scheduleId);
   const { data: seatMap } = useSeatMap(scheduleId);
 
-  const seatIds = hold?.seatIds ?? [];
+  const seatIds = hold ? [hold.seatId] : [];
   const recipients = useRecipients(seatIds);
 
   if (!hold) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
