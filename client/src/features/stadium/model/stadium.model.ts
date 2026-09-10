@@ -367,6 +367,10 @@ function hangulLabel(index: number): string {
 export function validateStadiumInfo(info: StadiumInfoDraft): string | null {
   if (!info.name.trim()) return '공연장 이름을 입력해 주세요.';
   if (!info.address.trim()) return '공연장 주소를 입력해 주세요.';
+  const maxCapacity = Number(info.maxCapacity);
+  if (!Number.isInteger(maxCapacity) || maxCapacity <= 0) {
+    return '최대 수용 인원을 1명 이상의 정수로 입력해 주세요.';
+  }
   return null;
 }
 
@@ -476,8 +480,7 @@ export function validateLayoutDraft(
     if (!code) addAreaIssue('AREA_CODE', '구역 코드를 입력해 주세요.');
     else {
       const scopedCode = `${area.levelCode}#${code}`;
-      if (areaCodes.has(scopedCode))
-        addAreaIssue('AREA_CODE_DUPLICATE', '중복된 구역 코드입니다.');
+      if (areaCodes.has(scopedCode)) addAreaIssue('AREA_CODE_DUPLICATE', '중복된 구역 코드입니다.');
       areaCodes.add(scopedCode);
     }
 

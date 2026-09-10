@@ -74,21 +74,20 @@ public class StadiumLayoutService {
         ensureStadium(stadiumId);
         List<StadiumLayoutSummaryResponse> layouts = layoutRepository
                 .findAllByStadiumIdOrderByDefaultLayoutDescCreatedAtAsc(stadiumId).stream()
-                .map(layout -> new StadiumLayoutSummaryResponse(
-                        layout.getId(), layout.getName(), layout.isDefaultLayout(), layout.getStatus(),
-                        layout.getWidth(), layout.getHeight(), areaRepository.countByStadiumLayoutId(layout.getId()),
-                        seatRepository.countByLayoutId(layout.getId())))
+                .map(this::toLayoutSummary)
                 .toList();
         return new StadiumLayoutListResponse(stadiumId, layouts);
     }
 
     public StadiumLayoutDetailResponse getLayout(Long layoutId) {
         StadiumLayout layout = getLayoutEntity(layoutId);
+        LayoutCapacity capacity = getLayoutCapacity(layoutId);
         return new StadiumLayoutDetailResponse(
                 layout.getId(), layout.getStadium().getId(), layout.getStadium().getName(), layout.getName(),
                 layout.isDefaultLayout(), layout.getStatus(), fileStorageService.presignedUrl(layout.getImageKey()),
                 layout.getWidth(), layout.getHeight(), layout.getLayoutElements(),
-                areaRepository.countByStadiumLayoutId(layoutId), seatRepository.countByLayoutId(layoutId));
+                areaRepository.countByStadiumLayoutId(layoutId), capacity.seated(), capacity.standing(),
+                capacity.total());
     }
 
     public AreaListResponse getAreas(Long layoutId) {
@@ -134,15 +133,18 @@ public class StadiumLayoutService {
         }
         validateLayoutElements(request.layoutElementsOrEmpty(), request.layoutWidth(), request.layoutHeight());
 
-        boolean firstLayout = layoutRepository.findAllByStadiumIdOrderByDefaultLayoutDescCreatedAtAsc(stadiumId).isEmpty();
-        boolean makeDefault = firstLayout || request.isDefault();
+        StadiumLayoutStatus status = request.saveMode().toStatus();
+        if (status != StadiumLayoutStatus.ACTIVE && request.isDefault()) {
+            throw new BusinessException(StadiumErrorCode.DRAFT_LAYOUT_CANNOT_BE_DEFAULT);
+        }
+        boolean makeDefault = status == StadiumLayoutStatus.ACTIVE
+                && (request.isDefault() || layoutRepository.findDefaultByStadiumId(stadiumId).isEmpty());
         if (makeDefault) clearDefault(stadiumId);
         StadiumLayout layout;
         try {
             layout = layoutRepository.saveAndFlush(StadiumLayout.create(
                     stadium, request.name(), request.layoutWidth(), request.layoutHeight(),
-                    request.layoutElementsOrEmpty(), makeDefault,
-                    makeDefault ? StadiumLayoutStatus.ACTIVE : StadiumLayoutStatus.DRAFT));
+                    request.layoutElementsOrEmpty(), makeDefault, status));
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(StadiumErrorCode.DUPLICATE_LAYOUT_NAME);
         }
@@ -151,6 +153,7 @@ public class StadiumLayoutService {
         Set<String> areaCodes = new HashSet<>();
         List<CreatedLayoutAreaResponse> createdAreas = new ArrayList<>();
         int seatCount = 0;
+        long layoutCapacity = 0;
         for (LayoutImportAreaRequest areaRequest : request.areas()) {
             if (!areaCodes.add(areaRequest.levelCodeOrDefault() + '#' + areaRequest.areaCode())) {
                 throw new BusinessException(StadiumErrorCode.DUPLICATE_AREA_CODE);
@@ -164,6 +167,8 @@ public class StadiumLayoutService {
             int maxSeat = areaRequest.type() == AreaType.SEATED
                     ? seats.size() : (areaRequest.maxSeat() == null ? 0 : areaRequest.maxSeat());
             if (maxSeat <= 0) throw new BusinessException(StadiumErrorCode.INVALID_EXCEL_MAPPING);
+            layoutCapacity += maxSeat;
+            validateLayoutCapacity(stadium, layoutCapacity);
 
             Area area = areaRepository.saveAndFlush(Area.create(
                     stadium, layout, areaRequest.levelCodeOrDefault(),
@@ -202,14 +207,20 @@ public class StadiumLayoutService {
             throw new BusinessException(StadiumErrorCode.DUPLICATE_LAYOUT_NAME);
         }
 
-        boolean makeDefault = request.isDefault();
+        StadiumLayoutStatus status = request.saveMode().toStatus();
+        if (status != StadiumLayoutStatus.ACTIVE && request.isDefault()) {
+            throw new BusinessException(StadiumErrorCode.DRAFT_LAYOUT_CANNOT_BE_DEFAULT);
+        }
+        LayoutCapacity sourceCapacity = getLayoutCapacity(sourceLayoutId);
+        validateLayoutCapacity(stadium, sourceCapacity.total());
+        boolean makeDefault = status == StadiumLayoutStatus.ACTIVE
+                && (request.isDefault() || layoutRepository.findDefaultByStadiumId(stadium.getId()).isEmpty());
         if (makeDefault) clearDefault(stadium.getId());
         StadiumLayout copied;
         try {
             copied = layoutRepository.saveAndFlush(StadiumLayout.create(
                     stadium, request.name(), source.getWidth(), source.getHeight(),
-                    source.getLayoutElements(), makeDefault,
-                    makeDefault ? StadiumLayoutStatus.ACTIVE : StadiumLayoutStatus.DRAFT));
+                    source.getLayoutElements(), makeDefault, status));
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(StadiumErrorCode.DUPLICATE_LAYOUT_NAME);
         }
@@ -257,6 +268,11 @@ public class StadiumLayoutService {
         if (request.layoutElements() != null) {
             validateLayoutElements(request.layoutElements(), layout.getWidth(), layout.getHeight());
         }
+        StadiumLayoutStatus targetStatus = request.status() == null ? layout.getStatus() : request.status();
+        boolean targetDefault = request.isDefault() == null ? layout.isDefaultLayout() : request.isDefault();
+        if (targetDefault && targetStatus != StadiumLayoutStatus.ACTIVE) {
+            throw new BusinessException(StadiumErrorCode.DRAFT_LAYOUT_CANNOT_BE_DEFAULT);
+        }
         if (Boolean.TRUE.equals(request.isDefault())) {
             clearDefault(layout.getStadium().getId());
             layout.markDefault(true);
@@ -264,6 +280,26 @@ public class StadiumLayoutService {
             throw new BusinessException(StadiumErrorCode.DEFAULT_LAYOUT_REQUIRED);
         }
         layout.update(request.name(), request.layoutElements(), request.status());
+    }
+
+    private StadiumLayoutSummaryResponse toLayoutSummary(StadiumLayout layout) {
+        LayoutCapacity capacity = getLayoutCapacity(layout.getId());
+        return new StadiumLayoutSummaryResponse(
+                layout.getId(), layout.getName(), layout.isDefaultLayout(), layout.getStatus(),
+                layout.getWidth(), layout.getHeight(), areaRepository.countByStadiumLayoutId(layout.getId()),
+                capacity.seated(), capacity.standing(), capacity.total());
+    }
+
+    private LayoutCapacity getLayoutCapacity(Long layoutId) {
+        long seated = seatRepository.countByLayoutId(layoutId);
+        long standing = areaRepository.sumStandingCapacityByLayoutId(layoutId);
+        return new LayoutCapacity(seated, standing);
+    }
+
+    private void validateLayoutCapacity(Stadium stadium, long layoutCapacity) {
+        if (layoutCapacity > stadium.getMaxCapacity()) {
+            throw new BusinessException(StadiumErrorCode.LAYOUT_CAPACITY_EXCEEDED);
+        }
     }
 
     @Transactional
@@ -477,5 +513,11 @@ public class StadiumLayoutService {
 
     private record LabeledSeat(
             String rowLabel, int seatNumber, BigDecimal x, BigDecimal y, String candidateId) {
+    }
+
+    private record LayoutCapacity(long seated, long standing) {
+        private long total() {
+            return seated + standing;
+        }
     }
 }

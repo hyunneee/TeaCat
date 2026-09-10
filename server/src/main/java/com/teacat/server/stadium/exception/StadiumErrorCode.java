@@ -34,7 +34,10 @@ public enum StadiumErrorCode implements ErrorCode {
     ENCRYPTED_EXCEL(HttpStatus.BAD_REQUEST, "EXCEL_002", "암호화되거나 매크로가 포함된 Excel 파일은 사용할 수 없습니다."),
     EXCEL_LIMIT_EXCEEDED(HttpStatus.PAYLOAD_TOO_LARGE, "EXCEL_003", "Excel 파일 크기 또는 분석 한도를 초과했습니다."),
     EXCEL_ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "EXCEL_004", "Excel 분석 결과가 없거나 유효 시간이 만료되었습니다."),
-    INVALID_EXCEL_MAPPING(HttpStatus.BAD_REQUEST, "EXCEL_005", "선택한 후보, 라벨 또는 구역 매핑이 올바르지 않습니다.");
+    INVALID_EXCEL_MAPPING(HttpStatus.BAD_REQUEST, "EXCEL_005", "선택한 후보, 라벨 또는 구역 매핑이 올바르지 않습니다."),
+    DRAFT_LAYOUT_CANNOT_BE_DEFAULT(HttpStatus.BAD_REQUEST, "LAYOUT_006", "작성 중인 배치는 기본 배치로 지정할 수 없습니다."),
+    LAYOUT_CAPACITY_EXCEEDED(HttpStatus.BAD_REQUEST, "LAYOUT_007", "배치 수용 인원이 공연장의 최대 수용 인원을 초과합니다."),
+    MAX_CAPACITY_BELOW_LAYOUT(HttpStatus.CONFLICT, "STADIUM_018", "최대 수용 인원을 기존 배치의 수용 인원보다 작게 설정할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -1102,7 +1102,8 @@ class NftServiceIntegrationTests {
 
     private Fixture insertPerformanceFixture() {
         Long stadiumId = jdbcTemplate.queryForObject("""
-                INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id
+                INSERT INTO stadiums (name, address, max_capacity)
+                VALUES ('테스트 공연장', '서울', 100000) RETURNING id
                 """, Long.class);
         Long layoutId = insertStadiumLayout(stadiumId);
         Long areaId = jdbcTemplate.queryForObject("""
@@ -1129,7 +1130,8 @@ class NftServiceIntegrationTests {
 
     private Fixture insertStandingPerformanceFixture() {
         Long stadiumId = jdbcTemplate.queryForObject("""
-                INSERT INTO stadiums (name, address) VALUES ('스탠딩 공연장', '서울') RETURNING id
+                INSERT INTO stadiums (name, address, max_capacity)
+                VALUES ('스탠딩 공연장', '서울', 100000) RETURNING id
                 """, Long.class);
         Long layoutId = insertStadiumLayout(stadiumId);
         Long areaId = jdbcTemplate.queryForObject("""

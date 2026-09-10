@@ -120,7 +120,8 @@ public abstract class PostgresIntegrationTest {
 
     protected Fixture insertPerformanceFixture() {
         Long stadiumId = jdbcTemplate.queryForObject("""
-                INSERT INTO stadiums (name, address) VALUES ('테스트 공연장', '서울') RETURNING id
+                INSERT INTO stadiums (name, address, max_capacity)
+                VALUES ('테스트 공연장', '서울', 100000) RETURNING id
                 """, Long.class);
         Long layoutId = jdbcTemplate.queryForObject("""
                 INSERT INTO stadium_layouts

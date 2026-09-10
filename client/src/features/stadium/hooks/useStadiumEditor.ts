@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { stadiumApi, stadiumKeys, type StadiumLayoutCreatePayload } from '../api/stadiumApi';
 import {
+  acceptedSeatCount,
   computeLayoutExtent,
   defaultLabelingRule,
   deriveAreaBounds,
@@ -158,6 +159,23 @@ export function useStadiumEditor() {
     [editor.analysis, editor.areas, editor.layoutElements, editor.layoutHeight, editor.layoutWidth],
   );
 
+  const layoutCapacity = useMemo(
+    () =>
+      editor.areas.reduce(
+        (sum, area) => sum + (area.type === 'STANDING' ? area.maxSeat : acceptedSeatCount(area)),
+        0,
+      ),
+    [editor.areas],
+  );
+  const stadiumMaxCapacity = useMemo(() => {
+    const createdCapacity = Number(editor.info.maxCapacity);
+    if (Number.isInteger(createdCapacity) && createdCapacity > 0) return createdCapacity;
+    return (
+      stadiums.data?.stadiums.find((stadium) => stadium.stadiumId === editor.stadiumId)
+        ?.maxCapacity ?? null
+    );
+  }, [editor.info.maxCapacity, editor.stadiumId, stadiums.data]);
+
   const focusValidationIssue = (issue: (typeof validationIssues)[number]) => {
     editor.goToStep(3);
     if (issue.sourceSheet) editor.setSelectedSheet(issue.sourceSheet);
@@ -167,18 +185,24 @@ export function useStadiumEditor() {
 
   const confirmLayout = useMutation({
     retry: false,
-    mutationFn: async () => {
+    mutationFn: async (saveMode: 'DRAFT' | 'PUBLISH') => {
       if (editor.stadiumId === null) {
         throw new Error('공연장을 먼저 등록해 주세요.');
       }
       if (!editor.layoutName.trim()) throw new Error('배치 이름을 입력해 주세요.');
       const validationError = validationIssues[0];
       if (validationError) throw new Error(validationError.message);
+      if (stadiumMaxCapacity !== null && layoutCapacity > stadiumMaxCapacity) {
+        throw new Error(
+          `배치 수용 인원(${layoutCapacity.toLocaleString()}명)이 공연장 최대 수용 인원(${stadiumMaxCapacity.toLocaleString()}명)을 초과합니다.`,
+        );
+      }
 
       const payload: StadiumLayoutCreatePayload = {
         analysisId: editor.analysis?.analysisId,
         name: editor.layoutName.trim(),
-        isDefault: editor.isDefault,
+        isDefault: saveMode === 'PUBLISH' && editor.isDefault,
+        saveMode,
         sourceSheet: editor.selectedSheet ?? editor.analysis?.sheets[0]?.name,
         layoutWidth: editor.layoutWidth,
         layoutHeight: editor.layoutHeight,
@@ -275,6 +299,8 @@ export function useStadiumEditor() {
     analyzeExcel,
     confirmLayout,
     validationIssues,
+    layoutCapacity,
+    stadiumMaxCapacity,
     focusValidationIssue,
     reset,
   };

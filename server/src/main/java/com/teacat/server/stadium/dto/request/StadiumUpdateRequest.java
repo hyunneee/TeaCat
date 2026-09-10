@@ -2,6 +2,7 @@ package com.teacat.server.stadium.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 @Schema(description = "공연장 수정 요청")
@@ -16,9 +17,12 @@ public record StadiumUpdateRequest(
 
         @Schema(description = "공연장 전화번호", example = "02-2128-2301")
         @Pattern(regexp = ".*\\S.*", message = "전화번호는 공백일 수 없습니다.")
-        @Size(max = 20) String phone
+        @Size(max = 20) String phone,
+
+        @Schema(description = "공연장의 물리적인 최대 수용 인원", example = "25000")
+        @Positive Integer maxCapacity
 ) {
     public boolean isEmpty() {
-        return name == null && address == null && phone == null;
+        return name == null && address == null && phone == null && maxCapacity == null;
     }
 }

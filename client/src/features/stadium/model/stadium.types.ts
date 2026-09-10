@@ -16,6 +16,7 @@ export interface StadiumInfoDraft {
   name: string;
   address: string;
   phone: string;
+  maxCapacity: string;
 }
 
 export interface LayoutPoint {
@@ -43,7 +44,7 @@ export interface StadiumSummary {
   address: string;
   phone: string | null;
   areaCount: number;
-  totalCapacity: number;
+  maxCapacity: number;
 }
 
 export interface StadiumList {
@@ -60,6 +61,7 @@ export interface StadiumUpdateRequest {
   name?: string;
   address?: string;
   phone?: string;
+  maxCapacity?: number;
 }
 
 export interface ExcelSheet {
@@ -186,6 +188,8 @@ export interface StadiumLayoutSummary {
   layoutHeight: number;
   areaCount: number;
   seatCount: number;
+  standingCapacity: number;
+  capacity: number;
 }
 
 export interface StadiumLayoutList {
@@ -212,6 +216,8 @@ export interface StadiumLayoutDetail {
   layoutElements: Record<string, unknown>[];
   areaCount: number;
   seatCount: number;
+  standingCapacity: number;
+  capacity: number;
 }
 
 export interface PersistedAreaSummary {

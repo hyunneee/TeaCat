@@ -10,6 +10,8 @@ public record StadiumLayoutSummaryResponse(
         int layoutWidth,
         int layoutHeight,
         long areaCount,
-        long seatCount
+        long seatCount,
+        long standingCapacity,
+        long capacity
 ) {
 }

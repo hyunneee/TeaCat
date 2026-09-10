@@ -197,7 +197,8 @@ export function ConcertForm({
               {layouts.options.map((layout) => (
                 <option key={layout.layoutId} value={String(layout.layoutId)}>
                   {layout.name}
-                  {layout.isDefault && ' (기본)'} · 구역 {layout.areaCount}개
+                  {layout.isDefault && ' (기본)'} · 구역 {layout.areaCount}개 · 수용{' '}
+                  {layout.capacity.toLocaleString()}명
                 </option>
               ))}
             </select>

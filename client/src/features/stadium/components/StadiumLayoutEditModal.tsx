@@ -80,14 +80,25 @@ export function StadiumLayoutEditModal({
         />
         <div className="flex items-center justify-between">
           <span className="text-ink-muted text-sm font-medium">배치 상태</span>
-          <Select label="배치 상태" value={status} options={STATUS_OPTIONS} onChange={setStatus} />
+          <Select
+            label="배치 상태"
+            value={status}
+            options={layout?.isDefault ? STATUS_OPTIONS.filter((option) => option.value === 'ACTIVE') : STATUS_OPTIONS}
+            onChange={(value) => {
+              setStatus(value);
+              if (value !== 'ACTIVE') setIsDefault(false);
+            }}
+          />
         </div>
         <label className="text-ink flex items-start gap-2 text-sm">
           <input
             type="checkbox"
             checked={isDefault}
             disabled={layout?.isDefault}
-            onChange={(event) => setIsDefault(event.target.checked)}
+            onChange={(event) => {
+              setIsDefault(event.target.checked);
+              if (event.target.checked) setStatus('ACTIVE');
+            }}
           />
           <span>
             기본 배치로 지정

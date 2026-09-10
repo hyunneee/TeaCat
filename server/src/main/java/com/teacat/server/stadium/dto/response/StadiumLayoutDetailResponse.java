@@ -17,6 +17,8 @@ public record StadiumLayoutDetailResponse(
         int layoutHeight,
         List<Map<String, Object>> layoutElements,
         long areaCount,
-        long seatCount
+        long seatCount,
+        long standingCapacity,
+        long capacity
 ) {
 }
