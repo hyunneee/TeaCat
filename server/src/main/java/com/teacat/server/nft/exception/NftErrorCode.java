@@ -65,7 +65,19 @@ public enum NftErrorCode implements ErrorCode {
             "포토카드를 체인에 발행하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     /** 보낼 카드가 없다. 이미 전부 보냈거나 발급되지 않은 공연이다 */
     NO_PENDING_PHOTOCARDS(HttpStatus.CONFLICT, "NFT_039",
-            "체인에 보낼 포토카드가 없습니다.");
+            "체인에 보낼 포토카드가 없습니다."),
+
+    // ── 뽑기 (카드팩) ─────────────────────────────────────────────────────
+    /** 프론트가 이 message 를 그대로 화면에 띄운다 */
+    PACK_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_040", "가진 카드팩이 없어요."),
+    /** 등록된 뽑기 풀 도안이 없거나 전부 소진됐다 */
+    DRAW_POOL_EMPTY(HttpStatus.CONFLICT, "NFT_041",
+            "지금은 뽑을 수 있는 카드가 없어요. 잠시 후 다시 시도해 주세요."),
+    /** 어드민 도안 등록: drawPool 과 performanceId 를 같이 보냈거나 둘 다 안 보냈다 */
+    DESIGN_POOL_CONFLICT(HttpStatus.BAD_REQUEST, "NFT_042",
+            "도안은 공연 소속이거나 뽑기 풀 중 하나여야 합니다."),
+    DESIGN_POOL_ATTRIBUTES_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_043",
+            "뽑기 풀 도안은 소속과 등급이 필요합니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
