@@ -50,8 +50,7 @@ import { toPaymentFailure } from '../model/payment.model';
  */
 
 export type GatewayResult =
-  | { ok: true; auth: PaymentAuthResult }
-  | { ok: false; failure: PaymentFailure };
+  { ok: true; auth: PaymentAuthResult } | { ok: false; failure: PaymentFailure };
 
 /**
  * 위젯 인스턴스 중 **우리가 쓰는 것만** 적은 최소 형태.
@@ -162,14 +161,11 @@ async function requestViaPaymentWindow({
     await payment.requestPayment({
       // 통합결제창 — 카드와 토스페이·네이버페이가 한 창에 나옵니다.
       method: 'CARD',
-      amount: { currency: 'KRW', value: prepared.totalAmount },
-      orderId: prepared.paymentId,
+      amount: { currency: 'KRW', value: prepared.cashAmount },
+      orderId: prepared.orderId!,
       orderName: prepared.orderName.slice(0, 90),
       successUrl,
       failUrl,
-      customerName: prepared.customer.fullName,
-      customerEmail: prepared.customer.email,
-      customerMobilePhone: prepared.customer.phoneNumber.replace(/[^0-9]/g, ''),
       card: { flowMode: 'DEFAULT', useEscrow: false, useCardPoint: false, useAppCardOnly: false },
     });
 
@@ -203,19 +199,15 @@ async function requestViaToss({
   try {
     /* 💡 금액은 서버가 확정한 값으로 다시 맞춥니다.
           화면에서 계산한 금액을 그대로 결제하면 요청을 조작해 1원 결제를 만들 수 있습니다. */
-    await mounted.setAmount({ currency: 'KRW', value: prepared.totalAmount });
+    await mounted.setAmount({ currency: 'KRW', value: prepared.cashAmount });
 
     await mounted.requestPayment({
       // 토스 규격: 6~64자, 영문·숫자·`-`·`_` 만 허용. 서버가 이 규칙으로 만들어야 합니다.
-      orderId: prepared.paymentId,
+      orderId: prepared.orderId!,
       // 100자 제한. 넘치면 요청이 거부됩니다.
       orderName: prepared.orderName.slice(0, 90),
       successUrl,
       failUrl,
-      customerName: prepared.customer.fullName,
-      customerEmail: prepared.customer.email,
-      // 하이픈이 있으면 거부되므로 숫자만 남깁니다.
-      customerMobilePhone: prepared.customer.phoneNumber.replace(/[^0-9]/g, ''),
     });
 
     // 여기까지 오면 리디렉션이 시작된 것입니다. 결과는 successUrl 에서 받습니다.
@@ -238,7 +230,7 @@ async function requestViaToss({
  */
 async function requestViaMock({ prepared }: RequestPaymentParams): Promise<GatewayResult> {
   const approved = window.confirm(
-    `[모의 결제]\n\n${prepared.orderName}\n${prepared.totalAmount.toLocaleString()}원\n\n확인을 누르면 결제가 승인됩니다.`,
+    `[모의 결제]\n\n${prepared.orderName}\n${prepared.cashAmount.toLocaleString()}원\n\n확인을 누르면 결제가 승인됩니다.`,
   );
 
   if (!approved) {
@@ -258,15 +250,25 @@ async function requestViaMock({ prepared }: RequestPaymentParams): Promise<Gatew
   return {
     ok: true,
     auth: {
-      paymentId: prepared.paymentId,
+      ticketOrderId: prepared.ticketOrderId,
       paymentKey: `mock_pk_${crypto.randomUUID().replace(/-/g, '')}`,
-      amount: prepared.totalAmount,
+      amount: prepared.cashAmount,
     },
   };
 }
 
 /** 결제를 요청합니다. 실제 결제는 리디렉션으로 결과가 돌아옵니다. */
 export function requestPayment(params: RequestPaymentParams): Promise<GatewayResult> {
+  if (params.prepared.cashAmount <= 0 || !params.prepared.orderId) {
+    return Promise.resolve({
+      ok: false,
+      failure: {
+        code: 'INVALID_PAYMENT_ORDER',
+        message: '카드 결제 주문 정보가 올바르지 않습니다.',
+        canceledByUser: false,
+      },
+    });
+  }
   if (env.payment.mode !== 'toss') return requestViaMock(params);
   return env.payment.widgetKey ? requestViaToss(params) : requestViaPaymentWindow(params);
 }
@@ -291,12 +293,13 @@ export function readRedirectResult(search: string): GatewayResult | null {
 
   const paymentKey = params.get('paymentKey');
   const orderId = params.get('orderId');
-  if (!paymentKey || !orderId) return null;
+  const ticketOrderId = Number(params.get('ticketOrderId'));
+  if (!paymentKey || !orderId || !Number.isSafeInteger(ticketOrderId)) return null;
 
   return {
     ok: true,
     auth: {
-      paymentId: orderId,
+      ticketOrderId,
       paymentKey,
       amount: Number(params.get('amount') ?? 0),
     },
