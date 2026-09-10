@@ -31,15 +31,11 @@ export interface MarketPhotocard {
 
 /** 내 포카 목록 항목 */
 /**
- * 🔴 `group`·`grade` 는 **선택**입니다. 실서버 응답(NftPhotocardDetailResponse)에는 아직
- * 없고 목업만 채웁니다. 없으면 화면은 이름만 · 금색으로 물러섭니다(추측하지 않습니다).
- * 서버가 주기 시작하면 물음표만 떼면 됩니다. (CLAUDE.md 8장)
+ * 뽑기 풀 도안에만 붙는 값들. **공연 좌석에서 발행된 카드에는 없습니다**(서버가 생략).
+ * 없으면 화면은 이름만 · 금색으로 물러섭니다 — 추측해서 호칭을 붙이지 않습니다.
  */
 export interface PocaDesignInfo {
-  /**
-   * 같은 도안이 지금까지 거래된 평균가(CAT). 거래가 없으면 null.
-   * 🔴 실서버 응답에는 아직 없습니다 — 목업이 지난 거래에서 계산해 줍니다.
-   */
+  /** 같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null */
   averagePrice?: number | null;
   /** 소속 — '서울 5반' · '15기' · '개발자' */
   group?: string;
@@ -50,7 +46,8 @@ export interface MyPhotocard extends PocaDesignInfo {
   photocardId: number;
   designName: string;
   imageUrl: string | null;
-  performanceTitle: string;
+  /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */
+  performanceTitle: string | null;
   status: PhotocardMintStatus;
   /** 판매 등록 여부. 가격은 오지 않는다 (서버 미결) */
   listed: boolean;
@@ -71,10 +68,12 @@ export interface PhotocardDetail extends PocaDesignInfo {
   photocardId: number;
   designName: string;
   imageUrl: string | null;
-  performanceTitle: string;
+  /** 🔴 뽑기로 얻은 카드는 **null** 입니다 */
+  performanceTitle: string | null;
   ownerNickname: string;
   issuedAt: string;
-  origin: PhotocardOrigin;
+  /** 🔴 뽑기로 얻은 카드는 **null** — 좌석에서 나온 것이 아닙니다 */
+  origin: PhotocardOrigin | null;
   status: PhotocardMintStatus;
   /** 판매 중이 아니면 null. 서버 봉투가 null 을 생략할 수도 있어 undefined 도 허용 */
   listing?: {
@@ -164,6 +163,19 @@ export interface PhotocardTrade {
  * 도안이 늘어날 때마다 화면 코드를 고쳐야 하는 구조가 되면 안 됩니다.
  */
 export type PocaGrade = 'SPECIAL' | 'COMMON';
+
+/** `GET /photocards/draw` 응답 — 남은 카드팩 */
+export interface PocaDrawStatus {
+  available: boolean;
+  remaining: number;
+}
+
+/** `POST /photocards/packs/claim` 응답 — 이벤트 팩 받기 */
+export interface PocaPackClaim {
+  /** 이번 요청으로 받았는가. 이미 받았거나 이벤트가 없으면 false (에러 아님) */
+  granted: boolean;
+  remaining: number;
+}
 
 /** `POST /photocards/draw` 응답 */
 export interface PocaDrawResult {

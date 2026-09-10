@@ -8,6 +8,8 @@ import type {
   PhotocardListing,
   PhotocardTradeHistory,
   PocaDrawResult,
+  PocaDrawStatus,
+  PocaPackClaim,
   PurchaseHistory,
   PurchaseResult,
   SaleHistory,
@@ -66,7 +68,13 @@ export const nftApi = {
   unlist: (photocardId: number) => http.delete<void>(`/photocards/${photocardId}/listing`),
 
   /** 가진 카드팩이 몇 개인지 — 몇 개를 주는지는 서버가 정합니다 */
-  drawAvailability: () => http.get<{ available: boolean; remaining: number }>('/photocards/draw'),
+  drawAvailability: () => http.get<PocaDrawStatus>('/photocards/draw'),
+
+  /**
+   * 이벤트 카드팩 받기. 뽑기 화면에 들어올 때 한 번 부릅니다.
+   * 이미 받았거나 진행 중인 이벤트가 없으면 `granted: false` — **에러가 아닙니다.**
+   */
+  claimPack: () => http.post<PocaPackClaim>('/photocards/packs/claim'),
 };
 
 export const nftKeys = {

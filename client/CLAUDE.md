@@ -296,11 +296,10 @@ export function Card({ className, ...rest }: CardProps) {
 | 내 티켓·예매 취소 | **실서버** (`/users/me/tickets`, 취소는 `/payments/ticket-orders/{orderId}/cancel`) |
 | 캣머니 잔액·배너 | **실서버** |
 | 취소표(NRF)·앱정보 | 목업 (`mocks/handlers/resale.ts`, `appInfo.ts`) |
-| 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
-| 포카 뽑기 | **목업** (`POST /photocards/draw`). 🔴 **어떤 카드가 나오는지는 목업(=서버 자리)이 정합니다** — 프론트에서 뽑으면 콘솔로 바꿀 수 있습니다. 카드 그림은 `public/mock/poca/` |
+| 포카(포토카드)·뽑기 | **실서버** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`, `/photocards/draw`, `/photocards/packs/claim`) |
 | 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
-⚠️ 남은 목업(취소표·포카·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
+⚠️ 남은 목업(취소표·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
 들어가면 404 가 납니다. 해당 도메인이 실서버로 바뀌면 함께 풀립니다.
 
 🔴 **예매 취소는 티켓이 아니라 주문에 걸려 있습니다.** 카드 취소·캣머니 환급·NFT 소각이 한 주문에 묶여
@@ -712,13 +711,16 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
 - [ ] 라이브니스(위조 방지) — 이번 단계 제외, 다음 작업
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)
-- [ ] **포카 뽑기 서버 계약** — `POST /photocards/draw`. 지금은 목업이 도안을 뽑고
-      `{ photocardId, designName, imageUrl, group, grade }` 를 돌려줍니다.
-      **횟수 제한·캣머니 비용·확률**은 정해지지 않았습니다 (전부 서버가 판정할 값)
+- [x] **포카 뽑기 서버 계약** — **확정·연동 완료.** `GET/POST /photocards/draw`,
+      `POST /photocards/packs/claim`. 팩 지급·도안 선택·멱등·횟수 판정 전부 서버입니다.
+      뽑기 카드는 `performanceTitle`·`origin` 이 **null** 이고 발행 직후 `PENDING` →
+      약 10초 뒤 `MINTED` 라, 화면이 그동안만 다시 물어봅니다
+- [ ] **입장 확인 시 팩 지급** — 서버에 체크인 기능이 없어 다음 작업입니다.
+      지금은 이벤트 팩(계정당 1개)만 생깁니다
 - [ ] 뽑기 진입로 — 어드민에서 `linkPath: /nft/draw` 배너를 만들어야 열립니다.
       상시 메뉴로 둘지, 이벤트 기간에만 배너로 열지 정해야 합니다
-- [ ] 포카 응답의 `group`·`grade`(등급 연출·호칭)와 `averagePrice`(판매가 기준) —
-      지금은 목업만 채우는 **선택 필드**입니다. 서버가 주기 시작하면 물음표를 뗍니다
+- [x] 포카 응답의 `group`·`grade`·`averagePrice` — 서버가 줍니다. **뽑기 풀 도안에만** 붙고,
+      공연 좌석에서 나온 카드에는 없습니다(그때는 이름만·금색으로 그립니다)
 - [ ] NRF 추첨 결과 통지 방식 (메일 + 인앱?)
 - [ ] 티켓 QR 규격 (플로우차트 주석: "QR은 추후 논의")
 - [ ] 토큰 벌기 / 순발력 컨텐츠 내용 (현재 `features/token` 은 빈 계획)
@@ -726,6 +728,14 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
 ---
 
 ## [규칙 변경 이력]
+
+- 2026-09-10 **포카가 실서버로 넘어갔습니다** (5장 현황표·8장 갱신).
+  `mocks/handlers/nft.ts` 를 통째로 지웠습니다 — 마켓·상세·내 포카·판매·구매·뽑기가 전부 실서버입니다.
+  🔴 **뽑기 카드는 `performanceTitle`·`origin` 이 null 입니다**(공연·좌석에서 나온 것이 아니라서).
+  화면은 `photocardSource()` 로 "이벤트 카드팩" 이라 적고, 출처 블록은 좌석이 있을 때만 그립니다.
+  발행 직후 `PENDING` → 약 10초 뒤 `MINTED` 라, 목록·상세가 **그동안만** 3초 간격으로 다시 물어봅니다
+  (확정되면 스스로 멈춥니다). 이벤트 팩은 뽑기 화면에 들어올 때 `POST /photocards/packs/claim`
+  을 한 번 부릅니다 — `granted: false` 는 실패가 아니라 "이미 받음" 이라 조용히 지나갑니다
 
 - 2026-09-07 `/admin/stadium` 좌석 배치 편집 화면에 한해 `AdminWorkspaceLayout` 데스크톱 작업 폭 허용 (사용자 승인)
 - 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
