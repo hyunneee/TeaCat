@@ -9,12 +9,27 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface TicketOrderRepository extends JpaRepository<TicketOrder, Long> {
 
     Optional<TicketOrder> findByPaymentId(Long paymentId);
+
+    /**
+     * 발권된 티켓으로 주문을 되찾는다.
+     *
+     * <p>내 티켓 화면이 결제 금액을 보여주고 <b>취소 버튼을 만들 때</b> 쓴다. 취소는 티켓이
+     * 아니라 주문 단위라({@code POST /payments/ticket-orders/{id}/cancel}) 티켓만 알아서는
+     * 취소를 걸 수 없다.
+     *
+     * <p>티켓 하나에 주문도 하나다 — 주문이 PAID 가 될 때 그 주문이 티켓을 발권한다.
+     */
+    Optional<TicketOrder> findByTicketId(Long ticketId);
+
+    /** 목록용. 티켓마다 따로 조회하면 N+1 이 된다 */
+    List<TicketOrder> findByTicketIdIn(Collection<Long> ticketIds);
 
     /**
      * 승인 선점용 조회. 행을 잠그고 읽어야 두 요청이 동시에 PENDING 을 보고 둘 다 승인을

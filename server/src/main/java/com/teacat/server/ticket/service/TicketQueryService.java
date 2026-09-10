@@ -4,6 +4,8 @@ import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.nft.entity.NftTicket;
 import com.teacat.server.nft.repository.NftTicketRepository;
+import com.teacat.server.payment.entity.TicketOrder;
+import com.teacat.server.payment.repository.TicketOrderRepository;
 import com.teacat.server.ticket.dto.response.MyTicketResponse;
 import com.teacat.server.ticket.entity.Ticket;
 import com.teacat.server.ticket.exception.TicketErrorCode;
@@ -33,6 +35,7 @@ public class TicketQueryService {
 
     private final TicketRepository ticketRepository;
     private final NftTicketRepository nftTicketRepository;
+    private final TicketOrderRepository ticketOrderRepository;
     private final FileStorageService fileStorageService;
 
     public List<MyTicketResponse> getMyTickets(Long userId) {
@@ -41,14 +44,24 @@ public class TicketQueryService {
             return List.of();
         }
 
+        List<Long> ticketIds = tickets.stream().map(Ticket::getId).toList();
+
         // 티켓마다 따로 조회하면 N+1 이 된다. 한 번에 읽어 붙인다
         Map<Long, NftTicket> nftByTicketId = new HashMap<>();
-        nftTicketRepository.findByTicketIdIn(tickets.stream().map(Ticket::getId).toList())
+        nftTicketRepository.findByTicketIdIn(ticketIds)
                 .forEach(nft -> nftByTicketId.put(nft.getTicket().getId(), nft));
+
+        // 금액과 취소 버튼이 주문에 달려 있다 (MyTicketResponse 주석 참고)
+        Map<Long, TicketOrder> orderByTicketId = new HashMap<>();
+        ticketOrderRepository.findByTicketIdIn(ticketIds)
+                .forEach(order -> orderByTicketId.put(order.getTicket().getId(), order));
 
         return tickets.stream()
                 .map(ticket -> MyTicketResponse.of(
-                        ticket, nftByTicketId.get(ticket.getId()), posterUrl(ticket)))
+                        ticket,
+                        nftByTicketId.get(ticket.getId()),
+                        orderByTicketId.get(ticket.getId()),
+                        posterUrl(ticket)))
                 .toList();
     }
 
@@ -61,7 +74,10 @@ public class TicketQueryService {
         }
 
         return MyTicketResponse.of(
-                ticket, nftTicketRepository.findByTicketId(ticketId).orElse(null), posterUrl(ticket));
+                ticket,
+                nftTicketRepository.findByTicketId(ticketId).orElse(null),
+                ticketOrderRepository.findByTicketId(ticketId).orElse(null),
+                posterUrl(ticket));
     }
 
     /** 포스터가 없는 공연도 있다. 그때는 URL 을 만들지 않는다 */
