@@ -10,6 +10,8 @@ export { useSectionSeats } from './hooks/useSectionSeats';
 export { useBookingPolicy } from './hooks/useBookingPolicy';
 export { useSeatSelection } from './hooks/useSeatSelection';
 export { useSeatHold } from './hooks/useSeatHold';
+export { useMyHolds, useActiveHold } from './hooks/useMyHolds';
+export { useResumeHold } from './hooks/useResumeHold';
 export { useRecipients } from './hooks/useRecipients';
 
 // View
@@ -20,6 +22,7 @@ export { SeatMap } from './components/SeatMap';
 export { SeatLegend } from './components/SeatLegend';
 export { HoldTimer } from './components/HoldTimer';
 export { HeldSeatNotice } from './components/HeldSeatNotice';
+export { ResumeBookingCard } from './components/ResumeBookingCard';
 export { SelectedSeatBar } from './components/SelectedSeatBar';
 
 // Model
@@ -28,6 +31,7 @@ export { bookingApi, bookingKeys } from './api/bookingApi';
 export {
   totalPrice,
   seatLabel,
+  myHoldSeatLabel,
   validateSelection,
   isSelectable,
   isSectionSoldOut,

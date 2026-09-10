@@ -45,6 +45,7 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
    (ComingSoonPage 는 파일 맨 위에서 바로 import 합니다 — `page()` 는 props 를 못 넘기고,
     Header + EmptyState 뿐이라 따로 청크를 나눌 것도 없습니다) */
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const PocaDrawPage = page(() => import('@/pages/PocaDrawPage'), 'PocaDrawPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -276,6 +277,8 @@ const routes: RouteObject[] = [
         children: [
           { path: ROUTES.FACE_REGISTER, element: withBoundary(<FaceRegisterPage />) },
           { path: ROUTES.FACE_DONE, element: withBoundary(<FaceDonePage />) },
+          /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
+          { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
 
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },

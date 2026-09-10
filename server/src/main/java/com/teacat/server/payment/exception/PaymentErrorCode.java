@@ -60,7 +60,16 @@ public enum PaymentErrorCode implements ErrorCode {
             "공연이 시작되어 취소할 수 없습니다."),
     /** 이미 취소된 예매 */
     ALREADY_CANCELED(HttpStatus.CONFLICT, "PAYMENT_015",
-            "이미 취소된 예매입니다.");
+            "이미 취소된 예매입니다."),
+
+    /**
+     * 같은 좌석에 결제 대기 중인 주문이 이미 있다 (uq_ticket_orders_pending_seat).
+     *
+     * 내 주문이면 그것을 그대로 돌려주므로 여기까지 오지 않는다. 같은 좌석으로 두 요청이
+     * 동시에 들어와 한쪽이 밀린 경우이고, 다시 부르면 앞선 주문을 받는다.
+     */
+    TICKET_ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "PAYMENT_016",
+            "이미 진행 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

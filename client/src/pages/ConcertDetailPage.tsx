@@ -14,7 +14,7 @@ import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { useAuth } from '@/features/auth';
-import { ScheduleList, posterSeedOf, useConcertDetail } from '@/features/concert';
+import { ScheduleList, posterSeedOf, useConcertDetail, useStartBooking } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -37,6 +37,10 @@ export function ConcertDetailPage() {
      안 넘기면 useFaceRegistration 의 기본값(마이페이지)으로 가버립니다. */
   const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
 
+  /* 오픈 전 회차도 버튼이 눌립니다. 열렸는지는 **누른 그 순간 서버에** 물어봅니다
+     (useStartBooking) — 새로고침해야 버튼이 나타나던 문제를 없애면서, 판단은 서버에 둡니다. */
+  const booking = useStartBooking();
+
   /* 덮개를 지우고 눌러도 여기서 다시 막습니다.
      화면 표시(덮개) → 버튼 disabled → 이 핸들러 → 라우트 가드, 네 겹입니다. */
   const startBooking = (scheduleId: string) => {
@@ -50,7 +54,7 @@ export function ConcertDetailPage() {
       });
       return;
     }
-    navigate(ROUTES.BOOKING_VERIFY(scheduleId));
+    booking.start(scheduleId, () => navigate(ROUTES.BOOKING_VERIFY(scheduleId)));
   };
 
   /* 쿼리를 끄면 `isPending` 이 계속 true 라 로딩 화면에서 멈춥니다. 로딩 분기보다 먼저 빠져나옵니다 */
@@ -182,6 +186,7 @@ export function ConcertDetailPage() {
             <ScheduleList
               schedules={concert.schedules}
               onBook={(scheduleId) => startBooking(scheduleId)}
+              checkingId={booking.checkingId}
               onWaitlist={(scheduleId) => navigate(ROUTES.RESALE(scheduleId))}
               blocked={
                 needsFace

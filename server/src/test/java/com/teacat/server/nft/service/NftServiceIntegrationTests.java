@@ -210,6 +210,26 @@ class NftServiceIntegrationTests {
     }
 
     @Test
+    void 판매자_설명_없이_판매를_등록할_수_있다() throws Exception {
+        Long sellerId = insertUser("seller@test.com", "판매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long ticketId = insertTicket(sellerId, fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 1);
+        Long photocardId = insertPhotocard(designId, ticketId, sellerId);
+        String accessToken = jwtTokenProvider.createAccessToken(sellerId, UserRole.USER);
+
+        mockMvc.perform(post("/photocards/{photocardId}/listing", photocardId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType("application/json")
+                        .content("{\"price\":3000}"))
+                .andExpect(status().isCreated());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT description FROM nft_photocard_listings WHERE photocard_id = ?",
+                String.class, photocardId)).isEmpty();
+    }
+
+    @Test
     void 구매_후_구매자_판매자_카드별_내역과_보유_목록에_반영된다() {
         Long sellerId = insertUser("seller@test.com", "판매자");
         Long buyerId = insertUser("buyer@test.com", "구매자");

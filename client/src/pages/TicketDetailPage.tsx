@@ -97,12 +97,11 @@ export function TicketDetailPage() {
           </dl>
 
           {/* NFT 발행은 예매와 다른 축입니다 — 발행 중이어도 예매는 이미 유효합니다.
-              그래서 상태 줄을 따로 두고, 실패도 "재시도 중" 으로만 씁니다 */}
+              그래서 상태 줄을 따로 두고, 실패도 "재시도 중" 으로만 씁니다.
+              🔴 토큰 번호는 보여주지 않습니다 — 사용자가 할 수 있는 일이 없는 값이라
+                 상태 한 줄만 남기는 편이 읽힙니다. (필요하면 포카 상세에서 봅니다) */}
           {nftLabel && (
-            <p className="text-subtle border-t pt-4 text-xs">
-              NFT 티켓 {nftLabel}
-              {ticket.tokenId && <span className="ml-1 font-mono">#{ticket.tokenId}</span>}
-            </p>
+            <p className="text-subtle border-t pt-4 text-xs">NFT 티켓 {nftLabel}</p>
           )}
         </Card>
 

@@ -2,7 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/shared/lib';
 import { Spinner } from './Spinner';
 
-type Variant = 'primary' | 'dark' | 'secondary' | 'soft' | 'ghost' | 'danger' | 'danger-ghost';
+type Variant =
+  'primary' | 'dark' | 'secondary' | 'soft' | 'outline' | 'ghost' | 'danger' | 'danger-ghost';
 type Size = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -37,6 +38,9 @@ const VARIANT: Record<Variant, string> = {
      구분은 **면의 밝기**가 합니다. */
   secondary: 'surface text-ink shadow-card hover:bg-surface-2',
   soft: 'surface-2 text-ink hover:bg-surface-3',
+  /* 홀로 놓이는 되돌리기 버튼 — 면만으로는 눌러야 할 것으로 안 읽혀서 테두리를 둡니다.
+     버튼이 나란히 놓이는 자리에는 쓰지 마세요(선이 겹칩니다). */
+  outline: 'surface text-ink border-line-strong border-2 hover:bg-surface-2',
   ghost: 'text-ink-muted hover:bg-surface-2 hover:text-ink',
   danger: 'bg-danger text-white hover:brightness-110 active:brightness-95',
   'danger-ghost': 'text-danger bg-danger-soft hover:brightness-97',

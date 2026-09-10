@@ -1,5 +1,6 @@
 import { http } from '@/shared/api';
 import type {
+  BookingOpenCheck,
   ConcertDetail,
   ConcertLayout,
   ConcertListPage,
@@ -8,15 +9,28 @@ import type {
 } from '../model/concert.types';
 
 export const concertApi = {
-  /** 공연 목록 (API-201). 검색어는 제목 부분 일치 */
-  list: (keyword?: string) =>
-    http.get<ConcertListPage>('/concerts', { params: { keyword } }),
+  /**
+   * 공연 목록 (API-201). 검색어는 제목 부분 일치.
+   *
+   * `past` 는 회차가 전부 지난 공연입니다. 두 목록은 겹치지 않아서
+   * 탭으로 갈라 보여줍니다 (`ConcertListPage`).
+   */
+  list: (keyword?: string, past = false) =>
+    http.get<ConcertListPage>('/concerts', { params: { keyword, past } }),
 
   /** 공연 상세 (API-202) */
   detail: (concertId: string) => http.get<ConcertDetail>(`/concerts/${concertId}`),
 
   /** 회차 단건 (API-203) */
   schedule: (scheduleId: string) => http.get<ScheduleDetail>(`/schedules/${scheduleId}`),
+
+  /**
+   * 예매 오픈 여부 (API-206) — 예매 버튼을 누른 순간 확인합니다.
+   *
+   * 🔴 캐시하지 마세요. "지금 열렸는가" 를 묻는 것이라 캐시하면 물어본 의미가 없습니다.
+   */
+  bookingOpen: (scheduleId: string) =>
+    http.get<BookingOpenCheck>(`/schedules/${scheduleId}/booking-status`),
 
   /**
    * 공연이 쓰는 배치도 — 도면 크기와 기둥·출입구 같은 고정 요소.
@@ -80,7 +94,8 @@ const toLayoutElement = (element: ApiLayoutElement): LayoutElement => ({
 
 export const concertKeys = {
   all: ['concert'] as const,
-  list: (keyword?: string) => [...concertKeys.all, 'list', keyword ?? ''] as const,
+  list: (keyword?: string, past = false) =>
+    [...concertKeys.all, 'list', keyword ?? '', past] as const,
   detail: (concertId: string) => [...concertKeys.all, 'detail', concertId] as const,
   schedule: (scheduleId: string) => [...concertKeys.all, 'schedule', scheduleId] as const,
   layout: (concertId: string) => [...concertKeys.all, 'layout', concertId] as const,

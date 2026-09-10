@@ -263,7 +263,7 @@ export function NftMarketPage() {
                     designName={card.designName}
                     imageUrl={card.imageUrl}
                     performanceTitle={card.performanceTitle}
-                    caption={card.listed ? '판매 중' : '보관 중'}
+                    state={card.listed ? 'LISTED' : 'STORED'}
                     onClick={() => goPhotocard(card.photocardId)}
                   />
                 </li>

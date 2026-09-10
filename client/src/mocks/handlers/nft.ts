@@ -3,10 +3,13 @@ import {
   findUser,
   iso,
   nextListingId,
+  nextPhotocardId,
   nextTradeId,
   now,
   photocardTrades,
   photocards,
+  PERFORMANCE_TITLES,
+  pocaDesigns,
   purchaseKeys,
   type MockPhotocard,
 } from '../db';
@@ -101,6 +104,116 @@ mock('GET', '/nft-market/photocards', (ctx) => {
 });
 
 /* ── P2 상세 ── */
+/**
+ * 사람마다 **가진 카드팩 수**. 서버라면 회원 행이나 별도 표에 남을 값입니다.
+ *
+ * 🔴 "몇 번 뽑을 수 있나" 가 아니라 **"팩을 몇 개 가졌나"** 입니다.
+ * 팩이 어떻게 늘어나는지(공연 관람·이벤트)는 서버가 정합니다 — 화면은 남은 수만 봅니다.
+ */
+const packsByUser = new Map<string, number>();
+
+/**
+ * 처음 오는 사람이 가진 팩 — 0개입니다.
+ *
+ * 🔴 **시연용 값입니다.** 진짜 팩은 서버가 줍니다(공연 관람 시 발행·이벤트 지급) —
+ * 실서버로 넘어갈 때 이 기본값은 사라지고 0 에서 시작합니다.
+ */
+const STARTING_PACKS = 0;
+
+/**
+ * 이미 처리한 뽑기 요청. 키 = `${userId}:${Idempotency-Key}`.
+ * 🔴 같은 키가 다시 오면 **새로 뽑지 않고 그때 준 카드를 그대로** 돌려줍니다.
+ * 네트워크 재시도나 더블탭으로 카드가 두 장 나가는 것을 서버가 막아야 합니다.
+ */
+/** 뽑기 응답 한 벌 — 도안 정보(소속·등급)까지 함께 나갑니다 */
+interface DrawnCard {
+  photocardId: number;
+  designName: string;
+  imageUrl: string | null;
+  group: string;
+  grade: (typeof pocaDesigns)[number]['grade'];
+  issuedAt: string;
+}
+
+const drawKeys = new Map<string, DrawnCard>();
+
+function remainingPacks(userId: string): number {
+  return packsByUser.get(userId) ?? STARTING_PACKS;
+}
+
+/* ── 포카 뽑기 ──────────────────────────────────────────────
+   🔴 **어떤 카드가 나오는지는 여기(=서버 자리)가 정합니다.**
+   프론트에서 뽑으면 콘솔로 결과를 바꿀 수 있고, 뜯기 전에 미리 알 수 있습니다.
+
+   `POST /photocards/draw` 는 2단이라 `POST /photocards/:id/listing`(3단)과
+   겹치지 않습니다. 서버에 뽑기가 생기면 이 핸들러만 지웁니다.
+
+   🔴 **가진 카드팩을 하나 씁니다.** 팩이 없으면 409 입니다. 이 판정도 결과와 같이
+   여기(=서버 자리)에서 합니다 — 프론트가 세면 새로고침이나 콘솔로 얼마든지 늘릴 수 있습니다.
+
+   본 발행은 이 화면이 아닙니다. 티켓 담당자가 입장 확인을 한 순간 그 티켓 보유자에게
+   서버가 카드를 발행합니다(티켓 사용 처리와 한 트랜잭션). 여기 배너 뽑기는 그것과 별개로
+   '한 번 구경해 보는' 자리입니다. */
+/**
+ * 남은 뽑기가 있는가.
+ * 🔴 이 판정도 서버 자리입니다 — 프론트가 기억하면 새로고침 한 번에 되살아납니다.
+ * 조건(이벤트 기간·티켓 보유·횟수)은 서버가 정하고, 화면은 `available` 만 보고 그립니다.
+ */
+mock('GET', '/photocards/draw', (ctx) => {
+  const user = requireUser(ctx.headers);
+  const remaining = remainingPacks(user.id);
+  return { available: remaining > 0, remaining };
+});
+
+mock('POST', '/photocards/draw', (ctx) => {
+  const user = requireUser(ctx.headers);
+
+  const key = ctx.headers['idempotency-key'] ?? ctx.headers['Idempotency-Key'] ?? '';
+  const done = drawKeys.get(`${user.id}:${key}`);
+  if (key && done) return done;
+
+  const remaining = remainingPacks(user.id);
+  if (remaining <= 0) {
+    throw mockError(409, 'NFT_014', '가진 카드팩이 없어요.');
+  }
+
+  const design = pocaDesigns[Math.floor(Math.random() * pocaDesigns.length)];
+  if (!design) throw mockError(500, 'NFT_013', '뽑을 수 있는 도안이 없습니다.');
+
+  const card: MockPhotocard = {
+    photocardId: nextPhotocardId(),
+    designName: design.designName,
+    imageUrl: design.imageUrl,
+    /* 어느 공연에서 얻었는지 — 컬렉션 이름이 아니라 공연 이름이어야 합니다 */
+    performanceTitle: PERFORMANCE_TITLES[
+      Math.floor(Math.random() * PERFORMANCE_TITLES.length)
+    ] as string,
+    ownerId: user.id,
+    issuedAt: iso(now()),
+    origin: { seatGrade: 'VIP', areaCode: 'A', rowLabel: null, seatNumber: null },
+    status: 'MINTED',
+    listing: null,
+  };
+  /* 뽑은 카드는 실제로 내 것이 됩니다 — '내 포카' 목록에 바로 보입니다 */
+  photocards.unshift(card);
+  /* 팩 하나를 씁니다 — 몇 번이든, 가진 만큼 뜯을 수 있습니다 */
+  packsByUser.set(user.id, remaining - 1);
+
+  const result = {
+    photocardId: card.photocardId,
+    designName: card.designName,
+    imageUrl: card.imageUrl,
+    group: design.group,
+    grade: design.grade,
+    issuedAt: card.issuedAt,
+  };
+
+  /* 같은 요청이 다시 오면 이 카드를 그대로 돌려줍니다 (두 장 발행 방지) */
+  if (key) drawKeys.set(`${user.id}:${key}`, result);
+
+  return result;
+});
+
 mock('GET', '/photocards/:photocardId', (ctx) => {
   // 만료된 경매를 먼저 닫습니다 — 끝난 경매를 "진행 중" 으로 보여주면 안 됩니다.
   closeExpiredAuctions();
@@ -111,6 +224,7 @@ mock('GET', '/photocards/:photocardId', (ctx) => {
   return {
     photocardId: p.photocardId,
     designName: p.designName,
+    ...designInfo(p.designName, p.imageUrl),
     imageUrl: p.imageUrl,
     performanceTitle: p.performanceTitle,
     ownerNickname: nickname(p.ownerId),
@@ -264,6 +378,38 @@ mock('POST', '/photocards/:photocardId/purchase', (ctx) => {
   return response;
 });
 
+/**
+ * 도안표에서 소속·등급을 찾아 붙입니다.
+ *
+ * 🔴 서버는 아직 이 값을 주지 않습니다 — 화면이 등급별 연출을 하려면 필요해서 목업이 먼저 채웁니다.
+ * 🔴 **이름이 아니라 그림 경로로 찾습니다.** 동명이인이 있습니다 —
+ *   정유진: 서울 3반 코치(Yujin_C) / 15기 교육생(Jung_yujin).
+ *   이름으로 찾으면 둘 다 먼저 등록된 코치로 붙어 교육생이 코치가 됩니다.
+ */
+/**
+ * 같은 도안이 지금까지 거래된 평균가.
+ * 🔴 서버가 아직 안 주는 값이라 목업이 지난 거래에서 계산합니다.
+ * 판매가를 정할 때 기준이 없으면 아무 숫자나 적게 됩니다.
+ */
+function averagePrice(designName: string): number | null {
+  const prices = photocardTrades
+    .filter(
+      (t) => photocards.find((c) => c.photocardId === t.photocardId)?.designName === designName,
+    )
+    .map((t) => t.price);
+
+  if (prices.length === 0) return null;
+  return Math.round(prices.reduce((sum, p) => sum + p, 0) / prices.length);
+}
+
+function designInfo(designName: string, imageUrl: string | null) {
+  const design =
+    (imageUrl !== null ? pocaDesigns.find((d) => d.imageUrl === imageUrl) : undefined) ??
+    pocaDesigns.find((d) => d.designName === designName);
+
+  return { group: design?.group, grade: design?.grade, averagePrice: averagePrice(designName) };
+}
+
 /* ── P6 내 포카 (최신 발행순, listed 필터) ── */
 mock('GET', '/users/me/photocards', (ctx) => {
   const user = requireUser(ctx.headers);
@@ -278,6 +424,7 @@ mock('GET', '/users/me/photocards', (ctx) => {
     .map((p) => ({
       photocardId: p.photocardId,
       designName: p.designName,
+      ...designInfo(p.designName, p.imageUrl),
       imageUrl: p.imageUrl,
       performanceTitle: p.performanceTitle,
       status: p.status,

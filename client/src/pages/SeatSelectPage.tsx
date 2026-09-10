@@ -13,6 +13,7 @@ import {
   SelectedSeatBar,
   useBookingPolicy,
   useBookingStore,
+  useResumeHold,
   useSeatHold,
   useSeatSelection,
   sectionBlockedReason,
@@ -37,6 +38,9 @@ export function SeatSelectPage() {
 
   const { data: seatMap, section, seats, isPending, isError } = useSectionSeats(scheduleId, sectionId);
   const hold = useBookingStore((s) => s.hold);
+
+  // 서버에만 남아 있는 선점 되살리기 (SectionSelectPage 주석 참고)
+  useResumeHold(scheduleId);
 
   /* 1인 최대 매수는 회차가 아니라 **공연** 단위 정책이라 concertId 가 필요합니다.
      회차 상세에서 얻어 정책을 조회하고, 아직 없으면 배포 환경 기본값을 씁니다. */

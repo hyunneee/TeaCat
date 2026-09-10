@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { Coins, ShieldCheck, Smartphone } from 'lucide-react';
+import { PageLoader } from '@/shared/components/common';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
@@ -11,6 +12,7 @@ import {
   priceLabel,
   seatLabel,
   useBookingStore,
+  useResumeHold,
   useSeatHold,
   useSeatMap,
 } from '@/features/booking';
@@ -49,15 +51,16 @@ export function PaymentPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const hold = useBookingStore((s) => s.hold);
-  const sectionId = useBookingStore((s) => s.sectionId);
   const { remainSeconds } = useSeatHold(scheduleId);
+  const { isResuming } = useResumeHold(scheduleId);
   const { data: seatMap } = useSeatMap(scheduleId);
   const { pay, stage, isPaying } = usePayment(scheduleId);
   const { data: token } = useTokenBalance();
 
-  const section = seatMap?.sections.find((s) => s.id === sectionId);
   const heldSeatIds = hold ? [hold.seatId] : [];
   const seats = seatMap?.seats.filter((s) => heldSeatIds.includes(s.id)) ?? [];
+  /* 구역은 **잡은 좌석**에서 찾습니다 (BookingReviewPage 주석 참고) */
+  const section = seatMap?.sections.find((s) => s.id === seats[0]?.sectionId);
   const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
 
   /* 서버 결제 정책은 1캣머니를 결제 금액 1원과 같은 단위로 계산합니다.
@@ -75,7 +78,10 @@ export function PaymentPage() {
   const needsSheet = payMethod === 'EASY_PAY' && usesSheet && estimatedCashAmount > 0;
 
   // 선점이 없으면 결제할 게 없습니다. (만료·직접 진입)
-  if (!hold) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+  // 단, 서버에 남은 선점을 확인하는 중이면 기다립니다 — 결제 직전에 튕기는 게 제일 아깝습니다
+  if (!hold) {
+    return isResuming ? <PageLoader /> : <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+  }
 
   return (
     <div className="flex min-h-dvh flex-col">
