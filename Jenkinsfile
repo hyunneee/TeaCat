@@ -170,14 +170,69 @@ pipeline {
                     #    이 줄을 MOCK=false 로 바꾼다.
                     MOCK=true
 
+                    # 행동 분석 (Microsoft Clarity). **빈 값이면 꺼진 채로 빌드된다.**
+                    #
+                    # 🔴 Clarity 에는 Sentry 의 environment 태그가 없다. 그래서 dev/prod 를
+                    #    가르는 방법이 **프로젝트를 따로 만드는 것**뿐이다. 같은 ID 를 양쪽에
+                    #    넣으면 히트맵·퍼널이 섞여서 어느 환경 수치인지 분간이 안 된다.
+                    #
+                    # 🔴 ID 를 채우기 전에 대시보드에서 **설정 > 마스킹 > Strict** 를 먼저
+                    #    바꿔야 한다. 기본값은 Balanced(숫자·이메일만 가림)이고, 마스킹 변경은
+                    #    **소급 적용되지 않는다** — 그 사이 올라간 세션은 가려지지 않은 채 남는다.
+                    #    (프로젝트 ID 는 공개 값이라 여기 적어도 된다. 데이터 내보내기 API
+                    #     토큰은 전혀 다른 물건이고 절대 여기 두면 안 된다)
+                    case "$DEPLOY_ENV" in
+                        prod) CLARITY_ID="" ;;
+                        *)    CLARITY_ID="" ;;
+                    esac
+
+                    # 소스맵 업로드 토큰 (Sentry). 없으면 조용히 건너뛴다 —
+                    # 예전처럼 난독화된 스택이 올라올 뿐, 배포가 실패하지는 않는다.
+                    #
+                    # 🔴 .env.dev/.env.prod 에 넣지 마라. 그 파일은 server 컨테이너가
+                    #    env_file 로 통째로 읽어서, 빌드에만 쓰는 토큰이 런타임 컨테이너
+                    #    환경에 남게 된다. 그래서 전용 파일을 따로 둔다.
+                    #    dev/prod 가 같은 Sentry 프로젝트(teacat)라 파일도 하나다.
+                    #
+                    # 🔴 젠킨스 sh 는 `sh -xe` 로 돌아서 **모든 명령이 값까지 로그에 찍힌다.**
+                    #    토큰을 만지는 동안만 추적을 끈다. 켠 뒤에 토큰 변수를 다시 쓰면
+                    #    그 줄에서 그대로 새므로, 판단은 HAS_TOKEN 플래그로만 한다.
+                    #    docker 에도 `--build-arg 이름` (값 없이) 으로 넘겨 환경에서 읽게 한다.
+                    TOKEN_FILE="$DEPLOY_DIR/.sentry-auth-token"
+                    set +x
+                    if [ -r "$TOKEN_FILE" ]; then
+                        SENTRY_AUTH_TOKEN=$(head -n 1 "$TOKEN_FILE" | tr -d '[:space:]')
+                    else
+                        SENTRY_AUTH_TOKEN=""
+                    fi
+                    export SENTRY_AUTH_TOKEN
+                    if [ -n "$SENTRY_AUTH_TOKEN" ]; then HAS_TOKEN=yes; else HAS_TOKEN=no; fi
+                    set -x
+
+                    if [ "$HAS_TOKEN" = yes ]; then
+                        echo "Sentry 소스맵을 업로드합니다 (release teacat-client@$TAG)."
+                    else
+                        echo "⚠️  $TOKEN_FILE 이 없어 소스맵 업로드를 건너뜁니다."
+                        echo "    배포는 되지만 이슈 스택이 난독화된 채로 옵니다. 서버에서:"
+                        echo "      echo '<토큰>' > $TOKEN_FILE && chmod 600 $TOKEN_FILE"
+                        echo "    토큰은 Sentry > Settings > Auth Tokens 에서 발급합니다"
+                        echo "    (범위: project:releases + org:read. DSN 과 전혀 다른 물건이다)."
+                    fi
+
                     # -latest 는 '이 환경의 프론트 이미지가 있는가' 를 묻기 위한 고정 태그다.
                     # 커밋 태그($TAG)만 붙이면 변경 감지가 매번 "이미지 없음" 으로 본다.
+                    #
+                    # 🔴 VITE_SENTRY_RELEASE 와 소스맵을 올리는 release 이름은 **같아야** 한다.
+                    #    vite.config.ts 가 이 값을 그대로 읽어 쓴다. 여기만 바꾸면 업로드는
+                    #    초록불인데 이슈에는 계속 난독화된 스택이 뜬다 — 경고도 안 난다.
                     docker build \
                         -t "teacat-client:$DEPLOY_ENV-$TAG" \
                         -t "teacat-client:$DEPLOY_ENV-latest" \
                         --build-arg VITE_USE_MOCK=$MOCK \
                         --build-arg VITE_SENTRY_ENVIRONMENT=$DEPLOY_ENV \
-                        --build-arg VITE_SENTRY_RELEASE=teacat-client@$TAG ./client
+                        --build-arg VITE_SENTRY_RELEASE=teacat-client@$TAG \
+                        --build-arg VITE_CLARITY_PROJECT_ID=$CLARITY_ID \
+                        --build-arg SENTRY_AUTH_TOKEN ./client
                 '''
             }
         }

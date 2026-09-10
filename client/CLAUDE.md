@@ -66,6 +66,7 @@
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
 | 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
 | 에러 리포팅 | **@sentry/react** (`shared/lib/sentry.ts` 만 사용) | 화면에서 `Sentry.*` 직접 호출, **Session Replay** |
+| 행동 분석 | **@microsoft/clarity** (`shared/lib/clarity.ts` 만 사용) | 화면에서 `window.clarity` 직접 호출, `index.html` 의 `data-clarity-mask` 제거, 세 번째 분석 도구 |
 | 얼굴 인식 | **onnxruntime-web** (`/wasm` 빌드 하나만) + INT8 ONNX 모델 | MediaPipe·tfjs 등 **두 번째 런타임**, FP32 모델 |
 
 ---
@@ -511,8 +512,15 @@ npm run typecheck && npm run lint
   로컬에서 끄고 싶으면 `.env.development` 에서 값만 지우면 됩니다.
 - 화면 코드에서 `Sentry.*` 를 직접 부르지 마세요. `shared/lib/sentry.ts` 의
   `reportError` / `setSentryUser` 만 씁니다. 전역 핸들러가 잡는 에러는 아무것도 안 해도 됩니다.
-- 🔴 **Session Replay 를 켜지 마세요** (0번 절차). 얼굴 등록 화면의 카메라 프리뷰와
-  결제창이 그대로 녹화됩니다. 7장 생체정보 규칙과 정면으로 부딪힙니다.
+- 🔴 **Sentry 의 Session Replay 를 켜지 마세요** (0번 절차). 화면 내용을 올리는 도구는
+  아래 "행동 분석 (Clarity)" 하나로 충분하고, 그쪽은 기본 차단 마스킹을 갖춰 두었습니다.
+  Replay 를 켜면 **같은 방어를 Sentry 쪽에도 따로** 세워야 하는데(별도 마스킹 옵션),
+  얻는 것은 겹칩니다.
+  ⚠️ 예전에 이 항목의 이유를 "카메라 프리뷰가 그대로 녹화된다" 라고 적어 두었는데
+  **사실이 아닙니다.** Replay·Clarity 모두 화면 녹화가 아니라 **DOM 재생**이라
+  `<video>`·`<canvas>` 픽셀은 올라가지 않습니다. 실제 위험은 DOM 텍스트
+  (이메일·전화번호·닉네임·좌석·티켓 번호)입니다. 판단 근거를 틀리게 남기면
+  나중에 "얼굴 안 찍히니 괜찮네" 로 잘못 뒤집힙니다.
 - 🔴 **사람을 특정하는 값을 넣지 마세요.** `setSentryUser` 는 `userId` 만 받습니다.
   이메일·닉네임·전화번호를 넣으면 개인정보를 Sentry 로 내보내는 것이 됩니다.
 - 예매 화면의 정상 동작(좌석 선점 실패 등 4xx `ApiError`)은 올리지 않습니다.
@@ -522,8 +530,66 @@ npm run typecheck && npm run lint
   에러도 경고도 안 나므로 눈치채기 어렵습니다 — 대시보드에서 `source` 가 `route` 인지 보세요.
 - dev·prod 구분은 CI 가 `--build-arg VITE_SENTRY_ENVIRONMENT` 로 넘깁니다.
   dev 배포도 `--mode production` 으로 빌드하기 때문에 `VITE_APP_ENV` 로는 못 가릅니다.
-- 운영 번들에는 소스맵이 없어서 **스택이 난독화된 채로 옵니다.** 소스맵 업로드는 다음 과제입니다
-  (8장). `SENTRY_AUTH_TOKEN` 은 CI 환경변수이지 `VITE_` 값이 아닙니다.
+- **소스맵은 Sentry 에만 올리고 배포본에는 남기지 않습니다.** `@sentry/vite-plugin` 이
+  빌드 때 올린 뒤 `dist` 에서 지웁니다(`vite.config.ts`). 그래서 대시보드에서는 원본 줄이
+  보이는데 브라우저에서는 아무도 소스를 못 받습니다.
+  - 🔴 `SENTRY_AUTH_TOKEN` · `SENTRY_ORG` · `SENTRY_PROJECT` 에 **`VITE_` 를 붙이지 마세요.**
+    붙이는 순간 토큰이 번들에 박혀 공개됩니다. 빌드 환경변수라 `process.env` 로 읽고,
+    그래서 `vite-env.d.ts` · `shared/config/env.ts` 에도 넣지 않습니다(3-3 은 `import.meta.env`
+    에 대한 규칙이라 해당 없음). 토큰의 실제 값은 서버의 `~/teacat/.sentry-auth-token` 에만
+    있고 젠킨스만 읽습니다.
+  - 🔴 **release 이름이 양쪽에서 같아야** 짝이 맞습니다. 런타임은 `VITE_SENTRY_RELEASE`,
+    업로드도 같은 값을 씁니다. 다르면 업로드는 초록불인데 이슈에는 계속 난독화된 스택이
+    뜹니다 — **경고가 나지 않습니다.**
+  - 토큰이 없으면 소스맵을 **만들지도 올리지도 않습니다.** 로컬 `npm run build` 는
+    예전과 똑같이 동작합니다.
+  - 업로드가 실패해도 **배포는 계속됩니다**(`errorHandler`). Sentry API 가 흔들린 날
+    프론트 배포가 통째로 멈추면 안 되기 때문입니다. 실패는 빌드 로그에 남습니다.
+  - 🔴 `build.sourcemap` 을 `true` 로 바꾸지 마세요. `'hidden'` 이어야 번들 끝에
+    `//# sourceMappingURL=` 주석이 안 붙습니다. 주석이 남으면 지워진 `.map` 을 찾느라
+    devtools 가 404 를 냅니다(Sentry 는 주석이 아니라 debug id 로 짝을 찾습니다).
+    같은 이유로 `workbox.sourcemap` 도 운영에서 꺼 둡니다 — 서비스워커 맵은 Sentry
+    플러그인이 청소한 **뒤에** 생성돼서 그대로 배포됩니다.
+
+### 행동 분석 (Microsoft Clarity)
+
+Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입니다.
+히트맵·rage click(연타)·dead click(눌렀는데 반응 없음)을 봅니다.
+
+- 켜지는 조건은 `VITE_CLARITY_PROJECT_ID` 하나입니다. 비어 있으면 스크립트조차
+  받지 않으므로, 로컬에서 끄고 싶으면 값만 지우면 됩니다. **기본값은 꺼짐입니다.**
+- 화면 코드에서 `window.clarity` 를 직접 부르지 마세요. `shared/lib/clarity.ts` 의
+  `initClarity` / `setClarityUser` / `trackClarityEvent` 만 씁니다.
+- 🔴 **`index.html` 의 `data-clarity-mask="true"` 를 지우지 마세요** (0번 절차).
+  `#root` 와 `#modal-root` 두 곳에 붙어 있고, 이게 **화면 전체를 기본 차단**합니다.
+  지우면 그 순간부터 화면 내용이 그대로 업로드됩니다.
+  - React 밖(`index.html`)에 둔 이유: 새 화면을 만들 때 아무것도 안 해도 가려집니다.
+    페이지마다 붙이는 방식은 새 화면이 생길 때마다 빠뜨립니다 —
+    `sentry.ts` 의 `httpBodies: []` 와 같은 발상입니다.
+  - `#modal-root` 는 `#root` 의 자식이 **아닙니다.** 둘 다 필요합니다.
+- 🔴 **라우트 단위로 끌 수 없습니다.** Clarity 공식 API 에는 `stop` 이 없습니다
+  (`init`·`setTag`·`identify`·`consent`·`event`·`upgrade` 뿐). 홈에서 한 번 로드되면
+  결제 화면으로 이동해도 계속 기록됩니다. **그래서 마스킹이 유일한 방어선입니다.**
+  "민감한 라우트에서 로드하지 않기" 같은 대책을 추가하지 마세요 — 첫 진입 라우트만
+  막는 반쪽이라 방어가 되는 것처럼 보이기만 합니다.
+- 🔴 **대시보드 설정은 코드가 강제할 수 없습니다.** 켜기 전에 사람이
+  **설정 > 마스킹 > Strict** 로 바꿔야 합니다(기본값 Balanced 는 숫자·이메일만 가림).
+  마스킹 변경은 **소급 적용되지 않습니다** — 새 리코딩부터, 반영까지 최대 1시간.
+- 마스킹해도 **히트맵·rage click 은 그대로 나옵니다.** 클릭 집계는 요소의 위치와
+  횟수를 세는 것이라 텍스트 마스킹과 무관합니다. 읽기 어려워지는 건 리플레이 화면뿐입니다.
+- 🔴 **`setClarityUser` 는 id 만** 받습니다. `setSentryUser` 와 같은 규칙입니다 —
+  이메일·닉네임·전화번호를 넣으면 마스킹과 **무관하게** 그대로 올라갑니다
+  (마스킹은 DOM 을 가리는 것이고, 이건 우리가 직접 보내는 값입니다).
+- 🔴 **dev/prod 는 Clarity 프로젝트를 따로 만드세요.** Clarity 에는 Sentry 의
+  `environment` 같은 태그가 없어서, 같은 ID 를 쓰면 히트맵·퍼널이 섞여 분간이 안 됩니다.
+  CI 가 `--build-arg VITE_CLARITY_PROJECT_ID` 로 환경별 ID 를 넘깁니다 (Jenkinsfile).
+- 안 잡히는 것: `<canvas>`·`<video>` 내용, 토스 결제창 내부(third-party iframe).
+  좌석맵 히트맵은 회차마다 그림이 달라 **사실상 의미가 없습니다** — 좌석 화면에서
+  쓸 수 있는 건 rage/dead click **횟수**와 리코딩입니다.
+- ⚠️ **미해결:** 쿠키 동의와 개인정보처리방침. Clarity 는 첫 파티 쿠키를 쓰고
+  데이터가 **국외(Microsoft, 미국)로 이전**됩니다. 동의가 없으면 세션이 조각나
+  리코딩·퍼널이 제한되고, 처리방침 고지 의무도 남습니다. 현재 앱에 처리방침 화면이
+  없습니다 — **운영에 켜기 전에** 정리해야 합니다 (8장).
 
 ### 알림 (웹 푸시)
 
@@ -600,14 +666,19 @@ npm run typecheck && npm run lint
 - [ ] 예매 수수료 정책 (현재 매당 2,000원 가정)
 - [ ] 결제 취소·환불 API 및 부분 취소 정책
 - [ ] **웹 푸시** — 백엔드 VAPID 키 + 발송 API, 서비스워커 `push` 핸들러
+- [ ] **개인정보처리방침 화면** — 지금 앱에 없습니다. 라우트·페이지 모두 미구현.
+      이메일·닉네임·전화번호·결제 정보를 다루므로 Clarity 와 무관하게 운영 전에 필요합니다
+- [ ] **쿠키 동의 (Clarity)** — Clarity 는 첫 파티 쿠키를 쓰고 데이터가 국외(Microsoft, 미국)로
+      이전됩니다. 동의가 없으면 세션이 페이지 단위로 조각나 **리코딩·퍼널이 제한**됩니다.
+      배너를 만들지 안 만들지, 처리방침 고지로 갈지 정해야 합니다 (7장 "행동 분석")
       (지금은 앱이 열려 있을 때만 알림이 뜹니다. `injectManifest` 로 바꿔야 하므로 0번 절차)
 - [ ] 배포 버전 API — `GET /app/version` 응답 형태 (`features/appInfo` 에 가정해 둠)
 - [ ] 모델 파일 호스팅 위치 — 지금은 자체 호스팅 `public/models/` (커밋 제외,
       빌드가 OpenCV Zoo 에서 받아 해시 검증). CDN 이전 여부와 버전 표기 규칙
       (CDN 을 쓰면 `VITE_FACE_*_URL` 을 절대 주소로 두면 끝입니다)
-- [ ] **Sentry 소스맵 업로드** — 지금은 운영 스택이 난독화돼 있습니다.
-      젠킨스에 `SENTRY_AUTH_TOKEN` 을 넣고 `@sentry/vite-plugin` 으로 올리면 풀립니다
-      (소스맵을 배포본에 **포함하지 않고** 업로드만 합니다)
+- [x] **Sentry 소스맵 업로드** — `@sentry/vite-plugin` 으로 올리고 `dist` 에서 지웁니다.
+      배포본에는 소스맵이 **포함되지 않습니다**. 남은 건 서버에 토큰 파일을 만드는 것뿐입니다
+      (`~/teacat/.sentry-auth-token`). 없으면 예전처럼 난독화된 스택이 올라옵니다
 - [ ] 라이브니스(위조 방지) — 이번 단계 제외, 다음 작업
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)
@@ -648,3 +719,32 @@ npm run typecheck && npm run lint
   🔴 **Session Replay 는 켜지 않았습니다** — 얼굴 등록·결제 화면이 녹화되기 때문입니다(7장).
   요청 본문·쿠키·헤더·쿼리는 `dataCollection` 으로 전부 막았습니다.
   Sentry 초기화 순서 때문에 `src/instrument.ts` 를 만들어 `main.tsx` 첫 줄에서 import 합니다. 사용자 승인
+- 2026-09-10 **@microsoft/clarity 추가** (1장 기술 스택, 7장 "행동 분석" 절 신설).
+  Sentry 는 "무엇이 터졌나" 만 답합니다. 좌석 선점 실패 후의 연타(rage click)처럼
+  **요청이 나가지 않아 서버에도 남지 않는** 좌절 신호를 보려고 붙였습니다.
+  `VITE_CLARITY_PROJECT_ID` 하나를 `.env.*` / `vite-env.d.ts` / `shared/config/env.ts`
+  에 추가했고, CI 가 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
+  🔴 **지금은 꺼져 있습니다** — 프로젝트 ID 가 비어 있으면 스크립트조차 받지 않습니다.
+  🔴 Clarity 공식 API 에 **`stop` 이 없어** 라우트 단위로 끌 수 없습니다. 그래서 방어를
+     `index.html` 의 `#root`·`#modal-root` `data-clarity-mask="true"` **기본 차단**으로
+     세웠습니다(페이지마다 붙이면 새 화면에서 빠뜨립니다). 대시보드 마스킹 Strict 는
+     코드가 강제할 수 없어 사람이 바꿔야 합니다.
+  ⚠️ 예전 Sentry 항목에 적혀 있던 "Session Replay 는 카메라 프리뷰가 녹화된다" 는
+     **사실이 아니어서 함께 고쳤습니다.** 두 도구 모두 DOM 재생이라 `<video>`·`<canvas>`
+     픽셀은 올라가지 않습니다. 실제 위험은 DOM 텍스트입니다.
+  ⚠️ **남은 일:** 쿠키 동의·개인정보처리방침(국외이전 고지). 운영에 켜기 전에 필요합니다.
+     dev/prod 는 Clarity 프로젝트를 따로 만들어야 합니다(환경 태그가 없어 섞입니다). 사용자 승인 대기
+- 2026-09-10 **@sentry/vite-plugin 추가 (devDependency)** — 8장에 계획으로 있던
+  소스맵 업로드입니다. 운영 빌드가 난독화돼서 이슈 스택이 `index-a3f9.js:1:24817` 로만
+  오던 문제를 풉니다. `vite.config.ts` 의 `build.sourcemap` 을 `'hidden'` 으로 바꾸고
+  (업로드할 때만), 올린 직후 플러그인이 `dist/**/*.map` 을 지웁니다 —
+  **소스맵은 배포본에 나가지 않습니다.**
+  🔴 `SENTRY_AUTH_TOKEN`·`SENTRY_ORG`·`SENTRY_PROJECT` 는 **`VITE_` 가 아닙니다.**
+     붙이면 토큰이 번들에 박혀 공개됩니다. 토큰은 서버의 `~/teacat/.sentry-auth-token`
+     에만 두고 젠킨스가 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
+     젠킨스 `sh` 가 `-xe` 라 토큰을 만지는 구간만 `set +x` 로 가립니다.
+  🔴 `workbox.sourcemap` 도 운영에서 껐습니다 — 서비스워커 맵은 Sentry 플러그인이
+     `dist` 를 청소한 **뒤에** 생성돼서 그대로 배포됩니다(실제로 재현했습니다).
+     Dockerfile 에 `find dist -name '*.map' -delete` 그물을 하나 더 뒀습니다.
+  업로드 실패는 배포를 막지 않습니다(`errorHandler`) — Sentry 가 흔들린 날
+  프론트 배포가 통째로 멈추면 안 되기 때문입니다. 사용자 요청
