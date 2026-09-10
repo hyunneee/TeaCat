@@ -9,6 +9,7 @@ import com.teacat.server.nft.client.PhotocardNftMetadata;
 import com.teacat.server.nft.dto.request.NftPhotocardDesignCreateRequest;
 import com.teacat.server.nft.dto.response.NftPhotocardDesignResponse;
 import com.teacat.server.nft.entity.NftDesignChainStatus;
+import com.teacat.server.nft.entity.NftPhotocardGrade;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -77,7 +79,12 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
 
     private NftPhotocardDesignCreateRequest request() {
         return new NftPhotocardDesignCreateRequest(
-                performanceId, "한정 포토카드 A", "2026 콘서트 기념", 100, image());
+                performanceId, "한정 포토카드 A", "2026 콘서트 기념", 100, image(), null, null, null);
+    }
+
+    private NftPhotocardDesignCreateRequest drawPoolRequest() {
+        return new NftPhotocardDesignCreateRequest(
+                null, "김예린", "TeaCat 포토카드", 100, image(), true, "서울 5반", NftPhotocardGrade.SPECIAL);
     }
 
     /*
@@ -211,7 +218,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     @Test
     void 없는_공연이면_핀을_시작하기_전에_거절한다() {
         NftPhotocardDesignCreateRequest request = new NftPhotocardDesignCreateRequest(
-                999_999L, "한정 포토카드", null, 100, image());
+                999_999L, "한정 포토카드", null, 100, image(), null, null, null);
 
         assertThatThrownBy(() -> designService.create(request))
                 .isInstanceOf(BusinessException.class)
@@ -219,6 +226,81 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
                 .isEqualTo(NftErrorCode.PERFORMANCE_NOT_FOUND);
 
         // 핀은 되돌릴 수 없다. 되돌릴 수 있는 검사가 앞에 와야 IPFS 에 쓰레기가 안 남는다
+        verifyNoInteractions(ipfsPinService);
+    }
+
+    /* ── 뽑기 풀 도안: 공연 없이 소속·등급을 갖는다 ─────────────────────────── */
+
+    @Test
+    void 뽑기_풀_도안은_공연_없이_만들어지고_소속_등급이_남는다() {
+        givenChainAccepts("PENDING");
+
+        NftPhotocardDesignResponse response = designService.create(drawPoolRequest());
+
+        assertThat(response.performanceId()).isNull();
+        assertThat(response.drawPool()).isTrue();
+        assertThat(response.group()).isEqualTo("서울 5반");
+        assertThat(response.grade()).isEqualTo(NftPhotocardGrade.SPECIAL);
+        assertThat(response.chainStatus()).isEqualTo(NftDesignChainStatus.REGISTERING);
+
+        assertThat(designService.getDrawPool()).extracting(NftPhotocardDesignResponse::designId)
+                .containsExactly(response.designId());
+    }
+
+    @Test
+    void 뽑기_풀_메타데이터에는_소속과_등급_속성이_들어간다() {
+        givenChainAccepts("PENDING");
+
+        designService.create(drawPoolRequest());
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(ipfsPinService).pinJson(any(), payload.capture());
+        PhotocardNftMetadata metadata = (PhotocardNftMetadata) payload.getValue();
+        assertThat(metadata.attributes())
+                .extracting(PhotocardNftMetadata.Attribute::traitType, PhotocardNftMetadata.Attribute::value)
+                .containsExactly(tuple("소속", "서울 5반"), tuple("등급", "SPECIAL"));
+    }
+
+    @Test
+    void 공연_도안_메타데이터에는_속성이_없다() {
+        givenChainAccepts("PENDING");
+
+        designService.create(request());
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(ipfsPinService).pinJson(any(), payload.capture());
+        assertThat(((PhotocardNftMetadata) payload.getValue()).attributes()).isNull();
+    }
+
+    @Test
+    void 뽑기_풀과_공연을_같이_보내면_거절하고_핀하지_않는다() {
+        NftPhotocardDesignCreateRequest both = new NftPhotocardDesignCreateRequest(
+                performanceId, "김예린", null, 100, image(), true, "서울 5반", NftPhotocardGrade.SPECIAL);
+        NftPhotocardDesignCreateRequest neither = new NftPhotocardDesignCreateRequest(
+                null, "김예린", null, 100, image(), false, null, null);
+
+        assertThatThrownBy(() -> designService.create(both))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_CONFLICT);
+        assertThatThrownBy(() -> designService.create(neither))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_CONFLICT);
+        verifyNoInteractions(ipfsPinService);
+    }
+
+    @Test
+    void 뽑기_풀인데_소속이나_등급이_없으면_거절한다() {
+        NftPhotocardDesignCreateRequest noGrade = new NftPhotocardDesignCreateRequest(
+                null, "김예린", null, 100, image(), true, "서울 5반", null);
+        NftPhotocardDesignCreateRequest noGroup = new NftPhotocardDesignCreateRequest(
+                null, "김예린", null, 100, image(), true, "  ", NftPhotocardGrade.COMMON);
+
+        assertThatThrownBy(() -> designService.create(noGrade))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
+        assertThatThrownBy(() -> designService.create(noGroup))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
         verifyNoInteractions(ipfsPinService);
     }
 

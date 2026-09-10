@@ -1,6 +1,9 @@
 package com.teacat.server.nft.client;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
 
 /**
  * IPFS 에 핀하는 <b>메타데이터 JSON</b>. 지갑이 {@code uri(tokenId)} 로 받아가는 문서다.
@@ -22,12 +25,26 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public record PhotocardNftMetadata(
         String name,
         String description,
-        String image
+        String image,
+        /** 뽑기 풀 도안만. 지갑이 속성 탭에 보여준다 (ERC-721 metadata 관례). 공연 도안은 null */
+        List<Attribute> attributes
 ) {
 
     private static final String IPFS_SCHEME = "ipfs://";
 
+    public record Attribute(
+            @JsonProperty("trait_type") String traitType,
+            String value
+    ) {
+    }
+
     public static PhotocardNftMetadata of(String name, String description, String imageCid) {
-        return new PhotocardNftMetadata(name, description, IPFS_SCHEME + imageCid);
+        return new PhotocardNftMetadata(name, description, IPFS_SCHEME + imageCid, null);
+    }
+
+    public static PhotocardNftMetadata ofDrawPool(String name, String description, String imageCid,
+                                                  String group, String grade) {
+        return new PhotocardNftMetadata(name, description, IPFS_SCHEME + imageCid,
+                List.of(new Attribute("소속", group), new Attribute("등급", grade)));
     }
 }
