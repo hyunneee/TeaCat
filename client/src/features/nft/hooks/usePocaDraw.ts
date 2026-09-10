@@ -32,6 +32,11 @@ const REVEAL_MS = 2200;
 export function usePocaDraw() {
   const [phase, setPhase] = useState<DrawPhase>('sealed');
   const [card, setCard] = useState<PocaDrawResult | null>(null);
+  /**
+   * 이미 뽑아서 더는 못 뽑는 상태 — 서버가 그렇게 답했을 때만 세웁니다.
+   * 🔴 프론트가 세지 않습니다. 새로고침 한 번이면 풀리는 잠금은 잠금이 아닙니다.
+   */
+  const [usedUp, setUsedUp] = useState<string | null>(null);
 
   /* 멱등키는 한 번 만들어 재시도에도 재사용합니다. 매번 새로 만들면 의미가 없습니다. */
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -53,13 +58,24 @@ export function usePocaDraw() {
       void queryClient.invalidateQueries({ queryKey: nftKeys.all });
     },
     onError: (error) => {
-      toast.error(ApiError.isApiError(error) ? error.message : '뽑기에 실패했어요.');
+      const failure = ApiError.isApiError(error) ? error : null;
+
+      /* 뽑기는 계정당 한 번뿐입니다. '실패' 가 아니라 '이미 받았다' 이므로
+         빨간 토스트로 스쳐 지나가게 두지 않고 화면에 남깁니다. */
+      if (failure?.status === 409) setUsedUp(failure.message);
+      else toast.error(failure?.message ?? '뽑기에 실패했어요.');
+
       setPhase('sealed');
     },
   });
 
   /* 화면을 떠날 때 타이머가 살아 있으면 사라진 컴포넌트에 setState 합니다 */
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   /** 봉지에 손이 닿았습니다 — 여기서 뽑기가 나갑니다 */
   const startCut = useCallback(() => {
@@ -76,15 +92,6 @@ export function usePocaDraw() {
     timer.current = setTimeout(() => setPhase('revealed'), REVEAL_MS);
   }, []);
 
-  /** 한 번 더 */
-  const reset = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    idempotencyKey.current = crypto.randomUUID();
-    draw.reset();
-    setCard(null);
-    setPhase('sealed');
-  }, [draw]);
-
   return {
     phase,
     card,
@@ -92,6 +99,7 @@ export function usePocaDraw() {
     isWaiting: phase === 'opening' && card === null,
     startCut,
     finishCut,
-    reset,
+    /** 이미 뽑은 계정이면 그 사유. 없으면 null */
+    usedUp,
   };
 }

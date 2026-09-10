@@ -13,7 +13,7 @@ import { PocaDust, PocaPack, PocaResultLine, PocaReveal, usePocaDraw } from '@/f
  */
 export function PocaDrawPage() {
   const navigate = useNavigate();
-  const { phase, card, isWaiting, startCut, finishCut, reset } = usePocaDraw();
+  const { phase, card, isWaiting, startCut, finishCut, usedUp } = usePocaDraw();
 
   const opened = phase === 'opening' || phase === 'revealed';
   const revealed = phase === 'revealed' && card !== null;
@@ -52,7 +52,8 @@ export function PocaDrawPage() {
           className="text-poca-hint absolute right-0 left-0 z-20 px-14 text-center text-sm"
           style={{ top: 'max(calc(50% - 286px), 12px)' }}
         >
-          {!opened && '봉지 윗부분 점선을 밀어서 뜯으세요'}
+          {/* 뽑기는 계정당 한 번뿐입니다 — 이미 썼으면 뜯으라고 안내하면 안 됩니다 */}
+          {!opened && (usedUp ?? '봉지 윗부분 점선을 밀어서 뜯으세요')}
         </p>
 
         {/* 카드는 **처음부터 봉지 안에** 있습니다 (z:2 — 봉지가 z:3).
@@ -92,9 +93,8 @@ export function PocaDrawPage() {
         )}
         style={{ top: 'min(calc(50% + 268px), calc(100% - 100px))' }}
       >
-        <Button variant="secondary" fullWidth onClick={reset}>
-          한 번 더
-        </Button>
+        {/* '한 번 더' 는 없습니다 — 계정당 한 번뿐이라 눌러도 반드시 실패합니다.
+            본 발행은 입장 확인 때 서버가 합니다. */}
         <Button fullWidth onClick={() => navigate(ROUTES.MY_NFTS)}>
           내 포카 보기
         </Button>

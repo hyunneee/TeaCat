@@ -104,6 +104,9 @@ mock('GET', '/nft-market/photocards', (ctx) => {
 });
 
 /* ── P2 상세 ── */
+/** 이미 뽑은 사람. 서버라면 회원 행에 남을 값입니다(새로고침해도 유지되어야 합니다) */
+const drawnUserIds = new Set<string>();
+
 /* ── 포카 뽑기 ──────────────────────────────────────────────
    🔴 **어떤 카드가 나오는지는 여기(=서버 자리)가 정합니다.**
    프론트에서 뽑으면 콘솔로 결과를 바꿀 수 있고, 뜯기 전에 미리 알 수 있습니다.
@@ -111,10 +114,28 @@ mock('GET', '/nft-market/photocards', (ctx) => {
    `POST /photocards/draw` 는 2단이라 `POST /photocards/:id/listing`(3단)과
    겹치지 않습니다. 서버에 뽑기가 생기면 이 핸들러만 지웁니다.
 
-   지금은 횟수 제한·비용이 없습니다. 실제로는 캣머니 차감이나 하루 N회 같은
-   판정이 서버에 붙습니다 — 그것도 프론트가 아니라 여기 자리입니다. */
+   🔴 **계정당 생애 1회**입니다. 이 판정도 결과와 같이 여기(=서버 자리)에서 합니다 —
+   프론트가 세면 새로고침이나 콘솔로 얼마든지 다시 뽑을 수 있습니다.
+
+   본 발행은 이 화면이 아닙니다. 티켓 담당자가 입장 확인을 한 순간 그 티켓 보유자에게
+   서버가 카드를 발행합니다(티켓 사용 처리와 한 트랜잭션). 여기 배너 뽑기는 그것과 별개로
+   '한 번 구경해 보는' 자리입니다. */
+/**
+ * 남은 뽑기가 있는가.
+ * 🔴 이 판정도 서버 자리입니다 — 프론트가 기억하면 새로고침 한 번에 되살아납니다.
+ * 조건(이벤트 기간·티켓 보유·횟수)은 서버가 정하고, 화면은 `available` 만 보고 그립니다.
+ */
+mock('GET', '/photocards/draw', (ctx) => {
+  const user = requireUser(ctx.headers);
+  return { available: !drawnUserIds.has(user.id) };
+});
+
 mock('POST', '/photocards/draw', (ctx) => {
   const user = requireUser(ctx.headers);
+
+  if (drawnUserIds.has(user.id)) {
+    throw mockError(409, 'NFT_014', '뽑기는 한 번만 할 수 있어요. 이미 카드를 받으셨습니다.');
+  }
 
   const design = pocaDesigns[Math.floor(Math.random() * pocaDesigns.length)];
   if (!design) throw mockError(500, 'NFT_013', '뽑을 수 있는 도안이 없습니다.');
@@ -135,6 +156,7 @@ mock('POST', '/photocards/draw', (ctx) => {
   };
   /* 뽑은 카드는 실제로 내 것이 됩니다 — '내 포카' 목록에 바로 보입니다 */
   photocards.unshift(card);
+  drawnUserIds.add(user.id);
 
   return {
     photocardId: card.photocardId,

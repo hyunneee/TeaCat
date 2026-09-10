@@ -497,7 +497,10 @@ export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
     designName,
     imageUrl: null,
     performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
-    ownerId: i < 2 ? 'u-1' : 'u-3',
+    /* 🔴 심어둔 이 카드들은 **내 것이 아닙니다.** 마켓·경매를 채우기 위한 남의 물건입니다.
+       내 보관함에는 실제로 뽑거나 발행받은 카드만 있어야 합니다 —
+       '무대 위 첫 소절' 같은 가짜 도안이 내 포카에 섞여 있으면 무엇이 진짜인지 알 수 없습니다. */
+    ownerId: 'u-3',
     issuedAt: iso(now() - (i + 1) * DAY),
     origin: {
       seatGrade: i % 2 === 0 ? 'VIP' : 'S',
@@ -701,7 +704,9 @@ const AUCTION_SEED: Array<{
   },
   {
     photocardId: 502,
-    sellerId: 'u-1',
+    /* 502 는 남의 카드입니다(ownerId: 'u-3'). 주인과 판매자가 다르면
+       '내 경매' 에 내 것이 아닌 카드가 올라옵니다. */
+    sellerId: 'u-3',
     startPrice: 900,
     buyNowPrice: 2500,
     endsInMs: 3 * DAY,

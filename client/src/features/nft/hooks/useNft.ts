@@ -48,6 +48,19 @@ export function usePhotocardDetail(photocardId: number) {
   });
 }
 
+/**
+ * 남은 뽑기가 있는가 — 카드팩을 보여줄지 정할 때 씁니다.
+ * 조건은 서버가 정합니다. 화면은 `available` 만 보고 그립니다.
+ */
+export function useDrawAvailability() {
+  return useQuery({
+    queryKey: nftKeys.drawAvailability(),
+    queryFn: nftApi.drawAvailability,
+    /* 뽑고 나면 mutation 이 nftKeys.all 을 무효화해 곧바로 다시 물어봅니다 */
+    staleTime: STALE_TIME.SHORT,
+  });
+}
+
 export function useMyPhotocards() {
   // 개인 데이터입니다. 마켓(공개 화면)에서도 쓰기 때문에
   // 비로그인 상태에서 호출되면 401 이 나므로 반드시 막아둡니다.

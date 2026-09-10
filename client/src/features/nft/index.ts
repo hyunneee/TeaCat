@@ -1,6 +1,7 @@
 export {
   useNftMarket,
   usePhotocardDetail,
+  useDrawAvailability,
   useMyPhotocards,
   useMyTrades,
   usePurchasePhotocard,
@@ -13,6 +14,7 @@ export { PocaArt } from './components/PocaArt';
 export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
 export { PocaPack } from './components/PocaPack';
+export { PocaPackTile } from './components/PocaPackTile';
 export { PocaDust } from './components/PocaDust';
 export { PocaReveal } from './components/PocaReveal';
 export { PocaLiveCard } from './components/PocaLiveCard';

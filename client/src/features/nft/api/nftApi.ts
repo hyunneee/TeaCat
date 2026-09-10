@@ -68,6 +68,9 @@ export const nftApi = {
     http.post<PhotocardListing>(`/photocards/${photocardId}/listing`, body),
 
   unlist: (photocardId: number) => http.delete<void>(`/photocards/${photocardId}/listing`),
+
+  /** 남은 뽑기가 있는지 — 조건은 서버가 정합니다 */
+  drawAvailability: () => http.get<{ available: boolean }>('/photocards/draw'),
 };
 
 export const nftKeys = {
@@ -76,6 +79,7 @@ export const nftKeys = {
     [...nftKeys.all, 'market', keyword ?? '', sort ?? '', performanceId ?? 0] as const,
   detail: (photocardId: number) => [...nftKeys.all, 'detail', photocardId] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
+  drawAvailability: () => [...nftKeys.all, 'draw-availability'] as const,
   purchases: () => [...nftKeys.all, 'purchases'] as const,
   sales: () => [...nftKeys.all, 'sales'] as const,
 };
