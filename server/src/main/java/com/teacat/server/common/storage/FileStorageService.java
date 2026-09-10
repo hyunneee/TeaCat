@@ -22,7 +22,6 @@ import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -38,14 +37,6 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RequiredArgsConstructor
 public class FileStorageService {
-
-    /** 허용 이미지 타입과 저장할 때 붙일 확장자 */
-    private static final Map<String, String> ALLOWED_IMAGE_TYPES = Map.of(
-            "image/jpeg", ".jpg",
-            "image/png", ".png",
-            "image/webp", ".webp",
-            "image/gif", ".gif"
-    );
 
     private static final DateTimeFormatter KEY_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy/MM");
 
@@ -80,9 +71,9 @@ public class FileStorageService {
      * @return DB 에 저장할 key. 예: "performance/poster/2026/09/a1b2....png"
      */
     public String uploadImage(MultipartFile file, String directory, DataSize maxSize) {
-        validateImage(file, maxSize);
+        ImageFiles.validate(file, maxSize);
 
-        String key = generateKey(directory, ALLOWED_IMAGE_TYPES.get(file.getContentType()));
+        String key = generateKey(directory, ImageFiles.extensionOf(file.getContentType()));
 
         try (InputStream stream = file.getInputStream()) {
             minioClient.putObject(PutObjectArgs.builder()
@@ -109,7 +100,7 @@ public class FileStorageService {
      * @param contentType 올릴 파일의 MIME 타입. 허용 목록에 없으면 거절한다
      */
     public PresignedUpload presignedUploadUrl(String directory, String contentType) {
-        String extension = ALLOWED_IMAGE_TYPES.get(contentType);
+        String extension = ImageFiles.extensionOf(contentType);
 
         if (extension == null) {
             throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
@@ -126,7 +117,7 @@ public class FileStorageService {
                     .expiry((int) validity.toSeconds(), TimeUnit.SECONDS)
                     .build());
 
-            return new PresignedUpload(key, url, validity.toSeconds());
+            return new PresignedUpload(key, toPublicUrl(url), validity.toSeconds());
         } catch (Exception e) {
             log.error("업로드 URL 발급 실패. key={}", key, e);
             throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
@@ -169,16 +160,40 @@ public class FileStorageService {
         }
 
         try {
-            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            return toPublicUrl(minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.GET)
                     .bucket(properties.bucket())
                     .object(key)
                     .expiry((int) properties.presignedUrlValidity().toSeconds(), TimeUnit.SECONDS)
-                    .build());
+                    .build()));
         } catch (Exception e) {
             log.error("presigned URL 발급 실패. key={}", key, e);
             throw new BusinessException(StorageErrorCode.URL_ISSUE_FAILED);
         }
+    }
+
+    /**
+     * presigned URL 의 앞부분(서버가 MinIO 에 붙는 주소)을 브라우저가 열 수 있는 주소로 바꾼다.
+     *
+     * 배포에서는 endpoint 가 컨테이너 내부 주소(http://minio:9000)라 그대로 내려주면 이미지가 깨진다.
+     * 서명(SigV4)은 Host 와 경로로 계산되므로 뒷단(nginx)이 Host 헤더를 endpoint 의 것으로 되돌려 넘기면
+     * 주소만 바꿔도 서명이 그대로 맞는다. 조회(GET)와 업로드(PUT) URL 모두 같은 규칙이다.
+     */
+    String toPublicUrl(String url) {
+        if (!properties.hasPublicBaseUrl() || url == null) {
+            return url;
+        }
+
+        String internal = stripTrailingSlash(properties.endpoint());
+        if (!url.startsWith(internal)) {
+            return url;
+        }
+
+        return stripTrailingSlash(properties.publicBaseUrl()) + url.substring(internal.length());
+    }
+
+    private static String stripTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     /** 게시물 삭제나 이미지 교체로 더 이상 쓰지 않는 파일을 지운다. */
@@ -195,20 +210,6 @@ public class FileStorageService {
         } catch (Exception e) {
             log.error("MinIO 삭제 실패. key={}", key, e);
             throw new BusinessException(StorageErrorCode.DELETE_FAILED);
-        }
-    }
-
-    private void validateImage(MultipartFile file, DataSize maxSize) {
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(StorageErrorCode.EMPTY_FILE);
-        }
-
-        if (!ALLOWED_IMAGE_TYPES.containsKey(file.getContentType())) {
-            throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
-        }
-
-        if (file.getSize() > maxSize.toBytes()) {
-            throw new BusinessException(StorageErrorCode.FILE_TOO_LARGE);
         }
     }
 

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,13 @@ public interface PerformanceDetailRepository extends JpaRepository<PerformanceDe
 
     /** 공연 회차 목록 (API-202, API-204) */
     List<PerformanceDetail> findByPerformanceIdOrderByPerformanceNumAsc(Long performanceId);
+
+    /**
+     * 여러 공연의 회차를 한 번에 (API-201 목록의 대표 예매 상태 계산용).
+     *
+     * <p>공연마다 따로 조회하면 목록 한 장에 N 번 쿼리가 나간다.
+     */
+    List<PerformanceDetail> findByPerformanceIdIn(Collection<Long> performanceIds);
 
     /**
      * 회차 단건 조회 (API-203, API-206).

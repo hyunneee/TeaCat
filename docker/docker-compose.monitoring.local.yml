@@ -1,0 +1,113 @@
+# 로컬 확인용 모니터링 스택. 운영용은 docker-compose.monitoring.yml 이다.
+#
+#   docker compose -f docker-compose.monitoring.local.yml up -d
+#   → http://localhost:3000 (admin / admin)
+#
+# ── 운영과 무엇이 다른가 ────────────────────────────────────────────
+#   1. 시크릿이 필요 없다. 로컬 전용 값이 박혀 있어 .env 없이 바로 뜬다
+#   2. Prometheus UI(9090)를 연다. 타겟이 붙었는지 보려면 이 화면이 필요하다
+#   3. 타겟이 host.docker.internal 이다 (앱을 호스트에서 직접 띄우므로)
+#   4. 자체 네트워크를 쓴다. 로컬 인프라는 teacat-net 이 아니라 docker_default 에 있고,
+#      postgres 는 5432 를 호스트에 열어두므로 그쪽으로 붙으면 그만이다
+#   5. node-exporter / cAdvisor 를 넣지 않는다. Docker Desktop 은 리눅스 VM 안에서
+#      돌아 호스트 지표가 실제 서버와 다르다 — 로컬에서 봐야 의미가 없다
+#
+# 🔴 이 파일을 운영에 쓰지 말 것. 비밀번호가 admin 이고 포트를 더 연다.
+
+name: teacat-monitoring-local
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: monlocal-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # 로컬은 짧게. 노트북 디스크를 며칠치 지표로 채울 이유가 없다
+      - '--storage.tsdb.retention.time=3d'
+      - '--web.enable-lifecycle'
+    volumes:
+      # 운영과 다른 설정 파일을 같은 자리에 올린다
+      - ./monitoring/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      # 알림 규칙은 운영과 같은 것을 읽는다 — 규칙을 고치면 여기서 먼저 확인할 수 있다
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      # 🔴 여기가 타겟 확인 화면이다: http://localhost:9090/targets
+      #    "왜 지표가 안 보이지" 의 답은 대부분 이 화면에 있다
+      - '127.0.0.1:9090:9090'
+    extra_hosts:
+      # Linux 도커에는 host.docker.internal 이 기본으로 없다. 명시해두면 양쪽에서 다 된다
+      - 'host.docker.internal:host-gateway'
+    mem_limit: 512m
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: monlocal-grafana
+    restart: unless-stopped
+    environment:
+      # 로컬 전용 값이다. 운영 compose 는 .env.monitoring 을 강제한다
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      # 로그인 화면을 건너뛰고 바로 보게 한다. 확인이 목적이라 마찰을 줄인다
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on: [prometheus, loki]
+    mem_limit: 256m
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: monlocal-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    mem_limit: 512m
+
+  alloy:
+    image: grafana/alloy:v1.6.1
+    container_name: monlocal-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    mem_limit: 256m
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: monlocal-postgres-exporter
+    restart: unless-stopped
+    command:
+      # 🔴 PostgreSQL 18 에서 체크포인트 통계가 pg_stat_bgwriter 에서 pg_stat_checkpointer 로
+      #    옮겨갔는데(PG 17 변경) exporter v0.16.0 이 아직 옛 컬럼을 본다. 켜두면 15초마다
+      #    "checkpoints_timed does not exist" 에러만 쌓인다.
+      #    알림이 쓰는 지표(pg_stat_database_deadlocks, pg_locks)는 다른 컬렉터라 영향이 없다.
+      - '--no-collector.stat_bgwriter'
+    environment:
+      # 로컬 docker-compose.yml 의 값이다. 이 비밀번호는 이미 그 파일에 평문으로 있다
+      DATA_SOURCE_NAME: 'postgresql://teacat:teacat_local_pw@host.docker.internal:5432/teacat?sslmode=disable'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    mem_limit: 128m
+
+volumes:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  grafana_data:

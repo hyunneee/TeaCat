@@ -1,7 +1,9 @@
 package com.teacat.server.performance.service;
 
 import com.teacat.server.common.config.PerformanceImageProperties;
+import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.dto.request.ConcertUpdateRequest;
 import com.teacat.server.performance.dto.request.PresignedUploadRequest;
@@ -12,7 +14,9 @@ import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import com.teacat.server.stadium.repository.AreaRepository;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.stadium.repository.StadiumRepository;
+import com.teacat.server.stadium.repository.StadiumLayoutRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -42,13 +47,17 @@ class AdminPerformanceServiceImageLimitTests {
 
     private static final String POSTER_KEY = "performance/poster/2026/09/a.png";
     private static final String DETAIL_KEY = "performance/detail/2026/09/b.png";
-    private static final Long OWNER = 6L;
+    private static final Long OWNER_ID = 6L;
+    /** 공연 주최자 — 자기가 등록한 공연만 다룰 수 있다 */
+    private static final AuthUser OWNER = new AuthUser(OWNER_ID, UserRole.PERFORMANCE);
 
     @Mock private PerformanceGeneralRepository performanceGeneralRepository;
     @Mock private PerformanceDetailRepository performanceDetailRepository;
     @Mock private PerformanceAreaRepository performanceAreaRepository;
     @Mock private AreaRepository areaRepository;
+    @Mock private TicketRepository ticketRepository;
     @Mock private StadiumRepository stadiumRepository;
+    @Mock private StadiumLayoutRepository stadiumLayoutRepository;
     @Mock private FileStorageService fileStorageService;
 
     private AdminPerformanceService service;
@@ -58,12 +67,12 @@ class AdminPerformanceServiceImageLimitTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, stadiumRepository, fileStorageService,
+                areaRepository, ticketRepository, stadiumRepository, stadiumLayoutRepository, fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다
         performance = PerformanceGeneral.create(
-                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null, OWNER);
+                null, "테스트 공연", LocalDateTime.now().plusDays(30), LocalDate.now(), null, null, OWNER_ID);
     }
 
     private void givenPerformanceExists() {

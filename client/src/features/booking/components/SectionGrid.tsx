@@ -1,8 +1,15 @@
 import { motion } from 'motion/react';
 import { Check } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
-import { cn, formatPrice, SPRING } from '@/shared/lib';
-import { isSectionSoldOut, sectionRemainRatio } from '../model/seat.model';
+import { cn, SPRING } from '@/shared/lib';
+import {
+  SECTION_AVAILABILITY_LABEL,
+  isSectionBookable,
+  priceLabel,
+  sectionAvailability,
+  sectionBlockedReason,
+  sectionRemainRatio,
+} from '../model/seat.model';
 import type { Section } from '../model/booking.types';
 
 interface Props {
@@ -11,9 +18,23 @@ interface Props {
   onSelect: (section: Section) => void;
 }
 
-/** 잔여율에 따른 표시 — 색만 보고도 급한 정도가 읽히게 */
+/**
+ * 배지 문구와 잔여 막대.
+ *
+ * 🔴 팔 수 없는 구역은 잔여율이 아니라 **왜 못 사는지**를 보여줍니다.
+ *    "매진" 과 "준비 중"(좌석 미생성)은 남은 자리가 0 인 건 같지만 뜻이 정반대입니다.
+ */
 function remainInfo(section: Section) {
-  if (isSectionSoldOut(section)) return { tone: 'neutral' as const, label: '매진', bar: 'bg-line-strong' };
+  const availability = sectionAvailability(section);
+
+  if (availability !== 'ON_SALE') {
+    return {
+      tone: availability === 'SOLD_OUT' ? ('neutral' as const) : ('warning' as const),
+      label: SECTION_AVAILABILITY_LABEL[availability],
+      bar: 'bg-line-strong',
+    };
+  }
+
   const ratio = sectionRemainRatio(section);
   if (ratio < 0.1) return { tone: 'danger' as const, label: '마감임박', bar: 'bg-danger' };
   if (ratio < 0.35) return { tone: 'warning' as const, label: '여유 적음', bar: 'bg-warning' };
@@ -25,7 +46,8 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
   return (
     <ul className="grid grid-cols-2 gap-2.5">
       {sections.map((section) => {
-        const soldOut = isSectionSoldOut(section);
+        const bookable = isSectionBookable(section);
+        const blockedReason = sectionBlockedReason(section);
         const info = remainInfo(section);
         const selected = section.id === selectedId;
         const ratio = sectionRemainRatio(section);
@@ -34,7 +56,10 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
           <li key={section.id}>
             <button
               type="button"
-              disabled={soldOut}
+              /* 🔴 잔여 수가 아니라 **팔 수 있는지**로 막습니다. 가격 미정 구역을 열어두면
+                 좌석 화면까지 갔다가 아무것도 못 고르고 되돌아 나오게 됩니다 */
+              disabled={!bookable}
+              aria-describedby={blockedReason ? `${section.id}-reason` : undefined}
               onClick={() => onSelect(section)}
               aria-pressed={selected}
               className={cn(
@@ -63,7 +88,7 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
                 <span className="truncate font-bold">{section.name}</span>
               </div>
 
-              <p className="text-ink mt-1 text-sm font-bold">{formatPrice(section.price)}</p>
+              <p className="text-ink mt-1 text-sm font-bold">{priceLabel(section.price)}</p>
 
               <div className="mt-2 flex items-center justify-between gap-1">
                 <span className="text-subtle text-xs">
@@ -82,6 +107,14 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
                   className={cn('h-full w-full rounded-full', info.bar)}
                 />
               </div>
+
+              {/* 못 고르는 이유를 카드 안에 적습니다. 배지만 있으면 "매진" 과
+                  "준비 중" 이 왜 다른지 알 수 없습니다 */}
+              {blockedReason && (
+                <p id={`${section.id}-reason`} className="text-subtle mt-1.5 text-xs">
+                  {blockedReason}
+                </p>
+              )}
             </button>
           </li>
         );

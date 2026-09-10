@@ -1,0 +1,62 @@
+# 알림 라우팅.
+#
+# 🔴 WEBHOOK_URL 은 이 파일에 적지 않는다. .env.monitoring 에 두고 환경변수로 주입한다 —
+#    Discord/Mattermost 웹훅 주소는 그 자체가 "누구나 이 채널에 글을 쓸 수 있는" 토큰이다.
+#    (아래 url_file 로 읽으므로 compose 에서 시크릿 파일을 마운트해도 된다)
+
+global:
+  resolve_timeout: 5m
+
+route:
+  # 같은 종류의 알림을 묶어서 한 번에 보낸다. 티켓 오픈에 컨테이너 여러 개가 동시에
+  # 메모리를 치면 알림이 10개 오는 대신 1개로 묶인다.
+  # env 를 넣는다 — dev 와 prod 의 같은 알림이 한 메시지로 합쳐지면 어느 쪽인지 모른다
+  group_by: ['alertname', 'severity', 'env']
+  group_wait: 30s
+  group_interval: 5m
+  # 낫지 않는 알림을 다시 알리는 주기. 너무 짧으면 알림 피로가 오고,
+  # 너무 길면 잊는다. 4시간이 무난하다.
+  repeat_interval: 4h
+  receiver: 'default'
+
+  routes:
+    # critical 은 묶지 말고 빨리 보낸다 — 발행 적체·RPC 두절은 1분이 아깝다
+    - matchers:
+        - severity = "critical"
+      receiver: 'default'
+      group_wait: 10s
+      repeat_interval: 1h
+
+inhibit_rules:
+  # 대상이 죽었으면(TargetDown) 그 대상에서 나오던 다른 알림은 억제한다.
+  # 안 그러면 서버 하나 내려갔을 때 알림이 5개씩 온다.
+  - source_matchers:
+      - alertname = "TargetDown"
+    target_matchers:
+      - severity = "warning"
+    equal: ['job', 'env']
+
+receivers:
+  - name: 'default'
+    # 🔴 webhook_configs 가 아니라 slack_configs 다.
+    #    webhook_configs 는 Alertmanager 고유 JSON({status, alerts:[...]})을 그대로 던지는데,
+    #    Mattermost 의 들어오는 웹후크는 {"text": ...} 를 기대해서 400 으로 거절한다.
+    #    알림이 안 오는데 앱 쪽에는 아무 흔적이 없어 원인을 찾기 어려운 종류의 실패다.
+    #
+    #    Mattermost 는 Slack 호환 페이로드를 받으므로 slack_configs 를 그대로 쓴다.
+    #    (Discord 로 바꾸게 되면 웹훅 주소 끝에 /slack 만 붙이면 된다)
+    slack_configs:
+      - api_url_file: /etc/alertmanager/webhook_url
+        send_resolved: true
+        # 제목 한 줄에 상태·개수·이름이 다 보이게 한다. 알림은 대개 휴대폰 잠금화면에서
+        # 처음 읽히므로, 펼치지 않고도 "지금 급한가" 가 판단돼야 한다.
+        title: '{{ if eq .Status "firing" }}🔴{{ else }}✅ 해제 {{ end }} [{{ .CommonLabels.severity }}]{{ with .CommonLabels.env }} [{{ . }}]{{ end }} {{ .CommonLabels.alertname }}{{ if gt (len .Alerts) 1 }} ({{ len .Alerts }}건){{ end }}'
+        # 본문에는 요약과 대응 방법을 넣는다. 규칙마다 적어둔 description 이 곧 대응 안내다.
+        text: >-
+          {{ range .Alerts }}{{ .Annotations.summary }}
+
+          {{ .Annotations.description }}
+
+          {{ end }}
+        # 색으로 심각도를 구분한다. 목록에서 훑을 때 이게 제일 빠르다
+        color: '{{ if eq .Status "firing" }}{{ if eq .CommonLabels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'

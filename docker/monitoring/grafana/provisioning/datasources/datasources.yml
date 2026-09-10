@@ -1,0 +1,33 @@
+# 데이터소스를 코드로 박아둔다. UI 에서 손으로 추가하면 볼륨이 날아갔을 때 다시 해야 한다.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # 🔴 uid 를 고정한다. 안 그러면 Grafana 가 무작위로 만들어서, 대시보드 JSON 의
+    #    데이터소스 참조가 볼륨을 지울 때마다 깨진다.
+    uid: prometheus
+    access: proxy
+    # 컨테이너 이름으로 붙는다. 호스트에 포트를 열지 않았으므로 이 경로뿐이다
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      # prometheus.yml 의 scrape_interval 과 맞춘다. 그래프의 최소 간격이 된다
+      timeInterval: 15s
+      httpMethod: POST
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      # 로그에서 txHash 를 만나면 바로 체인 탐색기로 뛸 수 있게 한다.
+      # 지표 라벨에는 txHash 를 넣지 않기로 했으므로(카디널리티), 개별 트랜잭션을
+      # 좇는 일은 이렇게 로그 쪽에서 처리한다.
+      derivedFields:
+        - name: txHash
+          matcherRegex: '(0x[0-9a-fA-F]{64})'
+          url: 'https://explorer.ssafy-blockchain.com/tx/${__value.raw}'
+          datasourceUid: ''

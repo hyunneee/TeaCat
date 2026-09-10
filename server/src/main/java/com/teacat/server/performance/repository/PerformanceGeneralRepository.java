@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface PerformanceGeneralRepository extends JpaRepository<PerformanceGeneral, Long> {
 
+    @Query("SELECT p FROM PerformanceGeneral p JOIN FETCH p.stadium JOIN FETCH p.stadiumLayout WHERE p.id = :performanceId")
+    Optional<PerformanceGeneral> findByIdWithStadiumAndLayout(Long performanceId);
+
     /**
      * 공연 목록 조회 (API-201).
      *
@@ -23,6 +26,11 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
      * titlePattern 은 LIKE 패턴을 그대로 받는다. 검색어가 없으면 '%' 를 넘긴다.
      * 여기서 null 을 넘기면 PostgreSQL 이 파라미터 타입을 bytea 로 추론해
      * lower(bytea) 함수를 찾다 실패하므로, null 분기를 두지 않는다.
+     *
+     * <p><b>past 로 지난 공연을 갈라 준다.</b> 기준은 회차 날짜다 — 남은 회차가 하나라도 있으면
+     * 예정, 전부 지났으면 지난 공연이다. {@code performance_general.status} 는 운영자가 손으로
+     * 바꾸는 값이라(자동 전이가 없다) 여기 기준으로 쓸 수 없다. 회차를 아직 등록하지 않은
+     * 공연은 지난 공연이 아니므로 예정에 남는다.
      */
     @Query("""
             SELECT p FROM PerformanceGeneral p
@@ -31,9 +39,21 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
               AND p.visibleFrom <= :today
               AND (:cursor IS NULL OR p.id < :cursor)
               AND LOWER(p.title) LIKE LOWER(:titlePattern) ESCAPE '\\'
+              AND ((:past = FALSE
+                    AND (EXISTS (SELECT 1 FROM PerformanceDetail d
+                                 WHERE d.performance = p AND d.performanceDate > :now)
+                         OR NOT EXISTS (SELECT 1 FROM PerformanceDetail d
+                                        WHERE d.performance = p)))
+                OR (:past = TRUE
+                    AND EXISTS (SELECT 1 FROM PerformanceDetail d
+                                WHERE d.performance = p)
+                    AND NOT EXISTS (SELECT 1 FROM PerformanceDetail d
+                                    WHERE d.performance = p AND d.performanceDate > :now)))
             ORDER BY p.id DESC
             """)
     List<PerformanceGeneral> findPage(@Param("today") LocalDate today,
+                                      @Param("now") LocalDateTime now,
+                                      @Param("past") boolean past,
                                       @Param("cursor") Long cursor,
                                       @Param("titlePattern") String titlePattern,
                                       Pageable pageable);
@@ -66,6 +86,33 @@ public interface PerformanceGeneralRepository extends JpaRepository<PerformanceG
 
     /** 공개 상태인 공연이 존재하는지 (API-204, API-205) */
     boolean existsByIdAndHiddenAtIsNull(Long concertId);
+
+    /**
+     * 이 관리자가 등록한 공연 전부 — **비공개 포함**.
+     *
+     * 관리자가 비공개로 돌린 공연을 다시 찾아 공개로 되돌리려면 어딘가에는 보여야 한다.
+     * 클라이언트 목록(findPage)은 비공개를 숨기므로 여기서 따로 준다. 최근 등록순.
+     */
+    @Query("""
+            SELECT p FROM PerformanceGeneral p
+            JOIN FETCH p.stadium
+            WHERE p.createdById = :userId
+            ORDER BY p.id DESC
+            """)
+    List<PerformanceGeneral> findAllByCreatedById(@Param("userId") Long userId);
+
+    /**
+     * 등록자를 가리지 않은 공연 전부 — **비공개 포함**. 전체 관리자(ADMIN)의 관리 목록이다.
+     *
+     * ADMIN 은 남이 등록한 공연도 수정·삭제할 수 있으므로 그 공연들이 목록에 보여야 한다.
+     * 특히 남이 비공개로 돌린 공연은 클라이언트 목록에 없어서, 여기 말고는 찾아갈 길이 없다.
+     */
+    @Query("""
+            SELECT p FROM PerformanceGeneral p
+            JOIN FETCH p.stadium
+            ORDER BY p.id DESC
+            """)
+    List<PerformanceGeneral> findAllForAdmin();
 
     /**
      * 이 공연에 예매 이력이 있는지 (API-263).

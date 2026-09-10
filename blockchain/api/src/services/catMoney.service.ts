@@ -4,10 +4,14 @@ import {
   catMoneyAddress,
   isBurnExecuted,
   isMintExecuted,
+  isPaused,
+  isTransferExecuted,
   mint,
   operationKeyOf,
+  transferAs,
 } from '../chain/contracts/catMoney';
 import { deriveUserAddress } from '../chain/keys/hdWallet';
+import { normalizeAddress } from '../chain/address';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
 
@@ -55,9 +59,13 @@ function requireDeployed(): void {
 
 export async function getBalance(address: string): Promise<BalanceResult> {
   requireDeployed();
+
+  const account = normalizeAddress(address);
+  if (account === null) throw errors.invalidAddress('address', address);
+
   return {
-    address: address.toLowerCase(),
-    balance: (await balanceOf(address)).toString(),
+    address: account,
+    balance: (await balanceOf(account)).toString(),
     decimals: DECIMALS,
     symbol: SYMBOL,
   };
@@ -77,16 +85,20 @@ export async function mintCatMoney(
 ): Promise<WriteResult> {
   requireDeployed();
 
+  // 티켓 발행과 같은 이유입니다 — 체크섬이 틀린 주소는 ethers 가 던져 500 이 됩니다.
+  const target = normalizeAddress(to);
+  if (target === null) throw errors.invalidAddress('to', to);
+
   const key = operationKeyOf(operationKey);
   if (await isMintExecuted(key)) {
     logger.info(
-      `캣머니 발행 건너뜀 (이미 처리됨) ${reason} ${amount} → ${to} key=${short(key)}`,
+      `캣머니 발행 건너뜀 (이미 처리됨) ${reason} ${amount} → ${target} key=${short(key)}`,
     );
     return { status: 'ALREADY_DONE', txHash: null };
   }
 
-  const txHash = await mint(to, BigInt(amount), key);
-  logger.info(`캣머니 발행 ${reason} ${amount} → ${to} key=${short(key)} tx=${short(txHash)}`);
+  const txHash = await mint(target, BigInt(amount), key);
+  logger.info(`캣머니 발행 ${reason} ${amount} → ${target} key=${short(key)} tx=${short(txHash)}`);
   return { status: 'PENDING', txHash };
 }
 
@@ -132,5 +144,80 @@ export async function burnCatMoney(
 
   const txHash = await burnAs(derivationIndex, value, key);
   logger.info(`캣머니 소각 ${reason} ${amount} ← ${derived} key=${short(key)} tx=${short(txHash)}`);
+  return { status: 'PENDING', txHash };
+}
+
+/**
+ * 전송. 포카 마켓 정산에서 **구매자 → 판매자**로 캣머니가 갑니다.
+ *
+ * **발행도 소각도 아닙니다.** `totalSupply` 는 그대로고 소유자만 바뀝니다 — 그래서
+ * 이 값이 여전히 "유저들이 아직 안 쓴 캣머니 총량" 입니다. (DESIGN.md 6장 ②)
+ *
+ * 소각과 같이 유저 본인이 서명하므로 `derivationIndex` 로 만든 주소가 `from` 과
+ * 같은지 먼저 확인합니다. 다르면 **엉뚱한 사람의 잔액이 나갑니다.**
+ *
+ * ── 이 함수는 돈만 옮깁니다 ───────────────────────────────────────
+ *
+ * 카드 이전(`transferPhotocard`)과 **원자적이지 않습니다.** 서로 다른 컨트랙트의
+ * 서로 다른 트랜잭션이라 한쪽만 성공할 수 있습니다. 순서와 보상은 Spring 이
+ * 소유합니다 — 캣머니 전송이 **확정된 뒤** 카드를 옮기고, 카드가 실패하면 별도
+ * `operationKey` 로 되돌립니다. (PHOTOCARD_PLAN.md 7장)
+ */
+export async function transferCatMoney(
+  operationKey: string,
+  from: string,
+  derivationIndex: number,
+  to: string,
+  amount: string,
+  tradeId: string,
+): Promise<WriteResult> {
+  requireDeployed();
+
+  // 체크섬이 틀린 주소는 ethers 가 던져 500 이 됩니다. 잘못된 건 입력이므로 400 입니다.
+  const target = normalizeAddress(to);
+  if (target === null) throw errors.invalidAddress('to', to);
+
+  const derived = deriveUserAddress(derivationIndex);
+  if (derived !== from.toLowerCase()) {
+    throw errors.badRequest(
+      `derivationIndex ${derivationIndex} 로 만든 주소가 from 과 다릅니다`,
+      { derived, from: from.toLowerCase() },
+    );
+  }
+
+  /* 자기 자신에게 보내는 것은 막습니다. 컨트랙트는 통과시키지만 **키만 태우고
+     아무것도 옮기지 않습니다** — Spring 은 정산이 끝난 줄 알고, 그 거래는 키가
+     영구히 소비돼 다시 시도할 수도 없습니다. 구매자와 판매자가 같은 거래는
+     애초에 있으면 안 되는 값이라 여기서 끊습니다. */
+  if (derived === target) {
+    throw errors.badRequest('from 과 to 가 같습니다', { address: derived, tradeId });
+  }
+
+  const key = operationKeyOf(operationKey);
+  if (await isTransferExecuted(derived, key)) {
+    logger.info(
+      `캣머니 전송 건너뜀 (이미 처리됨) ${amount} ${derived} → ${target} ` +
+        `trade=${tradeId} key=${short(key)}`,
+    );
+    return { status: 'ALREADY_DONE', txHash: null };
+  }
+
+  /* 정지 스위치를 미리 봅니다. `transferWithKey` 는 `whenNotPaused` 라 켜져 있으면
+     체인에서 revert 됩니다 — 그냥 보내면 202 를 돌려준 뒤 10초쯤 지나서야 실패가
+     드러나고, 그동안 Spring 은 정산이 진행 중인 줄 압니다. */
+  if (await isPaused()) throw errors.contractPaused('캣머니 전송');
+
+  /* 잔액도 미리 봅니다. 소각과 같은 이유이고, 진짜 방어는 컨트랙트가 합니다 —
+     확인과 전송 사이에 잔액이 바뀔 수 있습니다. */
+  const value = BigInt(amount);
+  if ((await balanceOf(derived)) < value) {
+    throw errors.insufficientBalance(derived);
+  }
+
+  const txHash = await transferAs(derivationIndex, target, value, key);
+  logger.info(
+    `캣머니 전송 ${amount} ${derived} → ${target} trade=${tradeId} ` +
+      `key=${short(key)} tx=${short(txHash)}`,
+  );
   return { status: 'PENDING', txHash };
 }

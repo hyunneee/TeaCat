@@ -1,3 +1,7 @@
+/* 🔴 이 import 가 **가장 위**에 있어야 합니다. 아래로 내리지 마세요.
+   라우터(@/app/router)가 만들어지기 전에 Sentry 가 켜져야 라우트 이름이
+   `/concerts/:id` 로 묶입니다. 이유는 src/instrument.ts 주석에 있습니다. */
+import './instrument';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setupAuthBridge } from '@/app/providers';

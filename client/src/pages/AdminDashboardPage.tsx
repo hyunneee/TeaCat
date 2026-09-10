@@ -1,4 +1,13 @@
-import { Activity, CalendarPlus, ScanFace, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import {
+  Armchair,
+  Building2,
+  CalendarPlus,
+  ChartLine,
+  ScanFace,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { ROUTES } from '@/shared/constants';
 import { Badge } from '@/shared/components/ui';
 import {
@@ -22,6 +31,7 @@ import { can, useAuth } from '@/features/auth';
 export function AdminDashboardPage() {
   const { user } = useAuth();
   const canManageUsers = can.manageUsers(user);
+  const canManageStadiumLayouts = can.manageStadiumLayouts(user);
 
   // 회원 통계는 ADMIN 전용 API 입니다. 다른 역할이 부르면 403 이라 아예 안 부릅니다
   const { data: stats } = useAdminUserStats();
@@ -29,8 +39,8 @@ export function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-lg font-bold text-ink">대시보드</h1>
-        <p className="text-sm text-ink-muted">
+        <h1 className="text-ink text-lg font-bold">대시보드</h1>
+        <p className="text-ink-muted text-sm">
           {user?.nickname}님, 오늘 운영 상태를 한눈에 확인하세요.
         </p>
       </div>
@@ -54,16 +64,13 @@ export function AdminDashboardPage() {
             />
             <StatTile
               label="운영진 계정"
-              value={
-                stats &&
-                stats.byRole.ADMIN + stats.byRole.STADIUM + stats.byRole.PERFORMANCE
-              }
+              value={stats && stats.byRole.ADMIN + stats.byRole.STADIUM + stats.byRole.PERFORMANCE}
               unit="명"
               icon={ShieldCheck}
             />
 
             <BentoTile
-              span={6}
+              span={4}
               title="유저 관리"
               description="회원을 검색하고 역할·정보를 수정하거나 새 계정을 만듭니다."
               icon={UserPlus}
@@ -81,10 +88,44 @@ export function AdminDashboardPage() {
             {/* 🔴 타일을 추가할 자리입니다. span 은 12칸 기준이고, 합이 12를
                    넘으면 자동으로 다음 줄로 넘어갑니다. */}
             <BentoTile
+              span={4}
+              title="공연장 목록"
+              description="등록된 공연장과 기본 정보를 조회하고 저장된 좌석 배치를 관리합니다."
+              icon={Building2}
+              to={ROUTES.ADMIN_STADIUMS}
+            />
+
+            <BentoTile
+              span={4}
+              title="운영 통계"
+              description="일자별 가입·탈퇴와 하루 접속자를 꺾은선으로 봅니다. 운영 배포 시점이 함께 표시됩니다."
+              icon={ChartLine}
+              to={ROUTES.ADMIN_ANALYTICS}
+            />
+
+            <BentoTile
+              span={4}
+              title="좌석 배치 관리"
+              description="공연장을 검색하고 Excel 좌석표에서 구역·좌석·고정 요소를 검수해 새 배치를 생성합니다."
+              icon={Armchair}
+              to={ROUTES.ADMIN_STADIUM}
+            />
+          </>
+        ) : canManageStadiumLayouts ? (
+          <>
+            <BentoTile
               span={6}
-              title="다음 관리 기능"
-              description="공연·예매·정산 관리가 여기에 붙습니다. 사이드바 메뉴는 AdminSidebar 의 ADMIN_MENU 에 한 줄 추가하면 됩니다."
-              icon={Activity}
+              title="공연장 목록"
+              description="담당 공연장과 저장된 좌석 배치를 조회하고 관리합니다."
+              icon={Building2}
+              to={ROUTES.ADMIN_STADIUMS}
+            />
+            <BentoTile
+              span={6}
+              title="좌석 배치 관리"
+              description="담당 공연장의 좌석 배치를 조회하고 Excel 기반 새 배치를 생성합니다."
+              icon={Armchair}
+              to={ROUTES.ADMIN_STADIUM}
             />
           </>
         ) : (

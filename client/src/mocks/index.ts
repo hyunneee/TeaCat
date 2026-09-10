@@ -21,13 +21,12 @@ export async function setupMocks() {
   await Promise.all([
     import('./handlers/auth'), // 캡차만 남아 있습니다 (로그인·내 정보·얼굴·잔액·공연은 실서버)
     // 공연 목록·상세·회차(/concerts, /schedules)는 실서버로 나갑니다
-    import('./handlers/booking'),
-    import('./handlers/ticket'),
+    // 구역·좌석·선점(/schedules/*/seats, /performance-details/*/hold)도 실서버입니다
+    //   -> handlers/booking.ts 는 삭제했습니다. 결제도 실서버로 나갑니다.
+    // 내 티켓(/users/me/tickets)·예매 취소도 실서버입니다 -> handlers/ticket.ts 삭제
     import('./handlers/resale'),
     import('./handlers/nft'),
     import('./handlers/auction'),
-    import('./handlers/banner'),
-    import('./handlers/payment'),
     import('./handlers/appInfo'),
   ]);
 

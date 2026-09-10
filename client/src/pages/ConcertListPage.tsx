@@ -1,36 +1,44 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { IconButton, Input } from '@/shared/components/ui';
+import { Input, Segmented } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { can, useAuth } from '@/features/auth';
 import { ConcertCard, useConcerts } from '@/features/concert';
+
+/**
+ * 공연 목록 (관람객 화면).
+ *
+ * 🔴 **공연 등록·수정 입구는 여기에 두지 않습니다.** 공연 관리는 어드민 콘솔(`/admin`)로
+ * 옮기기로 했습니다. 예전에는 헤더의 + 버튼과 "내 공연" 탭이 있었는데, 관람객이 보는
+ * 화면에 관리 기능이 섞여 있었습니다.
+ *
+ * 등록·수정 화면(`/concerts/new`, `/concerts/:id/edit`)과 그 라우트 가드는 그대로
+ * 살아 있습니다 — 어드민 콘솔에 "공연 관리" 메뉴가 생기면 거기서 이어 붙이면 됩니다.
+ * 그때까지는 주소로 직접 들어가는 것 외에 입구가 없습니다.
+ */
+/* 두 목록은 서버에서 갈라 옵니다(`past`) — 남은 회차가 있으면 예정, 전부 지났으면 지난 공연.
+   클라이언트에서 거르지 않는 이유: 커서 페이징이라 걸러내면 한 페이지가 들쭉날쭉해집니다. */
+const TABS = [
+  { value: 'UPCOMING', label: '공연 예정' },
+  { value: 'PAST', label: '지난 공연' },
+] as const;
+
+type Tab = (typeof TABS)[number]['value'];
 
 export function ConcertListPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   /* 홈 검색창에서 `?q=` 로 넘어옵니다. 화면을 하나 더 만들지 않고 여기서 받습니다. */
   const [searchParams] = useSearchParams();
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
-  const { data: concerts, isPending } = useConcerts(keyword || undefined);
+  const [tab, setTab] = useState<Tab>('UPCOMING');
 
-  /* 관리자에게만 등록 버튼이 보입니다. 서버(`/admin/**`)도 같은 역할만 받습니다. */
-  const canCreate = can.createConcert(user);
+  const { data: concerts, isPending } = useConcerts(keyword || undefined, tab === 'PAST');
 
   return (
     <>
-      <Header
-        title="공연"
-        right={
-          canCreate ? (
-            <IconButton label="공연 등록" onClick={() => navigate(ROUTES.CONCERT_CREATE)}>
-              <Plus size={22} />
-            </IconButton>
-          ) : undefined
-        }
-      />
+      <Header title="공연" />
 
       {/* 검색 바 — 헤더에 **붙여** 둡니다. 사이가 벌어지면 헤더가 두 겹으로 보입니다.
           바깥 면은 목록과 같은 바탕색이라 흰 입력창만 떠 보입니다.
@@ -38,7 +46,7 @@ export function ConcertListPage() {
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
         {/* 검색·포카 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고)
-            서버 검색은 공연명 부분 일치입니다 (API-201) */}
+            서버 검색은 공연명 부분 일치입니다 (API-201). */}
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -48,6 +56,10 @@ export function ConcertListPage() {
           type="search"
           tone="contrast"
         />
+
+        {/* 내 티켓·포카와 같은 세그먼트입니다. 검색창과 한 덩어리로 붙여 두면
+            스크롤해도 "무엇을 보고 있는지" 가 함께 따라옵니다. */}
+        <Segmented options={TABS} value={tab} onChange={setTab} className="mt-2" />
       </div>
 
       {isPending ? (
@@ -55,12 +67,18 @@ export function ConcertListPage() {
       ) : !concerts || concerts.length === 0 ? (
         <EmptyState
           icon={Search}
-          title={keyword ? '검색 결과가 없어요' : '아직 등록된 공연이 없어요'}
+          title={
+            keyword
+              ? '검색 결과가 없어요'
+              : tab === 'PAST'
+                ? '지난 공연이 없어요'
+                : '아직 등록된 공연이 없어요'
+          }
           description={
             keyword
               ? '다른 키워드로 찾아보세요.'
-              : canCreate
-                ? '오른쪽 위 + 버튼으로 첫 공연을 등록해 보세요.'
+              : tab === 'PAST'
+                ? undefined
                 : '공연이 등록되면 여기에 보여요.'
           }
         />

@@ -1,7 +1,12 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { errors } from '../shared/errors';
-import { burnCatMoney, getBalance, mintCatMoney } from '../services/catMoney.service';
+import {
+  burnCatMoney,
+  getBalance,
+  mintCatMoney,
+  transferCatMoney,
+} from '../services/catMoney.service';
 
 /**
  * 컨트롤러는 요청 검증과 응답 변환만 합니다.
@@ -54,6 +59,22 @@ export const burnBody = z.object({
   reason: z.enum(['PAYMENT', 'WITHDRAWAL']),
 });
 
+/**
+ * 포카 마켓 정산 — 유저 → 유저.
+ *
+ * 발행·소각과 달리 `reason` 이 없습니다. 캣머니 전송은 마켓 정산 하나뿐이고,
+ * 어느 거래였는지는 `tradeId` 가 이미 말해줍니다.
+ */
+export const transferBody = z.object({
+  operationKey,
+  from: address,
+  derivationIndex: z.number().int().min(0).max(MAX_DERIVATION_INDEX),
+  to: address,
+  amount,
+  /** `nft_photocard_trades.id`. 온체인에는 안 남고 로그 추적용입니다 */
+  tradeId: z.string().min(1).max(200),
+});
+
 export async function getCatMoneyBalance(req: Request, res: Response): Promise<void> {
   const parsed = balanceQuery.safeParse(req.query);
   if (!parsed.success) {
@@ -83,6 +104,18 @@ export async function postCatMoneyBurn(req: Request, res: Response): Promise<voi
 
   const { operationKey: key, from, derivationIndex, amount: value, reason } = parsed.data;
   const result = await burnCatMoney(key, from, derivationIndex, value, reason);
+
+  res.status(result.status === 'PENDING' ? 202 : 200).json(result);
+}
+
+export async function postCatMoneyTransfer(req: Request, res: Response): Promise<void> {
+  const parsed = transferBody.safeParse(req.body);
+  if (!parsed.success) {
+    throw errors.badRequest('요청 본문이 올바르지 않습니다', parsed.error.flatten());
+  }
+
+  const { operationKey: key, from, derivationIndex, to, amount: value, tradeId } = parsed.data;
+  const result = await transferCatMoney(key, from, derivationIndex, to, value, tradeId);
 
   res.status(result.status === 'PENDING' ? 202 : 200).json(result);
 }

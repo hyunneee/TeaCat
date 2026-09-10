@@ -3,6 +3,11 @@ import { env } from './config';
 import { logger } from './shared/logger';
 import { buildHealthReport } from './services/health.service';
 import { startConfirmWatcher, stopConfirmWatcher } from './services/confirm.service';
+import { startDrawWatcher, stopDrawWatcher } from './services/drawWatcher.service';
+import {
+  startPhotocardConfirmWatcher,
+  stopPhotocardConfirmWatcher,
+} from './services/photocardConfirm.service';
 import { closePool } from './db/pool';
 
 async function main(): Promise<void> {
@@ -41,9 +46,29 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  /* 포토카드 확정 감시. 티켓과 같은 구조인데 한 트랜잭션이 카드 200장을 실어
+     나릅니다. 컬럼이 없으면 공연 하나치 발행이 조용히 깨지므로 여기서 죽습니다. */
+  const missingPhotocard = await startPhotocardConfirmWatcher();
+  if (missingPhotocard.length > 0) {
+    logger.error('nft_photocards 스키마가 맞지 않아 기동을 중단합니다');
+    server.close();
+    await closePool();
+    process.exit(1);
+  }
+
+  /* 자동 리빌. 블록해시가 256블록(약 42분)만 남아서, 커밋한 추첨을 그 안에
+     공개하지 못하면 되살릴 수 없습니다. 사람 손에 맡기지 않습니다.
+     (PHOTOCARD_PLAN.md 4-8)
+
+     DB 를 보지 않습니다 — 창이 곧 봐야 할 범위라, 최근 256블록의 로그만 훑으면
+     복구할 것이 전부 나옵니다. */
+  startDrawWatcher();
+
   const shutdown = (signal: string): void => {
     logger.info(`${signal} 수신 — 종료합니다`);
     stopConfirmWatcher();
+    stopPhotocardConfirmWatcher();
+    stopDrawWatcher();
     server.close(() => {
       void closePool().finally(() => process.exit(0));
     });

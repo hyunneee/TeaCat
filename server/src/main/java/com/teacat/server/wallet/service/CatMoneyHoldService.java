@@ -29,10 +29,23 @@ public class CatMoneyHoldService {
     private final CatMoneyHoldRepository holdRepository;
     private final CatMoneyHoldLockRepository lockRepository;
 
-    /** 가용 잔액 = 체인 잔액 − 유효 홀드 합 */
+    /**
+     * 가용 잔액 = 체인 잔액 − 유효 홀드 − 미확정 소각.
+     *
+     * <b>빼야 할 것이 두 가지다.</b> 둘 다 "체인 잔액에는 아직 남아 있지만 이미 임자가 있는 돈" 인데
+     * 이유가 다르다.
+     * <ul>
+     *   <li><b>유효 홀드</b> — 입찰처럼 쓰겠다고 약속만 하고 아직 안 나간 돈
+     *   <li><b>미확정 소각</b> — 이미 체인으로 보냈지만 확정(블록 10초)을 기다리는 돈
+     * </ul>
+     * 하나만 빼면 그쪽 경로와 다른 경로가 같은 돈을 두 번 쓴다. 예를 들어 티켓 결제로 소각을
+     * 보낸 직후 경매에 입찰하면, 소각을 안 빼는 한 둘 다 잔액이 충분하다고 본다.
+     */
     @Transactional(readOnly = true)
     public long availableBalance(Long userId) {
-        return catMoneyService.chainBalance(userId) - holdRepository.sumActiveAmount(userId);
+        return catMoneyService.chainBalance(userId)
+                - holdRepository.sumActiveAmount(userId)
+                - catMoneyService.pendingBurns(userId);
     }
 
     /**

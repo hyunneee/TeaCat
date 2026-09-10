@@ -15,6 +15,23 @@ export interface StadiumSummary {
   phone: string | null;
 }
 
+/**
+ * 공연장의 무대 형식(배치).
+ *
+ * 한 공연장이 무대를 U형·O형처럼 바꿀 수 있고, 형식마다 구역이 다르게 나뉩니다.
+ * 형식과 그 구역·좌석은 공연장 관리에서 미리 저장해 두고, 공연은 그중 하나를 골라 씁니다.
+ */
+export interface StadiumLayoutSummary {
+  layoutId: number;
+  name: string;
+  /** 공연장이 이 형식을 기본으로 씁니다. 형식을 안 고르면 서버가 이걸 씁니다 */
+  isDefault: boolean;
+  /** `ACTIVE` 만 공연에 쓸 수 있습니다. `DRAFT`·`ARCHIVED` 는 서버가 거절합니다 (PERFORMANCE_LAYOUT_005) */
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  areaCount: number;
+  seatCount: number;
+}
+
 /** 공연 등록 응답 (API-261) */
 export interface ConcertCreateResponse {
   concertId: number;
@@ -31,9 +48,30 @@ export interface PresignedUpload {
 export type ImageType = 'POSTER' | 'DETAIL';
 
 /** 회차 등록 응답 (API-265) */
+/**
+ * 회차 좌석 생성 결과.
+ *
+ * 스탠딩으로만 파는 공연은 만들 좌석이 없어 `createdSeatCount` 가 0 으로 옵니다 —
+ * 실패가 아니라 "만들 게 없었다" 는 뜻입니다.
+ */
+export interface SeatGenerateResponse {
+  scheduleId: number;
+  createdSeatCount: number;
+  /** 좌석을 만든 구역 수. 스탠딩 구역은 빠집니다 */
+  seatedAreaCount: number;
+}
+
 export interface ScheduleCreateResponse {
   scheduleId: number;
   performanceNum: number;
+}
+
+/** 공연 노출 전환 응답 (API-271) */
+export interface ConcertVisibilityResponse {
+  concertId: number;
+  visible: boolean;
+  /** 비공개로 바뀐 시각. 공개 상태면 null */
+  hiddenAt: string | null;
 }
 
 /**
@@ -54,6 +92,12 @@ export interface ConcertCreateForm {
   title: string;
   /** `<select>` 값. 비어 있으면 미선택 */
   stadiumId: string;
+  /**
+   * 무대 형식(배치) `<select>` 값. 공연장을 고르면 그 공연장의 형식 목록에서 고릅니다.
+   * 이 형식의 구역만 이 공연에서 팔 수 있습니다. 등록에서만 씁니다 —
+   * 수정에서 형식을 바꾸면 저장해 둔 구역 설정과 생성한 좌석이 전부 어긋납니다.
+   */
+  stadiumLayoutId: string;
   /** `datetime-local` 값 — `2026-10-01T20:00` */
   ticketingStartAt: string;
   /** `date` 값 — `2026-09-20` */
@@ -76,6 +120,7 @@ export type ConcertCreateErrors = Partial<Record<keyof ConcertCreateForm, string
 export const EMPTY_CONCERT_CREATE: ConcertCreateForm = {
   title: '',
   stadiumId: '',
+  stadiumLayoutId: '',
   ticketingStartAt: '',
   visibleFrom: '',
   poster: null,
@@ -103,6 +148,117 @@ function imageError(file: File | null, maxBytes: number): string | undefined {
     return `${Math.floor(maxBytes / 1024 / 1024)}MB 이하 파일만 올릴 수 있어요.`;
   }
   return undefined;
+}
+
+/* ── 포토카드 도안 ─────────────────────────────────────────── */
+
+/**
+ * 공연과 함께 등록할 포토카드 도안 한 줄 (`POST /admin/photocard-designs`, multipart).
+ *
+ * **공연이 만들어진 뒤에야 보낼 수 있습니다** — 도안이 `performanceId` 를 필수로 받기 때문입니다.
+ * 그래서 폼에서는 모아만 두고, 공연 등록이 성공한 직후 순서대로 보냅니다.
+ *
+ * `totalSupply` 는 온체인 `maxSupply` 가 됩니다. **첫 장이 발급되는 순간 동결되어 아무도 바꿀 수
+ * 없습니다** — "한정 100장" 이 약관이 아니라 컨트랙트가 지키는 약속이 되는 자리입니다.
+ * (blockchain/PHOTOCARD_PLAN.md 3장)
+ */
+export interface PhotocardDesignForm {
+  name: string;
+  /** `<input type="number">` 값이라 문자열입니다. 비어 있으면 미입력 */
+  totalSupply: string;
+  /** 메타데이터 JSON 에만 들어가고 DB 에는 저장되지 않습니다 */
+  description: string;
+  image: File | null;
+}
+
+/** 도안 등록 응답 중 화면이 쓰는 부분 */
+export interface PhotocardDesignResponse {
+  designId: number;
+  name: string;
+  imageUrl: string;
+  totalSupply: number;
+  /** PENDING · REGISTERING · REGISTERED · FAILED */
+  chainStatus: string;
+}
+
+export const EMPTY_PHOTOCARD_DESIGN: PhotocardDesignForm = {
+  name: '',
+  totalSupply: '',
+  description: '',
+  image: null,
+};
+
+/** 서버 `ipfs.pinata.image-max-size` 와 같은 값입니다 */
+export const DESIGN_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const DESIGN_NAME_MAX_LENGTH = 100;
+export const DESIGN_DESCRIPTION_MAX_LENGTH = 500;
+/** 서버 검증(@Max)과 같은 값 */
+export const DESIGN_MAX_SUPPLY = 100_000;
+
+export type PhotocardDesignErrors = Partial<Record<keyof PhotocardDesignForm, string>>;
+
+/**
+ * 도안 한 줄 검증. 서버가 같은 규칙으로 다시 검사합니다
+ * (이름 100자·수량 1~100,000: NftPhotocardDesignCreateRequest, 이미지: STORAGE_002·003).
+ *
+ * <b>완전히 빈 줄은 검사하지 않습니다.</b> "도안 없이 공연만 등록" 이 정상 경로라,
+ * 아무것도 안 채운 줄은 보내지 않고 버립니다.
+ */
+export function validatePhotocardDesign(design: PhotocardDesignForm): PhotocardDesignErrors {
+  const errors: PhotocardDesignErrors = {};
+  if (isEmptyPhotocardDesign(design)) return errors;
+
+  if (!design.name.trim()) errors.name = '도안 이름을 입력해 주세요.';
+  else if (design.name.length > DESIGN_NAME_MAX_LENGTH) {
+    errors.name = `이름은 ${DESIGN_NAME_MAX_LENGTH}자 이하여야 해요.`;
+  }
+
+  const supply = Number(design.totalSupply);
+  if (!design.totalSupply) errors.totalSupply = '한정 수량을 입력해 주세요.';
+  else if (!Number.isInteger(supply) || supply < 1) errors.totalSupply = '1 이상의 정수여야 해요.';
+  else if (supply > DESIGN_MAX_SUPPLY) {
+    errors.totalSupply = `${DESIGN_MAX_SUPPLY.toLocaleString()}장 이하여야 해요.`;
+  }
+
+  if (design.description.length > DESIGN_DESCRIPTION_MAX_LENGTH) {
+    errors.description = `설명은 ${DESIGN_DESCRIPTION_MAX_LENGTH}자 이하여야 해요.`;
+  }
+
+  if (!design.image) errors.image = '도안 이미지를 골라 주세요.';
+  else {
+    const image = imageError(design.image, DESIGN_IMAGE_MAX_BYTES);
+    if (image) errors.image = image;
+  }
+
+  return errors;
+}
+
+/** 사용자가 아무것도 손대지 않은 줄. 보내지 않고 버립니다 */
+export function isEmptyPhotocardDesign(design: PhotocardDesignForm): boolean {
+  return !design.name.trim() && !design.totalSupply && !design.description.trim() && !design.image;
+}
+
+/** 실제로 보낼 줄만 남깁니다 */
+export function filledPhotocardDesigns(designs: PhotocardDesignForm[]): PhotocardDesignForm[] {
+  return designs.filter((design) => !isEmptyPhotocardDesign(design));
+}
+
+export function arePhotocardDesignsValid(designs: PhotocardDesignForm[]): boolean {
+  return designs.every((design) => Object.keys(validatePhotocardDesign(design)).length === 0);
+}
+
+/** 도안 등록 multipart 바디 */
+export function toPhotocardDesignFormData(
+  performanceId: number,
+  design: PhotocardDesignForm,
+): FormData {
+  const body = new FormData();
+  body.append('performanceId', String(performanceId));
+  body.append('name', design.name.trim());
+  body.append('totalSupply', design.totalSupply);
+  if (design.description.trim()) body.append('description', design.description.trim());
+  if (design.image) body.append('image', design.image);
+  return body;
 }
 
 export type ConcertFormMode = 'create' | 'edit';
@@ -140,6 +296,11 @@ export function validateConcertCreate(
   else if (form.title.length > TITLE_MAX_LENGTH) errors.title = `제목은 ${TITLE_MAX_LENGTH}자 이하여야 해요.`;
 
   if (!form.stadiumId) errors.stadiumId = '공연장을 선택해 주세요.';
+
+  /* 형식은 등록에서만 고릅니다. 공연장을 골랐으면 형식도 골라야 구역이 정해집니다 */
+  if (mode === 'create' && form.stadiumId && !form.stadiumLayoutId) {
+    errors.stadiumLayoutId = '무대 형식을 선택해 주세요.';
+  }
 
   if (!form.ticketingStartAt) errors.ticketingStartAt = '티켓팅 오픈 시각을 입력해 주세요.';
 
@@ -196,6 +357,8 @@ export function toConcertCreateFormData(form: ConcertCreateForm): FormData {
   const body = new FormData();
   body.append('title', form.title.trim());
   body.append('stadiumId', form.stadiumId);
+  /* 비우면 서버가 공연장의 기본 배치를 씁니다. 빈 문자열을 보내면 Long 변환이 실패해 400 이라 아예 뺍니다 */
+  if (form.stadiumLayoutId) body.append('stadiumLayoutId', form.stadiumLayoutId);
   body.append('ticketingStartAt', toServerDateTime(form.ticketingStartAt));
   body.append('visibleFrom', form.visibleFrom);
   if (form.poster) body.append('poster', form.poster);
@@ -212,6 +375,8 @@ export function concertToForm(concert: ConcertDetail): ConcertCreateForm {
   return {
     title: concert.title,
     stadiumId: String(concert.stadium.stadiumId),
+    /* 수정 폼은 형식을 바꾸지 않지만, 구역 목록을 이 형식 기준으로 불러와야 합니다 */
+    stadiumLayoutId: String(concert.layout.layoutId),
     ticketingStartAt: toDateTimeLocal(concert.ticketingStartAt),
     visibleFrom: concert.visibleFrom,
     poster: null,

@@ -14,6 +14,10 @@ services:
     image: pgvector/pgvector:pg18
     container_name: dev-postgres
     restart: unless-stopped
+    # 🔴 앱은 KST(LocalDateTime)를 timestamp 컬럼에 그대로 넣고, SQL 은 DB 의 now() 와
+    #    비교한다. DB 가 UTC 면 그 비교가 9시간 밀려 좌석 선점 만료 같은 것이 동작하지 않는다.
+    #    command 로 GUC 를 직접 지정한다 — TZ 환경변수는 이미 초기화된 볼륨에는 반영되지 않는다.
+    command: ['postgres', '-c', 'timezone=Asia/Seoul']
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-teacat}
       POSTGRES_USER: ${POSTGRES_USER:-teacat}
@@ -70,12 +74,28 @@ services:
     env_file:
       - .env.dev.chain
     environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
       NODE_ENV: production
       # 설정이 몇 개 안 되어 여기 적는다. INTERNAL_API_KEY 는 .env.dev 에 한 번만 두고
       # server 와 나눠 쓴다 (값이 갈라지면 가입이 401 로 실패한다).
       CHAIN_ID: ${CHAIN_ID:-31221}
       RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+
+      # 🔴 아래 셋은 없어도 컨테이너가 뜬다. 대신 해당 기능만 조용히 죽는다.
+      #    필수값이 아니라 더 위험하다 — 로그에 에러가 안 나고 /health 만 경고한다.
+      #
+      #    DATABASE_URL                  없으면 확정 기록이 안 돼 티켓이 영원히 PENDING
+      #    CONTRACT_OPERATOR_PRIVATE_KEY 없으면 도안 등록·정지·추첨 서명 불가
+      #    DRAW_SEED_SECRET              없으면 추첨 경로가 안 돈다
+      #
+      # DATABASE_URL 은 **우리 DB 가 아니라 Spring 이 쓰는 그 postgres** 다.
+      # 확정 결과 컬럼 몇 개만 갱신한다 (blockchain/DESIGN.md 1장).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-teacat}
+
+      # CONTRACT_OPERATOR_PRIVATE_KEY 와 DRAW_SEED_SECRET 은 개인키·시드라
+      # 니모닉과 같이 .env.dev.chain 에 두고 env_file 로 들어온다.
     mem_limit: 512m
     networks: [teacat-net]
     # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
@@ -94,6 +114,8 @@ services:
     env_file:
       - .env.dev
     environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
       # 아래는 .env 에 둘 수 없는 것들이다.
       #   - 컨테이너 주소: compose 구조에서 나오는 값이라 파일에 둘 이유가 없다
       #   - 이름이 다른 값: 파일의 이름과 스프링이 읽는 이름이 달라 여기서 옮긴다
@@ -104,9 +126,11 @@ services:
       SPRING_DATA_REDIS_PORT: '6379'
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
 
-      # ⚠️ 컨테이너 내부 주소다. 이 주소로 presigned URL 이 만들어지면 브라우저가
-      #    못 연다. 이미지 업로드를 붙일 때 다시 손봐야 한다.
+      # MINIO_ENDPOINT 는 컨테이너 내부 주소라 브라우저가 열 수 없다. 그래서 presigned URL 은
+      # MINIO_PUBLIC_BASE_URL 로 바꿔 내려주고, nginx 의 /storage/ 가 MinIO 로 넘긴다
+      # (docker/nginx/conf.d/dev.conf). 서명이 내부 Host 로 계산되므로 nginx 가 Host 를 되돌려 보낸다.
       MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_BASE_URL: https://dev.teacat.site/storage
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
 
@@ -121,6 +145,14 @@ services:
       REFRESH_COOKIE_SAME_SITE: Lax
       # 브라우저가 보는 경로 기준이다. 프론트가 /api 로 호출하므로 /api/auth 로 좁힌다
       REFRESH_COOKIE_PATH: /api/auth
+
+      # 에러 리포팅 (Sentry). DSN 이 비어 있으면 서버가 그냥 안 켠다.
+      # 🔴 프론트 DSN 과 다른 값이다 — Sentry 프로젝트가 따로다(플랫폼: Spring Boot).
+      #    값은 .env.dev 의 SENTRY_DSN 에 둔다. 저장소에 넣지 마라.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: dev
+      # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@dev}
 
       FRONTEND_BASE_URL: https://dev.teacat.site
       SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}

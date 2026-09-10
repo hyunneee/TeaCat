@@ -1,6 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronRight, Hourglass, Coins, Images, ScanFace, Search, Ticket, UserRound } from 'lucide-react';
+import {
+  ChevronRight,
+  Hourglass,
+  Coins,
+  Images,
+  ScanFace,
+  Search,
+  Ticket,
+  UserRound,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -17,7 +26,7 @@ import { ROUTES } from '@/shared/constants';
 import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
-import { isTicketingOpen, posterSeedOf, useConcerts } from '@/features/concert';
+import { isConcertOpen, posterSeedOf, useConcerts } from '@/features/concert';
 import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
@@ -69,7 +78,7 @@ export function HomePage() {
   /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
   const { data: newPocas } = useNftMarket();
 
-  const open = concerts?.filter((c) => isTicketingOpen(c)).slice(0, RAIL_LIMIT) ?? [];
+  const open = concerts?.filter((c) => isConcertOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
      두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
@@ -87,16 +96,18 @@ export function HomePage() {
    */
   const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
 
-  /** 배너를 눌렀을 때 어디로 갈지는 배너 데이터가 알려줍니다 (linkType). */
+  /**
+   * 배너를 눌렀을 때 어디로 갈지.
+   *
+   * 공연 배너는 공연 ID 만 오므로 여기서 경로를 만듭니다 — 서버가 `/concerts/3` 같은
+   * 문자열을 주면 프론트에서 경로를 바꿀 때 서버까지 고쳐야 합니다. (CLAUDE.md 3-5)
+   * 나머지는 관리자가 적어 둔 서비스 내 경로로 그대로 이동합니다. 둘 다 없으면 안내용이라 가만히 둡니다.
+   */
   const openBanner = (banner: Banner) => {
-    if (banner.linkType === 'CONCERT' && banner.linkId) {
-      navigate(ROUTES.CONCERT_DETAIL(banner.linkId));
-    } else if (banner.linkType === 'NFT') {
-      navigate(ROUTES.NFT_MARKET);
-    } else if (banner.linkType === 'POCA_DRAW') {
-      navigate(ROUTES.NFT_DRAW);
-    } else if (banner.linkType === 'TOKEN') {
-      navigate(ROUTES.TOKEN);
+    if (banner.performanceId !== null) {
+      navigate(ROUTES.CONCERT_DETAIL(String(banner.performanceId)));
+    } else if (banner.linkPath) {
+      navigate(banner.linkPath);
     }
   };
 
@@ -255,7 +266,9 @@ export function HomePage() {
                       </div>
 
                       <p className="mt-2 truncate text-[0.875rem] font-bold">{concert.title}</p>
-                      <p className="text-ink-muted truncate text-[0.8125rem]">{concert.stadiumName}</p>
+                      <p className="text-ink-muted truncate text-[0.8125rem]">
+                        {concert.stadiumName}
+                      </p>
                     </motion.button>
                   </li>
                 ))}

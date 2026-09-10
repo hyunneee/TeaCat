@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { CalendarDays, MapPin, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
+import { CalendarDays, MapPin, ShieldAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import {
   Card,
-  IconButton,
   Lightbox,
   PosterImage,
   SectionTitle,
@@ -14,9 +13,8 @@ import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
-import { can, useAuth } from '@/features/auth';
-import { ScheduleList, isConcertOwner, posterSeedOf, useConcertDetail } from '@/features/concert';
-import { useDeleteConcert } from '@/features/organizer';
+import { useAuth } from '@/features/auth';
+import { ScheduleList, posterSeedOf, useConcertDetail, useStartBooking } from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -24,24 +22,13 @@ export function ConcertDetailPage() {
   const { open } = useModal();
   const { concertId = '' } = useParams();
   const { user, isLoggedIn } = useAuth();
-  const { data: concert, isPending, isError } = useConcertDetail(concertId);
-  const remove = useDeleteConcert();
+  /* `/concerts/무엇이든` 이 전부 여기로 들어옵니다. 숫자가 아니면 공연 ID 가 아니라
+     없는 주소입니다 — 예전 `/concerts/new`(등록 화면, 지금은 어드민으로 옮김) 같은
+     오래된 링크가 여기로 떨어집니다. 서버에 물어봐야 500 만 받으므로 묻지 않습니다. */
+  const isConcertId = /^\d+$/.test(concertId);
+  const { data: concert, isPending, isError } = useConcertDetail(isConcertId ? concertId : '');
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
-
-  /** 헤더 오른쪽의 수정·삭제는 **이 공연을 등록한 관리자**에게만 보입니다. 서버도 같은 기준으로 거절합니다(PERFORMANCE_020). */
-  const canManage = can.manageConcert(user) && !!concert && isConcertOwner(concert, user?.userId);
-
-  /* 삭제는 되돌릴 수 없습니다 — 붉은 확인 모달을 거칩니다 (CLAUDE.md 4-7).
-     예매 이력이 있으면 서버가 거절하고 훅이 그 메시지를 토스트로 보여줍니다. */
-  const confirmDelete = () =>
-    open('common/confirm', {
-      title: '이 공연을 삭제할까요?',
-      message: '회차·구역·좌석 설정과 이미지가 함께 지워지고 되돌릴 수 없습니다. 예매 이력이 있는 공연은 삭제되지 않아요.',
-      confirmText: '삭제',
-      danger: true,
-      onConfirm: () => remove.mutate(concertId),
-    });
 
   /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
   const needsFace = isLoggedIn && !user?.faceRegistered;
@@ -49,6 +36,10 @@ export function ConcertDetailPage() {
   /* 등록을 마치면 **이 공연으로 되돌아오게** 현재 위치를 함께 넘깁니다.
      안 넘기면 useFaceRegistration 의 기본값(마이페이지)으로 가버립니다. */
   const goFaceRegister = () => navigate(ROUTES.FACE_REGISTER, { state: { from: location } });
+
+  /* 오픈 전 회차도 버튼이 눌립니다. 열렸는지는 **누른 그 순간 서버에** 물어봅니다
+     (useStartBooking) — 새로고침해야 버튼이 나타나던 문제를 없애면서, 판단은 서버에 둡니다. */
+  const booking = useStartBooking();
 
   /* 덮개를 지우고 눌러도 여기서 다시 막습니다.
      화면 표시(덮개) → 버튼 disabled → 이 핸들러 → 라우트 가드, 네 겹입니다. */
@@ -63,8 +54,22 @@ export function ConcertDetailPage() {
       });
       return;
     }
-    navigate(ROUTES.BOOKING_VERIFY(scheduleId));
+    booking.start(scheduleId, () => navigate(ROUTES.BOOKING_VERIFY(scheduleId)));
   };
+
+  /* 쿼리를 끄면 `isPending` 이 계속 true 라 로딩 화면에서 멈춥니다. 로딩 분기보다 먼저 빠져나옵니다 */
+  if (!isConcertId) {
+    return (
+      <>
+        <Header showBack />
+        <EmptyState
+          mood="sad"
+          title="페이지를 찾을 수 없어요"
+          description="주소가 바뀌었거나 삭제된 페이지입니다."
+        />
+      </>
+    );
+  }
 
   if (isPending) {
     return (
@@ -92,27 +97,10 @@ export function ConcertDetailPage() {
 
   return (
     <>
-      <Header
-        title={concert.title}
-        showBack
-        right={
-          canManage ? (
-            <span className="flex items-center">
-              <IconButton label="공연 수정" onClick={() => navigate(ROUTES.CONCERT_EDIT(concertId))}>
-                <Pencil size={19} />
-              </IconButton>
-              <IconButton
-                label="공연 삭제"
-                variant="danger-ghost"
-                disabled={remove.isPending}
-                onClick={confirmDelete}
-              >
-                <Trash2 size={19} />
-              </IconButton>
-            </span>
-          ) : undefined
-        }
-      />
+      {/* 🔴 수정 버튼을 두지 않습니다. 공연 관리는 어드민 콘솔(`/admin`)로 옮기기로 했습니다 —
+          여기는 관람객이 보는 화면입니다. 수정 화면(`/concerts/:id/edit`)과 라우트 가드는
+          그대로 살아 있으니, 어드민에 "공연 관리" 메뉴가 생기면 거기서 이어 붙이면 됩니다. */}
+      <Header title={concert.title} showBack />
 
       <Lightbox
         open={posterZoomed}
@@ -129,9 +117,10 @@ export function ConcertDetailPage() {
       </Lightbox>
 
       <div className="space-y-6 p-4">
-        {/* 헤드 — 제목은 포스터 위쪽에, 장소·오픈 시각은 **포스터 아래쪽에** 맞춥니다.
+        {/* 헤드 — 제목은 포스터 위쪽에, 장소는 **포스터 아래쪽에** 맞춥니다.
             제목 바로 밑에 붙이면 한 덩어리로 뭉쳐 제목이 묻히고,
-            포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다. */}
+            포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다.
+            오픈 시각은 좁아서 잘리던 탓에 아래 한 줄로 뺐습니다. */}
         <section className="flex gap-4">
           {/* 눌러서 크게 봅니다 (포토카드와 같은 방식 — Lightbox).
               포스터는 정보가 아니라 그림이라, 작게 보고 넘어가면 다시 못 봅니다. */}
@@ -146,20 +135,29 @@ export function ConcertDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
 
-            <ul className="text-muted space-y-1 text-[0.8125rem]">
-              <li className="flex items-start gap-1.5">
-                <MapPin size={13} className="mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block truncate">{concert.stadium.name}</span>
-                  <span className="text-subtle block truncate text-xs">{concert.stadium.address}</span>
-                </span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <CalendarDays size={13} className="shrink-0" />
-                <span className="truncate">티켓 오픈 {formatDateTime(concert.ticketingStartAt)}</span>
-              </li>
-            </ul>
+            <p className="text-muted flex items-start gap-1.5 text-[0.8125rem]">
+              <MapPin size={13} className="mt-0.5 shrink-0" />
+              <span className="min-w-0">
+                <span className="block truncate">{concert.stadium.name}</span>
+                <span className="text-subtle block truncate text-xs">{concert.stadium.address}</span>
+              </span>
+            </p>
           </div>
+        </section>
+
+        {/* 티켓 오픈 시각은 **한 줄을 통째로** 씁니다.
+            포스터 옆 칸은 176px 밖에 안 돼서 날짜가 딱 맞게 들어가 있었고,
+            하루만 두 자리가 되면(12. 1. → 12. 12.) 바로 잘렸습니다.
+            이 화면에서 가장 중요한 정보라 잘려서는 안 됩니다. */}
+        <section className="surface-2 flex items-center gap-2 rounded-xl px-3.5 py-3">
+          <CalendarDays size={15} className="text-ink-muted shrink-0" />
+          <span className="text-subtle text-[0.8125rem]">티켓 오픈</span>
+          <time
+            dateTime={concert.ticketingStartAt}
+            className="ml-auto text-right text-[0.8125rem] font-bold"
+          >
+            {formatDateTime(concert.ticketingStartAt)}
+          </time>
         </section>
 
         {/* 소개 — 회차보다 **먼저** 옵니다.
@@ -188,6 +186,7 @@ export function ConcertDetailPage() {
             <ScheduleList
               schedules={concert.schedules}
               onBook={(scheduleId) => startBooking(scheduleId)}
+              checkingId={booking.checkingId}
               onWaitlist={(scheduleId) => navigate(ROUTES.RESALE(scheduleId))}
               blocked={
                 needsFace

@@ -2,14 +2,36 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Recipient, SeatHold } from '../model/booking.types';
 
+/**
+ * 스토어에 담는 선점 정보.
+ *
+ * 서버 응답(`SeatHold`)에 두 가지를 더 붙입니다.
+ *
+ * `receivedAt` — 응답을 받은 **클라이언트 시각**.
+ *   서버는 남은 시간을 초(`remainingSeconds`)로 주므로, 그것만으로는
+ *   "지금 몇 초 남았는지" 를 다시 계산할 수 없습니다. 받은 순간을 함께
+ *   적어두면 `receivedAt + remainingSeconds * 1000` 이 클라이언트 시계 기준
+ *   만료 시각이 되고, 새로고침·결제창 복귀 후에도 그대로 유효합니다.
+ *   (서버 시각을 클라이언트 시계와 직접 비교하면 기기 시각이 틀어진 사용자에게
+ *    엉뚱한 타이머가 보입니다)
+ *
+ * 서버 선점은 (회차, 좌석, 사용자)로 식별합니다. 서버에 없는 별도 holdId는 만들지 않습니다.
+ */
+export type HoldSession = SeatHold & {
+  receivedAt: number;
+};
+
 interface BookingState {
   scheduleId: string | null;
   /** 구역 선택 단계에서 고른 구역 */
   sectionId: string | null;
-  /** 아직 서버에 락을 걸지 않은, 화면에서만 고른 좌석 */
+  /**
+   * 아직 서버에 락을 걸지 않은, 화면에서만 고른 좌석.
+   * 1인 1매 정책이라 실제로는 0개 또는 1개입니다 (배열은 정책이 늘어날 때를 위해 유지).
+   */
   selectedSeatIds: string[];
   /** 서버가 잡아준 락 정보 */
-  hold: SeatHold | null;
+  hold: HoldSession | null;
   /** 좌석별 티켓 수령인 (단순 양도 방지 — 결제 시점에 확정) */
   recipients: Recipient[];
   /** 결제 요청에 쓸 멱등키. 플로우 시작 시 1회 생성해 재시도해도 유지합니다. */
@@ -47,6 +69,18 @@ const initial = {
   | 'reset'
 >;
 
+/** 서버 응답을 스토어에 담을 형태로. 만료 계산의 기준점을 여기서 한 번만 찍습니다 */
+function toSession(hold: SeatHold): HoldSession {
+  return {
+    ...hold,
+    receivedAt: Date.now(),
+  };
+}
+
+/** 스토어에 남아 있는 선점이 이미 만료됐는지 */
+const isExpired = (hold: HoldSession) =>
+  hold.receivedAt + hold.remainingSeconds * 1000 <= Date.now();
+
 /**
  * 예매 플로우 한 판의 상태.
  *
@@ -78,9 +112,7 @@ export const useBookingStore = create<BookingState>()(persist((set, get) => ({
     // sessionStorage 에 유지되므로, 결제를 끝내지 않고 나갔던 판이 남아 있을 수 있습니다.
     // 만료된 선점을 그대로 두면 새 예매를 시작한 직후 만료 처리가 발동해
     // 방금 고른 좌석이 풀려버립니다.
-    const expired = current.hold
-      ? new Date(current.hold.expiresAt).getTime() <= Date.now()
-      : false;
+    const expired = current.hold ? isExpired(current.hold) : false;
 
     // 다른 회차로 넘어왔거나, 남아있던 선점이 이미 만료됐으면 새 판으로 시작합니다.
     if (current.scheduleId !== scheduleId || expired) set({ ...initial, scheduleId });
@@ -100,7 +132,7 @@ export const useBookingStore = create<BookingState>()(persist((set, get) => ({
 
   clearSelection: () => set({ selectedSeatIds: [] }),
 
-  setHold: (hold) => set({ hold }),
+  setHold: (hold) => set({ hold: hold === null ? null : toSession(hold) }),
 
   setRecipient: (seatId, loginId) =>
     set((s) => {

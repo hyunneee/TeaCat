@@ -10,73 +10,35 @@ import { requestPayment } from '../api/paymentGateway';
 import type { PayMethod, PaymentAuthResult } from '../model/payment.types';
 import { usesGateway } from '../model/payment.model';
 
-/** 사용자에게 보여줄 진행 단계 */
-export type PaymentStage =
-  | 'idle'
-  /** 서버에서 주문·금액 확정 중 */
-  | 'preparing'
-  /** 결제창이 떠 있는 중 */
-  | 'authenticating'
-  /** 백엔드가 승인·검증 중 */
-  | 'confirming';
+export type PaymentStage = 'idle' | 'preparing' | 'authenticating' | 'confirming';
 
-/**
- * 결제 승인(검증) 요청.
- *
- * 결제창 인증 결과만 있으면 되므로, 결제 페이지와 리디렉션 복귀 화면이
- * 같은 훅을 씁니다. 멱등키를 붙여 두 경로에서 중복 승인되지 않게 합니다.
- */
+/** 결제 승인 후 공통 후처리와 완료 화면 이동을 담당합니다. */
 export function useConfirmPayment() {
   const navigate = useNavigate();
   const ensureIdempotencyKey = useBookingStore((s) => s.ensureIdempotencyKey);
 
   return useMutation({
-    mutationFn: ({ auth, payMethod }: { auth: PaymentAuthResult; payMethod: PayMethod }) =>
+    mutationFn: ({ auth }: { auth: PaymentAuthResult }) =>
       paymentApi.confirm(
         {
-          paymentId: auth.paymentId,
-          paymentKey: auth.paymentKey,
-          // 서버는 이 금액을 믿지 않고 자기가 저장한 값과 비교합니다.
-          amount: auth.amount,
-          payMethod,
+          ticketOrderId: auth.ticketOrderId,
+          ...(auth.paymentKey ? { paymentKey: auth.paymentKey, amount: auth.amount } : {}),
         },
         ensureIdempotencyKey(),
       ),
     onSuccess: (order) => {
       void queryClient.invalidateQueries({ queryKey: ['booking'] });
       void queryClient.invalidateQueries({ queryKey: ['ticket'] });
-      // 캣머니로 결제했다면 잔액이 줄었습니다.
       void queryClient.invalidateQueries({ queryKey: ['token'] });
-      // 플로우 상태 정리는 완료 화면에서 합니다. 여기서 비우면 결제 페이지의
-      // "선점 없음" 가드가 먼저 발동해 구역 선택으로 튕깁니다.
-      navigate(ROUTES.BOOKING_DONE(order.orderId), { replace: true });
+      navigate(ROUTES.BOOKING_DONE(String(order.ticketOrderId)), { replace: true });
     },
   });
 }
 
-/**
- * 결제 플로우 전체.
- *
- *   ① prepare   서버가 주문 생성 + 금액/paymentId 확정
- *   ② 결제창     토스 결제창에서 사용자 인증 (간편결제)
- *   ③ confirm   백엔드가 토스 승인 API 호출 → 금액 검증 → 티켓 발급
- *
- * **캣머니(POINT) 결제는 ②가 없습니다.** PG 를 거치지 않고 바로 ③으로 가서
- * 서버가 잔액을 차감합니다. 그래서 리디렉션도 일어나지 않습니다.
- *
- * ②까지가 프론트 몫이고 ③은 백엔드가 실제로 일합니다.
- * 백엔드가 준비되면 `paymentApi.confirm` 의 응답만 맞춰주면
- * 이 훅과 화면은 그대로 씁니다.
- *
- * 토스페이먼츠는 인증에 성공하면 `successUrl` 로 페이지를 이동시킵니다.
- * 즉 **성공 결과는 항상 리디렉션으로** 돌아오고, `BOOKING_PAYMENT_RESULT`
- * 라우트에서 ③을 이어붙입니다. (usePaymentResult)
- */
+/** 실제 서버 주문 생성부터 캣머니/토스 승인까지 이어주는 결제 흐름입니다. */
 export function usePayment(scheduleId: string) {
   const [stage, setStage] = useState<PaymentStage>('idle');
-
   const hold = useBookingStore((s) => s.hold);
-  const recipients = useBookingStore((s) => s.recipients);
   const confirm = useConfirmPayment();
 
   const pay = useCallback(
@@ -86,22 +48,23 @@ export function usePayment(scheduleId: string) {
         return;
       }
 
-      try {
-        // ① 금액·주문번호는 서버가 정합니다.
-        setStage('preparing');
-        const prepared = await paymentApi.prepare({
-          holdId: hold.holdId,
-          recipients: recipients.filter((r) => hold.seatIds.includes(r.seatId)),
-        });
+      const performanceDetailId = Number(hold.scheduleId);
+      const seatId = Number(hold.seatId);
+      if (!Number.isSafeInteger(performanceDetailId) || !Number.isSafeInteger(seatId)) {
+        toast.error('결제할 회차 또는 좌석 정보가 올바르지 않습니다.');
+        return;
+      }
 
-        /* 캣머니 결제는 결제창을 거치지 않습니다.
-           차감은 서버가 하고, 프론트는 승인만 요청합니다. */
-        if (!usesGateway(payMethod)) {
+      try {
+        setStage('preparing');
+        const prepared = await paymentApi.prepare({ performanceDetailId, seatId });
+
+        // 서버가 카드 결제액을 0원으로 확정하면 토스를 거치지 않고 바로 발권합니다.
+        if (prepared.cashAmount === 0) {
           setStage('confirming');
           confirm.mutate(
             {
-              auth: { paymentId: prepared.paymentId, paymentKey: '', amount: prepared.totalAmount },
-              payMethod,
+              auth: { ticketOrderId: prepared.ticketOrderId, paymentKey: '', amount: 0 },
             },
             {
               onError: (error) => {
@@ -115,30 +78,38 @@ export function usePayment(scheduleId: string) {
           return;
         }
 
-        /* ② 결제창.
-              토스페이먼츠는 성공하면 successUrl 로 **페이지가 이동**합니다.
-              그래서 성공 경로는 여기로 돌아오지 않고 result 라우트에서 이어집니다. */
+        // POINT를 골랐는데 서버 가용 잔액이 부족하면 임의로 카드 결제로 바꾸지 않습니다.
+        if (!usesGateway(payMethod)) {
+          setStage('idle');
+          toast.error('캣머니가 부족합니다. 간편결제로 부족한 금액을 결제해 주세요.');
+          return;
+        }
+
         setStage('authenticating');
-        const resultUrl = `${window.location.origin}${ROUTES.BOOKING_PAYMENT_RESULT(scheduleId)}`;
+        const resultUrl = new URL(
+          ROUTES.BOOKING_PAYMENT_RESULT(scheduleId),
+          window.location.origin,
+        );
+        // 토스는 orderId만 돌려주므로 서버 PK를 리디렉션 URL에 보존합니다.
+        resultUrl.searchParams.set('ticketOrderId', String(prepared.ticketOrderId));
+
         const result = await requestPayment({
           prepared,
-          successUrl: resultUrl,
-          failUrl: resultUrl,
+          successUrl: resultUrl.toString(),
+          failUrl: resultUrl.toString(),
         });
 
         if (!result.ok) {
           setStage('idle');
-          // 사용자가 창을 닫은 것뿐이면 조용히 되돌립니다.
-          if (result.failure.canceledByUser) return;
-          if (result.failure.code === 'REDIRECTED') return;
+          if (result.failure.canceledByUser || result.failure.code === 'REDIRECTED') return;
           toast.error(result.failure.message);
           return;
         }
 
-        // ③ 승인은 백엔드가
+        // 모의 PG 모드처럼 리디렉션 없이 인증 결과가 돌아오는 경우입니다.
         setStage('confirming');
         confirm.mutate(
-          { auth: result.auth, payMethod },
+          { auth: result.auth },
           {
             onError: (error) => {
               setStage('idle');
@@ -155,13 +126,8 @@ export function usePayment(scheduleId: string) {
         toast.error(ApiError.isApiError(error) ? error.message : '결제를 시작할 수 없습니다.');
       }
     },
-    [hold, recipients, scheduleId, confirm],
+    [hold, scheduleId, confirm],
   );
 
-  return {
-    pay,
-    stage,
-    /** 결제 진행 중 — 버튼을 잠가 중복 요청을 막으세요 */
-    isPaying: stage !== 'idle',
-  };
+  return { pay, stage, isPaying: stage !== 'idle' };
 }

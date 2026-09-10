@@ -44,32 +44,43 @@ public class NftPhotocard {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
+    /** 카드를 받은 지갑. <b>발행을 보내기 전에 반드시 채워져 있어야 한다</b> — 받는 주소가 여기서 나온다 */
     @Column(name = "wallet_id")
     private Long walletId;
 
-    @Column(name = "metadata_uri")
-    private String metadataUri;
+    /*
+     * ── 아래 여섯 개는 블록체인 서비스가 쓴다 (blockchain/DESIGN.md 1장 예외) ──────
+     *
+     * 확정을 Spring 대신 그쪽이 기다려서 이 행을 직접 UPDATE 한다. 그래서 전부
+     * updatable = false 다. 안 그러면 로드해 둔 이 엔티티가 flush 되면서
+     * <b>방금 기록된 민팅 결과를 옛 값으로 되돌린다</b> — 카드가 영원히 PENDING 으로
+     * 남고, 원인은 한참 뒤에나 드러난다. (PHOTOCARD_PLAN.md 6-4)
+     *
+     * INSERT 는 막히지 않으므로 status 는 PENDING 으로 처음 저장된다.
+     * 그 뒤 PENDING → MINTING → MINTED 는 전부 저쪽이 옮긴다.
+     */
 
-    @Column(name = "chain_id")
+    @Column(name = "chain_id", updatable = false)
     private Integer chainId;
 
     @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "contract_address", length = 42, columnDefinition = "char(42)")
+    @Column(name = "contract_address", length = 42, columnDefinition = "char(42)", updatable = false)
     private String contractAddress;
 
-    @Column(name = "token_id", precision = 78)
+    /** {@code design_id} 와 같은 값이다. 포카의 tokenId 는 카드가 아니라 도안이다 */
+    @Column(name = "token_id", precision = 78, updatable = false)
     private BigDecimal tokenId;
 
     @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "mint_tx_hash", length = 66, columnDefinition = "char(66)")
+    @Column(name = "mint_tx_hash", length = 66, columnDefinition = "char(66)", updatable = false)
     private String mintTxHash;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "status", nullable = false, columnDefinition = "nft_mint_status")
+    @Column(name = "status", nullable = false, columnDefinition = "nft_mint_status", updatable = false)
     private NftMintStatus status;
 
-    @Column(name = "minted_at")
+    @Column(name = "minted_at", updatable = false)
     private LocalDateTime mintedAt;
 
     @CreationTimestamp

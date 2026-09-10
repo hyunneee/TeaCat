@@ -1,5 +1,15 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, type LucideIcon } from 'lucide-react';
+import {
+  Armchair,
+  Building2,
+  ChartLine,
+  GalleryHorizontalEnd,
+  LayoutDashboard,
+  MessagesSquare,
+  Music,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/shared/lib';
 import { ROUTES } from '@/shared/constants';
 import { Logo } from '@/shared/components/ui';
@@ -32,7 +42,49 @@ interface AdminMenuItem {
 
 const ADMIN_MENU: AdminMenuItem[] = [
   { to: ROUTES.ADMIN, label: '대시보드', icon: LayoutDashboard },
+  {
+    to: ROUTES.ADMIN_ANALYTICS,
+    label: '운영 통계',
+    icon: ChartLine,
+    visible: can.viewAnalytics,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_CONCERTS,
+    label: '공연 관리',
+    icon: Music,
+    visible: can.manageConcert,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_STADIUMS,
+    label: '공연장 목록',
+    icon: Building2,
+    visible: can.manageStadiumLayouts,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_STADIUM,
+    label: '좌석 배치 관리',
+    icon: Armchair,
+    visible: can.manageStadiumLayouts,
+    matchNested: true,
+  },
   { to: ROUTES.ADMIN_USERS, label: '유저 관리', icon: Users, visible: can.manageUsers, matchNested: true },
+  {
+    to: ROUTES.ADMIN_BANNERS,
+    label: '메인 배너 관리',
+    icon: GalleryHorizontalEnd,
+    visible: can.manageBanners,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_INQUIRIES,
+    label: '문의 관리',
+    icon: MessagesSquare,
+    visible: can.manageInquiries,
+    matchNested: true,
+  },
 ];
 
 export interface AdminSidebarProps {
@@ -48,7 +100,7 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
       className={cn(
         /* 어두운 면은 70:25:5 의 25(구조)입니다. brand 는 채도 0 이라
            초록(강조 5%)을 잡아먹지 않습니다. 선택된 메뉴만 초록입니다. */
-        'flex w-60 shrink-0 flex-col gap-1 bg-brand-900 p-4 text-white',
+        'bg-brand-900 flex w-60 shrink-0 flex-col gap-1 p-4 text-white',
         className,
       )}
     >
@@ -67,8 +119,8 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
               cn(
                 'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors',
                 isActive
-                  // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
-                  ? 'bg-accent-700 font-semibold text-white'
+                  ? // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
+                    'bg-accent-700 font-semibold text-white'
                   : 'text-white/70 hover:bg-white/10 hover:text-white',
               )
             }
@@ -80,8 +132,8 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
       </nav>
 
       {items.length === 1 && (
-        /* 대시보드만 보이는 역할(STADIUM·PERFORMANCE)에게 빈 사이드바를 설명 없이
-           보여주면 고장으로 읽힙니다. */
+        /* 대시보드만 보이는 역할에게 빈 사이드바를 설명 없이 보여주면 고장으로 읽힙니다.
+           (STADIUM 은 공연장·좌석 배치, PERFORMANCE 는 공연 관리가 보입니다) */
         <p className="mt-3 px-3 text-xs leading-relaxed text-white/50">
           이 계정으로 쓸 수 있는 관리 메뉴가 아직 없어요. 기능이 추가되면 여기에 나타납니다.
         </p>

@@ -40,7 +40,7 @@ public class AdminScheduleController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "회차 ID", example = "1") @PathVariable Long scheduleId,
             @Valid @RequestBody ScheduleUpdateRequest request) {
-        adminScheduleService.update(scheduleId, request, authUser.id());
+        adminScheduleService.update(scheduleId, request, authUser);
         return ResponseEntity.ok(BaseResponse.success("회차 정보가 수정되었습니다."));
     }
 
@@ -49,7 +49,7 @@ public class AdminScheduleController {
     public ResponseEntity<Void> delete(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @Parameter(description = "회차 ID", example = "1") @PathVariable Long scheduleId) {
-        adminScheduleService.delete(scheduleId, authUser.id());
+        adminScheduleService.delete(scheduleId, authUser);
         return ResponseEntity.noContent().build();
     }
 
@@ -62,6 +62,6 @@ public class AdminScheduleController {
             @Parameter(description = "회차 ID", example = "1") @PathVariable Long scheduleId) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(BaseResponse.success("좌석이 생성되었습니다.",
-                        adminScheduleService.generateSeats(scheduleId, authUser.id())));
+                        adminScheduleService.generateSeats(scheduleId, authUser)));
     }
 }

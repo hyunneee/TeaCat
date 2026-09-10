@@ -9,6 +9,9 @@ import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.TicketingWindow;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.performance.entity.BookingOpenStatus;
+import com.teacat.server.performance.entity.TicketingStatus;
+import com.teacat.server.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,15 +29,15 @@ public class BookingService {
     /** 1인 1매 제약을 강제하는 부분 유니크 인덱스 이름 (V20260903_1705 마이그레이션) */
     private static final String HELD_BY_UNIQUE_INDEX = "uq_performance_seats_held_by";
 
-    /** performance_details.status 가 이 값일 때만 예매를 받는다 */
-    private static final String TICKETING_STATUS_OPEN = "OPEN";
-
     private final PerformanceSeatRepository performanceSeatRepository;
+    private final UserRepository userRepository;
     private final Duration holdDuration;
 
     public BookingService(PerformanceSeatRepository performanceSeatRepository,
+            UserRepository userRepository,
             @Value("${booking.hold.duration}") Duration holdDuration) {
         this.performanceSeatRepository = performanceSeatRepository;
+        this.userRepository = userRepository;
         this.holdDuration = holdDuration;
     }
 
@@ -56,6 +59,12 @@ public class BookingService {
     /** 좌석 선점 */
     @Transactional
     public SeatHoldResponse holdSeat(Long performanceDetailId, Long seatId, Long userId) {
+        // 얼굴이 없으면 티켓을 발급할 수 없다(tickets.face_id 가 NOT NULL). 결제까지 받은 뒤
+        // 발급에서 막히면 되돌리기 가장 비싼 실패가 되므로, 좌석을 묶기 전에 거절한다.
+        //   정책 플래그(booking.policy.face-verification-required)로 끄지 않는다 —
+        //   스키마가 강제하는 제약이라 꺼도 발급이 되지 않는다.
+        requireFaceRegistered(userId);
+
         TicketingWindow ticketingWindow = performanceSeatRepository
                 .findTicketingWindow(performanceDetailId)
                 .orElseThrow(() -> new BusinessException(
@@ -119,6 +128,13 @@ public class BookingService {
         }
     }
 
+    /** 얼굴 미등록이면 선점을 거절한다 */
+    private void requireFaceRegistered(Long userId) {
+        if (!userRepository.existsByIdAndFaceIsNotNull(userId)) {
+            throw new BusinessException(BookingErrorCode.FACE_NOT_REGISTERED);
+        }
+    }
+
     /**
      * 예매 오픈 여부 검증.
      *
@@ -126,8 +142,13 @@ public class BookingService {
      * 종료 시각이 추가되면 상한도 시각으로 검증한다.
      */
     private void validateTicketingOpen(TicketingWindow ticketingWindow) {
-        if (!TICKETING_STATUS_OPEN.equals(ticketingWindow.getTicketingStatus())
-                || ticketingWindow.getTicketingStartAt().isAfter(LocalDateTime.now())) {
+        BookingOpenStatus status = BookingOpenStatus.resolve(
+                TicketingStatus.valueOf(ticketingWindow.getTicketingStatus()),
+                ticketingWindow.getTicketingStartAt(),
+                ticketingWindow.getPerformanceDate(),
+                LocalDateTime.now());
+
+        if (status != BookingOpenStatus.OPEN) {
             throw new BusinessException(BookingErrorCode.TICKETING_NOT_AVAILABLE);
         }
     }
@@ -144,6 +165,7 @@ public class BookingService {
 
         return switch (seat.getStatus()) {
             case SOLD -> BookingErrorCode.SEAT_ALREADY_SOLD;
+            case BLOCKED -> BookingErrorCode.SEAT_ALREADY_SOLD;
             // ② 가 만료된 HELD 를 흡수하므로 여기 남는 HELD 는 원칙적으로 "유효한 선점" 뿐이다.
             // 다만 ② 와 이 재조회 사이에 만료 시각이 지나는 좁은 창이 있어, 그때는 연장 불가(010)가
             // 아니라 경합에서 진 것으로 본다 (재시도하면 ② 가 흡수한다)
@@ -171,6 +193,7 @@ public class BookingService {
         return switch (seat.getStatus()) {
             // 결제까지 끝난 좌석에는 해제할 선점이 없다
             case SOLD -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
+            case BLOCKED -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
             // 남의 선점이면 권한 없음, 내 선점인데 UPDATE 가 실패했다면 만료된 것이다
             case HELD -> !userId.equals(seat.getHeldBy())
                     ? BookingErrorCode.NOT_SEAT_HOLDER

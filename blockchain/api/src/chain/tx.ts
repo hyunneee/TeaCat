@@ -1,5 +1,10 @@
 import type { LogDescription } from 'ethers';
-import { CatMoney__factory, TicketSBT__factory } from '@teacat/contracts';
+import {
+  CatMoney__factory,
+  PhotocardNFT__factory,
+  TicketSBT__factory,
+  VerifiableDraw__factory,
+} from '@teacat/contracts';
 import { provider } from './provider';
 
 /**
@@ -15,6 +20,12 @@ export type TxOperation =
   | 'CATMONEY_TRANSFER'
   | 'TICKET_ISSUE'
   | 'TICKET_BURN'
+  | 'PHOTOCARD_DESIGN'
+  | 'PHOTOCARD_ISSUE'
+  | 'PHOTOCARD_TRANSFER'
+  | 'DRAW_OPEN'
+  | 'DRAW_REVEAL'
+  | 'DRAW_CANCEL'
   | 'UNKNOWN';
 
 /** 이벤트 이름 → 작업 종류. 컨트랙트가 늘면 여기에 한 줄씩 붙입니다. */
@@ -24,7 +35,18 @@ const OPERATION_BY_EVENT: Record<string, TxOperation> = {
   TransferredWithKey: 'CATMONEY_TRANSFER',
   TicketIssued: 'TICKET_ISSUE',
   TicketBurned: 'TICKET_BURN',
+  DesignRegistered: 'PHOTOCARD_DESIGN',
+  PhotocardIssued: 'PHOTOCARD_ISSUE',
+  PhotocardTransferred: 'PHOTOCARD_TRANSFER',
+  DrawOpened: 'DRAW_OPEN',
+  DrawRevealed: 'DRAW_REVEAL',
+  DrawCanceled: 'DRAW_CANCEL',
 };
+
+/* 주의: 아래 `tokenId` 추출은 이벤트 **하나**만 봅니다.
+   포카 배치 발행은 한 트랜잭션에 `PhotocardIssued` 가 최대 200개라 그 값이
+   "첫 번째 카드의 도안" 일 뿐 의미가 없습니다. 포카의 확정 기록이 이 경로가 아니라
+   `photocardConfirm.service` 에서 **영수증 로그를 전부 파싱**하는 이유입니다. */
 
 /**
  * 우리 컨트랙트들의 인터페이스.
@@ -32,7 +54,12 @@ const OPERATION_BY_EVENT: Record<string, TxOperation> = {
  * 로그와 커스텀 에러를 풀 때 **전부** 시도합니다. 하나만 물려두면 다른 컨트랙트의
  * revert 가 "unknown custom error" 로만 나와서 Spring 이 원인을 구분하지 못합니다.
  */
-const INTERFACES = [CatMoney__factory.createInterface(), TicketSBT__factory.createInterface()];
+const INTERFACES = [
+  CatMoney__factory.createInterface(),
+  TicketSBT__factory.createInterface(),
+  PhotocardNFT__factory.createInterface(),
+  VerifiableDraw__factory.createInterface(),
+];
 
 export interface ChainTxStatus {
   /** 체인이 이 해시를 모르면 false. 드롭됐거나 애초에 없는 해시입니다 */

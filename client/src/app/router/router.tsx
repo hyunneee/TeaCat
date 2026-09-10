@@ -1,5 +1,6 @@
 import { createElement, lazy, type ComponentType, type ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { wrapCreateBrowserRouter } from '@sentry/react';
 import { ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
@@ -23,13 +24,8 @@ const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
 const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertListPage');
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
-const ConcertCreatePage = page(() => import('@/pages/ConcertCreatePage'), 'ConcertCreatePage');
-const ConcertEditPage = page(() => import('@/pages/ConcertEditPage'), 'ConcertEditPage');
 
-const BookingVerifyPage = page(
-  () => import('@/pages/BookingVerifyPage'),
-  'BookingVerifyPage',
-);
+const BookingVerifyPage = page(() => import('@/pages/BookingVerifyPage'), 'BookingVerifyPage');
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
@@ -55,33 +51,49 @@ const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
-const PasswordChangePage = page(
-  () => import('@/pages/PasswordChangePage'),
-  'PasswordChangePage',
-);
-const NicknameChangePage = page(
-  () => import('@/pages/NicknameChangePage'),
-  'NicknameChangePage',
-);
+const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
+const NicknameChangePage = page(() => import('@/pages/NicknameChangePage'), 'NicknameChangePage');
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
 
-const OauthCallbackPage = page(
-  () => import('@/pages/OauthCallbackPage'),
-  'OauthCallbackPage',
-);
+const OauthCallbackPage = page(() => import('@/pages/OauthCallbackPage'), 'OauthCallbackPage');
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
 
 const MonitoringPage = page(() => import('@/pages/MonitoringPage'), 'MonitoringPage');
+const AdminStadiumPage = page(() => import('@/pages/AdminStadiumPage'), 'AdminStadiumPage');
+const AdminStadiumListPage = page(
+  () => import('@/pages/AdminStadiumListPage'),
+  'AdminStadiumListPage',
+);
+const AdminStadiumDetailPage = page(
+  () => import('@/pages/AdminStadiumDetailPage'),
+  'AdminStadiumDetailPage',
+);
 const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 
 /* 어드민 대시보드. 껍데기까지 lazy 로 쪼갭니다 —
    일반 사용자는 평생 이 코드를 받지 않습니다. */
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
-const AdminDashboardPage = page(
-  () => import('@/pages/AdminDashboardPage'),
-  'AdminDashboardPage',
-);
+const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
+const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
+const AdminConcertCreatePage = page(
+  () => import('@/pages/AdminConcertCreatePage'),
+  'AdminConcertCreatePage',
+);
+const AdminConcertEditPage = page(
+  () => import('@/pages/AdminConcertEditPage'),
+  'AdminConcertEditPage',
+);
+const AdminInquiriesPage = page(
+  () => import('@/pages/AdminInquiriesPage'),
+  'AdminInquiriesPage',
+);
+
+const InquiryListPage = page(() => import('@/pages/InquiryListPage'), 'InquiryListPage');
+const InquiryWritePage = page(() => import('@/pages/InquiryWritePage'), 'InquiryWritePage');
+const InquiryDetailPage = page(() => import('@/pages/InquiryDetailPage'), 'InquiryDetailPage');
 
 /**
  * 첫 화면이 그려진 뒤 **한가할 때** 미리 받아 두는 화면들.
@@ -133,7 +145,9 @@ const devRoutes: RouteObject[] = IS_DEV_BUILD
   ? [
       {
         path: ROUTES.DEV_FACE,
-        element: withBoundary(createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage'))),
+        element: withBoundary(
+          createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage')),
+        ),
       },
     ]
   : [];
@@ -163,11 +177,44 @@ const routes: RouteObject[] = [
             children: [
               { index: true, element: withBoundary(<AdminDashboardPage />) },
               {
+                element: <RequireRole roles={['ADMIN', 'STADIUM']} />,
+                children: [
+                  { path: ROUTES.ADMIN_STADIUM, element: withBoundary(<AdminStadiumPage />) },
+                  { path: ROUTES.ADMIN_STADIUMS, element: withBoundary(<AdminStadiumListPage />) },
+                  {
+                    path: ROUTES.ADMIN_STADIUM_DETAIL(':stadiumId'),
+                    element: withBoundary(<AdminStadiumDetailPage />),
+                  },
+                ],
+              },
+              {
+                /* 공연 관리는 서버가 ADMIN 과 공연 주최자(PERFORMANCE)에게 열어 둔다
+                   (SecurityConfig 의 /admin/concerts/**). 보이는 범위는 다르다 —
+                   ADMIN 은 전체, PERFORMANCE 는 본인이 등록한 것만
+                   (useManagedConcerts 가 부르는 API 를 나눈다). */
+                element: <RequireRole roles={['ADMIN', 'PERFORMANCE']} />,
+                children: [
+                  { path: ROUTES.ADMIN_CONCERTS, element: withBoundary(<AdminConcertsPage />) },
+                  {
+                    /* 정적 경로가 `:concertId` 보다 먼저 와야 'new' 를 ID 로 읽지 않는다 */
+                    path: ROUTES.ADMIN_CONCERT_CREATE,
+                    element: withBoundary(<AdminConcertCreatePage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_CONCERT_EDIT(':concertId'),
+                    element: withBoundary(<AdminConcertEditPage />),
+                  },
+                ],
+              },
+              {
                 /* 회원 관리는 서버가 ADMIN 전용이다. STADIUM·PERFORMANCE 는
                    대시보드까지만 들어오고 여기서 홈으로 되돌려보낸다. */
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
+                  { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
+                  { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
               },
               /* 모니터링(/admin/monitoring)은 아직 앱(모바일) 레이아웃에 있습니다.
@@ -185,14 +232,9 @@ const routes: RouteObject[] = [
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
-      /* 공연 등록·수정 — 관리자만. 서버 /admin/** 도 ADMIN 만 받습니다 */
-      {
-        element: <RequireRole roles={['ADMIN']} />,
-        children: [
-          { path: ROUTES.CONCERT_CREATE, element: withBoundary(<ConcertCreatePage />) },
-          { path: ROUTES.CONCERT_EDIT(':concertId'), element: withBoundary(<ConcertEditPage />) },
-        ],
-      },
+      /* 공연 등록·수정은 어드민 콘솔(/admin/concerts)에 있습니다.
+         여기 앱 화면에도 같은 기능이 한 벌 더 있었는데, 관람객 화면에 관리 기능이 섞여
+         있었고 화면이 두 벌이라 한쪽만 고치면 어긋났습니다. */
       { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
       { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
 
@@ -244,6 +286,12 @@ const routes: RouteObject[] = [
           { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
           { path: ROUTES.SETTINGS_NICKNAME, element: withBoundary(<NicknameChangePage />) },
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
+
+          /* 문의 — 목록·작성·상세. 로그인한 회원 본인 것만 봅니다 */
+          { path: ROUTES.MY_INQUIRIES, element: withBoundary(<InquiryListPage />) },
+          { path: ROUTES.MY_INQUIRY_NEW, element: withBoundary(<InquiryWritePage />) },
+          { path: '/my/inquiries/:inquiryId', element: withBoundary(<InquiryDetailPage />) },
+          { path: '/my/inquiries/:inquiryId/edit', element: withBoundary(<InquiryWritePage />) },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.
@@ -312,4 +360,8 @@ const routes: RouteObject[] = [
   },
 ];
 
-export const router = createBrowserRouter(routes);
+/* Sentry 가 라우트를 알아보게 감쌉니다.
+   이게 없으면 성능 지표가 `/concerts/1`, `/concerts/2` … 로 흩어져서
+   "공연 상세가 느리다" 를 볼 수 없습니다 (`/concerts/:id` 하나로 묶임).
+   Sentry 가 꺼져 있으면 감싼 함수가 원본을 그대로 부릅니다. */
+export const router = wrapCreateBrowserRouter(createBrowserRouter)(routes);

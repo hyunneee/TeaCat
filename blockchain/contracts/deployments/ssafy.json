@@ -2,8 +2,11 @@
   "chainId": 31221,
   "network": "ssafy",
   "deployer": "0xaeac79d81a407731ab8c43a8d5f5c3470e4089ee",
-  "deployedAt": "2026-09-03T05:17:52.682Z",
+  "deployedAt": "2026-09-08T06:14:42.779Z",
   "contracts": {
-    "CatMoney": "0xd920ba6f79e2b8296d28e61d6cac114b12e46958"
+    "CatMoney": "0xd920ba6f79e2b8296d28e61d6cac114b12e46958",
+    "TicketSBT": "0xd72eb62da658fdb135c8d632f17e1048a65ac006",
+    "PhotocardNFT": "0x531e62febacf4132d02b5965e0033943ca2f5d0d",
+    "VerifiableDraw": "0x0cec179615c04f457b174465701bcdae0c9c900d"
   }
 }

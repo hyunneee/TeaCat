@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '@/shared/constants';
+import { setSentryUser } from '@/shared/lib';
 import { authApi, authKeys } from '../api/authApi';
 import { useAuthStore } from '../store/authStore';
 
@@ -42,6 +43,14 @@ export function useAuth() {
   useEffect(() => {
     if (data) syncUserSnapshot(data);
   }, [data, syncUserSnapshot]);
+
+  /* 에러가 났을 때 "누구에게 났는지" 를 붙입니다.
+     🔴 userId 만 보냅니다 — 이메일·닉네임·전화번호는 넣지 마세요 (shared/lib/sentry.ts).
+     로그아웃하면 지워서 다음 사용자의 에러에 남의 id 가 붙지 않게 합니다. */
+  const userId = data?.userId ?? snapshot?.userId ?? null;
+  useEffect(() => {
+    setSentryUser(accessToken ? userId : null);
+  }, [accessToken, userId]);
 
   return {
     // 서버가 준 최신 정보를 우선하되, 첫 로딩 동안은 스냅샷으로 화면을 그립니다.

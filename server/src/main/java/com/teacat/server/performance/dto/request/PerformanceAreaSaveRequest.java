@@ -1,5 +1,6 @@
 package com.teacat.server.performance.dto.request;
 
+import com.teacat.server.stadium.entity.AreaType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -38,9 +39,31 @@ public record PerformanceAreaSaveRequest(
             @Min(value = 0, message = "가격은 0 이상이어야 합니다.")
             Integer price,
 
-            @Schema(description = "이 구역에서 팔 최대 수량", example = "500")
-            @Min(value = 0, message = "최대 판매수량은 0 이상이어야 합니다.")
-            Integer maxCnt
+            @Schema(description = """
+                    이 구역에서 받을 인원의 상한.
+
+                    - `STANDING` 으로 파는 구역은 **필수**입니다. 좌석 행이 없어 이 값이 인원을 제한하는
+                      유일한 근거이고, 비우면 무제한이 됩니다 (PERFORMANCE_024).
+                    - `SEATED` 로 파는 구역은 생략할 수 있습니다. 좌석 행 수가 곧 상한입니다.
+                    """, example = "500")
+            @Min(value = 0, message = "받을 인원 상한은 0 이상이어야 합니다.")
+            Integer maxCnt,
+
+            @Schema(description = """
+                    이 공연에서 이 구역을 파는 방식. 생략하면 이미 저장된 방식을 그대로 둡니다
+                    (아직 설정하지 않은 구역이면 공연장 구역의 형태를 씁니다).
+
+                    기준은 의자가 설치돼 있는지 하나입니다.
+
+                    - 의자가 깔린 구역(`areas.type = SEATED`)은 `SEATED` 로만 팝니다.
+                      `STANDING` 은 거절합니다 — 의자가 그 자리에 있어 사람을 세울 수 없습니다
+                      (PERFORMANCE_022). 의자를 치운 구성은 무대 형식을 따로 만들어 표현하세요.
+                    - 의자가 없는 구역(`areas.type = STANDING`)은 둘 다 됩니다.
+                      `STANDING` 이면 좌석을 만들지 않고 `maxCnt` 로 인원만 관리하고,
+                      `SEATED` 면 그 구역에 등록된 좌석을 그대로 팝니다.
+                    - 판매 이력이 있는 구역은 바꿀 수 없습니다 (PERFORMANCE_023).
+                    """, example = "SEATED")
+            AreaType saleType
     ) {
     }
 }

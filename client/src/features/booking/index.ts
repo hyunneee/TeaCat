@@ -6,27 +6,38 @@
 // Controller
 export { useSections } from './hooks/useSections';
 export { useSeatMap } from './hooks/useSeatMap';
+export { useSectionSeats } from './hooks/useSectionSeats';
+export { useBookingPolicy } from './hooks/useBookingPolicy';
 export { useSeatSelection } from './hooks/useSeatSelection';
 export { useSeatHold } from './hooks/useSeatHold';
 export { useRecipients } from './hooks/useRecipients';
 
 // View
 export { VenueMap } from './components/VenueMap';
+export { VenueMapLegend } from './components/VenueMapLegend';
 export { SectionGrid } from './components/SectionGrid';
 export { SeatMap } from './components/SeatMap';
 export { SeatLegend } from './components/SeatLegend';
 export { HoldTimer } from './components/HoldTimer';
+export { HeldSeatNotice } from './components/HeldSeatNotice';
 export { SelectedSeatBar } from './components/SelectedSeatBar';
 
 // Model
-export { useBookingStore } from './store/bookingStore';
+export { useBookingStore, type HoldSession } from './store/bookingStore';
 export { bookingApi, bookingKeys } from './api/bookingApi';
 export {
   totalPrice,
   seatLabel,
   validateSelection,
+  isSelectable,
   isSectionSoldOut,
+  sectionAvailability,
+  sectionBlockedReason,
+  SECTION_AVAILABILITY_LABEL,
+  isSectionBookable,
+  priceLabel,
   sectionRemainRatio,
+  type SectionAvailability,
 } from './model/seat.model';
 export type {
   Seat,
@@ -34,8 +45,7 @@ export type {
   Section,
   SeatMapData,
   SeatHold,
-  HoldDetail,
+  MyHold,
+  BookingPolicy,
   Recipient,
-  Order,
-  CreateOrderRequest,
 } from './model/booking.types';

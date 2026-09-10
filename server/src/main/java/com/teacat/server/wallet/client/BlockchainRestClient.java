@@ -4,6 +4,7 @@ import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.wallet.exception.WalletErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 블록체인 서비스(Node.js)와의 HTTP 통신만 담당한다.
@@ -65,6 +67,36 @@ public class BlockchainRestClient {
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .body(responseType));
+    }
+
+    /**
+     * 404 를 "없음" 으로 돌려주는 조회.
+     *
+     * <p>트랜잭션 조회처럼 <b>없는 것이 정상 결과인</b> 경우에 쓴다. 체인이 해시를 모른다는 건
+     * 장애가 아니라 그 트랜잭션이 드롭됐다는 뜻이고, 부르는 쪽은 재전송으로 대응해야 한다
+     * (blockchain/DESIGN.md 7장). {@link #get} 처럼 실패로 던지면 그 분기를 할 수 없다.
+     */
+    public <T> Optional<T> getIfPresent(String path, Class<T> responseType, ErrorCode onFailure) {
+        requireConfigured();
+
+        try {
+            return Optional.ofNullable(restClient.get()
+                    .uri(path)
+                    .header(INTERNAL_KEY_HEADER, properties.internalApiKey())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(responseType));
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return Optional.empty();
+            }
+            log.error("블록체인 서비스 호출 실패 path={} status={} body={}",
+                    path, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new BusinessException(onFailure);
+        } catch (RuntimeException e) {
+            log.error("블록체인 서비스 호출이 실패했습니다. path={}", path, e);
+            throw new BusinessException(onFailure);
+        }
     }
 
     public <T> T post(String path, Object body, Class<T> responseType, ErrorCode onFailure) {

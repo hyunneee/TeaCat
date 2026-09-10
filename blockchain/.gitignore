@@ -6,7 +6,6 @@ node_modules/
 #       변수 설명은 .env.example 에 있습니다 (값 없이 설명만 — 그래서 커밋됩니다).
 .env
 .env.local
-contracts/deployments/ssafy.json
 
 # Hardhat 산출물
 contracts/artifacts/
@@ -21,4 +20,3 @@ contracts/deployments/hardhat.json
 # 빌드 산출물
 contracts/dist/
 api/dist/
-

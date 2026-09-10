@@ -80,17 +80,11 @@ public class PerformanceDetail {
      * 그 외에는 부모 공연의 티켓팅 시각과 현재 시각을 비교한다.
      */
     public BookingOpenStatus bookingStatus(LocalDateTime now) {
-        if (status == TicketingStatus.CLOSED || performanceDate.isBefore(now)) {
-            return BookingOpenStatus.CLOSED;
-        }
-        if (status == TicketingStatus.SOLD_OUT) {
-            return BookingOpenStatus.SOLDOUT;
-        }
-        if (!performance.isTicketingStarted(now)) {
-            return BookingOpenStatus.BEFORE;
-        }
-
-        return BookingOpenStatus.OPEN;
+        return BookingOpenStatus.resolve(
+                status,
+                performance.getTicketingStartAt(),
+                performanceDate,
+                now);
     }
 
     public boolean isBookable(LocalDateTime now) {

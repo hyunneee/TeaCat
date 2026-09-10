@@ -1,5 +1,6 @@
 package com.teacat.server.wallet.service;
 
+import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.wallet.client.BlockchainProperties;
 import com.teacat.server.wallet.client.BlockchainWalletClient;
@@ -8,6 +9,7 @@ import com.teacat.server.wallet.entity.Wallet;
 import com.teacat.server.wallet.entity.WalletOwner;
 import com.teacat.server.wallet.entity.WalletSeedGrant;
 import com.teacat.server.wallet.entity.WalletSeedStatus;
+import com.teacat.server.wallet.exception.WalletErrorCode;
 import com.teacat.server.wallet.repository.WalletOwnerRepository;
 import com.teacat.server.wallet.repository.WalletRepository;
 import com.teacat.server.wallet.repository.WalletSeedGrantRepository;
@@ -78,5 +80,28 @@ public class WalletService {
     private WalletSeedStatus toSeedStatus(String status) {
         // 모르는 값이 오면 보낸 것으로 보고 PENDING 으로 둔다. 확정 폴링이 붙으면 거기서 정리된다
         return "ALREADY_DONE".equals(status) ? WalletSeedStatus.ALREADY_DONE : WalletSeedStatus.PENDING;
+    }
+
+    /**
+     * 회원의 지갑 주소.
+     *
+     * <p>체인에 무언가를 보낼 때 받는 주소로 쓴다. 지갑이 없으면 조용히 넘기지 않는다 —
+     * 가입이 반쪽으로 끝났다는 뜻이라 드러나야 한다.
+     *
+     * <p>{@code CatMoneyService} 는 소각 때문에 파생 인덱스까지 필요해 자기 조회를 따로 갖고
+     * 있다. 여기는 주소만 필요한 쪽이 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public Wallet resolveWallet(Long userId) {
+        WalletOwner owner = walletOwnerRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+
+        return walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
+                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public String resolveAddress(Long userId) {
+        return resolveWallet(userId).getAddress();
     }
 }

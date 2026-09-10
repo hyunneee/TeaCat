@@ -389,8 +389,20 @@ GET  /internal/tickets/{tokenId}      소유자 · 소각 여부
 POST /internal/tickets/{tokenId}/burn 예매 취소. tokenId 가 영구 소멸합니다
 
 GET  /internal/tokens/catmoney/balance?address=0x…    잔액 조회
-POST /internal/tokens/catmoney/mint    발행 (입금·보상·환급)
-POST /internal/tokens/catmoney/burn    소각 (결제·출금)
+POST /internal/tokens/catmoney/mint      발행 (입금·보상·환급)
+POST /internal/tokens/catmoney/burn      소각 (결제·출금)
+POST /internal/tokens/catmoney/transfer  전송 (포카 마켓 정산 — 유저 → 유저)
+
+POST /internal/photocards/designs     도안 등록 (한정 수량 · IPFS CID)
+POST /internal/photocards/issue       배치 발행 (한 번에 최대 200장)
+GET  /internal/photocards/by-key?key=…    응답을 못 받았을 때 발행 결과 복구
+GET  /internal/photocards/balance?address=0x…&designId=…  대사 전용
+POST /internal/photocards/transfer    소유권 이전 (마켓 정산 — 판매자 → 구매자)
+
+POST /internal/draws/open             추첨 커밋 (참여자·수량을 해시로 고정)
+GET  /internal/draws/{drawKey}        추첨 상태 · 공개된 시드
+POST /internal/draws/{drawKey}/reveal 수동 공개 (평소엔 서버가 자동으로)
+POST /internal/draws/{drawKey}/assign 배정 계산 (순수 함수 — 누가 계산하든 같음)
 
 GET  /internal/tx/{txHash}        모든 쓰기의 확정 확인
 
@@ -398,16 +410,9 @@ GET  /docs                        Swagger UI (운영 제외)
 GET  /docs.json                   OpenAPI 원본
 ```
 
-Swagger 에는 **아직 안 만든 것도 계약만 먼저** 올려뒀습니다. Spring 이 병렬로
-붙일 수 있게 하기 위해서입니다. `(예정)` 태그와 `[미구현]` 표시가 붙어 있고,
-**호출하면 404 가 납니다.**
-
-| 태그 | | |
-|---|---|---|
-| 캣머니 (예정) | `transfer` — 포카 마켓 정산 | M6 |
-
-구현하면 `api/src/docs/planned.ts` 에서 지우고 `openapi.ts` 로 옮깁니다.
-거기서는 컨트롤러의 zod 스키마를 그대로 쓰고 응답도 타입과 대조합니다.
+**Swagger 에 있는 것은 전부 구현돼 있습니다.** 계약만 먼저 올려두던 `(예정)` 태그와
+`planned.ts` 는 마켓 정산이 붙으면서 없어졌습니다 — 이제 요청 스키마는 컨트롤러의 zod
+객체 **그 자체**이고, 응답은 실제 타입과 대조돼 어긋나면 컴파일이 깨집니다.
 
 ### 확정은 Spring 이 폴링하지 않습니다
 

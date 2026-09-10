@@ -1,0 +1,82 @@
+// Grafana Alloy — 컨테이너 로그를 주워 Loki 로 보낸다.
+//
+// Docker 로그 드라이버(loki plugin) 대신 이걸 쓰는 이유:
+//   드라이버 방식은 Loki 가 죽으면 컨테이너의 로그 쓰기가 막힐 수 있고, `docker logs` 도
+//   안 보이게 된다. 로그 파이프라인 장애가 서비스 장애로 번지는 구조라 쓰지 않는다.
+//   Alloy 는 밖에서 tail 하므로 Loki 가 죽어도 서비스는 그대로 돈다.
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+// 어떤 컨테이너들이 있는지 도커에 물어본다
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+// 🔴 라벨을 여기서 정한다. **라벨 하나가 스트림 하나**라, 값이 다양한 것을 라벨로 만들면
+//    Loki 가 가벼운 이유가 사라진다. 컨테이너 이름 정도가 상한이고, txHash·userId·요청 ID 는
+//    절대 라벨로 올리지 않는다 — 그런 건 로그 본문에 두고 조회할 때 검색한다.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // /teacat-postgres 처럼 앞에 슬래시가 붙어 온다. 떼야 쿼리가 읽기 좋다
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  // compose 서비스 이름. dev/prod 를 가로질러 "server 전체" 를 볼 때 쓴다
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "stack"
+  }
+
+  // 모니터링 스택 자신의 로그는 수집하지 않는다.
+  // 안 그러면 Loki 가 자기 로그를 먹고, 그 로그가 다시 로그를 만드는 고리가 생긴다
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    // 🔴 relabel 정규식은 **완전 일치**다. "teacat-monitoring" 만 적으면
+    //    로컬 스택(teacat-monitoring-local)이 안 걸려서 자기 로그를 먹는다.
+    regex         = "teacat-monitoring.*"
+    action        = "drop"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = { job = "docker" }
+  forward_to = [loki.process.trim.receiver]
+}
+
+loki.process "trim" {
+  forward_to = [loki.write.default.receiver]
+
+  // 빈 줄은 버린다. JVM 스택트레이스 사이에 섞여 들어와 양만 늘린다
+  stage.drop {
+    expression = `^\s*$`
+  }
+
+  // 🔴 마지막 방어선. 블록체인 서비스는 shared/logger.ts 가 니모닉·개인키를 이미
+  //    마스킹하지만, 로그가 여기서부터는 **중앙에 영구 축적**되므로 한 겹 더 둔다.
+  //    (Spring 로그나 라이브러리가 직접 찍는 줄에는 저쪽 마스킹이 걸리지 않는다)
+  stage.replace {
+    expression = `(0x[0-9a-fA-F]{64})`
+    replace    = "[REDACTED]"
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

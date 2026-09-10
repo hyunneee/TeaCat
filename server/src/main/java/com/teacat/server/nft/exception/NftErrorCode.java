@@ -40,7 +40,32 @@ public enum NftErrorCode implements ErrorCode {
     BID_NOT_BELOW_BUY_NOW(HttpStatus.BAD_REQUEST, "NFT_028", "즉시구매가 이상은 입찰할 수 없습니다. 즉시구매를 이용해 주세요."),
     BUY_NOW_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_029", "즉시구매가 없는 경매입니다."),
     INVALID_AUCTION_DURATION(HttpStatus.BAD_REQUEST, "NFT_030", "경매 기간이 허용 범위를 벗어났습니다."),
-    INVALID_BUY_NOW_PRICE(HttpStatus.BAD_REQUEST, "NFT_031", "즉시구매가는 시작가보다 높아야 합니다.");
+    INVALID_BUY_NOW_PRICE(HttpStatus.BAD_REQUEST, "NFT_031", "즉시구매가는 시작가보다 높아야 합니다."),
+
+    /** 블록체인 서비스에 닿지 못했거나 거절당했다. 도안 행은 남으므로 등록만 다시 보내면 된다 */
+    DESIGN_REGISTRATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "NFT_032",
+            "도안을 체인에 등록하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    /** 이미 등록이 확정된 도안. 첫 장이 나가면 온체인 값이 동결되므로 다시 보낼 이유가 없다 */
+    DESIGN_ALREADY_REGISTERED(HttpStatus.CONFLICT, "NFT_033", "이미 체인에 등록된 도안입니다."),
+    /** 등록 트랜잭션이 아직 확정되지 않았다. 확정 감시가 곧 결과를 채운다 */
+    DESIGN_REGISTRATION_IN_PROGRESS(HttpStatus.CONFLICT, "NFT_034",
+            "등록 트랜잭션이 아직 확정되지 않았습니다. 잠시 후 다시 확인해 주세요."),
+    /** CID 가 없어 등록 요청을 보낼 수 없다. 핀부터 다시 해야 한다 */
+    DESIGN_PINS_MISSING(HttpStatus.CONFLICT, "NFT_035",
+            "IPFS 핀 정보가 없는 도안입니다. 도안을 다시 등록해 주세요."),
+
+    /** 발행 대상 중 지갑이 없는 회원이 있다. 절반만 나간 공연을 만들지 않으려고 전체를 되돌린다 */
+    RECIPIENT_WALLET_NOT_FOUND(HttpStatus.CONFLICT, "NFT_036",
+            "지갑이 없는 회원이 발급 대상에 있습니다. 발급을 진행할 수 없습니다."),
+    /** 온체인 등록이 안 끝난 도안이 배정에 섞였다. 그대로 보내면 배치 전체가 revert 된다 */
+    DESIGN_NOT_REGISTERED_ON_CHAIN(HttpStatus.CONFLICT, "NFT_037",
+            "온체인 등록이 완료되지 않은 도안입니다. 등록을 먼저 마쳐 주세요."),
+    /** 블록체인 서비스에 닿지 못했거나 거절당했다. 카드 행은 PENDING 으로 남아 재시도할 수 있다 */
+    PHOTOCARD_MINT_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "NFT_038",
+            "포토카드를 체인에 발행하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    /** 보낼 카드가 없다. 이미 전부 보냈거나 발급되지 않은 공연이다 */
+    NO_PENDING_PHOTOCARDS(HttpStatus.CONFLICT, "NFT_039",
+            "체인에 보낼 포토카드가 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -18,7 +18,7 @@ export type ResultState =
  * 모바일 결제창에서 돌아왔을 때 결과를 처리합니다.
  *
  * 결제창은 모바일에서 페이지를 이동시키고, 인증이 끝나면
- * `redirectUrl` 로 쿼리 파라미터(paymentId, txId, code, message)를 붙여 돌려보냅니다.
+ * `redirectUrl` 로 쿼리 파라미터(paymentKey, orderId, amount)를 붙여 돌려보냅니다.
  * 여기서 그 값을 읽어 백엔드 승인으로 이어붙입니다.
  *
  * ⚠️ 이 화면은 얼굴 등록·봇 확인 가드 밖에 있어야 합니다.
@@ -58,7 +58,7 @@ export function usePaymentResult() {
       /* 리디렉션으로 돌아왔다는 것 자체가 PG 결제창을 거쳤다는 뜻입니다.
          (캣머니 결제는 결제창이 없어 이 경로로 오지 않습니다)
          실제 수단은 백엔드가 토스 조회로 확인하므로 참고값입니다. */
-      { auth: result.auth, payMethod: 'EASY_PAY' },
+      { auth: result.auth },
       {
         onError: (error) =>
           setState({

@@ -13,6 +13,46 @@ server:
   #    이 값을 켜면 스프링이 https://dev.teacat.site 로 인식해 CORS 검사를 아예 타지 않는다.
   forward-headers-strategy: framework
 
+# 모니터링 노출. Prometheus 가 긁어간다.
+#
+# 🔴 반드시 별도 포트여야 한다. 8080 에 두면 server.servlet.context-path 때문에
+#    /api/actuator/... 가 되고, nginx 가 /api 를 그대로 프록시하므로 액추에이터가
+#    인터넷에 열린다. 힙 덤프까지는 안 열리더라도 환경변수·빈 목록이 새는 건 확정이다.
+#    8081 은 compose 에서 호스트로 열지 않으므로 teacat-net 안에서만 닿는다.
+#    (관리 포트에는 context-path 가 적용되지 않는다 — management.server.base-path 가 따로다)
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        # 필요한 것만 연다. env / heapdump / loggers 는 켜지 않는다
+        include: health,prometheus
+  endpoint:
+    health:
+      # 컨테이너 헬스체크가 아니라 사람이 보는 용도다. 상세를 켜면 DB/Redis 개별 상태가 보인다
+      show-details: when-authorized
+  metrics:
+    tags:
+      # 나중에 서버가 여러 대가 돼도 시계열이 섞이지 않게 이름을 붙인다
+      application: ${spring.application.name}
+    distribution:
+      # 🔴 p95/p99 를 PromQL 로 계산하려면 히스토그램(버킷)이 필요하다. 이게 없으면
+      #    http_server_requests 는 count/sum 만 나와서 평균밖에 못 본다 —
+      #    티켓 오픈처럼 꼬리가 중요한 상황에서 평균은 아무것도 말해주지 않는다.
+      percentiles-histogram:
+        http.server.requests: true
+      # 버킷 범위. 좌석 선점은 100ms 안쪽이 정상이고 1s 를 넘으면 이미 사고다.
+      # 범위를 넓게 두면 버킷 수가 늘어 시계열이 불어나므로 이만큼으로 자른다
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 spring:
   application:
     name: teacat
@@ -73,6 +113,29 @@ booking:
     face-verification-required: true
     # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
 
+payment:
+  toss:
+    base-url: ${TOSS_API_URL:https://api.tosspayments.com}
+    # 🔴 이 키 하나로 승인·취소가 다 됩니다. 설정 파일에 적지 말고 server/.env 에 넣으세요.
+    #    프론트가 쓰는 것은 공개값인 클라이언트 키이고, 시크릿 키는 절대 내려보내지 않습니다.
+    #    비어 있으면 결제만 PAYMENT_001 로 거절되고 나머지 기능은 그대로 동작합니다.
+    secret-key: ${TOSS_SECRET_KEY:}
+    connect-timeout: 3s
+    # 승인은 카드사까지 다녀옵니다. 짧게 잡고 끊으면 "토스는 승인했는데 우리는 실패로 아는"
+    # 상태가 잦아집니다 — 그건 복구 배치가 뒤늦게 되살려야 하는 가장 비싼 실패입니다
+    read-timeout: 30s
+  token-charge:
+    # 충전 한도. 실수로 0 을 더 붙이는 사고를 막고, 탈취된 계정의 큰 결제를 늦춥니다
+    min-amount: ${TOKEN_CHARGE_MIN_AMOUNT:1000}
+    max-amount: ${TOKEN_CHARGE_MAX_AMOUNT:1000000}
+  recovery:
+    # 승인 결과를 못 받은 결제를 토스에 되묻는 주기
+    interval: ${PAYMENT_RECOVERY_INTERVAL:60s}
+    initial-delay: 30s
+    # 결제창을 띄우고 그냥 떠나는 일이 흔해서, 갓 만들어진 결제까지 물으면 헛걸음입니다.
+    # 승인이 끝날 만한 시간이 지난 것만 봅니다
+    settle-after: ${PAYMENT_SETTLE_AFTER:5m}
+
 nft:
   auction:
     # 판매자가 고를 수 있는 경매 진행 시간 범위
@@ -84,6 +147,47 @@ nft:
     sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
     sweep-batch-size: 100
     sweep-enabled: true
+  design:
+    # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
+    #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.
+    #   경매 마감과 달리 사용자가 기다리는 값이 아니라 넉넉히 잡는다 (SSAFY 체인은 블록이 10초).
+    confirm-interval: ${NFT_DESIGN_CONFIRM_INTERVAL:PT30S}
+    confirm-batch-size: 50
+    confirm-enabled: true
+  photocard:
+    issue:
+      # 회차 시작이 임박한 공연 회차의 확정 티켓 보유자에게 포토카드를 자동 발급하는 스케줄러.
+      #   @Scheduled(cron) 이 그대로 읽으므로 6필드 cron 표기여야 한다 (기본: 매시 정각).
+      scheduler-cron: ${NFT_PHOTOCARD_ISSUE_CRON:0 0 * * * *}
+      # 회차 시작(performance_date)이 지금부터 이 시간 이내면 발급 대상으로 본다.
+      lead-time: ${NFT_PHOTOCARD_ISSUE_LEAD_TIME:1h}
+      # 한 주기에 처리할 최대 회차 수. 나머지는 다음 주기에 다시 잡힌다.
+      batch-size: 20
+      scheduler-enabled: true
+
+ipfs:
+  # 포토카드 도안의 그림과 메타데이터 JSON 을 핀하는 곳. 도안 생성 API 에서만 쓴다.
+  #   🔴 CID 는 영원히 남지만 데이터는 누군가 핀하고 있어야 남는다. 이 계정이 만료되면
+  #      이미 발행된 카드의 그림이 지갑에서 깨진다 (blockchain/PHOTOCARD_PLAN.md 3장).
+  pinata:
+    # jwt 는 이 파일에 적지 말고 환경변수(PINATA_JWT)로만 주입한다.
+    #   비어 있으면 도안 생성만 IPFS_001 로 거절되고 나머지 기능은 그대로 동작한다.
+    jwt: ${PINATA_JWT:}
+    # Pinata 는 레거시 pinning API 와 v3 Files API 를 같이 굴리고 있다. 기본값은 v3 이고,
+    #   계정·요금제 때문에 레거시를 써야 하면 주소만 바꾸면 된다 — 응답에서 CID 를 꺼내는 쪽이
+    #   두 모양({ data.cid } / { IpfsHash })을 모두 읽는다.
+    #   레거시: https://api.pinata.cloud/pinning/pinFileToIPFS (이때 network 는 비운다)
+    upload-url: ${PINATA_UPLOAD_URL:https://uploads.pinata.cloud/v3/files}
+    # v3 Files API 의 필수 필드. public 이어야 게이트웨이로 열린다
+    network: ${PINATA_NETWORK:public}
+    # designs.image_url 에 넣을 주소를 만든다. ipfs:// 는 브라우저가 못 열기 때문이다.
+    #   체인에 올라가는 값은 어디까지나 ipfs://<cid> 라, 게이트웨이를 바꿔도 온체인 값은 그대로다.
+    gateway-url: ${PINATA_GATEWAY_URL:https://gateway.pinata.cloud}
+    connect-timeout: 3s
+    # 이미지 바이트를 통째로 올리므로 넉넉히 잡는다
+    read-timeout: 30s
+    # 도안 이미지 용량 한도. 지갑과 목록에서 함께 뜨므로 포스터급으로 잡는다
+    image-max-size: 5MB
 
 minio:
   # 코드가 붙는 포트는 9000 이다. 브라우저로 보는 관리 콘솔(9001)이 아니다.
@@ -94,6 +198,11 @@ minio:
   bucket: ${MINIO_BUCKET:teacat}
   # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
   presigned-url-validity: 10m
+  # 브라우저가 MinIO 에 닿는 주소. endpoint 가 컨테이너 내부 주소(http://minio:9000)인 배포 환경에서
+  # presigned URL 을 그대로 내려주면 브라우저가 열 수 없어 이미지가 깨진다.
+  # 비어 있으면 endpoint 그대로 쓴다 (로컬은 http://localhost:9000 이 브라우저에서도 열린다).
+  # 배포: https://dev.teacat.site/storage — nginx 가 /storage/ 를 MinIO 로 넘긴다 (docker/nginx/conf.d).
+  public-base-url: ${MINIO_PUBLIC_BASE_URL:}
 
 performance:
   image:
@@ -126,6 +235,17 @@ admin:
     nickname: ${ADMIN_SEED_NICKNAME:관리자}
     phone: ${ADMIN_SEED_PHONE:010-0000-0000}
 
+# 에러 리포팅 (Sentry). "무엇이 왜 터졌나"를 스택트레이스로 본다.
+# 지연·처리량은 Prometheus 가 보고, 여기는 예외만 본다 — 역할이 겹치지 않는다.
+#
+# 🔴 dsn 이 비어 있으면 아예 켜지지 않는다. 로컬은 그대로 두면 된다.
+#    프론트 DSN 과 다른 값이다 (Sentry 프로젝트가 다름). 값은 docker/.env.dev 에 둔다.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  # 배포마다 바뀌어야 의미가 있다. CI 가 커밋 해시를 넣어주면 가장 좋다.
+  release: ${SENTRY_RELEASE:teacat-server@local}
+
 app:
   # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
@@ -156,3 +276,19 @@ blockchain:
   connect-timeout: 3s
   # 체인에 트랜잭션을 보내고 오므로 넉넉히 잡습니다 (SSAFY 체인은 블록이 10초)
   read-timeout: 20s
+  # 발행·소각의 확정 확인 주기. 블록이 10초라 그보다 짧게 돌 이유가 없습니다
+  confirm-poll:
+    interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
+    initial-delay: 20s
+
+banner:
+  image:
+    # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.
+    #   업로드 URL 을 내줄 때와 key 를 넘겨받을 때 똑같이 걸린다.
+    max-size: 10MB
+
+analytics:
+  # 젠킨스가 배포 기록을 보낼 때 쓰는 키 (POST /internal/deployments 의 X-Internal-Api-Key).
+  # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 통계 마커만 안 쌓일 뿐 다른 기능에는 영향이 없다.
+  #    "비었으면 통과" 로 만들지 말 것 — 운영에 키를 안 넣은 실수가 열린 API 가 된다.
+  internal-api-key: ${ANALYTICS_INTERNAL_API_KEY:}

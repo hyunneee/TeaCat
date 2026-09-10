@@ -23,6 +23,14 @@ public record ConcertCreateRequest(
         @NotNull(message = "공연장을 선택해 주세요.")
         Long stadiumId,
 
+        /*
+         * 한 공연장이 무대를 U형·O형처럼 바꿀 수 있고, 그때마다 구역이 다르게 나뉜다.
+         * 그 형식들이 stadium_layouts 에 미리 저장돼 있고, 공연은 그중 하나를 골라 쓴다.
+         * 이 공연에서 팔 수 있는 구역은 고른 형식의 구역들뿐이다 (API-268 이 이 기준으로 검증한다).
+         */
+        @Schema(description = "공연장 배치(무대 형식) ID. 생략하면 공연장의 기본 배치를 쓴다", example = "1")
+        Long stadiumLayoutId,
+
         @Schema(description = "공연 제목", example = "티캣 단독 콘서트 2026")
         @NotBlank(message = "공연 제목을 입력해 주세요.")
         @Size(max = 200, message = "공연 제목은 200자 이하여야 합니다.")
