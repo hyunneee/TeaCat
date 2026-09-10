@@ -4,12 +4,17 @@ import { Header } from '@/shared/components/layout';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useInfiniteScroll } from '@/shared/hooks';
-import { NftCard, useMyPhotocards } from '@/features/nft';
+import { NftCard, groupPhotocards, useMyPhotocards } from '@/features/nft';
 
 export function MyNftsPage() {
   const navigate = useNavigate();
-  const { data: cards, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } =
-    useMyPhotocards();
+  const {
+    data: cards,
+    isPending,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useMyPhotocards();
 
   const sentinel = useInfiniteScroll({
     hasNext: !!hasNextPage,
@@ -32,14 +37,16 @@ export function MyNftsPage() {
           />
         ) : (
           <ul className="grid grid-cols-2 gap-3">
-            {cards.map((card) => (
+            {/* 같은 도안은 한 칸으로 — 몇 장인지는 카드가 ×n 으로 알려 줍니다 */}
+            {groupPhotocards(cards).map(({ card, count }) => (
               <li key={card.photocardId}>
                 <NftCard
                   photocardId={card.photocardId}
                   designName={card.designName}
                   imageUrl={card.imageUrl}
                   performanceTitle={card.performanceTitle}
-                  caption={card.listed ? '판매 중' : '보관 중'}
+                  state={card.listed ? 'LISTED' : 'STORED'}
+                  count={count}
                   onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
                 />
               </li>

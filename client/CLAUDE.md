@@ -253,12 +253,19 @@ export function Card({ className, ...rest }: CardProps) {
 | 붉은색 (경고) | 되돌릴 수 없는 동작 | 초록은 "누르세요", 붉은색은 "조심하세요" |
 | 붉은색 (LIVE) | `Badge tone="live"` · `LiveDot` — "예매중" | 방송 LIVE 관습. **상태 칩 전용, 버튼 금지** |
 | 좌석 상태 | 좌석맵·범례 (`--color-seat-*`) | 가용성은 색이 가장 빠른 신호 |
+| 포카 개봉 | **`/nft/draw` 한 화면** (`--color-poca-*`) | 등급을 빛으로 구분해야 함 |
 
 **이 밖에서는 색을 쓰지 마세요.** 늘리려면 0번 절차입니다.
 바탕·글자는 **채도 0** 입니다. 중성색에 색기를 섞지 마세요.
 좌석 색은 토큰 다섯 줄에 모여 있으니 **화면 코드에 색을 적지 말고 토큰을 고치세요.**
 위계는 색이 아니라 **명도·굵기·여백**으로 만듭니다.
 발광(glow)은 쓰지 않고 그림자·테두리로만 층을 만듭니다. (DESIGN.md 1·2·8장)
+
+> **예외 — 포카 개봉(`/nft/draw`)** 뽑기는 등급(코치/개발자)을 빛으로 구분해야 해서
+> 이 화면만 발광을 씁니다. 색·애니메이션은 `styles/index.css` 의 `--color-poca-*` ·
+> `--animate-poca-*` 에 모여 있습니다. 🔴 **이 화면 밖에서 쓰지 마세요.**
+> 밝은 빛 위에서는 **어두운 그림자를 사방으로 퍼뜨리면 안 됩니다** — 카드 둘레의 빛만
+> 깎아내 '어두운 네모 테두리'가 생깁니다. 아래로 치우친 짧은 그림자를 쓰세요.
 ### 4-7. 되돌릴 수 없는 동작은 붉게
 
 로그아웃·회원탈퇴·예매취소·대기취소·얼굴삭제·판매내리기는 **반드시**
@@ -281,6 +288,7 @@ export function Card({ className, ...rest }: CardProps) {
 | 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
 | 예매·티켓·취소표·캣머니·결제·배너·앱정보 | 목업 |
 | 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
+| 포카 뽑기 | **목업** (`POST /photocards/draw`). 🔴 **어떤 카드가 나오는지는 목업(=서버 자리)이 정합니다** — 프론트에서 뽑으면 콘솔로 바꿀 수 있습니다. 카드 그림은 `public/mock/poca/` |
 | 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
 ⚠️ 공연은 실서버, 예매는 목업인 과도기입니다. 목업 예매 핸들러는 `mocks/db.ts` 의 회차 ID(`s-1` …)만 알아서,
@@ -580,6 +588,10 @@ npm run typecheck && npm run lint
 - [ ] 라이브니스(위조 방지) — 이번 단계 제외, 다음 작업
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)
+- [ ] **포카 뽑기 서버 계약** — `POST /photocards/draw`. 지금은 목업이 도안을 뽑고
+      `{ photocardId, designName, imageUrl, group, grade }` 를 돌려줍니다.
+      **횟수 제한·캣머니 비용·확률**은 정해지지 않았습니다 (전부 서버가 판정할 값)
+- [ ] 배너 `linkType: 'POCA_DRAW'` — 배너가 실서버로 넘어갈 때 이 값도 함께 합의해야 합니다
 - [ ] NRF 추첨 결과 통지 방식 (메일 + 인앱?)
 - [ ] 티켓 QR 규격 (플로우차트 주석: "QR은 추후 논의")
 - [ ] 토큰 벌기 / 순발력 컨텐츠 내용 (현재 `features/token` 은 빈 계획)
@@ -603,3 +615,9 @@ npm run typecheck && npm run lint
 - 2026-09-08 포카 경매 프론트 착수. `features/auction` 추가(포카와 나란히, 카드 그림만 배럴로 공유),
   마켓 구매 탭 안에 상점·경매 **글자 탭**(DESIGN.md 10장), 잔액 표시를 `available` 로 전환,
   `shared/lib/parseServerTime` 추가(서버가 타임존 없는 KST 를 주므로 카운트다운이 어긋나지 않게)
+- 2026-09-10 **포토카드 뽑기(`/nft/draw`) 추가.** 4-6 의 발광 금지에 **개봉 화면 한정 예외**를 두고
+  `--color-poca-*` · `--animate-poca-*` 토큰을 신설했습니다(승인: 사용자).
+  🔴 **어떤 카드가 나오는지는 서버(`POST /photocards/draw`)가 정합니다** — 프론트에서 뽑으면
+  콘솔로 결과를 바꿀 수 있고 뜯기 전에 미리 알 수 있어서, 결제 금액과 같은 규율을 적용했습니다.
+  진입로는 홈 배너(`linkType: 'POCA_DRAW'`)이고 **목업 배너에만** 있습니다 — 운영으로 열기 전에
+  `mocks/handlers/banner.ts` 의 `b-draw` 항목을 빼세요

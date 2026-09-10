@@ -7,6 +7,7 @@ import type {
   PhotocardDetail,
   PhotocardListing,
   PhotocardTradeHistory,
+  PocaDrawResult,
   PurchaseHistory,
   PurchaseResult,
   SaleHistory,
@@ -27,6 +28,13 @@ export const nftApi = {
     http.get<CursorPage<MarketPhotocard>>('/nft-market/photocards', { params }),
 
   detail: (photocardId: number) => http.get<PhotocardDetail>(`/photocards/${photocardId}`),
+
+  /**
+   * 포카 뽑기. **어떤 카드가 나오는지는 서버가 정합니다** — 응답을 그대로 연출합니다.
+   * `Idempotency-Key` 로 재시도해도 한 장만 발행됩니다 (purchase 와 같은 규칙).
+   */
+  draw: (idempotencyKey: string) =>
+    http.post<PocaDrawResult>('/photocards/draw', undefined, { idempotencyKey }),
 
   /** 내 포카. `listed` 로 판매 중만 / 보관 중만 거를 수 있다 */
   mine: (params: PageParams & { listed?: boolean }) =>
@@ -51,8 +59,12 @@ export const nftApi = {
       idempotencyKey,
     }),
 
-  /** 판매 등록. `description` 은 서버가 필수(1~500자)로 받습니다 */
-  list: (photocardId: number, body: { price: number; description: string }) =>
+  /**
+   * 판매 등록.
+   * 🔴 서버는 `description` 을 **필수**(1~500자)로 받습니다(@NotBlank).
+   * 화면에서 입력칸을 뺐으므로, 백엔드가 그 제약을 풀기 전까지 실서버 등록은 400 입니다.
+   */
+  list: (photocardId: number, body: { price: number; description?: string }) =>
     http.post<PhotocardListing>(`/photocards/${photocardId}/listing`, body),
 
   unlist: (photocardId: number) => http.delete<void>(`/photocards/${photocardId}/listing`),

@@ -3,6 +3,7 @@ export type BannerLinkType =
   | 'CONCERT' // 공연 상세
   | 'NFT' // 포토카드 마켓
   | 'TOKEN' // 토큰 벌기
+  | 'POCA_DRAW' // 포토카드 뽑기 (서버 배너로 넘어갈 때 이 값도 함께 합의해야 합니다)
   | 'NONE'; // 안내만 (이동 없음)
 
 export interface Banner {

@@ -93,6 +93,8 @@ export function HomePage() {
       navigate(ROUTES.CONCERT_DETAIL(banner.linkId));
     } else if (banner.linkType === 'NFT') {
       navigate(ROUTES.NFT_MARKET);
+    } else if (banner.linkType === 'POCA_DRAW') {
+      navigate(ROUTES.NFT_DRAW);
     } else if (banner.linkType === 'TOKEN') {
       navigate(ROUTES.TOKEN);
     }

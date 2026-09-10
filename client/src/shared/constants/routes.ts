@@ -58,6 +58,11 @@ export const ROUTES = {
 
   /* ── 포토카드 NFT ── */
   NFT_MARKET: '/nft',
+  /**
+   * 포카 뽑기. `NFT_DETAIL` 의 `:photocardId` 와 겹쳐 보이지만
+   * React Router 는 **정적 세그먼트를 동적보다 우선**해서 여기로 옵니다.
+   */
+  NFT_DRAW: '/nft/draw',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
   /** 경매 상세. 비로그인도 구경할 수 있어야 해서 가드 밖에 둡니다 */

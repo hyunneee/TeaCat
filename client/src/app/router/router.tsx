@@ -45,6 +45,7 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
 
 const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const PocaDrawPage = page(() => import('@/pages/PocaDrawPage'), 'PocaDrawPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
 const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
 const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
@@ -229,6 +230,8 @@ const routes: RouteObject[] = [
         children: [
           { path: ROUTES.FACE_REGISTER, element: withBoundary(<FaceRegisterPage />) },
           { path: ROUTES.FACE_DONE, element: withBoundary(<FaceDonePage />) },
+          /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
+          { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
 
           { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },

@@ -25,6 +25,18 @@ mock('GET', '/banners', () => [
     linkType: 'CONCERT',
     linkId: 'c-1',
   },
+  /* 🔴 개발 확인용 진입로입니다. **운영으로 열기 전에 이 항목을 빼세요.**
+     배너는 목업이라 배포본에서도 보입니다(VITE_USE_MOCK 은 켜진 채입니다). */
+  {
+    id: 'b-draw',
+    label: 'EVENT',
+    title: '포토카드 뽑기',
+    subtitle: '봉지를 뜯어 코치님을 만나보세요',
+    artSeed: 'poca-draw',
+    imageUrl: null,
+    linkType: 'POCA_DRAW',
+    linkId: null,
+  },
   {
     id: 'b-3',
     label: 'NEW',

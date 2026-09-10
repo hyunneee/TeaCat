@@ -36,7 +36,39 @@ export function optionalUser(headers: Record<string, string>): MockUser | undefi
 
 /** 실서버 JWT(header.payload.signature) 로 로그인한 경우 — 시연용 사용자에 매핑 */
 function bridgeToDemoUser(token: string): MockUser | undefined {
-  return token.split('.').length === 3 ? users[0] : undefined;
+  if (token.split('.').length !== 3) return undefined;
+  adoptRealNickname();
+  return users[0];
+}
+
+/* 실서버가 준 닉네임을 마지막으로 읽은 값. 같은 문자열이면 다시 파싱하지 않습니다 */
+let lastSnapshot = '';
+
+/**
+ * 🔴 시연용 사용자에게 **실제 로그인한 사람의 닉네임을 입혀 줍니다.**
+ *
+ * 화면 여러 곳이 "내 것인가" 를 **닉네임 비교**로 판단합니다(`isOwner`).
+ * 카드 주인은 목업이 정하고('김싸피'), 내 닉네임은 실서버가 주므로 그대로 두면
+ * 영원히 남의 것으로 보입니다 — 내 카드를 눌러도 안 열리고 판매 버튼도 안 뜹니다.
+ * 토큰에는 userId·role 뿐이라 닉네임이 없어서, 로그인 스냅샷에서 가져옵니다.
+ *
+ * 목업 폴더 밖을 import 하지 않으려고 저장소를 직접 읽습니다. 남은 도메인이
+ * 실서버로 바뀌면 이 다리도 함께 사라집니다.
+ */
+function adoptRealNickname(): void {
+  try {
+    const raw = localStorage.getItem('ticket.auth') ?? '';
+    if (raw === lastSnapshot) return;
+    lastSnapshot = raw;
+
+    const nickname = (JSON.parse(raw) as { state?: { userSnapshot?: { nickname?: string } } }).state
+      ?.userSnapshot?.nickname;
+    const demo = users[0];
+    /* 실명(name)은 건드리지 않습니다 — 실서버가 준 값이 아니라 지어낸 값이 됩니다 */
+    if (demo && nickname) users[0] = { ...demo, nickname };
+  } catch {
+    /* 저장소가 없거나 모양이 다르면 시연용 이름을 그대로 씁니다 */
+  }
 }
 
 /* ── 자동입력 방지 (예매 진입 관문) ──

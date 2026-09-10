@@ -159,7 +159,11 @@ export function useListPhotocard() {
     }: {
       photocardId: number;
       price: number;
-      description: string;
+      /**
+       * 🔴 서버는 아직 이 값을 **필수**로 받습니다(@NotBlank).
+       * 화면에서 입력칸을 뺐으므로, 백엔드가 그 제약을 풀기 전까지 실서버 등록은 400 입니다.
+       */
+      description?: string;
     }) => nftApi.list(photocardId, { price, description }),
     onSuccess: () => {
       invalidateTrade();

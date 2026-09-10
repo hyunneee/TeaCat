@@ -30,7 +30,23 @@ export interface MarketPhotocard {
 }
 
 /** 내 포카 목록 항목 */
-export interface MyPhotocard {
+/**
+ * 🔴 `group`·`grade` 는 **선택**입니다. 실서버 응답(NftPhotocardDetailResponse)에는 아직
+ * 없고 목업만 채웁니다. 없으면 화면은 이름만 · 금색으로 물러섭니다(추측하지 않습니다).
+ * 서버가 주기 시작하면 물음표만 떼면 됩니다. (CLAUDE.md 8장)
+ */
+export interface PocaDesignInfo {
+  /**
+   * 같은 도안이 지금까지 거래된 평균가(CAT). 거래가 없으면 null.
+   * 🔴 실서버 응답에는 아직 없습니다 — 목업이 지난 거래에서 계산해 줍니다.
+   */
+  averagePrice?: number | null;
+  /** 소속 — '서울 5반' · '15기' · '개발자' */
+  group?: string;
+  grade?: PocaGrade;
+}
+
+export interface MyPhotocard extends PocaDesignInfo {
   photocardId: number;
   designName: string;
   imageUrl: string | null;
@@ -51,7 +67,7 @@ export interface PhotocardOrigin {
 }
 
 /** 포카 상세 */
-export interface PhotocardDetail {
+export interface PhotocardDetail extends PocaDesignInfo {
   photocardId: number;
   designName: string;
   imageUrl: string | null;
@@ -139,4 +155,23 @@ export interface PhotocardTrade {
   tradedAt: string;
   /** 거래 상대 닉네임 */
   counterpartyNickname: string;
+}
+
+/* ── 뽑기 ──────────────────────────────────────────────────── */
+
+/**
+ * 연출 등급. **서버가 정합니다** — 프론트가 designName 을 보고 추측하지 않습니다.
+ * 도안이 늘어날 때마다 화면 코드를 고쳐야 하는 구조가 되면 안 됩니다.
+ */
+export type PocaGrade = 'SPECIAL' | 'COMMON';
+
+/** `POST /photocards/draw` 응답 */
+export interface PocaDrawResult {
+  photocardId: number;
+  designName: string;
+  imageUrl: string | null;
+  /** 소속 표시용 — '서울 4반' / '15기' / '개발자' */
+  group: string;
+  grade: PocaGrade;
+  issuedAt: string;
 }

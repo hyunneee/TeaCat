@@ -9,6 +9,11 @@ export interface ConfirmModalProps {
   cancelText?: string;
   /** 되돌릴 수 없는 동작 — 붉은 띠 + 경고 아이콘 + 붉은 확인 버튼 */
   danger?: boolean;
+  /**
+   * 취소를 감춥니다 — **고를 것이 없는 알림**에 씁니다.
+   * 고를 것이 없는데 취소를 두면 "취소하면 어떻게 되지" 를 만들어 냅니다.
+   */
+  hideCancel?: boolean;
   onConfirm: () => void;
   /**
    * 사용자가 취소했을 때 (취소 버튼·바깥 클릭·ESC 모두). 확인을 눌렀을 때는 불리지 않습니다.
@@ -25,6 +30,7 @@ export function ConfirmModal({
   confirmText = '확인',
   cancelText = '취소',
   danger = false,
+  hideCancel = false,
   onConfirm,
   onCancel,
   onClose = () => {},
@@ -45,9 +51,11 @@ export function ConfirmModal({
          한눈에 안 들어옵니다. 취소는 회색 면, 확인은 채운 면입니다. */
       footer={
         <div className="flex gap-2">
-          <Button variant="soft" fullWidth onClick={cancel}>
-            {cancelText}
-          </Button>
+          {!hideCancel && (
+            <Button variant="soft" fullWidth onClick={cancel}>
+              {cancelText}
+            </Button>
+          )}
           <Button
             variant={danger ? 'danger' : 'dark'}
             fullWidth
