@@ -56,10 +56,19 @@ public class CatMoneyService {
     private final CatMoneyClient catMoneyClient;
     private final CatMoneyHoldRepository holdRepository;
 
+    /**
+     * 화면에 보여줄 잔액.
+     *
+     * <p>🔴 <b>지출 판정({@link CatMoneyHoldService#availableBalance})과 똑같이 빼야 합니다.</b>
+     * 예전에는 여기서 유효 홀드만 빼고 미확정 소각을 빼지 않았는데, 그래서 티켓 결제 직후
+     * 잔액이 <b>결제 전 값으로 되돌아갔습니다</b> — 승인 순간 홀드는 CAPTURED 로 풀리는데
+     * 소각은 아직 체인 확정(블록 하나) 전이라 어느 쪽에도 안 잡히는 구간이 생깁니다.
+     * 사용자에게는 "결제했는데 돈이 그대로" 로 보이고, 정작 그 돈을 쓰려 하면 판정에서 막힙니다.
+     */
     public BalanceResponse getBalance(Long userId) {
         return BalanceResponse.of(
                 catMoneyClient.getBalance(resolveAddress(userId)),
-                holdRepository.sumActiveAmount(userId));
+                holdRepository.sumActiveAmount(userId) + pendingBurns(userId));
     }
 
     /**

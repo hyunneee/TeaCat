@@ -34,18 +34,31 @@ public class PerformanceController {
     private final PerformanceService performanceService;
 
     @Operation(summary = "공연 목록 조회",
-            description = "노출 시작일이 지난 공연을 최신순으로 조회합니다. 다음 페이지는 응답의 nextCursor 를 cursor 로 넘겨 요청합니다.")
+            description = """
+                    노출 시작일이 지난 공연을 최신순으로 조회합니다. 다음 페이지는 응답의
+                    nextCursor 를 cursor 로 넘겨 요청합니다.
+
+                    - `past=false`(기본)는 **남은 회차가 있는 공연**, `past=true` 는 회차가 전부
+                      지난 공연입니다. 두 목록은 겹치지 않습니다.
+                    - 각 항목의 `bookingStatus` 는 회차를 합쳐 서버가 계산한 대표 예매 상태입니다.
+                      **목록 칩은 이 값을 쓰세요** — `ticketingStartAt` 만 보면 회차가 전부 마감된
+                      공연도 "예매중" 으로 보입니다.
+                    """)
     @GetMapping
     public ResponseEntity<BaseResponse<ConcertListResponse>> getConcerts(
             @Parameter(description = "검색어 (공연 제목 부분 일치)", example = "콘서트")
             @RequestParam(required = false) String keyword,
+
+            @Parameter(description = "회차가 전부 지난 공연만 조회", example = "false")
+            @RequestParam(defaultValue = "false") boolean past,
 
             @Parameter(description = "이전 응답의 nextCursor. 첫 페이지는 생략", example = "12")
             @RequestParam(required = false) Long cursor,
 
             @Parameter(description = "한 번에 가져올 개수 (1~50)", example = "20")
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
-        return ResponseEntity.ok(BaseResponse.success(performanceService.getConcerts(keyword, cursor, size)));
+        return ResponseEntity.ok(
+                BaseResponse.success(performanceService.getConcerts(keyword, past, cursor, size)));
     }
 
     @Operation(summary = "오픈 예정 공연 목록 조회",
