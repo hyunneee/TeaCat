@@ -5,7 +5,7 @@ import { Header } from '@/shared/components/layout';
 import { Segmented } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { TicketCard, isPast, useMyTickets } from '@/features/ticket';
+import { TicketCard, isUpcoming, useMyTickets } from '@/features/ticket';
 
 const TABS = [
   { value: 'UPCOMING', label: '관람 예정' },
@@ -20,9 +20,7 @@ export function MyTicketsPage() {
   const { data: tickets, isPending } = useMyTickets();
 
   const filtered = (tickets ?? []).filter((ticket) =>
-    tab === 'UPCOMING'
-      ? ticket.status === 'VALID' && !isPast(ticket)
-      : ticket.status !== 'VALID' || isPast(ticket),
+    tab === 'UPCOMING' ? isUpcoming(ticket) : !isUpcoming(ticket),
   );
 
   return (

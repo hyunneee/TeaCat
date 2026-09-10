@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function TicketCard({ ticket, onClick }: Props) {
-  const canceled = ticket.status === 'CANCELED';
+  const canceled = ticket.status === 'CANCELLED';
   const dimmed = canceled || isPast(ticket);
 
   return (
@@ -28,8 +28,8 @@ export function TicketCard({ ticket, onClick }: Props) {
       )}
     >
       <PosterImage
-        src={null}
-        seed={ticket.posterSeed}
+        src={ticket.posterUrl}
+        seed={ticket.id}
         alt={`${ticket.concertTitle} 포스터`}
         className="w-16 shrink-0"
       />

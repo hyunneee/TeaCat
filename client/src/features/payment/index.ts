@@ -14,7 +14,8 @@ export {
   type TossWidgetStatus,
 } from './hooks/useTossWidget';
 export { TossPaymentSheet } from './components/TossPaymentSheet';
-export { paymentApi } from './api/paymentApi';
+export { useTicketOrder, useCancelOrder } from './hooks/useTicketOrder';
+export { paymentApi, paymentKeys } from './api/paymentApi';
 export { PAY_METHOD_LABEL } from './model/payment.model';
 export type {
   PayMethod,

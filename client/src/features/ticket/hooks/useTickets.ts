@@ -1,39 +1,26 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { ApiError, queryClient } from '@/shared/api';
+import { useQuery } from '@tanstack/react-query';
 import { STALE_TIME } from '@/shared/constants';
-import { toast } from '@/shared/stores';
 import { ticketApi, ticketKeys } from '../api/ticketApi';
-import type { TicketStatus } from '../model/ticket.types';
 
-export function useMyTickets(status?: TicketStatus) {
+export function useMyTickets() {
   return useQuery({
-    queryKey: ticketKeys.list(status),
-    queryFn: () => ticketApi.list(status),
+    queryKey: ticketKeys.list(),
+    queryFn: () => ticketApi.list(),
     staleTime: STALE_TIME.SHORT,
   });
 }
 
+/**
+ * 티켓 한 장.
+ *
+ * NFT 발행은 결제 뒤에 뒤따라가므로(체인 확정 ~10초) 결제 직후에 열면
+ * `nftStatus` 가 `PENDING` 일 수 있습니다. 예매 자체는 그때도 유효합니다.
+ */
 export function useTicketDetail(ticketId: string) {
   return useQuery({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: () => ticketApi.detail(ticketId),
     staleTime: STALE_TIME.SHORT,
     enabled: !!ticketId,
-  });
-}
-
-/**
- * 예매 취소.
- * 취소된 좌석은 바로 재판매되지 않고 NRF 추첨 대상이 됩니다.
- */
-export function useCancelTicket() {
-  return useMutation({
-    mutationFn: (ticketId: string) => ticketApi.cancel(ticketId),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ticketKeys.all });
-      toast.success(`취소됐어요. ${result.refundAmount.toLocaleString()}원이 환불됩니다.`);
-    },
-    onError: (error) =>
-      toast.error(ApiError.isApiError(error) ? error.message : '취소에 실패했어요.'),
   });
 }
