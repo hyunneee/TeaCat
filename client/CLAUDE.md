@@ -65,6 +65,7 @@
 | 차트 | **recharts** — 어드민(`/admin`) 전용 | 사용자 화면에 차트 넣기, 두 번째 차트 라이브러리 |
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
 | 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
+| 에러 리포팅 | **@sentry/react** (`shared/lib/sentry.ts` 만 사용) | 화면에서 `Sentry.*` 직접 호출, **Session Replay** |
 | 얼굴 인식 | **onnxruntime-web** (`/wasm` 빌드 하나만) + INT8 ONNX 모델 | MediaPipe·tfjs 등 **두 번째 런타임**, FP32 모델 |
 
 ---
@@ -501,6 +502,29 @@ npm run typecheck && npm run lint
 - 얼굴 등록(카메라)·PWA 설치·결제창은 **HTTPS 에서만** 동작합니다.
 - 배포 전 `npm run preview` 로 운영 빌드를 확인하세요. dev 가 돌아도 배포본은 깨질 수 있습니다.
 
+### 에러 리포팅 (Sentry)
+
+운영 빌드는 `console.*` 를 통째로 지웁니다(vite.config.ts). **배포본에서 터진 에러를
+볼 수 있는 곳은 Sentry 뿐입니다.**
+
+- 켜지는 조건은 `VITE_SENTRY_DSN` 하나입니다. 비어 있으면 아무 일도 하지 않으므로
+  로컬에서 끄고 싶으면 `.env.development` 에서 값만 지우면 됩니다.
+- 화면 코드에서 `Sentry.*` 를 직접 부르지 마세요. `shared/lib/sentry.ts` 의
+  `reportError` / `setSentryUser` 만 씁니다. 전역 핸들러가 잡는 에러는 아무것도 안 해도 됩니다.
+- 🔴 **Session Replay 를 켜지 마세요** (0번 절차). 얼굴 등록 화면의 카메라 프리뷰와
+  결제창이 그대로 녹화됩니다. 7장 생체정보 규칙과 정면으로 부딪힙니다.
+- 🔴 **사람을 특정하는 값을 넣지 마세요.** `setSentryUser` 는 `userId` 만 받습니다.
+  이메일·닉네임·전화번호를 넣으면 개인정보를 Sentry 로 내보내는 것이 됩니다.
+- 예매 화면의 정상 동작(좌석 선점 실패 등 4xx `ApiError`)은 올리지 않습니다.
+  티켓 오픈 1분이면 수만 건이 쌓여 진짜 사고를 가립니다. 5xx 와 429 만 올립니다.
+- 🔴 **`src/instrument.ts` 는 `main.tsx` 의 첫 줄이어야 합니다.** 아래로 내리면
+  라우터가 Sentry 보다 먼저 만들어져서, 지표 이름이 `/concerts/12345` 처럼 흩어집니다.
+  에러도 경고도 안 나므로 눈치채기 어렵습니다 — 대시보드에서 `source` 가 `route` 인지 보세요.
+- dev·prod 구분은 CI 가 `--build-arg VITE_SENTRY_ENVIRONMENT` 로 넘깁니다.
+  dev 배포도 `--mode production` 으로 빌드하기 때문에 `VITE_APP_ENV` 로는 못 가릅니다.
+- 운영 번들에는 소스맵이 없어서 **스택이 난독화된 채로 옵니다.** 소스맵 업로드는 다음 과제입니다
+  (8장). `SENTRY_AUTH_TOKEN` 은 CI 환경변수이지 `VITE_` 값이 아닙니다.
+
 ### 알림 (웹 푸시)
 
 지금은 **앱이 열려 있는 동안만** 알림이 뜹니다.
@@ -581,6 +605,9 @@ npm run typecheck && npm run lint
 - [ ] 모델 파일 호스팅 위치 — 지금은 자체 호스팅 `public/models/` (커밋 제외,
       빌드가 OpenCV Zoo 에서 받아 해시 검증). CDN 이전 여부와 버전 표기 규칙
       (CDN 을 쓰면 `VITE_FACE_*_URL` 을 절대 주소로 두면 끝입니다)
+- [ ] **Sentry 소스맵 업로드** — 지금은 운영 스택이 난독화돼 있습니다.
+      젠킨스에 `SENTRY_AUTH_TOKEN` 을 넣고 `@sentry/vite-plugin` 으로 올리면 풀립니다
+      (소스맵을 배포본에 **포함하지 않고** 업로드만 합니다)
 - [ ] 라이브니스(위조 방지) — 이번 단계 제외, 다음 작업
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)
@@ -613,3 +640,11 @@ npm run typecheck && npm run lint
   지표가 늘 때마다 유지비가 붙습니다. **어드민(`/admin`) 화면에서만** 씁니다 —
   사용자 화면에 넣지 마세요(데스크톱 전용이라 번들 부담을 감수한 것입니다).
   차트는 `features/admin/components` 안에만 두고, 페이지는 그걸 조립만 합니다. 사용자 승인
+- 2026-09-10 **@sentry/react 추가** (1장 기술 스택, 7장 "에러 리포팅" 절 신설).
+  운영 빌드가 `console.*` 를 지우고 있어 배포본의 에러가 아무 데도 남지 않던 문제입니다.
+  `VITE_SENTRY_DSN`·`VITE_SENTRY_ENVIRONMENT`·`VITE_SENTRY_RELEASE`·
+  `VITE_SENTRY_TRACES_SAMPLE_RATE` 네 개를 `.env.*` / `vite-env.d.ts` / `shared/config/env.ts`
+  에 추가했고, CI 가 앞의 두 개를 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
+  🔴 **Session Replay 는 켜지 않았습니다** — 얼굴 등록·결제 화면이 녹화되기 때문입니다(7장).
+  요청 본문·쿠키·헤더·쿼리는 `dataCollection` 으로 전부 막았습니다.
+  Sentry 초기화 순서 때문에 `src/instrument.ts` 를 만들어 `main.tsx` 첫 줄에서 import 합니다. 사용자 승인

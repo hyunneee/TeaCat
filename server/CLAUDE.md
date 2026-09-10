@@ -37,6 +37,8 @@
 | 문서 | springdoc-openapi (Swagger UI) |
 | 벡터 | hibernate-vector + pgvector (얼굴 임베딩 512차원) |
 | 보일러플레이트 | Lombok |
+| 지표 | Micrometer → Prometheus (`/actuator/prometheus`) |
+| 에러 리포팅 | **sentry-logback** (자동설정 스타터 아님 — 아래 9장) |
 
 ---
 
@@ -194,6 +196,8 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
   (프론트 규칙 `client/CLAUDE.md` 7장과 한 쌍입니다 — 서버가 이미지를 받고 싶어지면 먼저 상의)
 - 회원 탈퇴는 소프트 삭제(`users.deleted_at`)이고, **생체정보는 탈퇴 시 즉시 파기**합니다.
 - 로그에 이메일·전화번호·토큰·임베딩을 남기지 마세요.
+  🔴 이 규칙이 더 중요해졌습니다 — `ERROR` 로그는 이제 **Sentry 로도 나갑니다**(9장).
+  로그에 남기면 외부 서비스에 남는 것입니다.
 - 시크릿은 코드에 박지 않습니다. `application.yaml` 은 로컬 기본값 + 환경변수 오버라이드
   (`${JWT_SECRET:...}`) 형태로만 둡니다.
 
@@ -218,6 +222,51 @@ cd server
 
 ---
 
+## 9. 에러 리포팅 (Sentry)
+
+Prometheus/Grafana 는 **"몇 건 터졌나"**를 보여줍니다. Sentry 는 **"무엇이 왜 터졌나"** —
+스택트레이스와 직전 로그를 보여줍니다. 둘은 대체재가 아니라 짝입니다.
+
+### 🔴 자동설정 스타터를 쓰지 마세요
+
+`io.sentry:sentry-spring-boot-starter-jakarta:8.16.0` 은 **스프링 부트 4 에서 뜨지 않습니다.**
+내부의 `SentrySpanRestClientConfiguration` 이
+`org.springframework.boot.web.client.RestClientCustomizer` 를 참조하는데, 부트 4 에서
+`org.springframework.boot.restclient` 로 옮겨간 클래스입니다. 자동설정 조건을 읽는 단계에서
+`NoClassDefFoundError` 가 나고 **애플리케이션 컨텍스트가 통째로 뜨지 않습니다.**
+`@ConditionalOn*` 으로 우회되지 않습니다 (조건을 평가하기 전에 터집니다).
+
+그래서 자동설정 없이 **로그백 어펜더 하나만** 붙였습니다 — `common/config/SentryConfig`.
+Sentry 가 부트 4 를 지원하면 그 클래스를 지우고 스타터로 갈아타면 됩니다.
+
+### 무엇이 올라가나
+
+| 로그 레벨 | Sentry |
+|---|---|
+| `ERROR` | **이슈로 올라감** (스택트레이스 + 직전 로그) |
+| `WARN` / `INFO` | 이슈 아님. 이벤트에 붙는 빵부스러기(breadcrumb) |
+
+`GlobalExceptionHandler` 의 `log.error("Unexpected error: ", e)` 가 그대로 잡힙니다.
+컨트롤러 밖(필터 체인·스케줄러·비동기)의 에러도 `ERROR` 로 찍히기만 하면 함께 올라갑니다.
+
+`BusinessException` 은 올라가지 않습니다 — 좌석 선점 실패처럼 **정상 동작**이라
+카운터로만 세고 있습니다. 그건 Grafana 가 볼 몫입니다.
+
+### 설정
+
+- `sentry.dsn` 이 비어 있으면 **아예 켜지지 않습니다.** 로컬·CI 는 그대로 두면 됩니다.
+- 값은 저장소에 두지 않고 `docker/.env.dev` · `.env.prod` 의 `SENTRY_DSN` 으로 주입합니다.
+  🔴 **프론트 DSN 과 다른 값입니다** — Sentry 프로젝트가 따로입니다(플랫폼: Spring Boot).
+- dev/prod 구분은 compose 가 `SENTRY_ENVIRONMENT` 로 고정해 넘깁니다.
+
+### 🔴 생체정보
+
+자동설정을 쓰지 않으므로 **HTTP 요청 본문이 이벤트에 실리지 않습니다.**
+얼굴 임베딩(`POST /users/me/face`)·비밀번호·결제 정보가 새어 나갈 경로가 없습니다.
+나중에 스타터나 서블릿 연동을 붙이게 되면 **반드시** 요청 본문 수집을 끄고 시작하세요(0번 절차).
+
+---
+
 ## 8. 커밋
 
 ```
@@ -234,3 +283,9 @@ cd server
 - 2026-09-02 인증 흐름(자동 로그인 · 리프레시 토큰 회전) 항목 추가
 - 2026-09-03 SSAFY 계정 로그인 항목 추가
 - 2026-09-03 Swagger 그룹(도메인 패키지 기준) · 로컬 시크릿(.env) 항목 추가
+- 2026-09-10 **sentry-logback 추가** (1장 기술 스택, 9장 신설, 6장에 한 줄).
+  배포본에서 터진 예외를 스택트레이스로 보기 위해서입니다.
+  🔴 자동설정 스타터(`sentry-spring-boot-starter-jakarta`)는 **스프링 부트 4 에서
+  컨텍스트가 뜨지 않아** 쓰지 않았습니다 (9장에 원인과 복귀 조건). 로그백 어펜더만 붙였습니다.
+  `sentry.dsn` / `sentry.environment` / `sentry.release` 를 `application.yaml` 에 추가하고
+  compose 의 server 서비스에서 넘깁니다. DSN 이 비면 켜지지 않습니다. 사용자 승인

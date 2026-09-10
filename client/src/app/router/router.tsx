@@ -1,5 +1,6 @@
 import { createElement, lazy, type ComponentType, type ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { wrapCreateBrowserRouter } from '@sentry/react';
 import { ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
@@ -356,4 +357,8 @@ const routes: RouteObject[] = [
   },
 ];
 
-export const router = createBrowserRouter(routes);
+/* Sentry 가 라우트를 알아보게 감쌉니다.
+   이게 없으면 성능 지표가 `/concerts/1`, `/concerts/2` … 로 흩어져서
+   "공연 상세가 느리다" 를 볼 수 없습니다 (`/concerts/:id` 하나로 묶임).
+   Sentry 가 꺼져 있으면 감싼 함수가 원본을 그대로 부릅니다. */
+export const router = wrapCreateBrowserRouter(createBrowserRouter)(routes);

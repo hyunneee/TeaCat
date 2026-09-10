@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button, CatMascot } from '@/shared/components/ui';
 import { env } from '@/shared/config';
+import { reportError } from '@/shared/lib';
 
 interface Props {
   children: ReactNode;
@@ -40,7 +41,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     this.componentStack = info.componentStack ?? null;
-    // TODO: Sentry 등 에러 리포팅 붙일 자리
+
+    /* 운영 빌드에서는 아래 console.error 가 통째로 제거됩니다(vite.config.ts).
+       Sentry 가 그 자리를 대신합니다 — DSN 이 없으면 아무 일도 하지 않습니다. */
+    reportError(error, { componentStack: info.componentStack });
+
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
 
