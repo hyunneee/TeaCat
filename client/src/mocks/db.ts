@@ -429,13 +429,64 @@ const NFT_NAMES = [
 ];
 
 /* 목업 공연 제목. 서버는 performanceTitle 을 문자열로 내려주므로 여기서도 문자열로 심습니다. */
-const PERFORMANCE_TITLES = ['PURPLE WAVE 2026', '고척 캣머니 페스티벌'] as const;
+export const PERFORMANCE_TITLES = ['PURPLE WAVE 2026', '고척 캣머니 페스티벌'] as const;
 
 /** 증가 카운터 — 서버의 IDENTITY 컬럼 흉내 */
 let listingSeq = 200;
 let tradeSeq = 900;
 export const nextListingId = () => (listingSeq += 1);
 export const nextTradeId = () => (tradeSeq += 1);
+
+/**
+ * 뽑기 도안 풀 — **서버가 가질 `nft_photocard_designs` 자리**입니다.
+ *
+ * 🔴 어떤 도안이 나오는지는 **서버가 정합니다.** 프론트에 두면 콘솔에서 바꿀 수 있고,
+ *    뜯기 전에 결과를 미리 알 수 있습니다. (결제 금액을 프론트에서 정하면 안 되는 것과 같은 이유)
+ *
+ * `grade` 는 연출 등급입니다 — 화면이 이 값만 보고 금색/보라를 고릅니다.
+ * 도안이 어느 반 소속인지(`group`)는 카드 그림에도 찍혀 있지만, 결과 화면 문구에 씁니다.
+ */
+export interface PocaDesign {
+  designName: string;
+  imageUrl: string;
+  group: string;
+  grade: 'SPECIAL' | 'COMMON';
+}
+
+const coach = (designName: string, file: string, group: string): PocaDesign => ({
+  designName,
+  imageUrl: `/mock/poca/${file}.webp`,
+  group,
+  grade: 'SPECIAL',
+});
+
+export const pocaDesigns: PocaDesign[] = [
+  coach('김선교', 'SunGyo_C', '서울 1반'),
+  coach('김나영', 'Nayoung_C', '서울 2반'),
+  coach('조재봉', 'Jaebong_C', '서울 3반'),
+  coach('정유진', 'Yujin_C', '서울 3반'),
+  coach('최상인', 'Sangin_C', '서울 3·4반'),
+  coach('주세빈', 'Sebin_C', '서울 4반'),
+  coach('강희정', 'HeeJung_C', '서울 4반'),
+  coach('김권수', 'GwonSu_C', '서울 5반'),
+  coach('김예린', 'YaeRin_C', '서울 5반'),
+  coach('김도훈', 'Dohoon_C', '서울 5·6반'),
+  coach('권이삭', 'Isaac_C', '서울 6반'),
+  coach('정예진', 'YaeJin_C', '서울 6반'),
+  coach('박유신', 'Yusin_C', '서울 7반'),
+  coach('이태호', 'Taeho_C', '서울 7반'),
+  coach('윤주하', 'Juha', '15기'),
+  coach('정재원', 'Jaewon', '15기'),
+  coach('정유진', 'Jung_yujin', '15기'),
+  coach('박지원', 'jiwon', '15기'),
+  /* 개발자는 흔한 카드 — 꽝 연출(먼지)로 갑니다 */
+  { designName: '차희광', imageUrl: '/mock/poca/cha.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '최혜민', imageUrl: '/mock/poca/mean.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '오서현', imageUrl: '/mock/poca/oh.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '표건희', imageUrl: '/mock/poca/pyo.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '양지훈', imageUrl: '/mock/poca/yang.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '최재성', imageUrl: '/mock/poca/monkey.webp', group: '개발자', grade: 'COMMON' },
+];
 
 export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
   const listed = hash(`list-${i}`) > 0.25;
@@ -446,7 +497,10 @@ export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
     designName,
     imageUrl: null,
     performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
-    ownerId: i < 2 ? 'u-1' : 'u-3',
+    /* 🔴 심어둔 이 카드들은 **내 것이 아닙니다.** 마켓·경매를 채우기 위한 남의 물건입니다.
+       내 보관함에는 실제로 뽑거나 발행받은 카드만 있어야 합니다 —
+       '무대 위 첫 소절' 같은 가짜 도안이 내 포카에 섞여 있으면 무엇이 진짜인지 알 수 없습니다. */
+    ownerId: 'u-3',
     issuedAt: iso(now() - (i + 1) * DAY),
     origin: {
       seatGrade: i % 2 === 0 ? 'VIP' : 'S',
@@ -467,12 +521,82 @@ export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
   };
 });
 
+/** 뽑기로 발행되는 포카의 id. 심어둔 카드(501~) 뒤에서 이어집니다. */
+let photocardSeq = 501 + photocards.length;
+export const nextPhotocardId = () => (photocardSeq += 1);
+
+/**
+ * 남이 이미 갖고 있는 포카 몇 장 — **거래 평균가를 보여주기 위한 씨앗**입니다.
+ * 하나도 없으면 판매 등록 화면에서 늘 "아직 거래된 적이 없어요" 만 보입니다.
+ */
+const tradedDesigns: { designName: string; imageUrl: string; prices: number[] }[] = [
+  { designName: '김예린', imageUrl: '/mock/poca/YaeRin_C.webp', prices: [1200, 1450, 980] },
+  { designName: '김권수', imageUrl: '/mock/poca/GwonSu_C.webp', prices: [2100, 1900] },
+  { designName: '최재성', imageUrl: '/mock/poca/monkey.webp', prices: [120, 90, 150] },
+];
+
+const seededTrades: MockPhotocardTrade[] = [];
+
+for (const { designName, imageUrl, prices } of tradedDesigns) {
+  prices.forEach((price, i) => {
+    const photocardId = nextPhotocardId();
+    photocards.push({
+      photocardId,
+      designName,
+      imageUrl,
+      performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
+      ownerId: 'u-3',
+      issuedAt: iso(now() - (i + 2) * DAY),
+      origin: { seatGrade: 'VIP', areaCode: 'A', rowLabel: null, seatNumber: null },
+      status: 'MINTED',
+      listing: null,
+    });
+    seededTrades.push({
+      tradeId: nextTradeId(),
+      photocardId,
+      buyerId: 'u-3',
+      sellerId: 'u-1',
+      price,
+      tradedAt: iso(now() - (i + 2) * DAY),
+    });
+  });
+}
+
 /* 지난 거래 몇 건을 심어둡니다 — 빈 화면만 보면 이 화면이 뭘 하는지 알 수 없습니다. */
 export const photocardTrades: MockPhotocardTrade[] = [
-  { tradeId: nextTradeId(), photocardId: 503, buyerId: 'u-1', sellerId: 'u-3', price: 640, tradedAt: iso(now() - 3 * DAY) },
-  { tradeId: nextTradeId(), photocardId: 505, buyerId: 'u-3', sellerId: 'u-1', price: 320, tradedAt: iso(now() - 9 * DAY) },
-  { tradeId: nextTradeId(), photocardId: 508, buyerId: 'u-1', sellerId: 'u-3', price: 180, tradedAt: iso(now() - 14 * DAY) },
-  { tradeId: nextTradeId(), photocardId: 511, buyerId: 'u-1', sellerId: 'u-3', price: 910, tradedAt: iso(now() - 21 * DAY) },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 503,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 640,
+    tradedAt: iso(now() - 3 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 505,
+    buyerId: 'u-3',
+    sellerId: 'u-1',
+    price: 320,
+    tradedAt: iso(now() - 9 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 508,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 180,
+    tradedAt: iso(now() - 14 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 511,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 910,
+    tradedAt: iso(now() - 21 * DAY),
+  },
+  ...seededTrades,
 ];
 
 /**
@@ -562,7 +686,14 @@ const AUCTION_SEED: Array<{
       { bidderId: 'u-2', amount: 1800, agoMs: 2 * HOUR },
     ],
   },
-  { photocardId: 506, sellerId: 'u-3', startPrice: 300, buyNowPrice: null, endsInMs: 6 * HOUR, bids: [] },
+  {
+    photocardId: 506,
+    sellerId: 'u-3',
+    startPrice: 300,
+    buyNowPrice: null,
+    endsInMs: 6 * HOUR,
+    bids: [],
+  },
   {
     photocardId: 509,
     sellerId: 'u-3',
@@ -571,7 +702,16 @@ const AUCTION_SEED: Array<{
     endsInMs: 2 * MINUTE,
     bids: [{ bidderId: 'u-1', amount: 700, agoMs: 30 * MINUTE }],
   },
-  { photocardId: 502, sellerId: 'u-1', startPrice: 900, buyNowPrice: 2500, endsInMs: 3 * DAY, bids: [] },
+  {
+    photocardId: 502,
+    /* 502 는 남의 카드입니다(ownerId: 'u-3'). 주인과 판매자가 다르면
+       '내 경매' 에 내 것이 아닌 카드가 올라옵니다. */
+    sellerId: 'u-3',
+    startPrice: 900,
+    buyNowPrice: 2500,
+    endsInMs: 3 * DAY,
+    bids: [],
+  },
 ];
 
 export const auctions: MockAuction[] = [];

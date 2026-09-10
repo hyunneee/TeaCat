@@ -5,6 +5,7 @@ import com.teacat.server.booking.entity.PerformanceSeatId;
 import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.dto.response.TicketOrderResponse;
 import com.teacat.server.payment.entity.Payment;
@@ -39,6 +40,10 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class TicketOrderRecorder {
+
+    /** 선점을 잃어 정리하는 주문의 사유. 토스가 준 코드가 아니라 우리가 붙이는 값이다 */
+    private static final String HOLD_EXPIRED_CODE = "SEAT_HOLD_EXPIRED";
+    private static final String HOLD_EXPIRED_MESSAGE = "좌석 선점이 만료되어 주문을 정리했습니다.";
 
     private final TicketOrderRepository ticketOrderRepository;
     private final PaymentRepository paymentRepository;
@@ -154,10 +159,21 @@ public class TicketOrderRecorder {
         return ticket.getId();
     }
 
-    /** 승인이 거절됐다. 묶어둔 캣머니를 풀어주고 좌석 선점은 그대로 둔다(만료가 정리한다) */
+    /**
+     * 주문을 실패로 닫는다. 묶어둔 캣머니를 풀어주고 좌석 선점은 그대로 둔다(만료가 정리한다).
+     *
+     * <p>PENDING 일 때만 닫는다. 발권까지 끝난 주문을 실패로 되돌리면 안 된다.
+     *
+     * <p>변경을 바로 flush 한다. 부르는 쪽이 이어서 같은 좌석으로 새 주문을 INSERT 하는데,
+     * Hibernate 는 INSERT 를 UPDATE 보다 먼저 내보내므로 그대로 두면 이 주문이 아직 PENDING 인
+     * 채로 {@code uq_ticket_orders_pending_seat} 와 부딪힌다.
+     */
     @Transactional
     public void abort(Long ticketOrderId, String failureCode, String failureMessage) {
         ticketOrderRepository.findById(ticketOrderId).ifPresent(order -> {
+            if (!order.isPending()) {
+                return;
+            }
             if (order.getPayment() != null) {
                 order.getPayment().abort(failureCode, failureMessage);
             }
@@ -165,7 +181,20 @@ public class TicketOrderRecorder {
                 catMoneyHoldService.release(CatMoneyHoldRefType.TICKET_ORDER, order.getId());
             }
             order.markFailed();
+            ticketOrderRepository.flush();
         });
+    }
+
+    /**
+     * 좌석 선점을 잃은 결제 대기 주문을 닫는다 (결제창을 닫고 돌아오지 않은 주문).
+     *
+     * <p>이 메서드에 {@code @Transactional} 을 다는 이유: 안에서 부르는 {@link #abort} 는 같은
+     * 빈의 메서드라 프록시를 거치지 않는다. 여기가 트랜잭션 경계여야 배치에서 불러도 동작한다.
+     */
+    @Transactional
+    public void expireStale(Long ticketOrderId) {
+        abort(ticketOrderId, HOLD_EXPIRED_CODE, HOLD_EXPIRED_MESSAGE);
+        log.info("선점을 잃은 결제 대기 주문을 정리했습니다. ticketOrderId={}", ticketOrderId);
     }
 
     /** 소각을 보낼 때 필요한 값. 트랜잭션 밖에서 쓰므로 엔티티가 아니라 값으로 꺼낸다 */
@@ -218,25 +247,39 @@ public class TicketOrderRecorder {
         return toResponse(order);
     }
 
-    /** 선점이 아직 내 것인지. 승인을 보내기 전에 값싸게 거른다 */
+    /**
+     * 선점이 아직 내 것인지. 승인을 보내기 전에 값싸게 거른다.
+     *
+     * <p>switch <b>식</b>이라 상태를 하나라도 빠뜨리면 컴파일이 되지 않는다. 문으로 두면 빠진
+     * 상태가 조용히 통과해 <b>카드를 긁은 뒤에</b> 발권에서 막힌다 — 가장 비싼 실패다.
+     */
     private void requireMySeatStillHeld(TicketOrder order, Long userId) {
         Long seatId = order.getSeat() == null ? null : order.getSeat().getId();
         PerformanceSeat seat = performanceSeatRepository
                 .findById(new PerformanceSeatId(order.getPerformanceDetail().getId(), seatId))
                 .orElseThrow(() -> new BusinessException(BookingErrorCode.SEAT_NOT_FOUND));
 
-        switch (seat.getStatus()) {
-            case SOLD -> throw new BusinessException(BookingErrorCode.SEAT_ALREADY_SOLD);
-            case AVAILABLE -> throw new BusinessException(PaymentErrorCode.SEAT_NO_LONGER_HELD);
-            case HELD -> {
-                if (!userId.equals(seat.getHeldBy())) {
-                    throw new BusinessException(BookingErrorCode.NOT_SEAT_HOLDER);
-                }
-                if (seat.isHeldExpired(LocalDateTime.now())) {
-                    throw new BusinessException(BookingErrorCode.SEAT_HOLD_EXPIRED);
-                }
-            }
+        ErrorCode failure = switch (seat.getStatus()) {
+            // 판매에서 빠진 좌석(BLOCKED)에는 발권할 수 없다
+            case SOLD, BLOCKED -> BookingErrorCode.SEAT_ALREADY_SOLD;
+            case AVAILABLE -> PaymentErrorCode.SEAT_NO_LONGER_HELD;
+            case HELD -> heldFailure(seat, userId);
+        };
+
+        if (failure != null) {
+            throw new BusinessException(failure);
         }
+    }
+
+    /** 선점된 좌석이 지금 내 것이고 아직 살아 있는지. 문제없으면 null */
+    private ErrorCode heldFailure(PerformanceSeat seat, Long userId) {
+        if (!userId.equals(seat.getHeldBy())) {
+            return BookingErrorCode.NOT_SEAT_HOLDER;
+        }
+        if (seat.isHeldExpired(LocalDateTime.now())) {
+            return BookingErrorCode.SEAT_HOLD_EXPIRED;
+        }
+        return null;
     }
 
     /** {@code alreadyPaid} 가 있으면 이미 끝난 주문이라 승인을 다시 보내지 않는다 */

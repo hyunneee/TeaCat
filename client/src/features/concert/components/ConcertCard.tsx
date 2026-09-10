@@ -2,7 +2,7 @@ import { CalendarDays, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Badge, LiveDot, PosterImage } from '@/shared/components/ui';
 import { formatDateTime } from '@/shared/lib';
-import { isTicketingOpen, posterSeedOf } from '../model/concert.model';
+import { CONCERT_BOOKING_LABEL, isConcertOpen, posterSeedOf } from '../model/concert.model';
 import type { ConcertSummary } from '../model/concert.types';
 
 interface Props {
@@ -31,7 +31,7 @@ interface Props {
  * (회차마다 다르니 상세에서 봅니다), 목록에서 가장 궁금한 건 "언제 열리나" 입니다.
  */
 export function ConcertCard({ concert, onClick }: Props) {
-  const open = isTicketingOpen(concert);
+  const open = isConcertOpen(concert);
 
   return (
     <motion.button
@@ -40,18 +40,20 @@ export function ConcertCard({ concert, onClick }: Props) {
       whileTap={{ scale: 0.985 }}
       className="surface shadow-list hover:bg-surface-2 relative flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
     >
-      {/* 상태 칩 — 카드 우상단 고정. 비공개는 등록자용 목록에서만 오고, 열림 여부보다 먼저 알려야 합니다 */}
+      {/* 상태 칩 — 카드 우상단 고정. 비공개는 등록자용 목록에서만 오고, 열림 여부보다 먼저 알려야 합니다.
+          🔴 문구의 근거는 **서버가 회차를 합쳐 계산한 `bookingStatus`** 입니다.
+             예전처럼 티켓 오픈 시각만 보면 회차가 전부 마감된 공연도 "예매중" 으로 보입니다. */}
       {concert.hidden ? (
         <Badge tone="neutral" size="lg" className="absolute top-2.5 right-2.5">
           비공개
         </Badge>
       ) : open ? (
         <Badge tone="live" size="lg" icon={<LiveDot />} className="absolute top-2.5 right-2.5">
-          예매중
+          {CONCERT_BOOKING_LABEL.OPEN}
         </Badge>
       ) : (
         <Badge tone="quiet" size="lg" className="absolute top-2.5 right-2.5">
-          오픈 예정
+          {CONCERT_BOOKING_LABEL[concert.bookingStatus]}
         </Badge>
       )}
 
@@ -71,12 +73,15 @@ export function ConcertCard({ concert, onClick }: Props) {
             <MapPin size={13} className="shrink-0" />
             <span className="truncate">{concert.stadiumName}</span>
           </p>
-          <p className="flex items-center gap-1 truncate">
+          {/* 🔴 접두어("예매 오픈")를 붙이지 않습니다. 남는 폭이 포스터·칩을 빼면 200px 남짓이라
+              접두어를 붙이면 **날짜 끝(시각)이 잘립니다** — 목록에서 가장 궁금한 게 몇 시인데
+              그게 먼저 사라집니다. 열렸는지 아닌지는 우상단 칩이 이미 말하고 있어
+              접두어는 같은 말을 두 번 하는 것이기도 합니다. */}
+          <p className="flex items-center gap-1">
             <CalendarDays size={13} className="shrink-0" />
-            <span className="truncate">
-              {open ? '예매 오픈 ' : '오픈 예정 '}
+            <time dateTime={concert.ticketingStartAt} className="truncate">
               {formatDateTime(concert.ticketingStartAt)}
-            </span>
+            </time>
           </p>
         </div>
       </div>

@@ -52,6 +52,9 @@ public class TicketOrderController {
                       않습니다. `orderId`도 내려가지 않으며, 승인 API를 바로 호출하면 됩니다.
                     - 좌석을 먼저 선점해야 합니다. 선점이 없거나 만료됐으면 거절됩니다.
                     - 얼굴 정보가 없으면 거절됩니다 — 티켓은 얼굴 없이 발권될 수 없습니다.
+                    - **같은 좌석으로 다시 호출하면 열려 있던 주문을 그대로 돌려줍니다.**
+                      결제창을 닫았다가 다시 결제할 때 주문이 중복으로 생기지 않고, 이미 묶인
+                      캣머니도 그대로 유지됩니다 (`ticketOrderId`·금액이 처음과 같습니다).
                     """
     )
     @ApiResponses({
@@ -92,6 +95,7 @@ public class TicketOrderController {
                             - `ERR_BOOKING_009` : 좌석 선점이 만료됨
                             - `PAYMENT_009` : 구역 가격이 설정되지 않음
                             - `PAYMENT_010` : 1인 최대 매수 초과
+                            - `PAYMENT_016` : 같은 좌석으로 요청이 겹쳐 밀림 (다시 호출하면 됩니다)
                             """,
                     content = @Content(schema = @Schema(implementation = BaseResponse.class))
             )

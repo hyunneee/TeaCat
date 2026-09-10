@@ -22,6 +22,14 @@ export interface ConcertSummary {
   /** 티켓팅 오픈 시각 */
   ticketingStartAt: string;
   status: ConcertStatus;
+  /**
+   * 서버가 회차를 합쳐 계산한 **대표 예매 상태**
+   * (하나라도 열려 있으면 OPEN → BEFORE → SOLDOUT → CLOSED).
+   *
+   * 🔴 목록 칩은 이 값을 씁니다. `ticketingStartAt` 으로 직접 계산하면
+   *    끝난 공연도 "예매중" 으로 보입니다 (`isConcertOpen` 주석 참고).
+   */
+  bookingStatus: BookingOpenStatus;
   posterUrl: string | null;
   /** 비공개 상태. 클라이언트 목록에서는 항상 false, 등록자용 목록(/admin/concerts/mine)에서만 true 가 옵니다 */
   hidden: boolean;
@@ -44,6 +52,23 @@ export interface ScheduleSummary {
   bookingStatus: BookingOpenStatus;
   /** 지금 예매할 수 있는가 — 서버가 판단한 값 */
   bookable: boolean;
+}
+
+/**
+ * 예매 오픈 여부 확인 (API-206) — **예매 버튼을 누른 그 순간** 서버에 물어본 답.
+ *
+ * 화면은 오픈 전에도 버튼을 살려두고, 누르면 이걸로 확인합니다. 클라이언트 시계를
+ * 앞당겨도 소용없고(판단은 서버), 폴링도 필요 없습니다(누를 때만 물어봅니다).
+ * 진짜 방어선은 좌석 선점 API 라 이 확인은 안내를 위한 것입니다.
+ */
+export interface BookingOpenCheck {
+  scheduleId: number;
+  status: BookingOpenStatus;
+  ticketingStartAt: string;
+  /** 응답을 만든 시점의 서버 시각 */
+  serverTime: string;
+  /** 오픈까지 남은 초. 이미 열렸거나 끝났으면 0 */
+  secondsUntilOpen: number;
 }
 
 export interface Stadium {

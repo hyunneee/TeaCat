@@ -6,6 +6,7 @@ import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.common.config.BookingPolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.payment.client.TossPaymentException;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.client.TossPaymentsClient;
@@ -15,6 +16,7 @@ import com.teacat.server.payment.dto.response.TicketOrderResponse;
 import com.teacat.server.payment.entity.Payment;
 import com.teacat.server.payment.entity.PaymentPurpose;
 import com.teacat.server.payment.entity.TicketOrder;
+import com.teacat.server.payment.entity.TicketOrderStatus;
 import com.teacat.server.payment.exception.PaymentErrorCode;
 import com.teacat.server.payment.repository.PaymentRepository;
 import com.teacat.server.payment.repository.TicketOrderRepository;
@@ -37,6 +39,8 @@ import com.teacat.server.wallet.service.CatMoneyHoldService;
 import com.teacat.server.wallet.service.CatMoneyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +65,9 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class TicketOrderService {
 
+    /** 좌석당 결제 대기 주문을 하나로 묶는 부분 유니크 인덱스 (V20260909_1100 마이그레이션) */
+    private static final String PENDING_SEAT_UNIQUE_INDEX = "uq_ticket_orders_pending_seat";
+
     private final PerformanceSeatRepository performanceSeatRepository;
     private final PerformanceDetailRepository performanceDetailRepository;
     private final PerformanceAreaRepository performanceAreaRepository;
@@ -78,6 +85,10 @@ public class TicketOrderService {
 
     /**
      * 선점해 둔 좌석으로 주문을 연다.
+     *
+     * <p>같은 좌석으로 다시 부르면 <b>열려 있던 주문을 그대로 돌려줍니다.</b> 결제창을 닫았다가
+     * 다시 결제를 누르는 흔한 흐름인데, 그때마다 주문을 새로 만들면 캣머니가 두 번 묶이고
+     * {@code uq_ticket_orders_pending_seat} 에 걸립니다.
      *
      * @return 카드로 낼 금액이 0원이면 {@code orderId} 없이 내려간다 (결제창을 띄우지 않는다)
      */
@@ -100,6 +111,12 @@ public class TicketOrderService {
 
         requireWithinTicketLimit(userId, performanceDetailId);
 
+        TicketOrder reusable = takeOverPendingOrder(userId, performanceDetailId, seatId);
+        if (reusable != null) {
+            return TicketOrderPrepareResponse.of(reusable, orderName(detail, seatRow),
+                    user.issuePaymentCustomerKey());
+        }
+
         int totalAmount = resolvePrice(detail, seatRow);
         // 가용 잔액 = 체인 잔액 − 유효 홀드 − 미확정 소각. 티켓 값을 넘지 않는 선에서 최대한 쓴다
         int tokenAmount = (int) Math.max(0, Math.min(catMoneyHoldService.availableBalance(userId), totalAmount));
@@ -110,8 +127,18 @@ public class TicketOrderService {
                 ? paymentRepository.save(Payment.ready(user, PaymentPurpose.TICKET, cashAmount))
                 : null;
 
-        TicketOrder order = ticketOrderRepository.save(TicketOrder.open(
-                user, detail, seatRow.getArea(), seatRow, totalAmount, tokenAmount, payment));
+        TicketOrder order;
+        try {
+            order = ticketOrderRepository.save(TicketOrder.open(
+                    user, detail, seatRow.getArea(), seatRow, totalAmount, tokenAmount, payment));
+        } catch (DataIntegrityViolationException e) {
+            // 같은 좌석으로 두 요청이 동시에 들어와 밀렸다. 위에서 정리·재사용으로 걸러지지만
+            // 그 사이에 끼어든 요청이 남는다. 트랜잭션이 이미 abort 상태라 다시 읽지 않고 던진다
+            if (isPendingSeatViolation(e)) {
+                throw new BusinessException(PaymentErrorCode.TICKET_ORDER_IN_PROGRESS);
+            }
+            throw e;
+        }
 
         if (tokenAmount > 0) {
             // 같은 트랜잭션에서 묶는다. 따로 커밋되면 "주문은 없는데 돈만 묶인" 상태가 남는다
@@ -192,28 +219,80 @@ public class TicketOrderService {
     }
 
     /**
+     * 같은 좌석에 이미 열려 있는 결제 대기 주문을 처리한다.
+     *
+     * <p>{@code uq_ticket_orders_pending_seat} 때문에 좌석 하나에 PENDING 주문은 하나뿐이다.
+     * 그냥 새로 만들면 유니크 위반으로 터지므로, 임자에 따라 갈라 준다.
+     *
+     * <ul>
+     *   <li><b>내 주문</b> — 그대로 돌려준다. 금액 분해와 묶어둔 캣머니를 유지해야 같은 돈이
+     *       두 번 묶이지 않는다. 그 사이 가격이 바뀌어도 주문 시점의 값을 지킨다.
+     *   <li><b>남의 주문</b> — 좌석은 방금 <b>내</b> 유효한 선점으로 확인했으니, 그 주문은 선점을
+     *       잃고 남은 찌꺼기다. 실패로 닫고 그 사람 캣머니를 풀어 준 뒤 자리를 비운다.
+     * </ul>
+     *
+     * @return 재사용할 내 주문. 없으면 null (새로 열면 된다)
+     */
+    private TicketOrder takeOverPendingOrder(Long userId, Long performanceDetailId, Long seatId) {
+        TicketOrder pending = ticketOrderRepository
+                .findByPerformanceDetail_IdAndSeat_IdAndStatus(
+                        performanceDetailId, seatId, TicketOrderStatus.PENDING)
+                .orElse(null);
+
+        if (pending == null) {
+            return null;
+        }
+        if (pending.isOwnedBy(userId)) {
+            log.info("열려 있던 티켓 주문을 다시 내려줍니다. ticketOrderId={}", pending.getId());
+            return pending;
+        }
+
+        recorder.expireStale(pending.getId());
+        return null;
+    }
+
+    /** 무결성 위반이 "좌석당 결제 대기 주문 하나" 인덱스 위반인지 (FK 위반 등 다른 원인과 구분한다) */
+    private boolean isPendingSeatViolation(DataIntegrityViolationException e) {
+        String message = NestedExceptionUtils.getMostSpecificCause(e).getMessage();
+        return message != null && message.contains(PENDING_SEAT_UNIQUE_INDEX);
+    }
+
+    /**
      * 내가 유효하게 선점 중인 좌석인지 확인한다.
      *
      * <p>선점이 없거나 만료됐으면 결제를 시작할 수 없다 — 그 좌석은 이미 남이 가져갈 수 있는
      * 상태다. 실패 사유는 선점 API 와 같은 코드로 내려 프론트가 같은 분기를 쓰게 한다.
+     *
+     * <p>switch <b>문</b>이 아니라 <b>식</b>이다. 문은 빠진 케이스를 그냥 통과시키는데, 그러면
+     * 판매 대상이 아닌 좌석으로 결제가 열린다. 식은 컴파일러가 모든 상태를 요구하므로
+     * {@code seat_booking_status} 에 값이 늘면 여기가 깨져서 보게 된다.
      */
     private void requireMyValidHold(Long performanceDetailId, Long seatId, Long userId) {
         PerformanceSeat seat = performanceSeatRepository
                 .findById(new PerformanceSeatId(performanceDetailId, seatId))
                 .orElseThrow(() -> new BusinessException(BookingErrorCode.SEAT_NOT_FOUND));
 
-        switch (seat.getStatus()) {
-            case SOLD -> throw new BusinessException(BookingErrorCode.SEAT_ALREADY_SOLD);
-            case AVAILABLE -> throw new BusinessException(BookingErrorCode.SEAT_HOLD_NOT_FOUND);
-            case HELD -> {
-                if (!userId.equals(seat.getHeldBy())) {
-                    throw new BusinessException(BookingErrorCode.NOT_SEAT_HOLDER);
-                }
-                if (seat.isHeldExpired(LocalDateTime.now())) {
-                    throw new BusinessException(BookingErrorCode.SEAT_HOLD_EXPIRED);
-                }
-            }
+        ErrorCode failure = switch (seat.getStatus()) {
+            // 판매에서 빠진 좌석(BLOCKED)도 살 수 없다. 선점 API 와 같은 코드로 알린다
+            case SOLD, BLOCKED -> BookingErrorCode.SEAT_ALREADY_SOLD;
+            case AVAILABLE -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
+            case HELD -> holdFailure(seat, userId);
+        };
+
+        if (failure != null) {
+            throw new BusinessException(failure);
         }
+    }
+
+    /** 선점된 좌석이 지금 내 것이고 아직 살아 있는지. 문제없으면 null */
+    private ErrorCode holdFailure(PerformanceSeat seat, Long userId) {
+        if (!userId.equals(seat.getHeldBy())) {
+            return BookingErrorCode.NOT_SEAT_HOLDER;
+        }
+        if (seat.isHeldExpired(LocalDateTime.now())) {
+            return BookingErrorCode.SEAT_HOLD_EXPIRED;
+        }
+        return null;
     }
 
     /** 1인 최대 매수 (booking.policy.max-tickets-per-user). 취소된 티켓은 세지 않는다 */
