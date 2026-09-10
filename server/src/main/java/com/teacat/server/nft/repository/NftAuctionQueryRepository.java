@@ -28,7 +28,7 @@ public class NftAuctionQueryRepository {
               FROM nft_auctions a
               JOIN nft_photocards p ON p.id = a.photocard_id
               JOIN nft_photocard_designs d ON d.id = p.design_id
-              JOIN performance_general pg ON pg.id = d.performance_general_id
+              LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
               JOIN users seller ON seller.id = a.seller_id
               LEFT JOIN users winner ON winner.id = a.winner_id
             """;
@@ -134,7 +134,7 @@ public class NftAuctionQueryRepository {
                   FROM nft_auctions a
                   JOIN nft_photocards p ON p.id = a.photocard_id
                   JOIN nft_photocard_designs d ON d.id = p.design_id
-                  JOIN performance_general pg ON pg.id = d.performance_general_id
+                  LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
                   JOIN users seller ON seller.id = a.seller_id
                   LEFT JOIN nft_auction_bids tb ON tb.id = a.top_bid_id
                   LEFT JOIN users top_bidder ON top_bidder.id = tb.bidder_id

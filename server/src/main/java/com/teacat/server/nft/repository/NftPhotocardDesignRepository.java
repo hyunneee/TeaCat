@@ -27,6 +27,29 @@ public interface NftPhotocardDesignRepository extends JpaRepository<NftPhotocard
 
     List<NftPhotocardDesign> findAllByPerformanceIdOrderByIdAsc(Long performanceId);
 
+    /** 어드민이 보는 뽑기 풀 목록 (등록 상태·남은 수량 확인용) */
+    List<NftPhotocardDesign> findAllByDrawPoolTrueOrderByIdAsc();
+
+    /**
+     * 뽑기 후보 중 하나를 <b>무작위로 골라 잠근다.</b> 한 문장이다.
+     *
+     * <p>Java 에서 고르고 잠그면 "고른 뒤 잠그기 전에 소진" 을 재시도로 다뤄야 하고, 한 트랜잭션이
+     * 도안 잠금을 두 개 들면 교착이 가능하다. 여기서는 남은 후보 중 지금 잠기지 않은 하나를 DB 가
+     * 골라 잠근다. 후보가 수백 행이라 {@code random()} 정렬 비용은 무시할 수 있다.
+     *
+     * <p>미등록(REGISTERED 아님) 도안은 발행 배치를 깨뜨리므로 후보에서 뺀다.
+     */
+    @Query(value = """
+            SELECT * FROM nft_photocard_designs
+             WHERE draw_pool
+               AND chain_status = 'REGISTERED'
+               AND issued_supply < total_supply
+             ORDER BY random()
+             LIMIT 1
+             FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<NftPhotocardDesign> lockRandomDrawCandidate();
+
     /** 확정 감시가 훑을 대상: 트랜잭션은 보냈는데 아직 결과를 못 본 도안 */
     @Query(value = """
             SELECT id FROM nft_photocard_designs

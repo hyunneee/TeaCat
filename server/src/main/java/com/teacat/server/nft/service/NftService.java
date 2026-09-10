@@ -108,11 +108,15 @@ public class NftService {
                         summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
                         summary.bidCount(), summary.endsAt()))
                 .orElse(null);
-        NftPhotocardDetailResponse.Origin origin = new NftPhotocardDetailResponse.Origin(
-                row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber());
+        // 뽑기 카드는 티켓·좌석이 없다
+        NftPhotocardDetailResponse.Origin origin = row.hasTicket()
+                ? new NftPhotocardDetailResponse.Origin(
+                        row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber())
+                : null;
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction);
+                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
+                row.groupName(), row.grade(), row.averagePrice());
     }
 
     @Transactional
@@ -238,7 +242,7 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed()))
+                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),
