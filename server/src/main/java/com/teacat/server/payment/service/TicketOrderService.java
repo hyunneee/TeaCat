@@ -6,6 +6,7 @@ import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.common.config.BookingPolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.payment.client.TossPaymentException;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.client.TossPaymentsClient;
@@ -261,24 +262,37 @@ public class TicketOrderService {
      *
      * <p>선점이 없거나 만료됐으면 결제를 시작할 수 없다 — 그 좌석은 이미 남이 가져갈 수 있는
      * 상태다. 실패 사유는 선점 API 와 같은 코드로 내려 프론트가 같은 분기를 쓰게 한다.
+     *
+     * <p>switch <b>문</b>이 아니라 <b>식</b>이다. 문은 빠진 케이스를 그냥 통과시키는데, 그러면
+     * 판매 대상이 아닌 좌석으로 결제가 열린다. 식은 컴파일러가 모든 상태를 요구하므로
+     * {@code seat_booking_status} 에 값이 늘면 여기가 깨져서 보게 된다.
      */
     private void requireMyValidHold(Long performanceDetailId, Long seatId, Long userId) {
         PerformanceSeat seat = performanceSeatRepository
                 .findById(new PerformanceSeatId(performanceDetailId, seatId))
                 .orElseThrow(() -> new BusinessException(BookingErrorCode.SEAT_NOT_FOUND));
 
-        switch (seat.getStatus()) {
-            case SOLD -> throw new BusinessException(BookingErrorCode.SEAT_ALREADY_SOLD);
-            case AVAILABLE -> throw new BusinessException(BookingErrorCode.SEAT_HOLD_NOT_FOUND);
-            case HELD -> {
-                if (!userId.equals(seat.getHeldBy())) {
-                    throw new BusinessException(BookingErrorCode.NOT_SEAT_HOLDER);
-                }
-                if (seat.isHeldExpired(LocalDateTime.now())) {
-                    throw new BusinessException(BookingErrorCode.SEAT_HOLD_EXPIRED);
-                }
-            }
+        ErrorCode failure = switch (seat.getStatus()) {
+            // 판매에서 빠진 좌석(BLOCKED)도 살 수 없다. 선점 API 와 같은 코드로 알린다
+            case SOLD, BLOCKED -> BookingErrorCode.SEAT_ALREADY_SOLD;
+            case AVAILABLE -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
+            case HELD -> holdFailure(seat, userId);
+        };
+
+        if (failure != null) {
+            throw new BusinessException(failure);
         }
+    }
+
+    /** 선점된 좌석이 지금 내 것이고 아직 살아 있는지. 문제없으면 null */
+    private ErrorCode holdFailure(PerformanceSeat seat, Long userId) {
+        if (!userId.equals(seat.getHeldBy())) {
+            return BookingErrorCode.NOT_SEAT_HOLDER;
+        }
+        if (seat.isHeldExpired(LocalDateTime.now())) {
+            return BookingErrorCode.SEAT_HOLD_EXPIRED;
+        }
+        return null;
     }
 
     /** 1인 최대 매수 (booking.policy.max-tickets-per-user). 취소된 티켓은 세지 않는다 */

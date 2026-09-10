@@ -284,6 +284,22 @@ class TicketOrderServiceIntegrationTests {
     }
 
     @Test
+    void 판매에서_빠진_좌석으로는_주문할_수_없다() {
+        givenChainBalance(0);
+        // 선점한 뒤 운영이 좌석을 막은 상황. 선점이 남아 있어도 팔 수 있는 좌석이 아니다
+        jdbcTemplate.update("UPDATE performance_seats SET status = 'BLOCKED'::seat_booking_status"
+                + " WHERE performance_detail_id = ? AND seat_id = ?", detailId, seatId);
+
+        assertThatThrownBy(() -> ticketOrderService.open(userId, detailId, seatId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(BookingErrorCode.SEAT_ALREADY_SOLD);
+
+        assertThat(countPayments()).isZero();
+        assertThat(countTicketOrders()).isZero();
+    }
+
+    @Test
     void 결제_시점에_얼굴이_없으면_거절한다() {
         givenChainBalance(0);
         // 선점 뒤에 얼굴을 지운 상황 (API-110). 얼굴 없이는 티켓 행을 만들 수 없다
