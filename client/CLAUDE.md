@@ -275,7 +275,7 @@ export function Card({ className, ...rest }: CardProps) {
 ## 5. 목업 데이터 (백엔드 연동 전)
 
 `src/mocks/` 의 가짜 응답과 실제 서버가 **섞여 있습니다.**
-회원·인증·얼굴은 실서버로 나가고, 나머지는 아직 목업입니다.
+회원·인증·얼굴·공연·예매·결제·티켓은 실서버로 나가고, 남은 도메인만 목업입니다.
 
 | 도메인 | 지금 |
 |---|---|
@@ -284,12 +284,19 @@ export function Card({ className, ...rest }: CardProps) {
 | 얼굴 등록·삭제 | **실서버** (`/users/me/face`) |
 | 공연 목록·상세·회차, 공연 등록(관리자) | **실서버** (`/concerts/*`, `/schedules/*`, `/admin/concerts`, `/stadiums`) |
 | 봇 확인(캡차) | 목업 (`mocks/handlers/auth.ts`) |
-| 예매·티켓·취소표·캣머니·결제·배너·앱정보 | 목업 |
+| 예매(구역·좌석·선점)·결제·주문 | **실서버** (`/schedules/*/seats`, `/performance-details/*/hold`, `/me/holds`, `/payments/ticket-orders*`) |
+| 내 티켓·예매 취소 | **실서버** (`/users/me/tickets`, 취소는 `/payments/ticket-orders/{orderId}/cancel`) |
+| 캣머니 잔액·배너 | **실서버** |
+| 취소표(NRF)·앱정보 | 목업 (`mocks/handlers/resale.ts`, `appInfo.ts`) |
 | 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
 | 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
-⚠️ 공연은 실서버, 예매는 목업인 과도기입니다. 목업 예매 핸들러는 `mocks/db.ts` 의 회차 ID(`s-1` …)만 알아서,
-실서버 회차 ID 로 예매 플로우에 들어가면 목업이 404 를 줍니다. 예매가 실서버로 바뀌면 함께 풀립니다.
+⚠️ 남은 목업(취소표·포카·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
+들어가면 404 가 납니다. 해당 도메인이 실서버로 바뀌면 함께 풀립니다.
+
+🔴 **예매 취소는 티켓이 아니라 주문에 걸려 있습니다.** 카드 취소·캣머니 환급·NFT 소각이 한 주문에 묶여
+있어서입니다. 티켓 응답의 `ticketOrderId` 로 `features/payment` 의 `useCancelOrder` 를 부르세요.
+티켓 응답에 **금액이 없는 것도 같은 이유**입니다 — 금액은 주문 조회에 있습니다.
 
 - 켜고 끄기: `.env.development` 의 `VITE_USE_MOCK`
 - 동작: `shared/api/client.ts` 의 axios 어댑터를 가로챕니다.
@@ -598,7 +605,9 @@ npm run typecheck && npm run lint
 - [ ] 캣머니 ↔ 원 환산율 (현재 `POINT_UNIT_KRW = 100` 가정)
 - [ ] 가상계좌·계좌이체 재도입 여부 (현재 화면에서 제외, 웹훅 미구현)
 - [ ] 예매 수수료 정책 (현재 매당 2,000원 가정)
-- [ ] 결제 취소·환불 API 및 부분 취소 정책
+- [x] 결제 취소·환불 API — **확정**. `POST /payments/ticket-orders/{id}/cancel` 이 카드 전액 취소 +
+      캣머니 환급 + NFT 소각까지 합니다. 좌석은 추첨 풀이 아니라 **바로 AVAILABLE** 로 돌아갑니다.
+      부분 취소는 없습니다 (1인 1매라 나눌 것이 없음)
 - [ ] **웹 푸시** — 백엔드 VAPID 키 + 발송 API, 서비스워커 `push` 핸들러
       (지금은 앱이 열려 있을 때만 알림이 뜹니다. `injectManifest` 로 바꿔야 하므로 0번 절차)
 - [ ] 배포 버전 API — `GET /app/version` 응답 형태 (`features/appInfo` 에 가정해 둠)
@@ -635,6 +644,12 @@ npm run typecheck && npm run lint
 - 2026-09-08 포카 경매 프론트 착수. `features/auction` 추가(포카와 나란히, 카드 그림만 배럴로 공유),
   마켓 구매 탭 안에 상점·경매 **글자 탭**(DESIGN.md 10장), 잔액 표시를 `available` 로 전환,
   `shared/lib/parseServerTime` 추가(서버가 타임존 없는 KST 를 주므로 카운트다운이 어긋나지 않게)
+- 2026-09-10 예매·결제·내 티켓 실서버 연동 마무리 (5장 현황표 갱신).
+  서버가 들고 있는 좌석 선점을 화면이 이어받도록 `useMyHolds`/`useResumeHold`/
+  `ResumeBookingCard` 추가 (홈의 "결제를 마치지 않은 자리" 카드).
+  🔴 내 티켓·예매 취소는 my-reservation 브랜치와 같은 작업이 겹쳐 **그쪽 구현으로 합쳤습니다** —
+  취소 경로는 `features/ticket` 의 `useCancelTicket`(주문 ID 기준) **하나뿐**입니다.
+  `features/payment` 에 같은 일을 하는 훅을 다시 만들지 마세요
 - 2026-09-09 **recharts 추가** (1장 기술 스택). 어드민 통계 대시보드의 꺾은선 그래프용입니다.
   자체 SVG 로도 선은 그리지만 툴팁·축 라벨·배포 마커선(`ReferenceLine`)까지 직접 만들면
   지표가 늘 때마다 유지비가 붙습니다. **어드민(`/admin`) 화면에서만** 씁니다 —

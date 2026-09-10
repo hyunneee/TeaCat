@@ -1,4 +1,4 @@
-import type { Seat, SeatStatus, Section } from './booking.types';
+import type { MyHold, Seat, SeatStatus, Section } from './booking.types';
 
 /**
  * 좌석 선택 규칙 (순수 도메인 로직).
@@ -37,6 +37,16 @@ export function totalPrice(seats: Seat[], selectedIds: readonly string[]): numbe
 /** 'VIP석 12열 5번' */
 export function seatLabel(seat: Seat, sectionName: string): string {
   return `${sectionName} ${seat.row}열 ${seat.number}번`;
+}
+
+/**
+ * 'A 12열 5번' — 내 선점 목록(`GET /me/holds`)용.
+ *
+ * {@link seatLabel} 과 결과는 같지만 재료가 다릅니다. 이쪽은 좌석맵 없이
+ * 서버가 조립해 준 이름만 갖고 있어서 `Seat` 를 만들 수 없습니다.
+ */
+export function myHoldSeatLabel(hold: MyHold): string {
+  return `${hold.sectionName} ${hold.row}열 ${hold.number}번`;
 }
 
 /** 구역 잔여율 (0~1) */
