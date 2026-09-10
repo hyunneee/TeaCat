@@ -58,7 +58,7 @@ export function AdminStadiumPage() {
             <Button variant="danger-ghost" fullWidth onClick={guard.discardAndLeave}>
               저장하지 않고 이동
             </Button>
-            <Button fullWidth onClick={guard.saveAndLeave}>
+            <Button fullWidth loading={guard.saving} onClick={() => void guard.saveAndLeave()}>
               임시저장 후 이동
             </Button>
           </div>

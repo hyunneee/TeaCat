@@ -239,6 +239,18 @@ function StadiumInfoStep({ controller }: { controller: StadiumEditorController }
             }
             placeholder="선택"
           />
+          <Input
+            label="최대 수용 인원"
+            required
+            showRequirement
+            type="number"
+            min={1}
+            value={info.maxCapacity}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setInfo('maxCapacity', event.target.value)
+            }
+            placeholder="예: 25000"
+          />
         </div>
         {createStadium.isError && (
           <p className="text-danger mt-3 text-sm">
@@ -300,7 +312,8 @@ function LayoutSourceStep({ controller }: { controller: StadiumEditorController 
                     {layout.name} {layout.isDefault && '· 기본'}
                   </span>
                   <span className="text-subtle block text-xs">
-                    구역 {layout.areaCount}개 · 좌석 {layout.seatCount}석
+                    구역 {layout.areaCount}개 · 좌석 {layout.seatCount}석 · 스탠딩{' '}
+                    {layout.standingCapacity}명 · 합계 {layout.capacity}명
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
@@ -1113,6 +1126,8 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
     confirmLayout,
     copyLayout,
     areas,
+    layoutCapacity,
+    stadiumMaxCapacity,
     reset,
   } = controller;
 
@@ -1169,6 +1184,16 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
             </li>
           ))}
         </ul>
+        <p
+          className={
+            stadiumMaxCapacity !== null && layoutCapacity > stadiumMaxCapacity
+              ? 'text-danger text-sm font-semibold'
+              : 'text-ink text-sm font-semibold'
+          }
+        >
+          배치 수용 인원 {layoutCapacity.toLocaleString()}명
+          {stadiumMaxCapacity !== null && ` / 공연장 최대 ${stadiumMaxCapacity.toLocaleString()}명`}
+        </p>
       </div>
       {confirmLayout.isError && (
         <p className="text-danger mt-3 text-sm">
@@ -1181,7 +1206,11 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
         <Button variant="secondary" onClick={() => controller.goToStep(3)}>
           이전으로
         </Button>
-        <Button fullWidth loading={confirmLayout.isPending} onClick={() => confirmLayout.mutate()}>
+        <Button
+          fullWidth
+          loading={confirmLayout.isPending}
+          onClick={() => confirmLayout.mutate('PUBLISH')}
+        >
           배치 확정하기
         </Button>
       </div>

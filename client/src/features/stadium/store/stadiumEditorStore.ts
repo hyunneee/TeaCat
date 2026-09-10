@@ -97,7 +97,7 @@ interface StadiumEditorState {
 
 const initial = {
   step: 0,
-  info: { name: '', address: '', phone: '' } as StadiumInfoDraft,
+  info: { name: '', address: '', phone: '', maxCapacity: '' } as StadiumInfoDraft,
   stadiumId: null as number | null,
 
   analysis: null as ExcelAnalysis | null,

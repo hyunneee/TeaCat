@@ -16,18 +16,28 @@ export function StadiumEditModal({
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [maxCapacity, setMaxCapacity] = useState('');
 
   useEffect(() => {
     setName(stadium?.name ?? '');
     setAddress(stadium?.address ?? '');
     setPhone(stadium?.phone ?? '');
+    setMaxCapacity(stadium ? String(stadium.maxCapacity) : '');
   }, [stadium]);
 
-  const valid = name.trim().length > 0 && address.trim().length > 0;
+  const parsedMaxCapacity = Number(maxCapacity);
+  const valid =
+    name.trim().length > 0 &&
+    address.trim().length > 0 &&
+    Number.isInteger(parsedMaxCapacity) &&
+    parsedMaxCapacity > 0;
   const phoneChanged = phone.trim().length > 0 && phone.trim() !== (stadium?.phone ?? '');
   const changed =
     !!stadium &&
-    (name.trim() !== stadium.name || address.trim() !== stadium.address || phoneChanged);
+    (name.trim() !== stadium.name ||
+      address.trim() !== stadium.address ||
+      phoneChanged ||
+      parsedMaxCapacity !== stadium.maxCapacity);
 
   const submit = () => {
     if (!stadium || !valid || !changed) return;
@@ -35,6 +45,7 @@ export function StadiumEditModal({
     if (name.trim() !== stadium.name) body.name = name.trim();
     if (address.trim() !== stadium.address) body.address = address.trim();
     if (phoneChanged) body.phone = phone.trim();
+    if (parsedMaxCapacity !== stadium.maxCapacity) body.maxCapacity = parsedMaxCapacity;
     onSubmit(stadium.stadiumId, body);
   };
 
@@ -76,6 +87,15 @@ export function StadiumEditModal({
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           hint="등록된 전화번호를 비우면 기존 번호가 유지됩니다."
+        />
+        <Input
+          label="최대 수용 인원"
+          required
+          type="number"
+          min={1}
+          value={maxCapacity}
+          onChange={(event) => setMaxCapacity(event.target.value)}
+          hint="등록된 모든 배치는 이 인원을 초과할 수 없습니다."
         />
       </div>
     </Modal>

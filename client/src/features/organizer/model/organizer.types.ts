@@ -30,6 +30,8 @@ export interface StadiumLayoutSummary {
   status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   areaCount: number;
   seatCount: number;
+  standingCapacity: number;
+  capacity: number;
 }
 
 /** 공연 등록 응답 (API-261) */
