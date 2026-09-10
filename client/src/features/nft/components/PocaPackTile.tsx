@@ -1,7 +1,10 @@
 import { motion } from 'motion/react';
+import { Badge } from '@/shared/components/ui';
 import packUrl from '@/assets/poca/pack.webp';
 
 interface Props {
+  /** 가진 카드팩 수. 여러 개면 몇 개인지 보여줍니다 */
+  count?: number;
   onClick: () => void;
 }
 
@@ -16,7 +19,7 @@ interface Props {
  *
  * 서버를 모릅니다 — props 로 받은 것만 씁니다. (CLAUDE.md 4-3)
  */
-export function PocaPackTile({ onClick }: Props) {
+export function PocaPackTile({ count, onClick }: Props) {
   return (
     <motion.button type="button" onClick={onClick} whileTap={{ scale: 0.97 }} className="w-full">
       <div className="surface-2 shadow-list overflow-hidden rounded-2xl">
@@ -30,6 +33,13 @@ export function PocaPackTile({ onClick }: Props) {
               draggable={false}
               className="motion-safe:animate-poca-float absolute inset-0 size-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.28)]"
             />
+            {/* 포카의 묶음 표시와 **같은 자리**(그림 오른쪽 아래)에 둡니다 —
+                같은 뜻(몇 개인지)이 자리마다 다르면 매번 다시 읽어야 합니다. */}
+            {count !== undefined && count > 1 && (
+              <Badge tone="brand" size="sm" className="absolute right-1 bottom-1">
+                ×{count}
+              </Badge>
+            )}
           </div>
         </div>
 

@@ -104,8 +104,42 @@ mock('GET', '/nft-market/photocards', (ctx) => {
 });
 
 /* ── P2 상세 ── */
-/** 이미 뽑은 사람. 서버라면 회원 행에 남을 값입니다(새로고침해도 유지되어야 합니다) */
-const drawnUserIds = new Set<string>();
+/**
+ * 사람마다 **가진 카드팩 수**. 서버라면 회원 행이나 별도 표에 남을 값입니다.
+ *
+ * 🔴 "몇 번 뽑을 수 있나" 가 아니라 **"팩을 몇 개 가졌나"** 입니다.
+ * 팩이 어떻게 늘어나는지(공연 관람·이벤트)는 서버가 정합니다 — 화면은 남은 수만 봅니다.
+ */
+const packsByUser = new Map<string, number>();
+
+/**
+ * 처음 오는 사람이 가진 팩 — 0개입니다.
+ *
+ * 🔴 **시연용 값입니다.** 진짜 팩은 서버가 줍니다(공연 관람 시 발행·이벤트 지급) —
+ * 실서버로 넘어갈 때 이 기본값은 사라지고 0 에서 시작합니다.
+ */
+const STARTING_PACKS = 0;
+
+/**
+ * 이미 처리한 뽑기 요청. 키 = `${userId}:${Idempotency-Key}`.
+ * 🔴 같은 키가 다시 오면 **새로 뽑지 않고 그때 준 카드를 그대로** 돌려줍니다.
+ * 네트워크 재시도나 더블탭으로 카드가 두 장 나가는 것을 서버가 막아야 합니다.
+ */
+/** 뽑기 응답 한 벌 — 도안 정보(소속·등급)까지 함께 나갑니다 */
+interface DrawnCard {
+  photocardId: number;
+  designName: string;
+  imageUrl: string | null;
+  group: string;
+  grade: (typeof pocaDesigns)[number]['grade'];
+  issuedAt: string;
+}
+
+const drawKeys = new Map<string, DrawnCard>();
+
+function remainingPacks(userId: string): number {
+  return packsByUser.get(userId) ?? STARTING_PACKS;
+}
 
 /* ── 포카 뽑기 ──────────────────────────────────────────────
    🔴 **어떤 카드가 나오는지는 여기(=서버 자리)가 정합니다.**
@@ -114,8 +148,8 @@ const drawnUserIds = new Set<string>();
    `POST /photocards/draw` 는 2단이라 `POST /photocards/:id/listing`(3단)과
    겹치지 않습니다. 서버에 뽑기가 생기면 이 핸들러만 지웁니다.
 
-   🔴 **계정당 생애 1회**입니다. 이 판정도 결과와 같이 여기(=서버 자리)에서 합니다 —
-   프론트가 세면 새로고침이나 콘솔로 얼마든지 다시 뽑을 수 있습니다.
+   🔴 **가진 카드팩을 하나 씁니다.** 팩이 없으면 409 입니다. 이 판정도 결과와 같이
+   여기(=서버 자리)에서 합니다 — 프론트가 세면 새로고침이나 콘솔로 얼마든지 늘릴 수 있습니다.
 
    본 발행은 이 화면이 아닙니다. 티켓 담당자가 입장 확인을 한 순간 그 티켓 보유자에게
    서버가 카드를 발행합니다(티켓 사용 처리와 한 트랜잭션). 여기 배너 뽑기는 그것과 별개로
@@ -127,14 +161,20 @@ const drawnUserIds = new Set<string>();
  */
 mock('GET', '/photocards/draw', (ctx) => {
   const user = requireUser(ctx.headers);
-  return { available: !drawnUserIds.has(user.id) };
+  const remaining = remainingPacks(user.id);
+  return { available: remaining > 0, remaining };
 });
 
 mock('POST', '/photocards/draw', (ctx) => {
   const user = requireUser(ctx.headers);
 
-  if (drawnUserIds.has(user.id)) {
-    throw mockError(409, 'NFT_014', '뽑기는 한 번만 할 수 있어요. 이미 카드를 받으셨습니다.');
+  const key = ctx.headers['idempotency-key'] ?? ctx.headers['Idempotency-Key'] ?? '';
+  const done = drawKeys.get(`${user.id}:${key}`);
+  if (key && done) return done;
+
+  const remaining = remainingPacks(user.id);
+  if (remaining <= 0) {
+    throw mockError(409, 'NFT_014', '가진 카드팩이 없어요.');
   }
 
   const design = pocaDesigns[Math.floor(Math.random() * pocaDesigns.length)];
@@ -156,9 +196,10 @@ mock('POST', '/photocards/draw', (ctx) => {
   };
   /* 뽑은 카드는 실제로 내 것이 됩니다 — '내 포카' 목록에 바로 보입니다 */
   photocards.unshift(card);
-  drawnUserIds.add(user.id);
+  /* 팩 하나를 씁니다 — 몇 번이든, 가진 만큼 뜯을 수 있습니다 */
+  packsByUser.set(user.id, remaining - 1);
 
-  return {
+  const result = {
     photocardId: card.photocardId,
     designName: card.designName,
     imageUrl: card.imageUrl,
@@ -166,6 +207,11 @@ mock('POST', '/photocards/draw', (ctx) => {
     grade: design.grade,
     issuedAt: card.issuedAt,
   };
+
+  /* 같은 요청이 다시 오면 이 카드를 그대로 돌려줍니다 (두 장 발행 방지) */
+  if (key) drawKeys.set(`${user.id}:${key}`, result);
+
+  return result;
 });
 
 mock('GET', '/photocards/:photocardId', (ctx) => {

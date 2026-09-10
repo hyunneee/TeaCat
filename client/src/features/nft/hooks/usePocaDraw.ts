@@ -40,6 +40,12 @@ export function usePocaDraw() {
 
   /* 멱등키는 한 번 만들어 재시도에도 재사용합니다. 매번 새로 만들면 의미가 없습니다. */
   const idempotencyKey = useRef(crypto.randomUUID());
+  /**
+   * 이번 봉지에서 이미 뽑기를 보냈는가.
+   * 🔴 상태가 아니라 ref 입니다 — 상태로 막으면 같은 프레임에 두 번 들어온 손가락이
+   * 둘 다 옛 값을 보고 통과합니다.
+   */
+  const requested = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const draw = useMutation({
@@ -65,6 +71,9 @@ export function usePocaDraw() {
       if (failure?.status === 409) setUsedUp(failure.message);
       else toast.error(failure?.message ?? '뽑기에 실패했어요.');
 
+      /* 실패했으면 다시 뜯어볼 수 있어야 합니다 */
+      requested.current = false;
+
       setPhase('sealed');
     },
   });
@@ -79,11 +88,27 @@ export function usePocaDraw() {
 
   /** 봉지에 손이 닿았습니다 — 여기서 뽑기가 나갑니다 */
   const startCut = useCallback(() => {
-    setPhase((prev) => {
-      if (prev !== 'sealed') return prev;
-      draw.mutate();
-      return 'cutting';
-    });
+    /* 🔴 setPhase 업데이터 안에서 mutate 를 부르면 안 됩니다 —
+       React 는 개발 모드에서 업데이터를 두 번 실행해서 **카드가 두 장 나갑니다.** */
+    if (requested.current) return;
+    requested.current = true;
+
+    setPhase('cutting');
+    draw.mutate();
+  }, [draw]);
+
+  /**
+   * 다시 뽑기 — 팩이 남아 있을 때만 화면이 이 버튼을 보여줍니다.
+   * 🔴 멱등키를 새로 만듭니다. 그대로 두면 서버가 앞선 뽑기와 같은 요청으로 보고
+   * 같은 카드를 돌려줍니다(멱등의 목적이 그것입니다).
+   */
+  const reset = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    idempotencyKey.current = crypto.randomUUID();
+    requested.current = false;
+    draw.reset();
+    setCard(null);
+    setPhase('sealed');
   }, [draw]);
 
   /** 다 잘렸습니다 */
@@ -99,6 +124,7 @@ export function usePocaDraw() {
     isWaiting: phase === 'opening' && card === null,
     startCut,
     finishCut,
+    reset,
     /** 이미 뽑은 계정이면 그 사유. 없으면 null */
     usedUp,
   };

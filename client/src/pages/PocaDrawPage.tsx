@@ -3,7 +3,14 @@ import { ChevronLeft } from 'lucide-react';
 import { Button, IconButton, Spinner } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { cn } from '@/shared/lib';
-import { PocaDust, PocaPack, PocaResultLine, PocaReveal, usePocaDraw } from '@/features/nft';
+import {
+  PocaDust,
+  PocaPack,
+  PocaResultLine,
+  PocaReveal,
+  useDrawAvailability,
+  usePocaDraw,
+} from '@/features/nft';
 
 /**
  * 포토카드 뽑기.
@@ -13,7 +20,11 @@ import { PocaDust, PocaPack, PocaResultLine, PocaReveal, usePocaDraw } from '@/f
  */
 export function PocaDrawPage() {
   const navigate = useNavigate();
-  const { phase, card, isWaiting, startCut, finishCut, usedUp } = usePocaDraw();
+  const { phase, card, isWaiting, startCut, finishCut, reset, usedUp } = usePocaDraw();
+
+  /* 팩이 남아 있을 때만 다시 뽑을 수 있습니다. 뽑고 나면 캐시가 갱신돼
+     남은 수가 0 이 되는 순간 버튼이 사라집니다. */
+  const { data: packs } = useDrawAvailability();
 
   const opened = phase === 'opening' || phase === 'revealed';
   const revealed = phase === 'revealed' && card !== null;
@@ -93,9 +104,15 @@ export function PocaDrawPage() {
         )}
         style={{ top: 'min(calc(50% + 268px), calc(100% - 100px))' }}
       >
-        {/* '한 번 더' 는 없습니다 — 계정당 한 번뿐이라 눌러도 반드시 실패합니다.
-            본 발행은 입장 확인 때 서버가 합니다. */}
-        <Button fullWidth onClick={() => navigate(ROUTES.MY_NFTS)}>
+        {/* 팩이 남았을 때만 — 없는데 버튼을 두면 눌러도 반드시 실패합니다 */}
+        {packs?.available && (
+          <Button variant="secondary" fullWidth onClick={reset}>
+            다시 뽑기
+          </Button>
+        )}{' '}
+        {/* 🔴 replace — 뽑기 화면을 **방문 기록에서 지우고** 갑니다.
+            그냥 밀어 넣으면 내 포카에서 뒤로 갈 때 다 쓴 뽑기 화면으로 되돌아옵니다. */}
+        <Button fullWidth onClick={() => navigate(ROUTES.MY_NFTS, { replace: true })}>
           내 포카 보기
         </Button>
       </div>

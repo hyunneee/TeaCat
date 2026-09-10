@@ -56,7 +56,7 @@ export function MyNftsPage() {
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
               {draw?.available && (
                 <li>
-                  <PocaPackTile onClick={askToOpen} />
+                  <PocaPackTile count={draw.remaining} onClick={askToOpen} />
                 </li>
               )}
 
@@ -75,15 +75,6 @@ export function MyNftsPage() {
                 </li>
               ))}
             </ul>
-
-            {/* 빈 화면 대신 — 카드팩은 위에 이미 있으니 무엇을 하면 되는지만 알려 줍니다 */}
-            {(!cards || cards.length === 0) && (
-              <p className="text-subtle mt-4 text-center text-sm">
-                아직 받은 포토카드가 없어요.
-                <br />
-                공연을 관람하면 좌석별 포토카드가 발행됩니다.
-              </p>
-            )}
           </>
         )}
 

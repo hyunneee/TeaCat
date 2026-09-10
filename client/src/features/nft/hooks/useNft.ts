@@ -49,8 +49,8 @@ export function usePhotocardDetail(photocardId: number) {
 }
 
 /**
- * 남은 뽑기가 있는가 — 카드팩을 보여줄지 정할 때 씁니다.
- * 조건은 서버가 정합니다. 화면은 `available` 만 보고 그립니다.
+ * 가진 카드팩 — 목록에 카드팩을 보여줄지, 몇 개인지 정할 때 씁니다.
+ * 팩이 어떻게 늘어나는지는 서버가 정합니다. 화면은 남은 수만 봅니다.
  */
 export function useDrawAvailability() {
   return useQuery({
@@ -172,10 +172,7 @@ export function useListPhotocard() {
     }: {
       photocardId: number;
       price: number;
-      /**
-       * 🔴 서버는 아직 이 값을 **필수**로 받습니다(@NotBlank).
-       * 화면에서 입력칸을 뺐으므로, 백엔드가 그 제약을 풀기 전까지 실서버 등록은 400 입니다.
-       */
+      /** 선택입니다. 지금 화면에는 입력칸이 없어 안 보냅니다(2차 배포 때 다시 붙습니다) */
       description?: string;
     }) => nftApi.list(photocardId, { price, description }),
     onSuccess: () => {

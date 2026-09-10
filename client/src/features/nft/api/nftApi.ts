@@ -59,18 +59,14 @@ export const nftApi = {
       idempotencyKey,
     }),
 
-  /**
-   * 판매 등록.
-   * 🔴 서버는 `description` 을 **필수**(1~500자)로 받습니다(@NotBlank).
-   * 화면에서 입력칸을 뺐으므로, 백엔드가 그 제약을 풀기 전까지 실서버 등록은 400 입니다.
-   */
+  /** 판매 등록. `description` 은 선택입니다(서버 500자 제한) */
   list: (photocardId: number, body: { price: number; description?: string }) =>
     http.post<PhotocardListing>(`/photocards/${photocardId}/listing`, body),
 
   unlist: (photocardId: number) => http.delete<void>(`/photocards/${photocardId}/listing`),
 
-  /** 남은 뽑기가 있는지 — 조건은 서버가 정합니다 */
-  drawAvailability: () => http.get<{ available: boolean }>('/photocards/draw'),
+  /** 가진 카드팩이 몇 개인지 — 몇 개를 주는지는 서버가 정합니다 */
+  drawAvailability: () => http.get<{ available: boolean; remaining: number }>('/photocards/draw'),
 };
 
 export const nftKeys = {
