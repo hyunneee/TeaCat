@@ -133,7 +133,8 @@ public class NftService {
 
         NftPhotocardListing listing = listingRepository.save(
                 NftPhotocardListing.create(
-                        photocard, photocard.getOwner(), request.price(), request.description().trim()));
+                        photocard, photocard.getOwner(), request.price(),
+                        request.description() == null ? "" : request.description().trim()));
         return NftListingResponse.from(listing);
     }
 
