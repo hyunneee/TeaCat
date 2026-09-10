@@ -558,6 +558,19 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
 
 - 켜지는 조건은 `VITE_CLARITY_PROJECT_ID` 하나입니다. 비어 있으면 스크립트조차
   받지 않으므로, 로컬에서 끄고 싶으면 값만 지우면 됩니다. **기본값은 꺼짐입니다.**
+
+| 환경 | Clarity 프로젝트 | 상태 |
+|---|---|---|
+| 로컬 (`npm run dev`) | — | **꺼짐.** `.env.development` 를 일부러 비워 뒀습니다 (아래) |
+| dev (dev.teacat.site) | `teacat` (`yfz2y32jxa`) | **켜짐.** CI 가 build-arg 로 넘깁니다 |
+| prod (teacat.site) | 아직 없음 | 꺼짐. 운영 열 때 프로젝트를 **새로 만들어** Jenkinsfile 에 채웁니다 |
+
+- 🔴 **`.env.development` 에 ID 를 넣지 마세요.** 그 파일은 커밋되므로 팀원 모두의
+  로컬 `npm run dev` 세션이 히트맵에 들어갑니다. Sentry 는 DSN 을 이 파일에 넣어
+  뒀지만 판단이 다릅니다 — 에러는 하나씩 보고 `environment` 로 걸러내는데,
+  히트맵·rage click 은 **여러 세션을 합친 값**이고 Clarity 에는 환경 태그가 없어서
+  HMR·목업이 낀 로컬 세션이 섞이면 지표 자체가 못 쓰게 됩니다.
+  잠깐 켜서 확인할 때는 `.env.development.local` 을 쓰세요 (gitignore 됨).
 - 화면 코드에서 `window.clarity` 를 직접 부르지 마세요. `shared/lib/clarity.ts` 의
   `initClarity` / `setClarityUser` / `trackClarityEvent` 만 씁니다.
 - 🔴 **`index.html` 의 `data-clarity-mask="true"` 를 지우지 마세요** (0번 절차).
@@ -724,7 +737,9 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
   **요청이 나가지 않아 서버에도 남지 않는** 좌절 신호를 보려고 붙였습니다.
   `VITE_CLARITY_PROJECT_ID` 하나를 `.env.*` / `vite-env.d.ts` / `shared/config/env.ts`
   에 추가했고, CI 가 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
-  🔴 **지금은 꺼져 있습니다** — 프로젝트 ID 가 비어 있으면 스크립트조차 받지 않습니다.
+  **dev(dev.teacat.site)만 켰습니다** — 프로젝트 `teacat`(`yfz2y32jxa`), 대시보드
+     마스킹은 사용자가 Strict 로 바꿔 뒀습니다. 로컬과 prod 는 ID 가 비어 꺼진 상태입니다.
+     로컬을 비워 두는 건 실수가 아니라 결정입니다(위 7장 표).
   🔴 Clarity 공식 API 에 **`stop` 이 없어** 라우트 단위로 끌 수 없습니다. 그래서 방어를
      `index.html` 의 `#root`·`#modal-root` `data-clarity-mask="true"` **기본 차단**으로
      세웠습니다(페이지마다 붙이면 새 화면에서 빠뜨립니다). 대시보드 마스킹 Strict 는

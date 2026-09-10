@@ -182,8 +182,13 @@ pipeline {
                     #    (프로젝트 ID 는 공개 값이라 여기 적어도 된다. 데이터 내보내기 API
                     #     토큰은 전혀 다른 물건이고 절대 여기 두면 안 된다)
                     case "$DEPLOY_ENV" in
+                        # 🔴 운영용 프로젝트는 아직 없다. 운영을 열 때 Clarity 에서 프로젝트를
+                        #    하나 더 만들어 여기 채운다. dev 것을 그대로 쓰면 히트맵이 섞인다.
+                        #    그때 개인정보처리방침·쿠키 동의도 함께 정리해야 한다
+                        #    (client/CLAUDE.md 8장 — 지금은 미해결).
                         prod) CLARITY_ID="" ;;
-                        *)    CLARITY_ID="" ;;
+                        # dev.teacat.site → Clarity 프로젝트 'teacat'
+                        *)    CLARITY_ID="yfz2y32jxa" ;;
                     esac
 
                     # 소스맵 업로드 토큰 (Sentry). 없으면 조용히 건너뛴다 —
