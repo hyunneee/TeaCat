@@ -146,6 +146,14 @@ services:
       # 브라우저가 보는 경로 기준이다. 프론트가 /api 로 호출하므로 /api/auth 로 좁힌다
       REFRESH_COOKIE_PATH: /api/auth
 
+      # 에러 리포팅 (Sentry). DSN 이 비어 있으면 서버가 그냥 안 켠다.
+      # 🔴 프론트 DSN 과 다른 값이다 — Sentry 프로젝트가 따로다(플랫폼: Spring Boot).
+      #    값은 .env.dev 의 SENTRY_DSN 에 둔다. 저장소에 넣지 마라.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: dev
+      # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@dev}
+
       FRONTEND_BASE_URL: https://dev.teacat.site
       SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}
       # 🔴 이걸 빼면 기본값(http://localhost:8080/...)이 SSAFY 에 그대로 나가서

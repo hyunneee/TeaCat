@@ -56,6 +56,18 @@ dependencies {
     // 오브젝트 스토리지 (MinIO / S3 호환)
     implementation 'io.minio:minio:8.5.17'
 
+    // 에러 리포팅. Prometheus/Grafana 는 "몇 건 터졌나"를 보여주고,
+    // 이건 "무엇이 왜 터졌나"(스택트레이스)를 보여준다.
+    //
+    // 🔴 sentry-spring-boot-starter-jakarta 를 쓰지 않는다. 스프링 부트 4 에서 뜨지 않는다 —
+    //    8.16.0 의 SentrySpanRestClientConfiguration 이 org.springframework.boot.web.client.
+    //    RestClientCustomizer 를 참조하는데, 부트 4 에서 org.springframework.boot.restclient
+    //    로 옮겨간 클래스다. 자동설정 조건을 읽다 NoClassDefFoundError 가 나면서
+    //    **애플리케이션 컨텍스트가 통째로 뜨지 않는다.**
+    //    그래서 자동설정 없이 로그백 어펜더만 쓴다 (SentryConfig 참고).
+    //    Sentry 가 부트 4 를 지원하면 그때 스타터로 갈아타면 된다.
+    implementation 'io.sentry:sentry-logback:8.16.0'
+
     // JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'

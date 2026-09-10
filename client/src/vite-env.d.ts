@@ -12,6 +12,12 @@ interface ImportMetaEnv {
   readonly VITE_USE_MOCK: string;
   readonly VITE_PAYMENT_MODE: 'auto' | 'mock' | 'toss';
   readonly VITE_TOSS_CLIENT_KEY: string;
+  /* 에러 리포팅 — DSN 이 비어 있으면 Sentry 를 아예 켜지 않습니다 */
+  readonly VITE_SENTRY_DSN: string;
+  readonly VITE_SENTRY_TRACES_SAMPLE_RATE: string;
+  /* dev/prod 구분과 커밋 표시. 배포에서는 CI 가 --build-arg 로 넘깁니다 */
+  readonly VITE_SENTRY_ENVIRONMENT: string;
+  readonly VITE_SENTRY_RELEASE: string;
   /* 얼굴 등록 — 브라우저에서만 쓰는 모델 파일 주소와 버전 */
   readonly VITE_FACE_DETECTOR_URL: string;
   readonly VITE_FACE_EMBEDDER_URL: string;

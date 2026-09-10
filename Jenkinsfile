@@ -175,7 +175,9 @@ pipeline {
                     docker build \
                         -t "teacat-client:$DEPLOY_ENV-$TAG" \
                         -t "teacat-client:$DEPLOY_ENV-latest" \
-                        --build-arg VITE_USE_MOCK=$MOCK ./client
+                        --build-arg VITE_USE_MOCK=$MOCK \
+                        --build-arg VITE_SENTRY_ENVIRONMENT=$DEPLOY_ENV \
+                        --build-arg VITE_SENTRY_RELEASE=teacat-client@$TAG ./client
                 '''
             }
         }
