@@ -10,6 +10,15 @@ import { TABS, useActiveIndex } from './navTabs';
 const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
 
 /**
+ * 탭 줄에서는 **MY 를 뺍니다.** 바로 윗줄 오른쪽에 이미 MY 가 있어서,
+ * 그대로 두면 한 머리말 안에 같은 목적지가 두 번 나옵니다.
+ * (폰의 하단 탭은 윗줄이 없으므로 다섯 개 그대로입니다 — `navTabs` 의 TABS)
+ *
+ * 지금 상태는 윗줄 MY 링크가 대신 표시합니다.
+ */
+const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
+
+/**
  * 데스크톱(lg 이상)의 상단 내비. 폰의 하단 탭과 **같은 목록**(navTabs)을 위로 올린 것입니다.
  *
  * 배치는 티켓 예매 사이트(NOL)의 머리말을 따릅니다 — 두 줄입니다.
@@ -28,6 +37,8 @@ const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
 export function TopNav() {
   const navigate = useNavigate();
   const activeIndex = useActiveIndex();
+  /* 탭 목록이 폰과 달라(MY 제외) 인덱스로는 짝이 안 맞습니다. 경로로 비교합니다 */
+  const activeTo = activeIndex >= 0 ? TABS[activeIndex]!.to : null;
   const [keyword, setKeyword] = useState('');
 
   /* 검색은 통합 검색 화면이 받습니다. 적은 글자를 `?q=` 로 넘겨 그 화면이 이어서 씁니다 */
@@ -68,19 +79,25 @@ export function TopNav() {
           </div>
         </form>
 
+        {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
+            어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
         <Link
           to={ROUTES.MY}
-          className="text-ink-subtle hover:text-ink-muted ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors"
+          aria-current={activeTo === ROUTES.MY ? 'page' : undefined}
+          className={cn(
+            'ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
+            activeTo === ROUTES.MY ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
+          )}
         >
           <UserRound size={18} />
           MY
         </Link>
       </div>
 
-      {/* ── 2줄 — 가로 탭 ── */}
-      <nav className={cn(ROW, 'h-11 gap-1')}>
-        {TABS.map(({ to, label }, index) => {
-          const isActive = activeIndex === index;
+      {/* ── 2줄 — 가로 탭. 줄 폭을 **똑같이 나눠** 가집니다 ── */}
+      <nav className={cn(ROW, 'h-11')}>
+        {DESKTOP_TABS.map(({ to, label }) => {
+          const isActive = to === activeTo;
 
           return (
             /* NavLink 를 쓰지 않는 이유는 하단 탭과 같습니다 — 자체 접두사 매칭이
@@ -90,15 +107,21 @@ export function TopNav() {
               to={to}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'relative flex h-full items-center px-4 text-sm font-semibold',
+                'flex h-full flex-1 items-center justify-center text-sm font-semibold',
                 'transition-colors duration-150',
                 isActive ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
               )}
             >
-              {label}
-              {/* 밑줄은 머리말의 아래 테두리 위에 겹쳐 놓습니다 (-bottom-px) —
-                  테두리 아래에 두면 탭과 떨어져 보입니다 */}
-              {isActive && <span className="bg-accent-800 absolute inset-x-3 -bottom-px h-0.5 rounded-full" />}
+              {/* 밑줄은 **글자 폭**입니다. 칸이 244px 이라 칸 전체에 그으면
+                  밑줄이 아니라 구분선처럼 보입니다.
+                  머리말 아래 테두리 위에 겹쳐 놓습니다 (-bottom-px) —
+                  테두리 아래에 두면 탭과 떨어져 보입니다. */}
+              <span className="relative flex h-full items-center">
+                {label}
+                {isActive && (
+                  <span className="bg-accent-800 absolute inset-x-0 -bottom-px h-0.5 rounded-full" />
+                )}
+              </span>
             </Link>
           );
         })}
