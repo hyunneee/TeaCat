@@ -53,6 +53,7 @@ export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
+export { AdminPocaDesignFormModal } from './components/AdminPocaDesignFormModal';
 
 // View — 운영 통계
 // 🔴 recharts 는 어드민 전용입니다 (CLAUDE.md 1장). 차트 컴포넌트를 사용자 화면에서
@@ -64,6 +65,18 @@ export { TrendLineChart } from './components/TrendLineChart';
 export { adminUserApi, adminKeys } from './api/adminUserApi';
 export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
 export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
+export { adminPocaDesignApi, adminPocaDesignKeys } from './api/adminPocaDesignApi';
+export {
+  useAdminDrawPoolDesigns,
+  useCreatePocaDesign,
+  useRetryDesignRegistration,
+} from './hooks/useAdminPocaDesigns';
+export type {
+  AdminPocaDesign,
+  AdminPocaDesignCreateRequest,
+  PocaDesignChainStatus,
+  PocaDesignGrade,
+} from './model/adminPocaDesign.types';
 export { adminAnalyticsApi, adminAnalyticsKeys } from './api/adminAnalyticsApi';
 export {
   TREND_RANGES,

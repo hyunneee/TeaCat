@@ -12,6 +12,7 @@ import {
   DEFAULT_SORT,
   NFT_SORTS,
   NftCard,
+  photocardSource,
   useMyPhotocards,
   useNftMarket,
   type NftSort,
@@ -89,7 +90,7 @@ export function NftMarketPage() {
     return list.filter(
       (card) =>
         card.designName.toLowerCase().includes(needle) ||
-        card.performanceTitle.toLowerCase().includes(needle),
+        (card.performanceTitle ?? '').toLowerCase().includes(needle),
     );
   }, [mine.data, trimmed]);
 
@@ -262,7 +263,7 @@ export function NftMarketPage() {
                     photocardId={card.photocardId}
                     designName={card.designName}
                     imageUrl={card.imageUrl}
-                    performanceTitle={card.performanceTitle}
+                    performanceTitle={photocardSource(card.performanceTitle)}
                     state={card.listed ? 'LISTED' : 'STORED'}
                     onClick={() => goPhotocard(card.photocardId)}
                   />

@@ -45,6 +45,7 @@ const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketD
    (ComingSoonPage 는 파일 맨 위에서 바로 import 합니다 — `page()` 는 props 를 못 넘기고,
     Header + EmptyState 뿐이라 따로 청크를 나눌 것도 없습니다) */
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const PocaPackClaimPage = page(() => import('@/pages/PocaPackClaimPage'), 'PocaPackClaimPage');
 const PocaDrawPage = page(() => import('@/pages/PocaDrawPage'), 'PocaDrawPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
@@ -77,6 +78,10 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminPocaDesignsPage = page(
+  () => import('@/pages/AdminPocaDesignsPage'),
+  'AdminPocaDesignsPage',
+);
 const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
 const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
 const AdminConcertCreatePage = page(
@@ -243,6 +248,10 @@ const routes: RouteObject[] = [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
+                  {
+                    path: ROUTES.ADMIN_POCA_DESIGNS,
+                    element: withBoundary(<AdminPocaDesignsPage />),
+                  },
                   { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
               },
@@ -307,6 +316,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.FACE_REGISTER, element: withMask(withBoundary(<FaceRegisterPage />)) },
           { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
+          { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
 

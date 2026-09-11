@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
@@ -10,6 +10,15 @@ import { nftApi, nftKeys } from '../api/nftApi';
 import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
 
 const PAGE_SIZE = 20;
+
+/**
+ * 발행이 끝나기를 기다리는 동안 다시 물어보는 간격.
+ *
+ * 뽑은 직후 카드는 `PENDING` 이고 블록이 확정되면(약 10초) `MINTED` 가 됩니다.
+ * 🔴 이걸 안 걸면 "발행 처리 중" 이 **영영 그대로** 남습니다 — 사용자는 뭔가
+ * 잘못된 줄 압니다. 확정되면 스스로 멈춥니다(끝없이 폴링하지 않습니다).
+ */
+const MINT_POLL_MS = 3000;
 
 /** 서버 커서 페이지 → 다음 pageParam. 마지막 페이지면 undefined (더 안 부름) */
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
@@ -43,9 +52,36 @@ export function usePhotocardDetail(photocardId: number) {
     queryKey: nftKeys.detail(photocardId),
     queryFn: () => nftApi.detail(photocardId),
     staleTime: STALE_TIME.SHORT,
+    refetchInterval: (query) => (query.state.data?.status === 'PENDING' ? MINT_POLL_MS : false),
     // URL 파라미터가 숫자가 아니면(`/nft/abc`) 부르지 않습니다. 화면은 에러 상태를 그립니다.
     enabled: Number.isInteger(photocardId) && photocardId > 0,
   });
+}
+
+/**
+ * 이벤트 카드팩 받기 — **수령 화면에 들어오면 한 번** 청구합니다.
+ *
+ * 🔴 `granted: false` 는 실패가 아닙니다(이미 받았거나 진행 중인 이벤트가 없음).
+ * 조건 판정은 전부 서버가 합니다 — 화면은 부르고 결과를 그리기만 합니다.
+ */
+export function useClaimEventPack() {
+  const claim = useMutation({
+    mutationFn: nftApi.claimPack,
+    /* 팩을 두 번 청구할 이유가 없습니다 — 실패는 화면이 다시 시도하게 둡니다 */
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: nftKeys.drawAvailability() }),
+  });
+
+  /* StrictMode 는 effect 를 두 번 돌립니다. 청구가 두 번 나가지 않게 막습니다 */
+  const asked = useRef(false);
+  const { mutate } = claim;
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    mutate();
+  }, [mutate]);
+
+  return claim;
 }
 
 /**
@@ -78,6 +114,11 @@ export function useMyPhotocards() {
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn,
+    /* 방금 뽑은 카드가 확정될 때까지만. 목록에 PENDING 이 하나도 없으면 멈춥니다 */
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((page) => page.items.some((c) => c.status === 'PENDING'))
+        ? MINT_POLL_MS
+        : false,
     select: (data) => data.pages.flatMap((page) => page.items),
   });
 }

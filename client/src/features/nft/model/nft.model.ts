@@ -86,6 +86,16 @@ export function pocaSeed(photocardId: number): string {
   return `poca-${photocardId}`;
 }
 
+/**
+ * 이 카드가 어디서 왔는가 — 목록·상세의 둘째 줄.
+ *
+ * 뽑기로 얻은 카드는 공연이 없어서 서버가 `performanceTitle` 을 null 로 줍니다.
+ * 빈 줄로 두면 카드마다 높이가 달라지고 "왜 여긴 비었지" 가 남습니다.
+ */
+export function photocardSource(performanceTitle: string | null): string {
+  return performanceTitle ?? '이벤트 카드팩';
+}
+
 /** 'VIP석 A구역 3열 5번' / 스탠딩이면 'VIP석 A구역 스탠딩' */
 export function formatOrigin(origin: PhotocardOrigin): string {
   const grade = origin.seatGrade.endsWith('석') ? origin.seatGrade : `${origin.seatGrade}석`;
