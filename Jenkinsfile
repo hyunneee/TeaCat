@@ -71,8 +71,23 @@ pipeline {
             steps {
                 sh '''
                     set -e
+                    # 시크릿은 저장소에 없다. 이것만 서버에 미리 있어야 한다.
                     test -r "$ENV_FILE" || { echo "$ENV_FILE 을 읽을 수 없습니다."; exit 1; }
-                    test -r "$COMPOSE"  || { echo "$COMPOSE 가 없습니다."; exit 1; }
+
+                    # 🔴 여기서 보는 건 **워크스페이스의 원본**이지 $COMPOSE(=~/teacat/...)가 아니다.
+                    #    $COMPOSE 는 아래 '설정 동기화' 가 저장소에서 복사해 만든다. 그걸 여기서
+                    #    미리 요구하면 그 환경의 첫 배포가 영원히 실패한다 — 파일을 만드는 단계까지
+                    #    가보지도 못한다. (개발은 파일이 이미 있어서 이 순서 문제가 드러나지 않았다)
+                    for f in "docker/docker-compose.$DEPLOY_ENV.yml" "docker/nginx/conf.d/$DEPLOY_ENV.conf"; do
+                        test -r "$f" || { echo "저장소에 $f 가 없습니다."; exit 1; }
+                    done
+
+                    # '설정 동기화' 가 conf 를 복사해 넣을 곳. cp 는 폴더가 없으면 실패한다.
+                    test -d "$DEPLOY_DIR/nginx/conf.d" || {
+                        echo "$DEPLOY_DIR/nginx/conf.d 폴더가 없습니다."
+                        echo "docker-compose.proxy.yml 의 nginx 가 이 폴더를 마운트합니다."
+                        exit 1
+                    }
                     test -d "$DEPLOY_DIR/frontend/$DEPLOY_ENV" || {
                         echo "$DEPLOY_DIR/frontend/$DEPLOY_ENV 폴더가 없습니다."
                         echo "nginx 가 이 폴더를 마운트하고 있어야 합니다."
