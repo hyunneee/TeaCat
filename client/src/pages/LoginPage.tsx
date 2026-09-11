@@ -1,19 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { KeyRound, User } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input, Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { SsafyLoginButton, useLogin } from '@/features/auth';
 
 export function LoginPage() {
-  const [loginId, setLoginId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const login = useLogin();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    login.mutate({ loginId, password });
+    login.mutate({ email, password });
   };
 
   return (
@@ -34,12 +34,14 @@ export function LoginPage() {
         </div>
 
         <Input
-          label="아이디"
-          value={loginId}
-          onChange={(e) => setLoginId(e.target.value)}
-          placeholder="아이디를 입력하세요"
-          autoComplete="username"
-          leftIcon={<User size={17} />}
+          label="이메일"
+          type="email"
+          inputMode="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          leftIcon={<Mail size={17} />}
         />
 
         <Input
@@ -60,7 +62,7 @@ export function LoginPage() {
           fullWidth
           className="mt-2"
           loading={login.isPending}
-          disabled={!loginId || !password}
+          disabled={!email || !password}
         >
           로그인
         </Button>

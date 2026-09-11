@@ -1,0 +1,23 @@
+
+# 인증서 개인키. 절대 커밋 금지
+docker/certbot/
+
+# EC2 키
+*.pem
+
+# 배포 시크릿
+docker/.env.dev
+docker/.env.dev.chain
+docker/.env.prod
+docker/.env.prod.chain
+
+# 모니터링 시크릿 (Grafana 관리자 비번, DB 비번)
+docker/.env.monitoring
+# 🔴 알림 웹훅 주소. 그 자체가 "이 채널에 아무나 글을 쓸 수 있는" 토큰이다
+docker/monitoring/alertmanager/webhook_url
+
+# 🔴 Sentry 소스맵 업로드 토큰. 실제 파일은 서버의 ~/teacat/.sentry-auth-token 이고
+#    젠킨스만 읽는다(Jenkinsfile '빌드: 프론트'). DSN 과 달리 공개 값이 아니다.
+#    저장소에 들어오는 경로를 미리 막아 둔다.
+.sentry-auth-token
+docker/.sentry-auth-token

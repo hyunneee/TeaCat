@@ -1,106 +1,75 @@
 import { mock, mockError } from '../router';
-import { sessions, users, userFromToken, type MockUser } from '../db';
+import { users, userFromToken, type MockUser } from '../db';
 
-/** 요청 헤더의 Bearer 토큰으로 로그인한 사용자를 찾습니다. */
+/* ────────────────────────────────────────────────────────────
+   로그인 · 회원가입 · 내 정보 · 얼굴 등록은 **실제 서버**가 처리합니다.
+   (POST /auth/*, /users/me/*) — 이 파일에서 지웠으니 그대로 네트워크로 나갑니다.
+
+   여기 남은 건 아직 서버에 없는 **캡차**뿐입니다.
+   ──────────────────────────────────────────────────────────── */
+
+/**
+ * 요청 헤더의 Bearer 토큰으로 로그인한 사용자를 찾습니다.
+ *
+ * 지금은 실제 서버가 발급한 JWT 가 들어옵니다. 목업에는 그 사용자의
+ * 티켓·포카 같은 데이터가 없으므로, **유효한 토큰이면 시연용 사용자 하나로 이어 붙입니다.**
+ * 남은 목업 도메인(예매·티켓·포카)이 실제 API 로 바뀌면 이 다리도 함께 사라집니다.
+ */
 export function requireUser(headers: Record<string, string>): MockUser {
-  const raw = headers.authorization ?? headers.Authorization ?? '';
-  const user = userFromToken(raw.replace('Bearer ', ''));
+  const user = optionalUser(headers);
   if (!user) throw mockError(401, 'UNAUTHORIZED', '로그인이 필요합니다.');
   return user;
 }
 
-const toDto = (u: MockUser) => ({
-  id: u.id,
-  loginId: u.loginId,
-  name: u.name,
-  phone: u.phone,
-  email: u.email,
-  role: u.role,
-  faceRegistered: u.faceRegistered,
-  profileImageUrl: u.profileImageUrl,
-  tokenBalance: u.tokenBalance,
-});
-
-let tokenSeq = 0;
-function issueToken(userId: string) {
-  tokenSeq += 1;
-  const token = `mock-access-${userId}-${tokenSeq}`;
-  sessions.set(token, userId);
-  return token;
+/**
+ * 로그인했으면 사용자, 아니면 `undefined`.
+ *
+ * **공개 조회인데 로그인하면 내용이 달라지는** 경로에 씁니다 —
+ * 경매 상세가 그렇습니다(비로그인도 구경하고, 로그인하면 `viewer` 가 붙습니다).
+ * 여기서 401 을 던지면 구경조차 못 하게 됩니다.
+ */
+export function optionalUser(headers: Record<string, string>): MockUser | undefined {
+  const raw = headers.authorization ?? headers.Authorization ?? '';
+  const token = raw.replace('Bearer ', '');
+  return userFromToken(token) ?? bridgeToDemoUser(token);
 }
 
-/* ── 로그인 / 회원가입 ── */
+/** 실서버 JWT(header.payload.signature) 로 로그인한 경우 — 시연용 사용자에 매핑 */
+function bridgeToDemoUser(token: string): MockUser | undefined {
+  if (token.split('.').length !== 3) return undefined;
+  adoptRealNickname();
+  return users[0];
+}
 
-mock('POST', '/auth/login', (ctx) => {
-  const { loginId, password } = ctx.body as { loginId?: string; password?: string };
-  const user = users.find((u) => u.loginId === loginId && u.password === password);
+/* 실서버가 준 닉네임을 마지막으로 읽은 값. 같은 문자열이면 다시 파싱하지 않습니다 */
+let lastSnapshot = '';
 
-  if (!user) throw mockError(401, 'UNAUTHORIZED', '아이디 또는 비밀번호가 올바르지 않습니다.');
+/**
+ * 🔴 시연용 사용자에게 **실제 로그인한 사람의 닉네임을 입혀 줍니다.**
+ *
+ * 화면 여러 곳이 "내 것인가" 를 **닉네임 비교**로 판단합니다(`isOwner`).
+ * 카드 주인은 목업이 정하고('김싸피'), 내 닉네임은 실서버가 주므로 그대로 두면
+ * 영원히 남의 것으로 보입니다 — 내 카드를 눌러도 안 열리고 판매 버튼도 안 뜹니다.
+ * 토큰에는 userId·role 뿐이라 닉네임이 없어서, 로그인 스냅샷에서 가져옵니다.
+ *
+ * 목업 폴더 밖을 import 하지 않으려고 저장소를 직접 읽습니다. 남은 도메인이
+ * 실서버로 바뀌면 이 다리도 함께 사라집니다.
+ */
+function adoptRealNickname(): void {
+  try {
+    const raw = localStorage.getItem('ticket.auth') ?? '';
+    if (raw === lastSnapshot) return;
+    lastSnapshot = raw;
 
-  return { accessToken: issueToken(user.id), expiresIn: 3600, user: toDto(user) };
-});
-
-mock('POST', '/auth/signup', (ctx) => {
-  const body = ctx.body as Record<string, string>;
-
-  if (users.some((u) => u.loginId === body.loginId)) {
-    throw mockError(409, 'DUPLICATE_LOGIN_ID', '이미 사용 중인 아이디입니다.');
+    const nickname = (JSON.parse(raw) as { state?: { userSnapshot?: { nickname?: string } } }).state
+      ?.userSnapshot?.nickname;
+    const demo = users[0];
+    /* 실명(name)은 건드리지 않습니다 — 실서버가 준 값이 아니라 지어낸 값이 됩니다 */
+    if (demo && nickname) users[0] = { ...demo, nickname };
+  } catch {
+    /* 저장소가 없거나 모양이 다르면 시연용 이름을 그대로 씁니다 */
   }
-
-  const user: MockUser = {
-    id: `u-${users.length + 1}`,
-    loginId: body.loginId ?? '',
-    password: body.password ?? '',
-    name: body.name ?? '',
-    phone: body.phone ?? '',
-    email: body.email ?? '',
-    role: 'USER',
-    faceRegistered: false,
-    profileImageUrl: null,
-    tokenBalance: 0,
-  };
-  users.push(user);
-
-  return { accessToken: issueToken(user.id), expiresIn: 3600, user: toDto(user) };
-});
-
-mock('POST', '/auth/logout', (ctx) => {
-  const raw = (ctx.headers.authorization ?? '').replace('Bearer ', '');
-  sessions.delete(raw);
-  return null;
-});
-
-mock('POST', '/auth/refresh', (ctx) => {
-  // 목업에서는 기존 토큰이 유효하면 그대로 재발급해 줍니다.
-  const user = requireUser(ctx.headers);
-  return { accessToken: issueToken(user.id) };
-});
-
-/* ── 내 정보 ── */
-
-mock('GET', '/users/me', (ctx) => toDto(requireUser(ctx.headers)));
-
-mock('PATCH', '/users/me/password', (ctx) => {
-  const user = requireUser(ctx.headers);
-  const { currentPassword, newPassword } = ctx.body as Record<string, string>;
-
-  if (user.password !== currentPassword) {
-    throw mockError(400, 'INVALID_PASSWORD', '현재 비밀번호가 올바르지 않습니다.');
-  }
-  user.password = newPassword ?? user.password;
-  return null;
-});
-
-mock('DELETE', '/users/me', (ctx) => {
-  const user = requireUser(ctx.headers);
-  const index = users.indexOf(user);
-  if (index >= 0) users.splice(index, 1);
-  return null;
-});
-
-/* ── 얼굴 등록 ──
-   실제로는 이미지를 업로드하고 서버가 임베딩을 저장합니다.
-   목업은 "등록됨" 플래그만 세웁니다. */
+}
 
 /* ── 자동입력 방지 (예매 진입 관문) ──
    플로우차트: 공연 상세 → 봇 확인 → 구역 선택

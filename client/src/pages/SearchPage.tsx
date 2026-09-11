@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, SectionTitle } from '@/shared/components/ui';
@@ -26,12 +26,14 @@ const LIMIT = 6;
  */
 export function SearchPage() {
   const navigate = useNavigate();
-  const [keyword, setKeyword] = useState('');
+  /* 데스크톱 상단 검색창이 `?q=` 로 넘겨줍니다. 그 글자로 시작해야 두 번 치지 않습니다 */
+  const [searchParams] = useSearchParams();
+  const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
   const query = useDebouncedValue(keyword.trim());
   const enabled = query.length > 0;
 
   const { data: concerts, isPending: concertsPending } = useConcerts(query || undefined);
-  const { data: pocas, isPending: pocasPending } = useNftMarket(query || undefined);
+  const { data: pocas, isPending: pocasPending } = useNftMarket({ keyword: query || undefined });
 
   /* 키워드가 없을 때는 조회 결과를 쓰지 않습니다 (전체 목록이 내려옵니다) */
   const concertHits = enabled ? (concerts ?? []) : [];
@@ -103,10 +105,10 @@ export function SearchPage() {
               </SectionTitle>
               <ul className="space-y-2">
                 {concertHits.slice(0, LIMIT).map((concert) => (
-                  <li key={concert.id}>
+                  <li key={concert.concertId}>
                     <ConcertCard
                       concert={concert}
-                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(concert.id))}
+                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
                     />
                   </li>
                 ))}
@@ -132,9 +134,16 @@ export function SearchPage() {
                 포토카드
               </SectionTitle>
               <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
-                {pocaHits.slice(0, LIMIT).map((nft) => (
-                  <li key={nft.id}>
-                    <NftCard nft={nft} onClick={() => navigate(ROUTES.NFT_DETAIL(nft.id))} />
+                {pocaHits.slice(0, LIMIT).map((card) => (
+                  <li key={card.photocardId}>
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle}
+                      price={card.price}
+                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                    />
                   </li>
                 ))}
               </ul>

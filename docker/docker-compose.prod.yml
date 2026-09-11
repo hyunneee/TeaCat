@@ -1,0 +1,223 @@
+# 운영 환경 앱 스택. 앞단 nginx 는 docker-compose.proxy.yml 에 있다.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# 개발(docker-compose.dev.yml)과 구조가 같다. 다른 점만 정리하면
+#   - 컨테이너 이름 접두어가 prod-  (nginx 의 proxy_pass 가 prod-server 를 찾는다)
+#   - 볼륨 이름이 달라 개발과 데이터가 섞이지 않는다 (compose project name 이 teacat-prod)
+#   - 도메인·쿠키·싸피 콜백 주소가 teacat.site 기준이다
+#
+# 🔴🔴 스택 안에서 서로를 부를 때 **서비스 이름을 쓰지 말 것** (postgres / redis / minio).
+#
+#    compose 는 서비스마다 "서비스 이름" 네트워크 별칭을 붙인다. dev 와 prod 가 같은
+#    teacat-net 위에 있으므로, 두 스택이 뜨면 `postgres` 별칭을 **둘 다** 등록한다.
+#    그러면 도커 DNS 가 요청마다 둘 사이를 라운드로빈해서, prod-server 가 절반쯤은
+#    dev-postgres 로 붙는다. (비밀번호가 다르면 간헐적 인증 실패, 같으면 조용한 데이터 혼입)
+#
+#    dev 만 떠 있는 동안은 별칭이 유일해서 멀쩡히 동작한다 — 운영을 올리는 순간
+#    양쪽이 같이 깨진다. 그래서 컨테이너 이름(prod-postgres 등)으로만 부른다.
+#    nginx 의 proxy_pass 와 prometheus 타겟이 이미 같은 이유로 컨테이너 이름을 쓴다.
+#
+#    데이터 자체는 원래부터 갈려 있다 — 볼륨이 compose 프로젝트 이름으로 접두어가 붙어
+#    teacat-dev_postgres_data / teacat-prod_postgres_data 로 따로 만들어진다.
+
+name: teacat-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: prod-postgres
+    restart: unless-stopped
+    # 🔴 앱은 KST(LocalDateTime)를 timestamp 컬럼에 그대로 넣고, SQL 은 DB 의 now() 와
+    #    비교한다. DB 가 UTC 면 그 비교가 9시간 밀려 좌석 선점 만료 같은 것이 동작하지 않는다.
+    #    command 로 GUC 를 직접 지정한다 — TZ 환경변수는 이미 초기화된 볼륨에는 반영되지 않는다.
+    command: ['postgres', '-c', 'timezone=Asia/Seoul']
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teacat}
+      POSTGRES_USER: ${POSTGRES_USER:-teacat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env.prod 에 넣으세요}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-teacat} -d ${POSTGRES_DB:-teacat}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+    # 포트를 열지 않는다. DB 접속이 필요하면 SSH 터널을 쓴다.
+
+  redis:
+    image: redis:8-alpine
+    container_name: prod-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?.env.prod 에 넣으세요}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [teacat-net]
+
+  minio:
+    image: minio/minio
+    container_name: prod-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9000/minio/health/live || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+
+  blockchain:
+    image: teacat-blockchain:prod
+    container_name: prod-blockchain
+    restart: unless-stopped
+    environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
+      NODE_ENV: production
+      CHAIN_ID: ${CHAIN_ID:-31221}
+      RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
+      # 🔴 시크릿. .env.prod 에만 두고 절대 커밋하지 않는다.
+      #    개발과 **다른 값**을 쓴다 — 마스터 니모닉이 같으면 두 환경이 같은 지갑을 공유한다.
+      MASTER_MNEMONIC: ${MASTER_MNEMONIC:?.env.prod 에 넣으세요}
+      OPERATOR_PRIVATE_KEY: ${OPERATOR_PRIVATE_KEY:?0x + 64자리 hex}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+
+      # 🔴 아래 셋은 없어도 컨테이너가 뜬다. 대신 해당 기능만 조용히 죽는다.
+      #    필수값이 아니라 더 위험하다 — 로그에 에러가 안 나고 /health 만 경고한다.
+      #
+      #    DATABASE_URL                  없으면 확정 기록이 안 돼 티켓이 영원히 PENDING
+      #    CONTRACT_OPERATOR_PRIVATE_KEY 없으면 도안 등록·정지·추첨 서명 불가
+      #    DRAW_SEED_SECRET              없으면 추첨 경로가 안 돈다
+      #
+      # DATABASE_URL 은 **우리 DB 가 아니라 Spring 이 쓰는 그 postgres** 다.
+      # 확정 결과 컬럼 몇 개만 갱신한다 (blockchain/DESIGN.md 1장).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB:-teacat}
+
+      # prod 는 env_file 을 쓰지 않으므로 개인키·시드도 여기서 넘긴다.
+      CONTRACT_OPERATOR_PRIVATE_KEY: ${CONTRACT_OPERATOR_PRIVATE_KEY:-}
+      DRAW_SEED_SECRET: ${DRAW_SEED_SECRET:-}
+    mem_limit: 512m
+    networks: [teacat-net]
+    # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
+
+  server:
+    image: teacat-server:prod
+    container_name: prod-server
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      blockchain: { condition: service_healthy }
+    environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
+      # application.yaml 의 localhost 기본값을 컨테이너 주소로 덮어쓴다.
+      # 스프링이 SCREAMING_SNAKE_CASE 환경변수를 yaml 키에 매핑해준다.
+      # 에러 리포팅 (Sentry). DSN 이 비어 있으면 서버가 그냥 안 켠다.
+      # 🔴 프론트 DSN 과 다른 값이다 — Sentry 프로젝트가 따로다(플랫폼: Spring Boot).
+      #    값은 .env.prod 의 SENTRY_DSN 에 둔다. 저장소에 넣지 마라.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: prod
+      # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@prod}
+
+      SPRING_DATASOURCE_URL: jdbc:postgresql://prod-postgres:5432/${POSTGRES_DB:-teacat}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: prod-redis
+      SPRING_DATA_REDIS_PORT: '6379'
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # 🔴 개발과 다른 값을 쓴다. 같으면 개발에서 발급한 토큰이 운영에서도 통한다.
+      JWT_SECRET: ${JWT_SECRET:?32바이트 이상}
+
+      # MINIO_ENDPOINT 는 컨테이너 내부 주소라 브라우저가 열 수 없다. 그래서 presigned URL 은
+      # MINIO_PUBLIC_BASE_URL 로 바꿔 내려주고, nginx 의 /storage/ 가 MinIO 로 넘긴다
+      # (docker/nginx/conf.d/prod.conf). 서명이 내부 Host 로 계산되므로 nginx 가 Host 를 되돌려 보낸다.
+      MINIO_ENDPOINT: http://prod-minio:9000
+      MINIO_PUBLIC_BASE_URL: https://teacat.site/storage
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # 버킷은 서버가 없으면 만든다 (FileStorageService). 개발과 이름이 같아도
+      # MinIO 인스턴스가 따로라 섞이지 않는다.
+      MINIO_BUCKET: ${MINIO_BUCKET:-teacat}
+
+      BLOCKCHAIN_API_URL: http://prod-blockchain:4000
+      # blockchain 의 INTERNAL_API_KEY 와 같은 값이어야 한다. 틀리면 가입이 401 로 실패한다.
+      BLOCKCHAIN_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      BLOCKCHAIN_CHAIN_ID: ${CHAIN_ID:-31221}
+
+      # 포토카드 도안의 그림과 메타데이터 JSON 을 IPFS 에 핀한다.
+      # 🔴 빠지면 도안 생성만 IPFS_001 로 막히고 나머지는 정상 동작한다 — 배포는 성공한 것처럼
+      #    보이고, 어드민이 도안을 만들려 할 때 처음 드러난다. 그래서 :? 로 기동을 막는다.
+      # 🔴 CID 는 영원히 남지만 데이터는 누군가 핀하고 있어야 남는다. 이 계정이 만료되면
+      #    이미 발행된 카드의 그림이 지갑에서 깨진다 (blockchain/PHOTOCARD_PLAN.md 3장).
+      PINATA_JWT: ${PINATA_JWT:?Pinata 대시보드 API Keys 에서 발급}
+      # 공용 게이트웨이(gateway.pinata.cloud)는 25KB 이미지에 25초 타임아웃이 실측됐다.
+      # 대시보드 Gateways 의 전용 주소(https://<이름>.mypinata.cloud)를 쓴다.
+      # 체인에 올라가는 값은 ipfs://<cid> 라, 이 주소를 바꿔도 온체인 값은 그대로다.
+      PINATA_GATEWAY_URL: ${PINATA_GATEWAY_URL:?전용 게이트웨이 주소}
+
+      # HTTPS 이고 프론트와 같은 도메인이다. Secure 를 켜고 SameSite 는 Lax 로 둔다
+      REFRESH_COOKIE_SECURE: 'true'
+      REFRESH_COOKIE_SAME_SITE: Lax
+      REFRESH_COOKIE_PATH: /api/auth
+
+      FRONTEND_BASE_URL: https://teacat.site
+      SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}
+      # 🔴 SSAFY 개발자센터에 등록한 주소와 글자 하나까지 같아야 한다
+      SSAFY_REDIRECT_URI: https://teacat.site/api/auth/oauth/ssafy/callback
+
+      # 결제 (토스페이먼츠). 이 키 하나로 승인·취소가 다 된다.
+      # 🔴 :? 로 기동을 막는다. 비어 있어도 서버는 멀쩡히 뜨고 결제만 PAYMENT_001 로
+      #    거절되기 때문이다 — 운영에서 그건 "배포는 초록인데 아무도 결제를 못 하는" 상태다.
+      #    개발과 다른 키를 쓴다 (개발은 test_, 운영은 live_ 로 시작한다).
+      TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:?토스 개발자센터의 시크릿 키}
+
+      # 어드민 통계 차트의 배포 마커. 젠킨스가 POST /internal/deployments 에 이 키로 붙는다
+      # (Jenkinsfile 의 recordDeployment, 자격증명 ID: teacat-analytics-key).
+      # 🔴 젠킨스에 등록한 값과 같아야 한다. 다르면 마커만 401 로 빠지고 배포는 그대로 성공한다.
+      #    비워 두면 그 엔드포인트가 전부 401 이다 — "비었으면 통과" 로 만들지 말 것.
+      ANALYTICS_INTERNAL_API_KEY: ${ANALYTICS_INTERNAL_API_KEY:-}
+
+      # 관리자가 0명이면 대시보드에 들어갈 방법이 없어서, 서버가 뜰 때 하나 만든다 (멱등).
+      # 🔴 기본 비밀번호(6789)가 application.yaml 에 적혀 있다. 운영에 그대로 나가면
+      #    저장소를 볼 수 있는 누구나 어드민이 된다. :? 로 막고 .env.prod 에서 받는다.
+      #    이미 어드민을 만들어 뒀다면 ADMIN_SEED_ENABLED=false 로 꺼도 된다
+      #    (그래도 compose 는 값을 보간하므로 비밀번호 줄은 채워 둬야 한다).
+      ADMIN_SEED_ENABLED: ${ADMIN_SEED_ENABLED:-true}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-admin@teacat.site}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:?운영 어드민 비밀번호. 기본값을 쓰지 말 것}
+
+      # API 문서는 운영에 내보내지 않는다. nginx 에서도 404 로 막지만, 앱에서도 끈다
+      SPRINGDOC_API_DOCS_ENABLED: 'false'
+      SPRINGDOC_SWAGGER_UI_ENABLED: 'false'
+    # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
+    #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
+    #    개발 스택의 JVM 과 합쳐 호스트를 넘지 않게 맞춘다.
+    mem_limit: 2g
+    networks: [teacat-net]
+    # 포트를 열지 않는다. nginx 가 /api 를 프록시한다.
+
+networks:
+  teacat-net:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

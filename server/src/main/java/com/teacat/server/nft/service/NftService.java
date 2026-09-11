@@ -1,0 +1,579 @@
+package com.teacat.server.nft.service;
+
+import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.nft.dto.request.NftDesignAllocationRequest;
+import com.teacat.server.nft.dto.request.NftListingCreateRequest;
+import com.teacat.server.nft.dto.request.NftMarketSort;
+import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
+import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
+import com.teacat.server.nft.dto.response.NftCursorPageResponse;
+import com.teacat.server.nft.dto.response.NftListingResponse;
+import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPurchaseResponse;
+import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.entity.NftAuctionStatus;
+import com.teacat.server.nft.entity.NftListingStatus;
+import com.teacat.server.nft.entity.NftPhotocard;
+import com.teacat.server.nft.entity.NftPhotocardDesign;
+import com.teacat.server.nft.entity.NftPhotocardListing;
+import com.teacat.server.nft.entity.NftPhotocardTrade;
+import com.teacat.server.nft.exception.NftErrorCode;
+import com.teacat.server.nft.repository.NftAuctionQueryRepository;
+import com.teacat.server.nft.repository.NftAuctionRepository;
+import com.teacat.server.nft.repository.NftMarketQueryRepository;
+import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
+import com.teacat.server.nft.repository.NftPhotocardListingRepository;
+import com.teacat.server.nft.repository.NftPhotocardRepository;
+import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
+import com.teacat.server.user.entity.User;
+import com.teacat.server.user.exception.UserErrorCode;
+import com.teacat.server.user.repository.UserRepository;
+import com.teacat.server.wallet.client.BlockchainProperties;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class NftService {
+
+    private static final String MARKET_SCOPE_PREFIX = "market:";
+    private static final String PURCHASE_SCOPE = "purchases";
+    private static final String SALE_SCOPE = "sales";
+    private static final String OWNED_SCOPE = "owned";
+    private static final String CARD_TRADE_SCOPE = "card-trades";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    private final NftPhotocardRepository photocardRepository;
+    private final NftAuctionRepository auctionRepository;
+    private final NftAuctionQueryRepository auctionQueryRepository;
+    private final NftPhotocardDesignRepository designRepository;
+    private final NftPhotocardListingRepository listingRepository;
+    private final NftPhotocardTradeRepository tradeRepository;
+    private final NftMarketQueryRepository queryRepository;
+    private final UserRepository userRepository;
+    private final NftCursorCodec cursorCodec;
+    private final BlockchainProperties blockchainProperties;
+
+    public NftCursorPageResponse<NftMarketPhotocardResponse> getMarketPhotocards(
+            Long performanceId, String keyword, NftMarketSort sort, String cursor, Integer requestedSize) {
+        int size = validateSize(requestedSize);
+        NftMarketSort effectiveSort = sort == null ? NftMarketSort.RECENT : sort;
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, MARKET_SCOPE_PREFIX + effectiveSort.name());
+        validateMarketCursor(decoded, effectiveSort);
+        String normalizedKeyword = normalizeKeyword(keyword);
+
+        List<NftMarketQueryRepository.MarketRow> rows = queryRepository.findMarketPhotocards(
+                performanceId, normalizedKeyword, effectiveSort, decoded.value(), decoded.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftMarketQueryRepository.MarketRow> pageRows = takePage(rows, size);
+        List<NftMarketPhotocardResponse> items = pageRows.stream()
+                .map(row -> new NftMarketPhotocardResponse(
+                        row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
+                        row.performanceTitle(), row.price(), row.sellerNickname()))
+                .toList();
+        String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
+        return new NftCursorPageResponse<>(items, nextCursor, hasNext);
+    }
+
+    public NftPhotocardDetailResponse getPhotocard(Long photocardId) {
+        NftMarketQueryRepository.DetailRow row = queryRepository.findPhotocardDetail(photocardId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
+        NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
+                : new NftPhotocardDetailResponse.Listing(
+                        row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+        // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
+        NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
+                .map(summary -> new NftPhotocardDetailResponse.Auction(
+                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.bidCount(), summary.endsAt()))
+                .orElse(null);
+        // 뽑기 카드는 티켓·좌석이 없다
+        NftPhotocardDetailResponse.Origin origin = row.hasTicket()
+                ? new NftPhotocardDetailResponse.Origin(
+                        row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber())
+                : null;
+        return new NftPhotocardDetailResponse(
+                row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
+                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
+                row.groupName(), row.grade(), row.averagePrice());
+    }
+
+    @Transactional
+    public NftListingResponse registerListing(Long userId,
+                                              Long photocardId,
+                                              NftListingCreateRequest request) {
+        NftPhotocard photocard = getPhotocardForUpdate(photocardId);
+        if (!photocard.isOwnedBy(userId)) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
+        }
+        if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
+        }
+        // 경매 등록도 포카 행 락을 먼저 잡으므로, 여기서 본 결과는 커밋까지 유효하다
+        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+            throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
+        }
+
+        NftPhotocardListing listing = listingRepository.save(
+                NftPhotocardListing.create(
+                        photocard, photocard.getOwner(), request.price(),
+                        request.description() == null ? "" : request.description().trim()));
+        return NftListingResponse.from(listing);
+    }
+
+    @Transactional
+    public void cancelListing(Long userId, Long photocardId) {
+        getPhotocardForUpdate(photocardId);
+        NftPhotocardListing listing = getActiveListing(photocardId);
+        if (!listing.isOwnedBy(userId)) {
+            throw new BusinessException(NftErrorCode.LISTING_OWNER_MISMATCH);
+        }
+        listing.cancel(LocalDateTime.now());
+    }
+
+    @Transactional
+    public NftPurchaseResponse purchase(Long buyerId, Long photocardId, String idempotencyKeyHeader) {
+        UUID idempotencyKey = parseIdempotencyKey(idempotencyKeyHeader);
+
+        // 같은 구매자의 중복 키 요청과, 추후 CAT 계정 차감을 직렬화하기 위한 임시 잠금이다.
+        queryRepository.lockPurchaseBuyer(buyerId);
+        NftPhotocardTrade existingTrade = tradeRepository
+                .findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey)
+                .orElse(null);
+        if (existingTrade != null) {
+            validateIdempotentTarget(existingTrade, photocardId);
+            return NftPurchaseResponse.from(existingTrade);
+        }
+
+        NftPhotocard photocard = getPhotocardForUpdate(photocardId);
+        // 다른 요청이 포토카드 잠금을 기다리는 동안 거래를 끝냈을 수 있으므로 잠금 뒤 다시 확인한다.
+        existingTrade = tradeRepository.findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey).orElse(null);
+        if (existingTrade != null) {
+            validateIdempotentTarget(existingTrade, photocardId);
+            return NftPurchaseResponse.from(existingTrade);
+        }
+
+        NftPhotocardListing listing = listingRepository
+                .findByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(
+                        listingRepository.existsByPhotocardId(photocardId)
+                                ? NftErrorCode.LISTING_ALREADY_CLOSED
+                                : NftErrorCode.LISTING_NOT_FOUND));
+        if (listing.isOwnedBy(buyerId)) {
+            throw new BusinessException(NftErrorCode.SELF_PURCHASE_NOT_ALLOWED);
+        }
+
+        User buyer = userRepository.findById(buyerId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        // TODO(cat-money): CAT 도메인 확정 후 이 위치에서 구매자 차감과 판매자 지급을 수행한다.
+        // 이 연동 전에는 무료 소유권 이전이 되므로 구매 API를 운영 환경에 노출하면 안 된다.
+        LocalDateTime now = LocalDateTime.now();
+        listing.sold(now);
+        photocard.transferTo(buyer);
+        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
+                NftPhotocardTrade.complete(listing, buyer, idempotencyKey));
+        return NftPurchaseResponse.from(trade);
+    }
+
+    public NftCursorPageResponse<NftPurchaseHistoryResponse> getPurchaseHistory(
+            Long userId, String cursor, Integer requestedSize) {
+        int size = validateSize(requestedSize);
+        TimeCursor timeCursor = decodeTimeCursor(cursor, PURCHASE_SCOPE);
+        List<NftMarketQueryRepository.UserTradeRow> rows = queryRepository.findPurchaseHistory(
+                userId, timeCursor.at(), timeCursor.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftMarketQueryRepository.UserTradeRow> pageRows = takePage(rows, size);
+        List<NftPurchaseHistoryResponse> items = pageRows.stream()
+                .map(row -> new NftPurchaseHistoryResponse(
+                        row.tradeId(), row.photocardId(), row.designName(), row.imageUrl(),
+                        row.counterpartyNickname(), row.price(), row.tradedAt()))
+                .toList();
+        return new NftCursorPageResponse<>(items,
+                nextTimeCursor(hasNext, PURCHASE_SCOPE, pageRows), hasNext);
+    }
+
+    public NftCursorPageResponse<NftSaleHistoryResponse> getSaleHistory(
+            Long userId, String cursor, Integer requestedSize) {
+        int size = validateSize(requestedSize);
+        TimeCursor timeCursor = decodeTimeCursor(cursor, SALE_SCOPE);
+        List<NftMarketQueryRepository.UserTradeRow> rows = queryRepository.findSaleHistory(
+                userId, timeCursor.at(), timeCursor.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftMarketQueryRepository.UserTradeRow> pageRows = takePage(rows, size);
+        List<NftSaleHistoryResponse> items = pageRows.stream()
+                .map(row -> new NftSaleHistoryResponse(
+                        row.tradeId(), row.photocardId(), row.designName(), row.imageUrl(),
+                        row.counterpartyNickname(), row.price(), row.tradedAt()))
+                .toList();
+        return new NftCursorPageResponse<>(items,
+                nextTimeCursor(hasNext, SALE_SCOPE, pageRows), hasNext);
+    }
+
+    public NftCursorPageResponse<MyNftPhotocardResponse> getMyPhotocards(
+            Long userId, Boolean listed, String cursor, Integer requestedSize) {
+        int size = validateSize(requestedSize);
+        TimeCursor timeCursor = decodeTimeCursor(cursor, OWNED_SCOPE);
+        List<NftMarketQueryRepository.OwnedRow> rows = queryRepository.findOwnedPhotocards(
+                userId, listed, timeCursor.at(), timeCursor.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftMarketQueryRepository.OwnedRow> pageRows = takePage(rows, size);
+        List<MyNftPhotocardResponse> items = pageRows.stream()
+                .map(row -> new MyNftPhotocardResponse(
+                        row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
+                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
+                .toList();
+        String nextCursor = hasNext
+                ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),
+                pageRows.getLast().photocardId())
+                : null;
+        return new NftCursorPageResponse<>(items, nextCursor, hasNext);
+    }
+
+    public NftCursorPageResponse<NftPhotocardTradeHistoryResponse> getPhotocardTrades(
+            Long photocardId, String cursor, Integer requestedSize) {
+        getPhotocard(photocardId);
+        int size = validateSize(requestedSize);
+        TimeCursor timeCursor = decodeTimeCursor(cursor, CARD_TRADE_SCOPE);
+        List<NftMarketQueryRepository.CardTradeRow> rows = queryRepository.findPhotocardTrades(
+                photocardId, timeCursor.at(), timeCursor.id(), size + 1);
+        boolean hasNext = rows.size() > size;
+        List<NftMarketQueryRepository.CardTradeRow> pageRows = takePage(rows, size);
+        List<NftPhotocardTradeHistoryResponse> items = pageRows.stream()
+                .map(row -> new NftPhotocardTradeHistoryResponse(
+                        row.tradeId(), row.price(), row.sellerNickname(), row.buyerNickname(), row.tradedAt()))
+                .toList();
+        String nextCursor = hasNext
+                ? cursorCodec.encode(CARD_TRADE_SCOPE, pageRows.getLast().tradedAt().toString(),
+                pageRows.getLast().tradeId())
+                : null;
+        return new NftCursorPageResponse<>(items, nextCursor, hasNext);
+    }
+
+    @Transactional
+    public NftPhotocardIssueResponse issuePhotocards(Long performanceId, NftPhotocardIssueRequest request) {
+        if (!queryRepository.lockPerformance(performanceId)) {
+            throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
+        }
+        if (photocardRepository.existsByDesignPerformanceId(performanceId)) {
+            throw new BusinessException(NftErrorCode.PHOTOCARDS_ALREADY_ISSUED);
+        }
+
+        List<NftDesignAllocationRequest> allocations = request.designAllocations();
+        List<Long> designIds = allocations.stream().map(NftDesignAllocationRequest::designId).toList();
+        if (new HashSet<>(designIds).size() != designIds.size()) {
+            throw new BusinessException(NftErrorCode.DUPLICATE_DESIGN_ALLOCATION);
+        }
+
+        List<NftPhotocardDesign> designs = designRepository.findAllByIdForUpdate(designIds);
+        if (designs.size() != designIds.size()) {
+            throw new BusinessException(NftErrorCode.DESIGN_NOT_FOUND);
+        }
+        Map<Long, NftPhotocardDesign> designById = new LinkedHashMap<>();
+        for (NftPhotocardDesign design : designs) {
+            if (!design.getPerformanceId().equals(performanceId)) {
+                throw new BusinessException(NftErrorCode.DESIGN_PERFORMANCE_MISMATCH);
+            }
+            designById.put(design.getId(), design);
+        }
+
+        requireDesignsRegistered(designById.values());
+
+        List<NftMarketQueryRepository.TicketRecipientRow> recipients =
+                queryRepository.findConfirmedTicketRecipients(performanceId);
+        int allocationTotal = allocations.stream().mapToInt(NftDesignAllocationRequest::quantity).sum();
+        if (allocationTotal != recipients.size()) {
+            throw new BusinessException(NftErrorCode.ALLOCATION_QUANTITY_MISMATCH);
+        }
+
+        Map<Long, User> usersById = loadRecipients(recipients);
+        Map<Long, Long> walletIdByUser = loadRecipientWallets(recipients);
+
+        List<Long> designPool = new ArrayList<>(allocationTotal);
+        for (NftDesignAllocationRequest allocation : allocations) {
+            NftPhotocardDesign design = designById.get(allocation.designId());
+            design.reserve(allocation.quantity());
+            for (int i = 0; i < allocation.quantity(); i++) {
+                designPool.add(design.getId());
+            }
+        }
+        Collections.shuffle(designPool, SECURE_RANDOM);
+
+        List<NftMarketQueryRepository.IssueRow> issueRows = new ArrayList<>(recipients.size());
+        for (int i = 0; i < recipients.size(); i++) {
+            NftMarketQueryRepository.TicketRecipientRow recipient = recipients.get(i);
+            User owner = usersById.get(recipient.userId());
+            issueRows.add(new NftMarketQueryRepository.IssueRow(
+                    designPool.get(i), recipient.ticketId(), owner.getId(),
+                    walletIdByUser.get(owner.getId())));
+        }
+        queryRepository.batchIssuePhotocards(issueRows);
+        return new NftPhotocardIssueResponse(issueRows.size(), 0);
+    }
+
+    /**
+     * 회차(performance_detail) 하나에 자동 발급한다. <b>스케줄러 전용</b>이다 —
+     * 사람이 넣어 주는 도안별 수량이 없어, 수동 발급({@link #issuePhotocards})과 규칙이 다르다.
+     *
+     * <ul>
+     *   <li><b>회차 단위 중복 방지</b> — 이 회차 티켓으로 카드가 하나라도 만들어졌으면 조용히 끝낸다
+     *       (예외 아님). 스케줄러가 매시 다시 도는 것이 정상 경로다.
+     *   <li><b>수량 중심 배정</b> — 도안 재고만큼만 발급하고, 재고가 모자라면 일부 수령자는 카드가 없다
+     *       ({@link NftPhotocardScheduleAllocator}).
+     *   <li><b>거를 것은 거르고 진행</b> — 지갑·회원 정보가 없는 수령자, 온체인 미등록 도안은 대상에서
+     *       빼고 나머지로 발급한다. 수동 발급의 "한 명이라도 없으면 전체 롤백" 과 반대다 —
+     *       스케줄러는 사람이 지켜보지 않아, 한 건이 전체를 멈추게 두면 안 된다.
+     * </ul>
+     *
+     * <p>체인 전송은 여기서 하지 않는다. 카드 행만 PENDING 으로 만들고, 전송은
+     * {@code NftPhotocardMinter.mintPendingForSchedule} 이 트랜잭션 밖에서 이어 한다.
+     */
+    @Transactional
+    public NftPhotocardIssueResponse issuePhotocardsForSchedule(Long scheduleId) {
+        if (!queryRepository.lockSchedule(scheduleId)) {
+            throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
+        }
+        if (queryRepository.existsPhotocardForSchedule(scheduleId)) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+        Long performanceId = queryRepository.findPerformanceIdBySchedule(scheduleId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND));
+
+        List<NftPhotocardDesign> allDesigns = designRepository.findAllByPerformanceIdOrderByIdAsc(performanceId);
+        if (allDesigns.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 공연에 도안이 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+        // 배정하며 issued_supply 를 누적 갱신하므로 잠그고 읽는다. 잠근 뒤 상태를 다시 본다
+        List<NftPhotocardDesign> designs = designRepository.findAllByIdForUpdate(
+                        allDesigns.stream().map(NftPhotocardDesign::getId).toList()).stream()
+                .filter(NftPhotocardDesign::isRegistered)
+                .toList();
+        if (designs.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 온체인 등록된 도안이 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        List<NftMarketQueryRepository.TicketRecipientRow> recipients =
+                queryRepository.findConfirmedTicketRecipientsForSchedule(scheduleId);
+        if (recipients.isEmpty()) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        List<Long> userIds = recipients.stream()
+                .map(NftMarketQueryRepository.TicketRecipientRow::userId).distinct().toList();
+        Map<Long, User> usersById = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> usersById.put(user.getId(), user));
+        Map<Long, Long> walletIdByUser = queryRepository
+                .findActiveWallets(userIds, blockchainProperties.chainId()).stream()
+                .collect(Collectors.toMap(
+                        NftMarketQueryRepository.UserWalletRow::userId,
+                        NftMarketQueryRepository.UserWalletRow::walletId));
+
+        List<NftMarketQueryRepository.TicketRecipientRow> eligible = recipients.stream()
+                .filter(row -> usersById.containsKey(row.userId()) && walletIdByUser.containsKey(row.userId()))
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (eligible.size() < recipients.size()) {
+            log.warn("회차 자동 발급 — 지갑/회원 정보가 없는 수령자 {}명 제외 scheduleId={}",
+                    recipients.size() - eligible.size(), scheduleId);
+        }
+        if (eligible.isEmpty()) {
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        int[] remaining = designs.stream()
+                .mapToInt(design -> design.getTotalSupply() - design.getIssuedSupply())
+                .toArray();
+        int[] quantities = NftPhotocardScheduleAllocator.allocate(remaining, eligible.size());
+
+        List<Long> designPool = new ArrayList<>();
+        for (int i = 0; i < designs.size(); i++) {
+            if (quantities[i] <= 0) {
+                continue;
+            }
+            NftPhotocardDesign design = designs.get(i);
+            design.reserve(quantities[i]);
+            for (int n = 0; n < quantities[i]; n++) {
+                designPool.add(design.getId());
+            }
+        }
+        if (designPool.isEmpty()) {
+            log.info("회차 자동 발급 건너뜀 — 도안 재고가 없습니다 scheduleId={} performanceId={}",
+                    scheduleId, performanceId);
+            return new NftPhotocardIssueResponse(0, 0);
+        }
+
+        Collections.shuffle(designPool, SECURE_RANDOM);
+        Collections.shuffle(eligible, SECURE_RANDOM);
+
+        List<NftMarketQueryRepository.IssueRow> issueRows = new ArrayList<>(designPool.size());
+        for (int i = 0; i < designPool.size(); i++) {
+            NftMarketQueryRepository.TicketRecipientRow recipient = eligible.get(i);
+            issueRows.add(new NftMarketQueryRepository.IssueRow(
+                    designPool.get(i), recipient.ticketId(), recipient.userId(),
+                    walletIdByUser.get(recipient.userId())));
+        }
+        queryRepository.batchIssuePhotocards(issueRows);
+        log.info("회차 자동 발급 scheduleId={} 확정 티켓 {}명 중 {}장 발급",
+                scheduleId, recipients.size(), issueRows.size());
+        return new NftPhotocardIssueResponse(issueRows.size(), 0);
+    }
+
+    /**
+     * 배정된 도안이 전부 온체인에 등록됐는지.
+     *
+     * <p><b>미등록 도안이 하나라도 섞이면 발행 배치 전체가 revert 된다.</b> 200장을 보내고
+     * 10초 뒤에 통째로 실패한 걸 알게 되는 것보다, 여기서 막는 편이 낫다.
+     * (blockchain/PHOTOCARD_PLAN.md 2장)
+     */
+    private void requireDesignsRegistered(Collection<NftPhotocardDesign> designs) {
+        for (NftPhotocardDesign design : designs) {
+            if (!design.isRegistered()) {
+                throw new BusinessException(NftErrorCode.DESIGN_NOT_REGISTERED_ON_CHAIN);
+            }
+        }
+    }
+
+    /**
+     * 받는 사람들의 지갑. <b>한 명이라도 없으면 발급 전체를 거절한다.</b>
+     *
+     * <p>지갑이 없으면 보낼 주소가 없어 그 카드만 체인에 못 올라간다. 그대로 두면 카드가
+     * 절반만 나간 공연이 생기고, 수습 비용이 발급을 다시 하는 것보다 훨씬 크다.
+     * 탈퇴 회원이 섞였을 때 전체를 롤백하는 것과 같은 태도다.
+     */
+    private Map<Long, Long> loadRecipientWallets(
+            List<NftMarketQueryRepository.TicketRecipientRow> recipients) {
+        List<Long> userIds = recipients.stream()
+                .map(NftMarketQueryRepository.TicketRecipientRow::userId)
+                .distinct()
+                .toList();
+
+        Map<Long, Long> walletIdByUser = queryRepository
+                .findActiveWallets(userIds, blockchainProperties.chainId()).stream()
+                .collect(Collectors.toMap(
+                        NftMarketQueryRepository.UserWalletRow::userId,
+                        NftMarketQueryRepository.UserWalletRow::walletId));
+
+        if (walletIdByUser.size() != userIds.size()) {
+            throw new BusinessException(NftErrorCode.RECIPIENT_WALLET_NOT_FOUND);
+        }
+
+        return walletIdByUser;
+    }
+
+    private NftPhotocard getPhotocardForUpdate(Long photocardId) {
+        return photocardRepository.findByIdForUpdate(photocardId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
+    }
+
+    private NftPhotocardListing getActiveListing(Long photocardId) {
+        return listingRepository.findByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.LISTING_NOT_FOUND));
+    }
+
+    private Map<Long, User> loadRecipients(List<NftMarketQueryRepository.TicketRecipientRow> recipients) {
+        List<Long> userIds = recipients.stream()
+                .map(NftMarketQueryRepository.TicketRecipientRow::userId)
+                .distinct()
+                .toList();
+        Map<Long, User> usersById = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> usersById.put(user.getId(), user));
+        if (usersById.size() != userIds.size()) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_OWNER_NOT_FOUND);
+        }
+        return usersById;
+    }
+
+    private UUID parseIdempotencyKey(String header) {
+        return NftRequestSupport.parseIdempotencyKey(header);
+    }
+
+    private void validateIdempotentTarget(NftPhotocardTrade trade, Long photocardId) {
+        if (!trade.getPhotocard().getId().equals(photocardId)) {
+            throw new BusinessException(NftErrorCode.IDEMPOTENCY_KEY_REUSED);
+        }
+    }
+
+    private int validateSize(Integer requestedSize) {
+        return NftRequestSupport.validateSize(requestedSize);
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.trim();
+    }
+
+    private String marketCursor(NftMarketSort sort, NftMarketQueryRepository.MarketRow row) {
+        String value = sort == NftMarketSort.RECENT ? row.listedAt().toString() : row.price().toString();
+        return cursorCodec.encode(MARKET_SCOPE_PREFIX + sort.name(), value, row.listingId());
+    }
+
+    private void validateMarketCursor(NftCursorCodec.Cursor cursor, NftMarketSort sort) {
+        if (!cursor.present()) {
+            return;
+        }
+        try {
+            if (sort == NftMarketSort.RECENT) {
+                LocalDateTime.parse(cursor.value());
+            } else {
+                Long.parseLong(cursor.value());
+            }
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_CURSOR);
+        }
+    }
+
+    private TimeCursor decodeTimeCursor(String cursor, String scope) {
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, scope);
+        if (!decoded.present()) {
+            return new TimeCursor(null, null);
+        }
+        try {
+            return new TimeCursor(LocalDateTime.parse(decoded.value()), decoded.id());
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_CURSOR);
+        }
+    }
+
+    private String nextTimeCursor(boolean hasNext,
+                                  String scope,
+                                  List<NftMarketQueryRepository.UserTradeRow> rows) {
+        if (!hasNext) {
+            return null;
+        }
+        NftMarketQueryRepository.UserTradeRow last = rows.getLast();
+        return cursorCodec.encode(scope, last.tradedAt().toString(), last.tradeId());
+    }
+
+    private <T> List<T> takePage(List<T> rows, int size) {
+        return rows.size() > size ? List.copyOf(rows.subList(0, size)) : List.copyOf(rows);
+    }
+
+    private record TimeCursor(LocalDateTime at, Long id) {
+    }
+}

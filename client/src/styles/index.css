@@ -80,6 +80,22 @@
   --color-seat-sold: oklch(0.84 0 0); /* 회색 — 판매 완료 */
   --color-seat-blocked: oklch(0.91 0 0); /* 옅은 회색 — 추첨 대기 */
 
+  /* ── 포카 개봉 (강조·발광 규칙의 예외 — CLAUDE.md 0번 승인) ──
+     🔴 **개봉 화면(`/nft/draw`) 밖에서는 쓰지 마세요.**
+     이 앱은 발광(glow)을 쓰지 않는 게 원칙입니다(4-6). 뽑기는 등급을 빛으로
+     구분해야 하는 유일한 화면이라 여기만 예외를 둡니다.
+
+     SPECIAL(코치·15기) 금색 / COMMON(개발자) 보라 두 벌입니다.
+     **색을 바꾸려면 이 여덟 줄만.** */
+  --color-poca-gold: oklch(0.9 0.09 92); /* 빛 알갱이·테두리 */
+  --color-poca-gold-glow: oklch(0.86 0.11 88); /* 카드 둘레 발광 */
+  --color-poca-gold-amb: oklch(0.88 0.1 90); /* 무대 배경광 */
+  --color-poca-violet: oklch(0.88 0.07 305);
+  --color-poca-violet-glow: oklch(0.72 0.16 300);
+  --color-poca-violet-amb: oklch(0.7 0.17 300);
+  --color-poca-stage: oklch(0.16 0 0); /* 어두운 무대 */
+  --color-poca-hint: oklch(0.72 0 0); /* 무대 위 안내 문구 */
+  --color-poca-dust: oklch(0.86 0.02 80); /* 꽝일 때 봉지에서 퍼지는 먼지 */
 
   /* ── 70% · 바탕 ───────────────────────────────────────────
      순백(#fff)을 쓰지 않습니다. 큰 면적의 순백은 밝은 곳에서 눈이 부시고
@@ -114,16 +130,23 @@
   --font-sans: 'Pretendard Variable', Pretendard, var(--font-system);
 
   /* ── 앱 폭 ────────────────────────────────────────────────
-     이 앱은 **폰 화면 하나**를 위한 레이아웃입니다. 데스크톱에서 폭이 늘어나면
-     포스터·배너·카드가 같이 커져서 "확대해 놓은 모바일" 처럼 보입니다.
-     그래서 화면이 넉넉해지면 **폰 폭으로 고정**하고 가운데 세웁니다.
+     이 앱은 **한 기둥** 레이아웃입니다. 넓은 화면에서 폭을 풀어 두면 카드와 목록이
+     가로로 늘어져 읽는 줄이 너무 길어집니다. 그래서 상한을 걸고 가운데 세웁니다.
+
+     🔴 값을 정할 때 기준은 "폰 폭" 이 아니라 **디자인이 견디는 폭** 입니다.
+        예전에는 21rem(336px, 폰 폭)이었는데 데스크톱에서 지나치게 좁아 보였습니다.
+        30rem(480px)까지는 지금 디자인이 그대로 버팁니다 — 카드 속 여백만 늘어납니다.
+        36rem(576px)을 넘기면 목록 카드의 포스터는 그대로인 채 오른쪽이 비어
+        늘어져 보이기 시작합니다. 더 넓히려면 화면별 배치를 다시 짜야 합니다.
 
      ⚠️ 이 값은 **넓은 화면에서만** 걸리는 상한입니다. 폰에서는 화면을 꽉 씁니다 —
         상한을 무조건 걸면 큰 폰(430px)에서 좌우에 빈 띠가 생깁니다.
         캡이 걸리는 지점과 방식은 아래 `app-width` 유틸리티 한 곳에 있습니다.
      ⚠️ 폭을 바꾸면 모달·토스트가 프레임을 넘지 않는지 함께 보세요
-        (둘 다 `app-width` 를 쓰므로 자동으로 따라옵니다). */
-  --container-app: 21rem;
+        (둘 다 `app-width` 를 쓰므로 자동으로 따라옵니다).
+     ⚠️ 배너도 이 값을 따라갑니다 (아래 `--banner-width`). 홈의 검정/하양 경계가
+        배너 높이로 계산되므로 폭을 바꾸면 그 경계도 함께 움직입니다. */
+  --container-app: 30rem;
 
   /* ── 레이아웃 상수 ────────────────────────────────────────
      nav-gap 은 하단 탭 위에 두는 여유입니다. 폰에서 화면 맨 아래는
@@ -150,6 +173,382 @@
   --animate-ring: ring 2s ease-out infinite;
   /* 점이 커졌다 작아지며 숨 쉬는 효과 — 살아 있는 상태 표시에 씁니다 */
   --animate-breathe: breathe 1.8s ease-in-out infinite;
+
+  /* ── 포카 개봉 (`/nft/draw` 전용) ──────────────────────────
+     🔴 다른 화면에서 쓰지 마세요. 여기 값들은 개봉 한 번의 흐름에 맞춰
+        서로 시간이 물려 있습니다 (뜯김 → 카드 상승 → 회전 낙하 → 후광). */
+  --animate-poca-float: poca-float 3.4s ease-in-out infinite alternate;
+  --animate-poca-snip-a: poca-snip-a 0.72s infinite;
+  --animate-poca-snip-b: poca-snip-b 0.72s infinite;
+  --animate-poca-sci-hint: poca-sci-hint 2.6s ease-in-out infinite;
+  --animate-poca-tear: poca-tear 0.85s cubic-bezier(0.35, 0.2, 0.3, 1) forwards;
+  --animate-poca-slide-down: poca-slide-down 0.95s 0.06s cubic-bezier(0.4, 0.35, 0.3, 1) forwards;
+  --animate-poca-lift: poca-lift 1.9s 0.3s linear forwards;
+  /* 카드는 봉지 '안'(z:2)에 있다가, 밖으로 빠져나온 뒤에야 앞으로 나옵니다.
+     처음부터 앞에 두면 아직 봉지 안인데 겉으로 겹쳐 보입니다. */
+  --animate-poca-raise: poca-raise 0.01s 0.58s forwards;
+  --animate-poca-spin: poca-spin 0.82s 0.92s cubic-bezier(0.38, 0, 0.1, 1) forwards;
+  /* 착지 후 5초마다 한 바퀴. spin 이 멈춘 900deg 에서 이어받습니다 */
+  /* 0deg 에서 시작하므로 지연 중에도 기본값과 같습니다 — backwards 가 필요 없습니다 */
+  --animate-poca-idle-spin: poca-idle-spin 5s 2.6s cubic-bezier(0.5, 0, 0.2, 1) infinite;
+  --animate-poca-bob: poca-bob 2.6s 2.2s ease-in-out infinite alternate;
+
+  /* 이미 가진 카드를 볼 때(상세·크게 보기) — 뽑기와 달리 **기다리지 않습니다.**
+     화면에 들어오자마자 움직여야 "만질 수 있는 것" 으로 읽힙니다.
+     폭은 뽑기의 절반(-8px) — 가만히 보는 화면에서 크게 흔들리면 눈이 피곤합니다. */
+  --animate-poca-hover: poca-hover 2.6s ease-in-out infinite alternate;
+  --animate-poca-turn: poca-idle-spin 5s cubic-bezier(0.5, 0, 0.2, 1) infinite;
+
+  @keyframes poca-hover {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-8px);
+    }
+  }
+  --animate-poca-halo: poca-halo 1.5s 0.72s cubic-bezier(0.3, 0.7, 0.3, 1) forwards;
+  --animate-poca-rays: poca-rays 16s linear infinite;
+
+  @keyframes poca-float {
+    from {
+      transform: translateY(-7px);
+    }
+    to {
+      transform: translateY(7px);
+    }
+  }
+
+  /* 벌린 채 대기 → 탁 닫힘 → 닫힌 채 대기 → 천천히 벌어짐.
+     ease-in-out 로 계속 흔들면 '가위질' 이 아니라 '춤' 으로 보입니다.
+     닫히는 구간만 빠른 이징을 주는 게 핵심입니다.
+
+     🔴 날 두 개가 **서로 반대로** 돌아야 합니다. 통짜로 회전시키면 그냥 흔들립니다.
+        축은 나사 자리(12,12) — `transform-box: view-box` 라야 viewBox 좌표로 줍니다. */
+  @keyframes poca-snip-a {
+    0%,
+    34% {
+      transform: rotate(0deg);
+      animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+    }
+    50%,
+    66% {
+      transform: rotate(30deg);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.5, 1);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  @keyframes poca-snip-b {
+    0%,
+    34% {
+      transform: rotate(0deg);
+      animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+    }
+    50%,
+    66% {
+      transform: rotate(-30deg);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.5, 1);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+
+  /* 손대기 전 안내 — 가위가 절취선을 따라 끝까지 미끄러집니다.
+     `--sci-travel` 은 봉지 폭. 손이 닿으면 컴포넌트가 이 애니메이션을 끕니다. */
+  @keyframes poca-sci-hint {
+    0%,
+    4% {
+      transform: translateX(0);
+      opacity: 0;
+    }
+    14% {
+      transform: translateX(10px);
+      opacity: 1;
+    }
+    72% {
+      transform: translateX(var(--sci-travel));
+      opacity: 1;
+    }
+    86%,
+    100% {
+      transform: translateX(var(--sci-travel));
+      opacity: 0;
+    }
+  }
+
+  /* 윗조각은 찢겨 나갑니다 — skew 가 '비틀리며 뜯기는' 느낌을 만듭니다 */
+  @keyframes poca-tear {
+    0% {
+      transform: translate(0, 0) rotate(0) skewX(0);
+    }
+    18% {
+      transform: translate(13px, -5px) rotate(2.5deg) skewX(-4deg);
+    }
+    45% {
+      transform: translate(126px, -18px) rotate(9deg) skewX(-8deg);
+    }
+    100% {
+      transform: translate(400px, -52px) rotate(17deg) skewX(-11deg);
+      opacity: 0;
+    }
+  }
+
+  /* 아랫조각은 힘 빠진 비닐처럼 흘러내립니다 — 회전을 넣지 않습니다 */
+  @keyframes poca-slide-down {
+    0% {
+      transform: translateY(0) scaleY(1);
+      opacity: 1;
+    }
+    30% {
+      transform: translateY(30px) scaleY(0.98);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(330px) scaleY(0.9);
+      opacity: 0;
+    }
+  }
+
+  /* 솟구쳐 올랐다가 회전하며 내려와 감쇠 진동으로 멈춥니다.
+     구간마다 이징을 따로 줘야 '가속해서 떨어지고 → 감속해서 멈춤' 이 됩니다.
+     전체에 이징 하나를 걸면 마지막에 툭 끊깁니다. */
+  @keyframes poca-lift {
+    0% {
+      transform: translateY(0) scale(0.94);
+      animation-timing-function: cubic-bezier(0.16, 0.86, 0.32, 1);
+    }
+    26% {
+      transform: translateY(-116px) scale(1.1);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    42% {
+      transform: translateY(-125px) scale(1.1);
+      animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.5);
+    }
+    70% {
+      transform: translateY(24px) scale(1);
+      animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+    }
+    81% {
+      transform: translateY(2px) scale(1.01);
+      animation-timing-function: cubic-bezier(0.45, 0, 0.5, 1);
+    }
+    90% {
+      transform: translateY(22px) scale(1);
+      animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    95% {
+      transform: translateY(14px) scale(1);
+      animation-timing-function: cubic-bezier(0.4, 0, 0.4, 1);
+    }
+    100% {
+      transform: translateY(18px) scale(1);
+    }
+  }
+
+  @keyframes poca-raise {
+    to {
+      z-index: 9;
+    }
+  }
+
+  /* 2.5바퀴 → 앞면에서 정지 */
+  @keyframes poca-spin {
+    from {
+      transform: rotateY(0deg);
+    }
+    to {
+      transform: rotateY(900deg);
+    }
+  }
+
+  /* 착지한 뒤 이따금 한 바퀴 — 뒷면이 스쳐 지나갑니다.
+     🔴 **등장 회전(poca-spin)과 다른 요소에 겁니다.** 같은 요소에 걸면 둘 다
+        transform 이라 나중 것이 앞엣것을 덮어써, 등장 회전이 채 끝나기 전에
+        잘려 나갑니다(= 회전이 사라진 것처럼 보임).
+        바깥 래퍼가 0→360 을 더하는 구조라 여기서는 각도를 이어 맞출 필요가 없습니다.
+        한 주기의 앞 62% 는 가만히 있습니다 — 쉬지 않고 돌면 어지럽습니다. */
+  @keyframes poca-idle-spin {
+    0%,
+    62% {
+      transform: rotateY(0deg);
+    }
+    100% {
+      transform: rotateY(360deg);
+    }
+  }
+
+  /* 착지가 끝나는 시각(0.3 + 1.9 = 2.2s)부터, **0 에서** 출발합니다.
+     0 이 아닌 값에서 시작하면 그 순간 카드가 툭 튑니다. */
+  @keyframes poca-bob {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-16px);
+    }
+  }
+
+  @keyframes poca-halo {
+    0% {
+      opacity: 0;
+      transform: scale(0.45);
+    }
+    26% {
+      opacity: 0.7;
+      transform: scale(0.88);
+    }
+    56% {
+      opacity: 1;
+      transform: scale(1.08);
+    }
+    72% {
+      opacity: 0.82;
+      transform: scale(0.98);
+    }
+    100% {
+      opacity: 0.9;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes poca-rays {
+    from {
+      rotate: 0deg;
+    }
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  /* 결과 문구가 떠오릅니다 — 줄 전체가 한 번만. 글자별 연출은 아래 파도가 맡습니다.
+     🔴 0.4s 늦게 뜹니다. 카드가 착지하는 순간과 겹치면 둘 다 눈에 안 들어옵니다.
+     backwards 가 있어야 그 0.4s 동안 **안 보인 채로** 기다립니다. */
+  --animate-poca-line-in: poca-line-in 0.42s 0.4s cubic-bezier(0.2, 0.85, 0.3, 1) backwards;
+
+  @keyframes poca-line-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.4em);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* 글자가 하나씩 톡 튀어 **파도**를 만듭니다.
+     🔴 뛰는 구간을 앞쪽 18% 에 몰아넣고 나머지는 쉽니다 — 쉬는 구간이 없으면
+     글자가 쉼 없이 출렁여 읽기 힘들고, 카드가 이따금 도는 것과도 안 어울립니다.
+     글자마다 delay 를 조금씩 늦춰(컴포넌트가 흩뿌립니다) 파도가 왼쪽에서 오른쪽으로 흐릅니다.
+     제자리에서 위로만 뜁니다 — 기울이거나 눌리면 점프가 아니라 흔들림으로 보입니다. */
+  --animate-poca-wave: poca-wave 2.8s ease-in-out infinite;
+
+  @keyframes poca-wave {
+    /* 솟구칠 때는 빠르게 붙었다 느려지고, 떨어질 때는 반대 — 그래야 점프로 읽힙니다 */
+    0% {
+      transform: none;
+      animation-timing-function: cubic-bezier(0.25, 0.7, 0.35, 1);
+    }
+    8% {
+      transform: translateY(-0.42em);
+      animation-timing-function: cubic-bezier(0.6, 0, 0.75, 0.4);
+    }
+    16%,
+    100% {
+      transform: none;
+    }
+  }
+
+  /* 꽝(개발자 카드)은 뛰는 대신 **부르르 떱니다.** 같은 주기·같은 지연을 쓰므로
+     글자를 타고 흔들림이 번져 갑니다. 좌우로만 흔들어 줄이 흐트러지지 않게 합니다. */
+  --animate-poca-shake: poca-shake 2.8s linear infinite;
+
+  @keyframes poca-shake {
+    0% {
+      transform: none;
+    }
+    3% {
+      transform: translateX(-0.07em) rotate(-5deg);
+    }
+    6% {
+      transform: translateX(0.07em) rotate(5deg);
+    }
+    9% {
+      transform: translateX(-0.05em) rotate(-3deg);
+    }
+    12% {
+      transform: translateX(0.04em) rotate(2deg);
+    }
+    15%,
+    100% {
+      transform: none;
+    }
+  }
+
+  /* 카드 앞면을 쓸고 지나가는 광택.
+     한 주기(3.6s) 중 앞 30% 만 쓸고 나머지는 쉬어서 쉼표 있는 반짝임이 됩니다.
+     🔴 left 가 아니라 transform 을 움직입니다 — left 면 매 프레임 레이아웃을 다시 잽니다.
+     꽝(개발자 카드)에는 걸지 않습니다. 광택이 없어야 탁해 보입니다. */
+  --animate-poca-sheen: poca-sheen 3.6s 1.65s ease-out infinite;
+
+  @keyframes poca-sheen {
+    0% {
+      transform: translateX(-120%) rotate(18deg);
+      opacity: 0;
+    }
+    8% {
+      opacity: 0.9;
+    }
+    30%,
+    100% {
+      transform: translateX(320%) rotate(18deg);
+      opacity: 0;
+    }
+  }
+
+  /* 빛 알갱이 — 카드 둘레에서 천천히 떠오릅니다.
+     주기가 저마다 달라야(컴포넌트가 delay·duration 을 흩뿌립니다) 규칙이 눈에 안 잡힙니다. */
+  --animate-poca-mote: poca-mote 4s ease-in-out infinite;
+
+  @keyframes poca-mote {
+    0% {
+      transform: translate(-50%, -50%) scale(0.35);
+      opacity: 0;
+    }
+    22% {
+      opacity: 0.95;
+    }
+    62% {
+      opacity: 0.7;
+    }
+    100% {
+      transform: translate(-50%, calc(-50% - 62px)) scale(1);
+      opacity: 0;
+    }
+  }
+
+  /* 꽝(COMMON) — 봉지가 갈라지는 순간 먼지가 한 번 확 퍼집니다.
+     퍼지는 방향·거리는 뭉치마다 달라야 해서 `--dx/--dy` 를 컴포넌트가 넣어 줍니다.
+     (계속 내려앉는 미세먼지는 쓰지 않습니다 — 화면이 지저분해집니다) */
+  --animate-poca-puff: poca-puff 2s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+
+  @keyframes poca-puff {
+    0% {
+      transform: translate(-50%, -50%) scale(0.5);
+      opacity: 0;
+    }
+    18% {
+      opacity: 0.78;
+    }
+    100% {
+      transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(2.2);
+      opacity: 0;
+    }
+  }
 
   @keyframes fade-in {
     from {
@@ -246,6 +645,19 @@
   @media (width >= 30rem) {
     :root {
       --banner-width: calc(var(--container-app) - 2rem);
+    }
+  }
+
+  /* 데스크톱(lg)부터는 기둥이 아니라 **본문 폭**이 기준이고, 배너도 가로로 긴
+     히어로(21:9)로 바뀝니다. 홈의 초록/하양 경계가 이 값을 그대로 씁니다.
+
+     64rem = AppLayout 본문 상한(max-w-5xl), 3rem = 그 본문의 좌우 여백(px-6).
+     ⚠️ 셋 중 하나라도 바꾸면 홈 경계가 배너에서 떨어집니다
+        (AppLayout · BannerCarousel · 여기, DESIGN.md 10장) */
+  @media (width >= 64rem) {
+    :root {
+      --banner-width: calc(min(100vw, 64rem) - 3rem);
+      --banner-height: calc(var(--banner-width) * 9 / 21);
     }
   }
 
@@ -444,14 +856,39 @@
    *
    * 폰에서는 캡이 **없습니다.** 큰 폰(430px)에 21rem 상한을 걸면
    * 좌우에 빈 띠가 생겨 "화면이 안 맞는 앱" 이 됩니다.
-   * 화면이 앱 폭보다 확실히 넉넉해지는 30rem(480px)부터 상한을 걸어
-   * 그때부터는 어느 창 크기에서든 같은 폰 폭으로 보입니다.
+   * 30rem(480px)부터 상한을 걸어 그때부터는 어느 창 크기에서든 같은 폭으로 보입니다.
+   *
+   * 상한값(`--container-app`)이 이 지점과 같은 30rem 이라, 480px 이하 화면은
+   * 지금까지와 똑같이 화면을 꽉 씁니다 — 폰에서 달라지는 것이 없습니다.
    */
   .app-width {
     width: 100%;
   }
   @media (width >= 30rem) {
     .app-width {
+      max-width: var(--container-app);
+    }
+  }
+
+  /**
+   * 화면 껍데기(AppLayout · PlainLayout)의 폭.
+   *
+   * `app-width` 와 다른 점은 **lg(64rem)부터 상한이 풀린다**는 것 하나입니다.
+   * 그 지점부터 하단 탭이 좌측 사이드 내비로 바뀌고 본문이 화면을 넓게 씁니다.
+   *
+   *   ~30rem    화면을 꽉 씀 (폰)
+   *   30~64rem  한 기둥으로 고정 (`--container-app`) — 태블릿·작은 창
+   *   64rem~    상한 없음. 사이드 내비 + 넓은 본문 (데스크톱)
+   *
+   * 🔴 `app-width` 를 여기에 쓰면 안 됩니다. 그건 모달·토스트·하단 탭처럼
+   *    **넓은 화면에서도 한 기둥으로 남아야 하는** 것들이 쓰는 유틸리티입니다.
+   *    둘을 합치면 데스크톱에서 모달이 화면 끝까지 늘어납니다.
+   */
+  .app-shell {
+    width: 100%;
+  }
+  @media (width >= 30rem) and (width < 64rem) {
+    .app-shell {
       max-width: var(--container-app);
     }
   }
@@ -473,9 +910,7 @@
 
   /* 하단 탭에 가리지 않도록 본문 아래에 두는 여백. */
   .pb-nav {
-    padding-bottom: calc(
-      var(--spacing-nav) + var(--spacing-nav-gap) + env(safe-area-inset-bottom)
-    );
+    padding-bottom: calc(var(--spacing-nav) + var(--spacing-nav-gap) + env(safe-area-inset-bottom));
   }
 
   /* 티켓 카드 좌우 절취선 */

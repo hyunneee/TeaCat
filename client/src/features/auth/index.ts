@@ -10,6 +10,12 @@ export { useAuth, useIsLoggedIn } from './hooks/useAuth';
 export { useLogin, useLogout } from './hooks/useLogin';
 export { useSignup } from './hooks/useSignup';
 export { useCaptcha } from './hooks/useCaptcha';
+export {
+  startSsafyLogin,
+  useOauthCallback,
+  useOauthSignup,
+  usePendingOauthSignup,
+} from './hooks/useOauth';
 export { SsafyLoginButton } from './components/SsafyLoginButton';
 export {
   SIGNUP_FIELDS,
@@ -19,8 +25,14 @@ export {
   type SignupForm,
   type SignupErrors,
   type SignupFieldSpec,
+  EMPTY_OAUTH_SIGNUP,
+  OAUTH_SIGNUP_FIELDS,
+  isOauthSignupValid,
+  validateOauthSignup,
+  type OauthSignupForm,
+  type OauthSignupErrors,
 } from './model/signup.model';
-export { useChangePassword, useWithdraw } from './hooks/useAccount';
+export { useChangePassword, useChangeNickname, useWithdraw } from './hooks/useAccount';
 
 // Model
 export { useAuthStore } from './store/authStore';
@@ -34,4 +46,9 @@ export type {
   LoginResponse,
   CaptchaChallenge,
   ChangePasswordRequest,
+  ChangeNicknameRequest,
+  SignupResponse,
+  AuthTokens,
+  OauthSignupRequest,
+  PendingOauthSignup,
 } from './model/auth.types';

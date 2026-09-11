@@ -1,0 +1,176 @@
+# 개발 환경 앱 스택. 앞단 nginx 는 docker-compose.proxy.yml 에 있다.
+#
+#   docker build -t teacat-server:dev     <저장소>/server
+#   docker build -t teacat-blockchain:dev <저장소>/blockchain
+#   docker compose -f docker-compose.dev.yml --env-file .env.dev up -d
+#
+# 이미지를 여기서 빌드하지 않고 태그로만 참조한다.
+# EC2 의 ~/teacat 에는 소스가 없고, 나중에 젠킨스도 "빌드 → 태그 → up" 순서로 돈다.
+
+name: teacat-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: dev-postgres
+    restart: unless-stopped
+    # 🔴 앱은 KST(LocalDateTime)를 timestamp 컬럼에 그대로 넣고, SQL 은 DB 의 now() 와
+    #    비교한다. DB 가 UTC 면 그 비교가 9시간 밀려 좌석 선점 만료 같은 것이 동작하지 않는다.
+    #    command 로 GUC 를 직접 지정한다 — TZ 환경변수는 이미 초기화된 볼륨에는 반영되지 않는다.
+    command: ['postgres', '-c', 'timezone=Asia/Seoul']
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teacat}
+      POSTGRES_USER: ${POSTGRES_USER:-teacat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env.dev 에 넣으세요}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-teacat} -d ${POSTGRES_DB:-teacat}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+    # 포트를 열지 않는다. DB 접속이 필요하면 SSH 터널을 쓴다.
+
+  redis:
+    image: redis:8-alpine
+    container_name: dev-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?.env.dev 에 넣으세요}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [teacat-net]
+
+  minio:
+    image: minio/minio
+    container_name: dev-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9000/minio/health/live || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [teacat-net]
+
+  blockchain:
+    image: teacat-blockchain:dev
+    container_name: dev-blockchain
+    restart: unless-stopped
+    # 🔴 니모닉과 오퍼레이터 키는 이 파일에만 있다. server 는 이 파일을 안 읽는다.
+    #    니모닉이 새면 전 유저 지갑이 털리므로 이 프로세스 밖으로 내보내지 않는다.
+    env_file:
+      - .env.dev.chain
+    environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
+      NODE_ENV: production
+      # 설정이 몇 개 안 되어 여기 적는다. INTERNAL_API_KEY 는 .env.dev 에 한 번만 두고
+      # server 와 나눠 쓴다 (값이 갈라지면 가입이 401 로 실패한다).
+      CHAIN_ID: ${CHAIN_ID:-31221}
+      RPC_URL: ${RPC_URL:-https://rpc.ssafy-blockchain.com}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?16자 이상}
+
+      # 🔴 아래 셋은 없어도 컨테이너가 뜬다. 대신 해당 기능만 조용히 죽는다.
+      #    필수값이 아니라 더 위험하다 — 로그에 에러가 안 나고 /health 만 경고한다.
+      #
+      #    DATABASE_URL                  없으면 확정 기록이 안 돼 티켓이 영원히 PENDING
+      #    CONTRACT_OPERATOR_PRIVATE_KEY 없으면 도안 등록·정지·추첨 서명 불가
+      #    DRAW_SEED_SECRET              없으면 추첨 경로가 안 돈다
+      #
+      # DATABASE_URL 은 **우리 DB 가 아니라 Spring 이 쓰는 그 postgres** 다.
+      # 확정 결과 컬럼 몇 개만 갱신한다 (blockchain/DESIGN.md 1장).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@dev-postgres:5432/${POSTGRES_DB:-teacat}
+
+      # CONTRACT_OPERATOR_PRIVATE_KEY 와 DRAW_SEED_SECRET 은 개인키·시드라
+      # 니모닉과 같이 .env.dev.chain 에 두고 env_file 로 들어온다.
+    mem_limit: 512m
+    networks: [teacat-net]
+    # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
+
+  server:
+    image: teacat-server:dev
+    container_name: dev-server
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      blockchain: { condition: service_healthy }
+    # .env.dev 에 적은 값이 그대로 들어간다. 스프링이 쓰는 이름으로 적으면
+    # compose 를 안 고쳐도 된다 (JWT_SECRET, SSAFY_*, REFRESH_COOKIE_* 등).
+    env_file:
+      - .env.dev
+    environment:
+      # JVM 시간대. DB(Asia/Seoul)와 같아야 timestamp 비교가 맞는다
+      TZ: Asia/Seoul
+      # 아래는 .env 에 둘 수 없는 것들이다.
+      #   - 컨테이너 주소: compose 구조에서 나오는 값이라 파일에 둘 이유가 없다
+      #   - 이름이 다른 값: 파일의 이름과 스프링이 읽는 이름이 달라 여기서 옮긴다
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dev-postgres:5432/${POSTGRES_DB:-teacat}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: dev-redis
+      SPRING_DATA_REDIS_PORT: '6379'
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # MINIO_ENDPOINT 는 컨테이너 내부 주소라 브라우저가 열 수 없다. 그래서 presigned URL 은
+      # MINIO_PUBLIC_BASE_URL 로 바꿔 내려주고, nginx 의 /storage/ 가 MinIO 로 넘긴다
+      # (docker/nginx/conf.d/dev.conf). 서명이 내부 Host 로 계산되므로 nginx 가 Host 를 되돌려 보낸다.
+      MINIO_ENDPOINT: http://dev-minio:9000
+      MINIO_PUBLIC_BASE_URL: https://dev.teacat.site/storage
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+      BLOCKCHAIN_API_URL: http://dev-blockchain:4000
+      BLOCKCHAIN_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      BLOCKCHAIN_CHAIN_ID: ${CHAIN_ID:-31221}
+
+      # 🔴 HTTPS 로 서비스하므로 인증 쿠키에 Secure 를 붙인다.
+      #    기본값(false)으로 두면 평문 HTTP 로 쿠키를 덮어쓸 수 있다.
+      #    프론트와 API 가 같은 도메인(dev.teacat.site)이라 SameSite 는 Lax 로 충분하다.
+      REFRESH_COOKIE_SECURE: 'true'
+      REFRESH_COOKIE_SAME_SITE: Lax
+      # 브라우저가 보는 경로 기준이다. 프론트가 /api 로 호출하므로 /api/auth 로 좁힌다
+      REFRESH_COOKIE_PATH: /api/auth
+
+      # 에러 리포팅 (Sentry). DSN 이 비어 있으면 서버가 그냥 안 켠다.
+      # 🔴 프론트 DSN 과 다른 값이다 — Sentry 프로젝트가 따로다(플랫폼: Spring Boot).
+      #    값은 .env.dev 의 SENTRY_DSN 에 둔다. 저장소에 넣지 마라.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: dev
+      # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@dev}
+
+      FRONTEND_BASE_URL: https://dev.teacat.site
+      SSAFY_CLIENT_SECRET: ${SSAFY_CLIENT_SECRET:-}
+      # 🔴 이걸 빼면 기본값(http://localhost:8080/...)이 SSAFY 에 그대로 나가서
+      #    로그인을 마친 사용자가 localhost 로 튕긴다. SSAFY 개발자센터에 등록한 주소와 같아야 한다
+      SSAFY_REDIRECT_URI: https://dev.teacat.site/api/auth/oauth/ssafy/callback
+    # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
+    #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
+    #    운영까지 올리면 JVM 두 개가 각각 12G 를 노리게 된다.
+    mem_limit: 2g
+    networks: [teacat-net]
+    # 포트를 열지 않는다. nginx 가 /api 를 프록시한다.
+
+networks:
+  teacat-net:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

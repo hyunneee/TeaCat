@@ -3,11 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
   Coins,
+  Gavel,
+  HandCoins,
   Hourglass,
   LogOut,
+  MessageSquare,
   Receipt,
   ScanFace,
   Settings,
+  ShieldCheck,
   Sparkles,
   Ticket,
   UserRound,
@@ -17,7 +21,7 @@ import { AnimatedNumber, Badge, Button, Card, ListRow, SectionTitle } from '@/sh
 import { useModal } from '@/app/providers';
 import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
-import { useAuth, useLogout } from '@/features/auth';
+import { can, useAuth, useLogout } from '@/features/auth';
 import { useTokenBalance } from '@/features/token';
 
 /**
@@ -69,7 +73,10 @@ export function MyPage() {
         <div className="relative px-4">
           <div
             aria-hidden
-            className="surface-strong absolute inset-x-0 bottom-1/2"
+            /* 넓은 화면에서는 홈과 같이 **화면 끝까지** 갑니다. 본문 폭(1024px)에서
+               끊으면 짙은 면이 화면 한가운데 뜬 네모가 되어 배경이 아니라 카드로
+               보입니다. 가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다. */
+            className="surface-strong absolute inset-x-0 bottom-1/2 lg:right-auto lg:left-1/2 lg:w-screen lg:-translate-x-1/2"
             style={{
               /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다.
                  위 여백과 **같은 값**이어야 경계가 카드 중앙에 옵니다 (HEADER_GAP) */
@@ -77,7 +84,10 @@ export function MyPage() {
             }}
           />
 
-          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center">
+          {/* 넓은 화면에서는 **카드만** 좁힙니다 — 짙은 배경판(위 div)은 full-bleed 로
+              둬야 경계가 화면을 가로지릅니다. 카드를 감싸는 컨테이너를 좁히면
+              `bottom-1/2` 가 기대는 높이는 그대로지만 배경판까지 같이 줄어듭니다. */}
+          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center lg:mx-auto lg:max-w-3xl">
             {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7).
                 위 절반이 짙은 배경 위에 놓이므로 **밝은 원**이어야 보입니다 —
                 배경과 같은 어두운 원이면 흰 테두리만 동동 뜬 것처럼 보입니다. */}
@@ -86,7 +96,7 @@ export function MyPage() {
             </span>
 
             <p className="truncate text-lg font-extrabold">{user?.name}</p>
-            <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.loginId}</p>
+            <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.nickname}</p>
 
             <div className="mt-2.5 flex justify-center">
               {user?.faceRegistered ? (
@@ -107,17 +117,27 @@ export function MyPage() {
             >
               <Coins size={17} className="text-ink-muted shrink-0" />
               <span className="text-ink-muted text-sm font-medium">캣머니</span>
+              {/* 보여주는 건 **쓸 수 있는 금액**입니다 (token.types.ts 주석) */}
               <AnimatedNumber
-                value={token?.balance ?? 0}
+                value={token?.available ?? 0}
                 className="ml-auto text-[0.9375rem] font-extrabold"
               />
               <ChevronRight size={17} className="text-subtle shrink-0" />
             </button>
+
+            {/* 묶인 돈이 있을 때만 한 줄. 이게 없으면 총액과의 차액이 어디로 갔는지
+                알 수 없어 "돈이 사라졌다" 가 됩니다. 어느 경매에 묶였는지는
+                내 입찰 화면이 보여줍니다. */}
+            {!!token?.held && (
+              <p className="text-subtle mt-1.5 text-xs">
+                경매 입찰로 {token.held.toLocaleString()}캣머니 묶임
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="space-y-6 p-4">
+      <div className="space-y-6 p-4 lg:mx-auto lg:max-w-3xl lg:px-0">
         {!user?.faceRegistered && (
           <Card
             tone="warning"
@@ -155,12 +175,44 @@ export function MyPage() {
               onClick={() => navigate(ROUTES.MY_NFTS)}
             />
             <ListRow
+              icon={<Gavel size={18} />}
+              title="내 경매"
+              onClick={() => navigate(ROUTES.MY_AUCTIONS)}
+            />
+            <ListRow
+              icon={<HandCoins size={18} />}
+              title="내 입찰"
+              onClick={() => navigate(ROUTES.MY_BIDS)}
+            />
+            <ListRow
               icon={<Receipt size={18} />}
               title="포카 거래 내역"
               onClick={() => navigate(ROUTES.MY_NFT_TRADES)}
             />
+            <ListRow
+              icon={<MessageSquare size={18} />}
+              title="문의하기"
+              description="오류 신고 · 개선 제안"
+              onClick={() => navigate(ROUTES.MY_INQUIRIES)}
+            />
           </Card>
         </section>
+
+        {/* 운영 역할만 보입니다. 일반 회원에게는 이 줄이 아예 없습니다.
+            🔴 판단은 can.accessAdmin 한 곳입니다 — 서버 권한과 같아야 합니다. */}
+        {can.accessAdmin(user) && (
+          <section>
+            <SectionTitle>운영</SectionTitle>
+            <Card padded={false} className="overflow-hidden">
+              <ListRow
+                icon={<ShieldCheck size={18} />}
+                title="운영 콘솔"
+                description="데스크톱에서 열어주세요"
+                onClick={() => navigate(ROUTES.ADMIN)}
+              />
+            </Card>
+          </section>
+        )}
 
         <section>
           <SectionTitle>계정</SectionTitle>

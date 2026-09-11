@@ -19,6 +19,8 @@
     "models": "node scripts/fetch-face-models.mjs"
   },
   "dependencies": {
+    "@microsoft/clarity": "^1.0.2",
+    "@sentry/react": "^10.74.0",
     "@tanstack/react-query": "^5.85.5",
     "@tosspayments/tosspayments-sdk": "^2.8.1",
     "axios": "^1.11.0",
@@ -29,11 +31,13 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.8.2",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",
+    "@sentry/vite-plugin": "^5.4.0",
     "@tailwindcss/vite": "^4.1.12",
     "@tanstack/react-query-devtools": "^5.85.5",
     "@types/node": "^24.3.0",

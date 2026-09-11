@@ -1,20 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
-import { STALE_TIME } from '@/shared/constants';
-import { bookingApi, bookingKeys } from '../api/bookingApi';
+import { useSeatMap } from './useSeatMap';
 
 /**
- * 구역 목록 (플로우: 봇 확인 → 구역 → 좌석 선택).
+ * 구역 목록 (플로우: 봇 확인 → **구역** → 좌석 선택).
  *
- * 좌석 수천 개를 한 번에 내려받지 않고 구역을 먼저 고르게 하는 이유:
- * 오픈 순간 전 좌석 조회가 몰리면 서버도 클라이언트도 버티지 못합니다.
+ * 좌석 현황 응답에서 구역만 꺼내 씁니다. 구역 전용 API 를 따로 부르지 않는
+ * 이유는 잔여 좌석 수가 두 화면에서 어긋나지 않게 하려는 것입니다 —
+ * 같은 쿼리를 공유하므로 구역 화면에서 본 잔여 수가 좌석 화면과 항상 같습니다.
  */
 export function useSections(scheduleId: string) {
-  return useQuery({
-    queryKey: bookingKeys.sections(scheduleId),
-    queryFn: () => bookingApi.sections(scheduleId),
-    staleTime: STALE_TIME.REALTIME,
-    refetchInterval: 5000,
-    refetchIntervalInBackground: false,
-    enabled: !!scheduleId,
-  });
+  const query = useSeatMap(scheduleId);
+
+  return {
+    ...query,
+    data: query.data?.sections,
+  };
 }

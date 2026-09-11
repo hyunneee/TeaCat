@@ -1,0 +1,303 @@
+server:
+  servlet:
+    # 프론트가 /api 프리픽스로 호출한다 (vite 프록시가 경로를 그대로 넘긴다)
+    context-path: /api
+
+  # 🔴 배포에서는 nginx 뒤에 있다. 이 설정이 없으면 스프링이 X-Forwarded-Proto 를 무시하고
+  #    자기 주소를 http://dev.teacat.site 로 재구성한다. 그러면 브라우저가 보낸
+  #    Origin(https://dev.teacat.site)이 "다른 출처"로 보여 CORS 검사를 타고,
+  #    허용 목록에 없으면 403 Invalid CORS request 가 난다.
+  #
+  #    같은 도메인 배포인데도 CORS 가 터진 원인이 이것이다. 브라우저는 same-origin 이라도
+  #    POST/PATCH/DELETE 에는 Origin 헤더를 붙이기 때문에 GET 만 우연히 통과했다.
+  #    이 값을 켜면 스프링이 https://dev.teacat.site 로 인식해 CORS 검사를 아예 타지 않는다.
+  forward-headers-strategy: framework
+
+# 모니터링 노출. Prometheus 가 긁어간다.
+#
+# 🔴 반드시 별도 포트여야 한다. 8080 에 두면 server.servlet.context-path 때문에
+#    /api/actuator/... 가 되고, nginx 가 /api 를 그대로 프록시하므로 액추에이터가
+#    인터넷에 열린다. 힙 덤프까지는 안 열리더라도 환경변수·빈 목록이 새는 건 확정이다.
+#    8081 은 compose 에서 호스트로 열지 않으므로 teacat-net 안에서만 닿는다.
+#    (관리 포트에는 context-path 가 적용되지 않는다 — management.server.base-path 가 따로다)
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        # 필요한 것만 연다. env / heapdump / loggers 는 켜지 않는다
+        include: health,prometheus
+  endpoint:
+    health:
+      # 컨테이너 헬스체크가 아니라 사람이 보는 용도다. 상세를 켜면 DB/Redis 개별 상태가 보인다
+      show-details: when-authorized
+  metrics:
+    tags:
+      # 나중에 서버가 여러 대가 돼도 시계열이 섞이지 않게 이름을 붙인다
+      application: ${spring.application.name}
+    distribution:
+      # 🔴 p95/p99 를 PromQL 로 계산하려면 히스토그램(버킷)이 필요하다. 이게 없으면
+      #    http_server_requests 는 count/sum 만 나와서 평균밖에 못 본다 —
+      #    티켓 오픈처럼 꼬리가 중요한 상황에서 평균은 아무것도 말해주지 않는다.
+      percentiles-histogram:
+        http.server.requests: true
+      # 버킷 범위. 좌석 선점은 100ms 안쪽이 정상이고 1s 를 넘으면 이미 사고다.
+      # 범위를 넓게 두면 버킷 수가 늘어 시계열이 불어나므로 이만큼으로 자른다
+      minimum-expected-value:
+        http.server.requests: 10ms
+      maximum-expected-value:
+        http.server.requests: 5s
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+spring:
+  application:
+    name: teacat
+
+  # 로컬 시크릿은 server/.env 에 둔다 (커밋 안 됨). 파일이 없어도 그냥 뜬다
+  config:
+    import: optional:file:./.env[.properties]
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/teacat
+    username: teacat
+    password: teacat_local_pw
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    out-of-order: true
+
+  servlet:
+    multipart:
+      # 업로드 파일 크기 제한. performance.image.* 의 가장 큰 한도보다 넉넉해야 우리 에러 메시지가 먼저 나온다
+      max-file-size: 25MB
+      max-request-size: 100MB
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: teacat_local_pw
+
+jwt:
+  secret: ${JWT_SECRET:teacat-local-dev-access-token-secret-key-change-me-32bytes-over}
+  access-token-validity: 1h
+  refresh-token-validity: 14d
+  # 프론트와 도메인이 다른 환경(운영)에서는 same-site: None, secure: true 여야 쿠키가 전달된다.
+  # 개발은 vite 프록시를 타서 같은 사이트이므로 Lax 로 충분하다.
+  refresh-cookie:
+    secure: ${REFRESH_COOKIE_SECURE:false}
+    same-site: ${REFRESH_COOKIE_SAME_SITE:Lax}
+    # 쿠키 path 는 브라우저가 보는 경로 기준이다. 프론트가 /api 프리픽스로 호출하면 /api/auth 로 좁혀야 한다.
+    path: ${REFRESH_COOKIE_PATH:/api/auth}
+
+booking:
+  hold:
+    # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
+    duration: ${BOOKING_HOLD_DURATION:10m}
+  # 예매 정책 (API-205). 공연별이 아니라 서비스 전체 기준이다.
+  policy:
+    # 기획 초안은 1인 4매였으나 배포 기준은 1매다. 늘리려면 이 값만 바꾼다
+    max-tickets-per-user: ${BOOKING_MAX_TICKETS_PER_USER:1}
+    # 1인 1매라 동행자를 지정할 여지가 없다. 매수 제한을 늘리면 매크로 방지용으로 다시 켠다
+    companion-required: false
+    # 입장 게이트에서 얼굴로 본인을 확인한다
+    face-verification-required: true
+    # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
+
+payment:
+  toss:
+    base-url: ${TOSS_API_URL:https://api.tosspayments.com}
+    # 🔴 이 키 하나로 승인·취소가 다 됩니다. 설정 파일에 적지 말고 server/.env 에 넣으세요.
+    #    프론트가 쓰는 것은 공개값인 클라이언트 키이고, 시크릿 키는 절대 내려보내지 않습니다.
+    #    비어 있으면 결제만 PAYMENT_001 로 거절되고 나머지 기능은 그대로 동작합니다.
+    secret-key: ${TOSS_SECRET_KEY:}
+    connect-timeout: 3s
+    # 승인은 카드사까지 다녀옵니다. 짧게 잡고 끊으면 "토스는 승인했는데 우리는 실패로 아는"
+    # 상태가 잦아집니다 — 그건 복구 배치가 뒤늦게 되살려야 하는 가장 비싼 실패입니다
+    read-timeout: 30s
+  token-charge:
+    # 충전 한도. 실수로 0 을 더 붙이는 사고를 막고, 탈취된 계정의 큰 결제를 늦춥니다
+    min-amount: ${TOKEN_CHARGE_MIN_AMOUNT:1000}
+    max-amount: ${TOKEN_CHARGE_MAX_AMOUNT:1000000}
+  recovery:
+    # 승인 결과를 못 받은 결제를 토스에 되묻는 주기
+    interval: ${PAYMENT_RECOVERY_INTERVAL:60s}
+    initial-delay: 30s
+    # 결제창을 띄우고 그냥 떠나는 일이 흔해서, 갓 만들어진 결제까지 물으면 헛걸음입니다.
+    # 승인이 끝날 만한 시간이 지난 것만 봅니다
+    settle-after: ${PAYMENT_SETTLE_AFTER:5m}
+
+nft:
+  auction:
+    # 판매자가 고를 수 있는 경매 진행 시간 범위
+    min-duration: ${NFT_AUCTION_MIN_DURATION:1h}
+    max-duration: ${NFT_AUCTION_MAX_DURATION:7d}
+    # 만료 경매를 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
+    # 경매 상세 조회도 만료를 확인해 닫으므로 이 값이 커도 사용자는 마감 직후 결과를 본다.
+    # 입찰·즉시구매는 닫지 않고 DB 시각으로 거절만 한다 (NftAuctionCloser 주석 참고)
+    sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
+    sweep-batch-size: 100
+    sweep-enabled: true
+  design:
+    # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
+    #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.
+    #   경매 마감과 달리 사용자가 기다리는 값이 아니라 넉넉히 잡는다 (SSAFY 체인은 블록이 10초).
+    confirm-interval: ${NFT_DESIGN_CONFIRM_INTERVAL:PT30S}
+    confirm-batch-size: 50
+    confirm-enabled: true
+  photocard:
+    issue:
+      # 회차 시작이 임박한 공연 회차의 확정 티켓 보유자에게 포토카드를 자동 발급하는 스케줄러.
+      #   @Scheduled(cron) 이 그대로 읽으므로 6필드 cron 표기여야 한다 (기본: 매시 정각).
+      scheduler-cron: ${NFT_PHOTOCARD_ISSUE_CRON:0 0 * * * *}
+      # 회차 시작(performance_date)이 지금부터 이 시간 이내면 발급 대상으로 본다.
+      lead-time: ${NFT_PHOTOCARD_ISSUE_LEAD_TIME:1h}
+      # 한 주기에 처리할 최대 회차 수. 나머지는 다음 주기에 다시 잡힌다.
+      batch-size: 20
+      scheduler-enabled: true
+    draw:
+      # 이벤트 팩 지급 코드. 비우면 이벤트 없음(POST /photocards/packs/claim 이 granted:false).
+      #   바꾸면 새 이벤트가 된다 — 같은 계정이 또 받는다. 그게 의도다.
+      event-code: ${NFT_PHOTOCARD_DRAW_EVENT_CODE:OPEN_EVENT}
+      # 체인 전송을 못 한 뽑기 카드(PENDING, 티켓 없음)를 다시 보내는 주기. ISO-8601(PT…) 표기.
+      #   뽑기 응답 직후 한 번 보내고, 그게 실패한 카드만 여기서 잡힌다.
+      sweep-interval: ${NFT_PHOTOCARD_DRAW_SWEEP_INTERVAL:PT60S}
+      sweep-batch-size: 200
+      sweep-enabled: true
+
+ipfs:
+  # 포토카드 도안의 그림과 메타데이터 JSON 을 핀하는 곳. 도안 생성 API 에서만 쓴다.
+  #   🔴 CID 는 영원히 남지만 데이터는 누군가 핀하고 있어야 남는다. 이 계정이 만료되면
+  #      이미 발행된 카드의 그림이 지갑에서 깨진다 (blockchain/PHOTOCARD_PLAN.md 3장).
+  pinata:
+    # jwt 는 이 파일에 적지 말고 환경변수(PINATA_JWT)로만 주입한다.
+    #   비어 있으면 도안 생성만 IPFS_001 로 거절되고 나머지 기능은 그대로 동작한다.
+    jwt: ${PINATA_JWT:}
+    # Pinata 는 레거시 pinning API 와 v3 Files API 를 같이 굴리고 있다. 기본값은 v3 이고,
+    #   계정·요금제 때문에 레거시를 써야 하면 주소만 바꾸면 된다 — 응답에서 CID 를 꺼내는 쪽이
+    #   두 모양({ data.cid } / { IpfsHash })을 모두 읽는다.
+    #   레거시: https://api.pinata.cloud/pinning/pinFileToIPFS (이때 network 는 비운다)
+    upload-url: ${PINATA_UPLOAD_URL:https://uploads.pinata.cloud/v3/files}
+    # v3 Files API 의 필수 필드. public 이어야 게이트웨이로 열린다
+    network: ${PINATA_NETWORK:public}
+    # designs.image_url 에 넣을 주소를 만든다. ipfs:// 는 브라우저가 못 열기 때문이다.
+    #   체인에 올라가는 값은 어디까지나 ipfs://<cid> 라, 게이트웨이를 바꿔도 온체인 값은 그대로다.
+    gateway-url: ${PINATA_GATEWAY_URL:https://gateway.pinata.cloud}
+    connect-timeout: 3s
+    # 이미지 바이트를 통째로 올리므로 넉넉히 잡는다
+    read-timeout: 30s
+    # 도안 이미지 용량 한도. 지갑과 목록에서 함께 뜨므로 포스터급으로 잡는다
+    image-max-size: 5MB
+
+minio:
+  # 코드가 붙는 포트는 9000 이다. 브라우저로 보는 관리 콘솔(9001)이 아니다.
+  #   계정 정보는 로컬 도커 기본값이라 여기 두고, 배포 환경에서는 .env / 환경변수로 덮어쓴다.
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:admin}
+  secret-key: ${MINIO_SECRET_KEY:password123}
+  bucket: ${MINIO_BUCKET:teacat}
+  # 발급한 조회 URL 의 유효시간. 짧을수록 안전하지만 너무 짧으면 페이지 보는 도중 만료된다
+  presigned-url-validity: 10m
+  # 브라우저가 MinIO 에 닿는 주소. endpoint 가 컨테이너 내부 주소(http://minio:9000)인 배포 환경에서
+  # presigned URL 을 그대로 내려주면 브라우저가 열 수 없어 이미지가 깨진다.
+  # 비어 있으면 endpoint 그대로 쓴다 (로컬은 http://localhost:9000 이 브라우저에서도 열린다).
+  # 배포: https://dev.teacat.site/storage — nginx 가 /storage/ 를 MinIO 로 넘긴다 (docker/nginx/conf.d).
+  public-base-url: ${MINIO_PUBLIC_BASE_URL:}
+
+performance:
+  image:
+    # 공연 이미지 용량 한도. 직접 업로드(API-261)와 업로드 URL 방식(API-262) 모두에 걸린다.
+    #   포스터는 목록에서 여러 장이 한 화면에 뜨므로 가볍게, 상세 이미지는 세로로 긴 한 장이라 넉넉하게.
+    poster-max-size: 5MB
+    detail-max-size: 20MB
+
+cors:
+  # allowCredentials 를 켜야 해서 와일드카드를 못 쓴다. 허용할 프론트 주소를 명시한다.
+  #
+  # forward-headers-strategy 를 켠 뒤로는 같은 도메인 배포(dev.teacat.site, teacat.site)는
+  # 애초에 CORS 요청이 아니다. 이 목록은 프론트를 따로 띄우는 경우(로컬 vite, 도메인 분리)를 위한 것이다.
+  # 콤마로 구분해 환경변수 CORS_ALLOWED_ORIGINS 하나로 덮어쓸 수 있다.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,https://dev.teacat.site,https://teacat.site}
+
+admin:
+  # 서버가 뜰 때 관리자 계정이 하나도 없으면 이 값으로 만든다.
+  #   역할을 지정해 회원을 만들 수 있는 건 관리자뿐이고 일반 가입은 항상 USER 라,
+  #   관리자가 0명이면 대시보드에 들어갈 방법이 없다. 그 닫힌 고리를 끊는 장치다.
+  #   ADMIN 이 이미 하나라도 있으면 아무것도 하지 않는다 (멱등).
+  #
+  # 🔴 운영에서는 ADMIN_SEED_PASSWORD 로 덮어쓰거나 ADMIN_SEED_ENABLED=false 로 끄세요.
+  #    기본 비밀번호는 이 파일에 적혀 있어 저장소를 볼 수 있는 누구나 압니다.
+  seed:
+    enabled: ${ADMIN_SEED_ENABLED:true}
+    email: ${ADMIN_SEED_EMAIL:admin@teacat.site}
+    password: ${ADMIN_SEED_PASSWORD:6789}
+    name: ${ADMIN_SEED_NAME:관리자}
+    nickname: ${ADMIN_SEED_NICKNAME:관리자}
+    phone: ${ADMIN_SEED_PHONE:010-0000-0000}
+
+# 에러 리포팅 (Sentry). "무엇이 왜 터졌나"를 스택트레이스로 본다.
+# 지연·처리량은 Prometheus 가 보고, 여기는 예외만 본다 — 역할이 겹치지 않는다.
+#
+# 🔴 dsn 이 비어 있으면 아예 켜지지 않는다. 로컬은 그대로 두면 된다.
+#    프론트 DSN 과 다른 값이다 (Sentry 프로젝트가 다름). 값은 docker/.env.dev 에 둔다.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  # 배포마다 바뀌어야 의미가 있다. CI 가 커밋 해시를 넣어주면 가장 좋다.
+  release: ${SENTRY_RELEASE:teacat-server@local}
+
+app:
+  # 외부 로그인을 마치고 사용자를 돌려보낼 프론트 주소
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  oauth-redirect-path: /oauth/callback
+
+oauth:
+  # client-secret 은 이 파일에 적지 말고 환경변수 SSAFY_CLIENT_SECRET 로만 주입합니다.
+  #   (client-id 는 인가 주소에 그대로 실려 나가는 공개 값이라 기본값으로 둡니다)
+  #   secret 이 비어 있으면 SSAFY 로그인은 AUTH_008 로 거절되고 나머지 기능은 그대로 동작합니다.
+  ssafy:
+    client-id: ${SSAFY_CLIENT_ID:b0fb61a5-4caa-435c-87fd-a38d8007ab49}
+    client-secret: ${SSAFY_CLIENT_SECRET:}
+    redirect-uri: ${SSAFY_REDIRECT_URI:http://localhost:8080/api/auth/oauth/ssafy/callback}
+    authorization-uri: ${SSAFY_AUTHORIZATION_URI:https://project.ssafy.com/oauth/sso-check}
+    token-uri: ${SSAFY_TOKEN_URI:https://project.ssafy.com/ssafy/oauth2/token}
+    user-info-uri: ${SSAFY_USER_INFO_URI:https://project.ssafy.com/ssafy/resources/userInfo}
+    # SSAFY 문서에 state 가 없어 기본은 끕니다. 지원이 확인되면 true 로 켜세요.
+    #   꺼도 CSRF 방어는 유지됩니다 — 같은 값을 httpOnly 쿠키로 들고 있다가 콜백에서 대조합니다.
+    send-state: ${SSAFY_SEND_STATE:false}
+
+blockchain:
+  # 블록체인 서비스(Node.js)는 마스터 니모닉을 쥐고 있어 루프백에만 열려 있습니다
+  base-url: ${BLOCKCHAIN_API_URL:http://127.0.0.1:4000}
+  # blockchain/.env 의 INTERNAL_API_KEY 와 같은 값이어야 합니다. server/.env 에 넣으세요
+  internal-api-key: ${BLOCKCHAIN_INTERNAL_API_KEY:}
+  # blockchain/.env 의 CHAIN_ID 와 반드시 같아야 합니다 (31221 SSAFY 체인 / 31337 로컬)
+  chain-id: ${BLOCKCHAIN_CHAIN_ID:31221}
+  connect-timeout: 3s
+  # 체인에 트랜잭션을 보내고 오므로 넉넉히 잡습니다 (SSAFY 체인은 블록이 10초)
+  read-timeout: 20s
+  # 발행·소각의 확정 확인 주기. 블록이 10초라 그보다 짧게 돌 이유가 없습니다
+  confirm-poll:
+    interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
+    initial-delay: 20s
+
+banner:
+  image:
+    # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.
+    #   업로드 URL 을 내줄 때와 key 를 넘겨받을 때 똑같이 걸린다.
+    max-size: 10MB
+
+analytics:
+  # 젠킨스가 배포 기록을 보낼 때 쓰는 키 (POST /internal/deployments 의 X-Internal-Api-Key).
+  # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 통계 마커만 안 쌓일 뿐 다른 기능에는 영향이 없다.
+  #    "비었으면 통과" 로 만들지 말 것 — 운영에 키를 안 넣은 실수가 열린 API 가 된다.
+  internal-api-key: ${ANALYTICS_INTERNAL_API_KEY:}

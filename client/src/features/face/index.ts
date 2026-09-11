@@ -11,6 +11,7 @@ export { useCamera, type CameraError, type CameraErrorCode } from './hooks/useCa
 export { useFaceEngine, type EngineState } from './hooks/useFaceEngine';
 export { useFaceGuide } from './hooks/useFaceGuide';
 export { useFaceRegistration } from './hooks/useFaceRegistration';
+export { useFaceRemoval } from './hooks/useFaceRemoval';
 
 // View
 export { CameraStage } from './components/CameraStage';
@@ -20,7 +21,6 @@ export { faceApi } from './api/faceApi';
 export { checkFaceQuality, FACE_GUIDE_IDLE, FACE_GUIDE_READY } from './model/faceQuality';
 export { cosineSimilarity, SFACE_COSINE_THRESHOLD } from './model/embedding';
 export type {
-  FaceStatus,
   FaceEnrollRequest,
   DetectedFace,
   FaceQualityCode,

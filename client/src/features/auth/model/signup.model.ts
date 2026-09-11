@@ -9,16 +9,17 @@ import type { HTMLInputTypeAttribute } from 'react';
  * 라벨·필수 여부·글자수·검증 규칙이 한 곳에 모여 있습니다.
  *
  * ⚠️ 클라이언트 검증은 **사용자 편의**입니다. 진짜 검증은 서버가 합니다.
- *    여기 통과했다고 서버가 받아준다는 뜻이 아닙니다 (중복 아이디 등).
+ *    여기 통과했다고 서버가 받아준다는 뜻이 아닙니다 (중복 이메일 등).
+ *    규칙은 서버(SignupRequest)의 제약과 같은 값으로 맞춰 둡니다.
  */
 
 export interface SignupForm {
-  loginId: string;
+  email: string;
   password: string;
   passwordConfirm: string;
   name: string;
+  nickname: string;
   phone: string;
-  email: string;
 }
 
 export type SignupErrors = Partial<Record<keyof SignupForm, string>>;
@@ -26,7 +27,6 @@ export type SignupErrors = Partial<Record<keyof SignupForm, string>>;
 export interface SignupFieldSpec {
   name: keyof SignupForm;
   label: string;
-  /** 필수 입력인가 (전화번호만 선택) */
   required: boolean;
   type?: HTMLInputTypeAttribute;
   placeholder?: string;
@@ -41,9 +41,11 @@ export interface SignupFieldSpec {
   validate: (value: string, form: SignupForm) => string | null;
 }
 
-const ID_PATTERN = /^[a-zA-Z0-9]+$/;
+/** 서버와 같은 규칙입니다 (SignupRequest) */
+const NICKNAME_PATTERN = /^[가-힣a-zA-Z0-9]{2,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^01[0-9]-\d{3,4}-\d{4}$/;
+const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$/;
 
 /** 숫자만 남겨 010-1234-5678 모양으로 */
 function formatPhone(value: string): string {
@@ -55,18 +57,19 @@ function formatPhone(value: string): string {
 
 export const SIGNUP_FIELDS: SignupFieldSpec[] = [
   {
-    name: 'loginId',
-    label: '아이디',
+    name: 'email',
+    label: '이메일',
     required: true,
-    placeholder: '영문·숫자 4~20자',
-    hint: '티켓을 주고받을 때 쓰는 식별자입니다.',
-    autoComplete: 'username',
-    maxLength: 20,
+    type: 'email',
+    placeholder: 'you@example.com',
+    hint: '로그인할 때 쓰는 아이디입니다.',
+    autoComplete: 'email',
+    inputMode: 'email',
+    maxLength: 60,
     format: (v) => v.trim(),
     validate: (v) => {
-      if (!v) return '아이디를 입력해 주세요.';
-      if (v.length < 4) return '4자 이상 입력해 주세요.';
-      if (!ID_PATTERN.test(v)) return '영문과 숫자만 쓸 수 있어요.';
+      if (!v) return '이메일을 입력해 주세요.';
+      if (!EMAIL_PATTERN.test(v)) return '이메일 형식이 올바르지 않아요.';
       return null;
     },
   },
@@ -75,13 +78,12 @@ export const SIGNUP_FIELDS: SignupFieldSpec[] = [
     label: '비밀번호',
     required: true,
     type: 'password',
-    placeholder: '영문·숫자 포함 8자 이상',
+    placeholder: '영문·숫자·특수문자 포함 8~20자',
     autoComplete: 'new-password',
-    maxLength: 32,
+    maxLength: 20,
     validate: (v) => {
       if (!v) return '비밀번호를 입력해 주세요.';
-      if (v.length < 8) return '8자 이상 입력해 주세요.';
-      if (!/[a-zA-Z]/.test(v) || !/[0-9]/.test(v)) return '영문과 숫자를 함께 넣어 주세요.';
+      if (!PASSWORD_PATTERN.test(v)) return '영문·숫자·특수문자를 모두 넣어 8~20자로 만들어 주세요.';
       return null;
     },
   },
@@ -91,7 +93,7 @@ export const SIGNUP_FIELDS: SignupFieldSpec[] = [
     required: true,
     type: 'password',
     autoComplete: 'new-password',
-    maxLength: 32,
+    maxLength: 20,
     validate: (v, form) => {
       if (!v) return '비밀번호를 한 번 더 입력해 주세요.';
       if (v !== form.password) return '비밀번호가 일치하지 않아요.';
@@ -114,35 +116,32 @@ export const SIGNUP_FIELDS: SignupFieldSpec[] = [
     },
   },
   {
-    name: 'email',
-    label: '이메일',
+    name: 'nickname',
+    label: '닉네임',
     required: true,
-    type: 'email',
-    placeholder: 'you@example.com',
-    hint: '취소표 추첨 당첨 안내를 받습니다.',
-    autoComplete: 'email',
-    inputMode: 'email',
-    maxLength: 60,
+    placeholder: '한글·영문·숫자 2~20자',
+    hint: '티켓을 주고받을 때 쓰는 이름입니다.',
+    autoComplete: 'nickname',
+    maxLength: 20,
     format: (v) => v.trim(),
     validate: (v) => {
-      if (!v) return '이메일을 입력해 주세요.';
-      if (!EMAIL_PATTERN.test(v)) return '이메일 형식이 올바르지 않아요.';
+      if (!v) return '닉네임을 입력해 주세요.';
+      if (!NICKNAME_PATTERN.test(v)) return '한글·영문·숫자 2~20자로 입력해 주세요.';
       return null;
     },
   },
   {
-    /* 유일한 선택 항목입니다. 없어도 가입은 되지만 예매 안내를 못 받습니다. */
     name: 'phone',
     label: '휴대폰 번호',
-    required: false,
+    required: true,
     placeholder: '010-0000-0000',
-    hint: '입력하면 예매·입장 안내를 문자로 받습니다.',
+    hint: '예매·입장 안내를 문자로 받습니다.',
     autoComplete: 'tel',
     inputMode: 'tel',
     maxLength: 13,
     format: formatPhone,
     validate: (v) => {
-      if (!v) return null; // 선택 항목 — 비어 있어도 통과
+      if (!v) return '휴대폰 번호를 입력해 주세요.';
       if (!PHONE_PATTERN.test(v)) return '010-0000-0000 형식으로 입력해 주세요.';
       return null;
     },
@@ -150,12 +149,12 @@ export const SIGNUP_FIELDS: SignupFieldSpec[] = [
 ];
 
 export const EMPTY_SIGNUP: SignupForm = {
-  loginId: '',
+  email: '',
   password: '',
   passwordConfirm: '',
   name: '',
+  nickname: '',
   phone: '',
-  email: '',
 };
 
 /** 폼 전체를 검사합니다. 빈 객체면 통과. */
@@ -170,4 +169,36 @@ export function validateSignup(form: SignupForm): SignupErrors {
 
 export function isSignupValid(form: SignupForm): boolean {
   return Object.keys(validateSignup(form)).length === 0;
+}
+
+/* ── SSAFY 가입 추가정보 ───────────────────────────────────
+   SSAFY 가 이메일과 비밀번호를 대신하므로 나머지만 받습니다.
+   검증 규칙을 두 벌 적지 않도록 위 테이블을 그대로 재사용합니다. */
+
+const OAUTH_SIGNUP_FIELD_NAMES = ['name', 'nickname', 'phone'] as const;
+
+export type OauthSignupForm = Pick<SignupForm, (typeof OAUTH_SIGNUP_FIELD_NAMES)[number]>;
+export type OauthSignupErrors = Partial<Record<keyof OauthSignupForm, string>>;
+
+export const OAUTH_SIGNUP_FIELDS: SignupFieldSpec[] = SIGNUP_FIELDS.filter((field) =>
+  (OAUTH_SIGNUP_FIELD_NAMES as readonly string[]).includes(field.name),
+);
+
+export const EMPTY_OAUTH_SIGNUP: OauthSignupForm = { name: '', nickname: '', phone: '' };
+
+export function validateOauthSignup(form: OauthSignupForm): OauthSignupErrors {
+  const full: SignupForm = { ...EMPTY_SIGNUP, ...form };
+  const errors: OauthSignupErrors = {};
+
+  for (const field of OAUTH_SIGNUP_FIELDS) {
+    const key = field.name as keyof OauthSignupForm;
+    const message = field.validate(full[key], full);
+    if (message) errors[key] = message;
+  }
+
+  return errors;
+}
+
+export function isOauthSignupValid(form: OauthSignupForm): boolean {
+  return Object.keys(validateOauthSignup(form)).length === 0;
 }

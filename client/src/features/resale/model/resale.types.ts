@@ -12,6 +12,8 @@ export interface ResaleSection {
   price: number;
   /** 현재 이 구역 대기 인원 */
   waitingCount: number;
+  /** 이 구역이 매진됐는가. 취소표 대기는 매진된 구역에만 걸 수 있습니다 — 남은 자리가 있으면 그냥 예매하면 됩니다 */
+  soldOut: boolean;
 }
 
 export interface ResaleEntry {

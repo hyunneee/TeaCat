@@ -1,14 +1,17 @@
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Info, UserRound } from 'lucide-react';
+import { PageLoader } from '@/shared/components/common';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Badge, Button, Card, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { formatPrice } from '@/shared/lib';
 import {
   HoldTimer,
+  priceLabel,
   seatLabel,
   useBookingStore,
   useRecipients,
+  useResumeHold,
   useSeatHold,
   useSeatMap,
 } from '@/features/booking';
@@ -24,18 +27,24 @@ export function BookingReviewPage() {
   const { scheduleId = '' } = useParams();
 
   const hold = useBookingStore((s) => s.hold);
-  const sectionId = useBookingStore((s) => s.sectionId);
   const { remainSeconds } = useSeatHold(scheduleId);
-  const { data: seatMap } = useSeatMap(scheduleId, sectionId ?? undefined);
+  const { data: seatMap } = useSeatMap(scheduleId);
+  /* 스토어가 비어 있어도 서버에 선점이 남아 있을 수 있습니다 (탭을 닫았다 온 경우).
+     확인이 끝나기 전에 내보내면 잡아둔 자리를 두고 구역 선택으로 튕깁니다 */
+  const { isResuming } = useResumeHold(scheduleId);
 
-  const seatIds = hold?.seatIds ?? [];
+  const seatIds = hold ? [hold.seatId] : [];
   const recipients = useRecipients(seatIds);
 
-  if (!hold) return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+  if (!hold) {
+    return isResuming ? <PageLoader /> : <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+  }
 
-  const section = seatMap?.sections.find((s) => s.id === sectionId);
   const seats = seatMap?.seats.filter((s) => seatIds.includes(s.id)) ?? [];
-  const total = seats.reduce((sum, s) => sum + s.price, 0);
+  /* 구역은 **잡은 좌석**에서 찾습니다. 스토어의 sectionId 로 찾으면, 선점을 되살려
+     들어온 경우(스토어가 비었던 경우) 구역 이름이 빈칸으로 나옵니다 */
+  const section = seatMap?.sections.find((s) => s.id === seats[0]?.sectionId);
+  const total = seats.reduce((sum, s) => sum + (s.price ?? 0), 0);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -61,7 +70,7 @@ export function BookingReviewPage() {
               <Card flat className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold">{seatLabel(seat, section?.name ?? '')}</p>
-                  <p className="text-muted text-sm">{formatPrice(seat.price)}</p>
+                  <p className="text-muted text-sm">{priceLabel(seat.price)}</p>
                 </div>
 
                 {/* 수령인은 **고칠 수 없습니다.** 입력창으로 열어 두면

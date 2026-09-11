@@ -1,42 +1,53 @@
-/** 서비스 이용 주체 */
-export type UserRole = 'USER' | 'ORGANIZER' | 'ADMIN';
+/** 서비스 이용 주체. 서버의 user_role ENUM 과 같습니다. */
+export type UserRole = 'USER' | 'ADMIN' | 'STADIUM' | 'PERFORMANCE';
 
+/** 서버 `GET /users/me` 응답 그대로입니다. 필드를 바꾸려면 서버부터 바꾸세요. */
 export interface User {
-  id: string;
-  /** 티켓 수령인을 지정할 때 쓰는 식별자 */
-  loginId: string;
-  name: string;
-  phone: string;
+  userId: number;
   email: string;
+  /** 실명 — 입장 시 신분 확인용 */
+  name: string;
+  /** 표시 이름. 티켓 수령인을 지정할 때 쓰는 식별자이기도 합니다 */
+  nickname: string;
+  phone: string;
   role: UserRole;
   /** 얼굴 등록 완료 여부 — 티켓 사용(입장)의 전제 조건 */
   faceRegistered: boolean;
-  profileImageUrl: string | null;
-  /** 캣머니 토큰 잔액 */
-  tokenBalance: number;
+  createdAt: string;
 }
 
 export interface LoginRequest {
-  loginId: string;
+  email: string;
   password: string;
 }
 
 export interface SignupRequest {
-  loginId: string;
+  email: string;
   password: string;
   name: string;
+  nickname: string;
+  phone: string;
+}
+
+export interface SignupResponse {
+  userId: number;
   email: string;
-  /** 선택 항목 — 없으면 보내지 않습니다 */
-  phone?: string;
+  nickname: string;
 }
 
 export interface AuthTokens {
   accessToken: string;
-  /** 서버가 httpOnly 쿠키로 내려주면 이 필드는 없습니다 */
-  refreshToken?: string;
+  tokenType: string;
+  /** 만료까지 남은 시간(초) */
   expiresIn: number;
 }
 
+/**
+ * 로그인 응답.
+ *
+ * 리프레시 토큰은 여기 없습니다 — 서버가 httpOnly 쿠키로 내려주고 JS 는 읽을 수 없습니다.
+ * 401 이 나면 `shared/api/client.ts` 가 그 쿠키로 조용히 재발급을 시도합니다.
+ */
 export interface LoginResponse extends AuthTokens {
   user: User;
 }
@@ -61,4 +72,23 @@ export interface CaptchaChallenge {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface ChangeNicknameRequest {
+  nickname: string;
+}
+
+/* ── SSAFY 계정 로그인 ── */
+
+/** SSAFY 인증은 끝났지만 가입이 안 끝난 상태. 화면을 미리 채우는 용도입니다 */
+export interface PendingOauthSignup {
+  email: string;
+  /** SSAFY 가 이름을 주지 않으면 null */
+  name: string | null;
+}
+
+export interface OauthSignupRequest {
+  name: string;
+  nickname: string;
+  phone: string;
 }

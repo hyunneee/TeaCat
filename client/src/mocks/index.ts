@@ -19,16 +19,13 @@ import { createMockAdapter } from './router';
 export async function setupMocks() {
   // 핸들러 파일들은 import 되는 순간 스스로 라우트를 등록합니다.
   await Promise.all([
-    import('./handlers/auth'),
-    import('./handlers/concert'),
-    import('./handlers/booking'),
-    import('./handlers/ticket'),
+    import('./handlers/auth'), // 캡차만 남아 있습니다 (포카는 실서버로 넘어갔습니다)
+    // 공연 목록·상세·회차(/concerts, /schedules)는 실서버로 나갑니다
+    // 구역·좌석·선점(/schedules/*/seats, /performance-details/*/hold)도 실서버입니다
+    //   -> handlers/booking.ts 는 삭제했습니다. 결제도 실서버로 나갑니다.
+    // 내 티켓(/users/me/tickets)·예매 취소도 실서버입니다 -> handlers/ticket.ts 삭제
     import('./handlers/resale'),
-    import('./handlers/nft'),
-    import('./handlers/token'),
-    import('./handlers/face'),
-    import('./handlers/banner'),
-    import('./handlers/payment'),
+    import('./handlers/auction'),
     import('./handlers/appInfo'),
   ]);
 
@@ -37,7 +34,7 @@ export async function setupMocks() {
   http.raw.defaults.adapter = createMockAdapter(getAdapter(original));
 
   console.info(
-    '%c[MOCK] 목업 데이터로 동작 중입니다. 로그인: ssafy / ssafy1234',
+    '%c[MOCK] 일부 도메인만 목업입니다. 회원·인증·얼굴은 실제 서버로 나갑니다.',
     'color:#a855f7;font-weight:bold',
   );
 }

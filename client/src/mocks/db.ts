@@ -24,6 +24,8 @@ export interface MockUser {
   loginId: string;
   password: string;
   name: string;
+  /** 표시 이름. 포카 소유 판정(ownerNickname 비교)에 쓰이므로 실서버 User.nickname 과 같은 뜻 */
+  nickname: string;
   phone: string;
   email: string;
   role: 'USER' | 'ORGANIZER' | 'ADMIN';
@@ -87,14 +89,6 @@ export interface MockSeat {
   ownerId: string | null;
 }
 
-export interface MockHold {
-  holdId: string;
-  scheduleId: string;
-  seatIds: string[];
-  userId: string;
-  expiresAt: string;
-}
-
 export interface MockTicket {
   id: string;
   orderId: string;
@@ -119,18 +113,45 @@ export interface MockResaleEntry {
   createdAt: string;
 }
 
-export interface MockNft {
-  id: string;
-  name: string;
-  concertId: string;
-  /** 어느 좌석에서 나온 포카인지 */
-  seatLabel: string;
+/**
+ * 포토카드 — **서버 nft_photocards 행 모양**입니다.
+ * 필드 이름은 서버 응답(`NftPhotocardDetailResponse`)과 같게 둡니다.
+ * 서버에 포카가 발행되면 이 타입과 handlers/nft.ts 를 함께 지웁니다.
+ */
+export interface MockPhotocard {
+  /** 서버처럼 숫자 id. 501 부터 */
+  photocardId: number;
+  designName: string;
+  /** 지금은 전부 null → 화면이 시드 그림을 그립니다 */
+  imageUrl: string | null;
+  performanceTitle: string;
   ownerId: string;
-  /** 마켓에 올라와 있으면 가격, 아니면 null */
-  listPrice: number | null;
-  description: string | null;
-  artSeed: string;
-  mintedAt: string;
+  issuedAt: string;
+  origin: {
+    seatGrade: string;
+    areaCode: string;
+    /** 스탠딩이면 null */
+    rowLabel: string | null;
+    seatNumber: number | null;
+  };
+  status: 'PENDING' | 'MINTING' | 'MINTED' | 'FAILED';
+  /** 판매 중이면 값, 아니면 null (서버 nft_photocard_listings 의 ACTIVE 행) */
+  listing: {
+    listingId: number;
+    price: number;
+    description: string;
+    listedAt: string;
+  } | null;
+}
+
+/** 포카 거래 한 건. 실서버에서는 nft_photocard_trades */
+export interface MockPhotocardTrade {
+  tradeId: number;
+  photocardId: number;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  tradedAt: string;
 }
 
 /* ─────────────────────────── 시드 ─────────────────────────── */
@@ -146,6 +167,7 @@ export const users: MockUser[] = [
     loginId: 'ssafy',
     password: 'ssafy1234',
     name: '김싸피',
+    nickname: '김싸피',
     phone: '010-1234-5678',
     email: 'ssafy@example.com',
     role: 'USER',
@@ -158,6 +180,7 @@ export const users: MockUser[] = [
     loginId: 'admin',
     password: 'admin1234',
     name: '관리자',
+    nickname: '관리자',
     phone: '010-0000-0000',
     email: 'admin@example.com',
     role: 'ADMIN',
@@ -170,6 +193,7 @@ export const users: MockUser[] = [
     loginId: 'friend',
     password: 'friend1234',
     name: '이친구',
+    nickname: '이친구',
     phone: '010-9999-8888',
     email: 'friend@example.com',
     role: 'USER',
@@ -349,8 +373,6 @@ export const seats: MockSeat[] = sections.flatMap((section) => {
   return result;
 });
 
-export const holds: MockHold[] = [];
-
 export const tickets: MockTicket[] = [
   {
     id: 't-1',
@@ -406,40 +428,311 @@ const NFT_NAMES = [
   '마지막 인사',
 ];
 
-export const nfts: MockNft[] = NFT_NAMES.map((name, i) => {
+/* 목업 공연 제목. 서버는 performanceTitle 을 문자열로 내려주므로 여기서도 문자열로 심습니다. */
+export const PERFORMANCE_TITLES = ['PURPLE WAVE 2026', '고척 캣머니 페스티벌'] as const;
+
+/** 증가 카운터 — 서버의 IDENTITY 컬럼 흉내 */
+let listingSeq = 200;
+let tradeSeq = 900;
+export const nextListingId = () => (listingSeq += 1);
+export const nextTradeId = () => (tradeSeq += 1);
+
+/**
+ * 뽑기 도안 풀 — **서버가 가질 `nft_photocard_designs` 자리**입니다.
+ *
+ * 🔴 어떤 도안이 나오는지는 **서버가 정합니다.** 프론트에 두면 콘솔에서 바꿀 수 있고,
+ *    뜯기 전에 결과를 미리 알 수 있습니다. (결제 금액을 프론트에서 정하면 안 되는 것과 같은 이유)
+ *
+ * `grade` 는 연출 등급입니다 — 화면이 이 값만 보고 금색/보라를 고릅니다.
+ * 도안이 어느 반 소속인지(`group`)는 카드 그림에도 찍혀 있지만, 결과 화면 문구에 씁니다.
+ */
+export interface PocaDesign {
+  designName: string;
+  imageUrl: string;
+  group: string;
+  grade: 'SPECIAL' | 'COMMON';
+}
+
+const coach = (designName: string, file: string, group: string): PocaDesign => ({
+  designName,
+  imageUrl: `/mock/poca/${file}.webp`,
+  group,
+  grade: 'SPECIAL',
+});
+
+export const pocaDesigns: PocaDesign[] = [
+  coach('김선교', 'SunGyo_C', '서울 1반'),
+  coach('김나영', 'Nayoung_C', '서울 2반'),
+  coach('조재봉', 'Jaebong_C', '서울 3반'),
+  coach('정유진', 'Yujin_C', '서울 3반'),
+  coach('최상인', 'Sangin_C', '서울 3·4반'),
+  coach('주세빈', 'Sebin_C', '서울 4반'),
+  coach('강희정', 'HeeJung_C', '서울 4반'),
+  coach('김권수', 'GwonSu_C', '서울 5반'),
+  coach('김예린', 'YaeRin_C', '서울 5반'),
+  coach('김도훈', 'Dohoon_C', '서울 5·6반'),
+  coach('권이삭', 'Isaac_C', '서울 6반'),
+  coach('정예진', 'YaeJin_C', '서울 6반'),
+  coach('박유신', 'Yusin_C', '서울 7반'),
+  coach('이태호', 'Taeho_C', '서울 7반'),
+  coach('윤주하', 'Juha', '15기'),
+  coach('정재원', 'Jaewon', '15기'),
+  coach('정유진', 'Jung_yujin', '15기'),
+  coach('박지원', 'jiwon', '15기'),
+  /* 개발자는 흔한 카드 — 꽝 연출(먼지)로 갑니다 */
+  { designName: '차희광', imageUrl: '/mock/poca/cha.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '최혜민', imageUrl: '/mock/poca/mean.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '오서현', imageUrl: '/mock/poca/oh.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '표건희', imageUrl: '/mock/poca/pyo.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '양지훈', imageUrl: '/mock/poca/yang.webp', group: '개발자', grade: 'COMMON' },
+  { designName: '최재성', imageUrl: '/mock/poca/monkey.webp', group: '개발자', grade: 'COMMON' },
+];
+
+export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
   const listed = hash(`list-${i}`) > 0.25;
+  const standing = i % 5 === 4;
 
   return {
-    id: `n-${i + 1}`,
-    name,
-    concertId: i % 2 === 0 ? 'c-1' : 'c-3',
-    seatLabel: `${i % 2 === 0 ? 'VIP석' : 'S석'} ${(i % 6) + 1}열 ${i + 3}번`,
-    ownerId: i < 2 ? 'u-1' : 'u-3',
-    // 해시는 값이 한쪽에 몰려서 가격이 다 비슷해집니다. 정렬이 눈에 보이도록 고르게 퍼뜨립니다.
-    listPrice: listed ? 80 + ((i * 173) % 920) : null,
-    description: listed ? '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.' : null,
-    artSeed: `poca-${i}`,
-    mintedAt: iso(now() - (i + 1) * DAY),
+    photocardId: 501 + i,
+    designName,
+    imageUrl: null,
+    performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
+    /* 🔴 심어둔 이 카드들은 **내 것이 아닙니다.** 마켓·경매를 채우기 위한 남의 물건입니다.
+       내 보관함에는 실제로 뽑거나 발행받은 카드만 있어야 합니다 —
+       '무대 위 첫 소절' 같은 가짜 도안이 내 포카에 섞여 있으면 무엇이 진짜인지 알 수 없습니다. */
+    ownerId: 'u-3',
+    issuedAt: iso(now() - (i + 1) * DAY),
+    origin: {
+      seatGrade: i % 2 === 0 ? 'VIP' : 'S',
+      areaCode: String.fromCharCode(65 + (i % 4)), // A~D
+      rowLabel: standing ? null : String((i % 6) + 1),
+      seatNumber: standing ? null : i + 3,
+    },
+    status: 'MINTED',
+    listing: listed
+      ? {
+          listingId: nextListingId(),
+          // 해시는 값이 한쪽에 몰려서 가격이 다 비슷해집니다. 정렬이 눈에 보이도록 고르게 퍼뜨립니다.
+          price: 80 + ((i * 173) % 920),
+          description: '실물 카드 상태 그대로 보관 중입니다. 스크래치 없어요.',
+          listedAt: iso(now() - i * DAY),
+        }
+      : null,
   };
 });
 
-/** 포카 거래 한 건. 실서버에서는 거래 테이블입니다. */
-export interface MockNftTrade {
-  id: string;
-  nftId: string;
-  buyerId: string;
-  sellerId: string;
-  price: number;
-  tradedAt: string;
-}
+/** 뽑기로 발행되는 포카의 id. 심어둔 카드(501~) 뒤에서 이어집니다. */
+let photocardSeq = 501 + photocards.length;
+export const nextPhotocardId = () => (photocardSeq += 1);
 
 /* 지난 거래 몇 건을 심어둡니다 — 빈 화면만 보면 이 화면이 뭘 하는지 알 수 없습니다. */
-export const nftTrades: MockNftTrade[] = [
-  { id: 'tr-1', nftId: 'n-3', buyerId: 'u-1', sellerId: 'u-3', price: 640, tradedAt: iso(now() - 3 * DAY) },
-  { id: 'tr-2', nftId: 'n-5', buyerId: 'u-3', sellerId: 'u-1', price: 320, tradedAt: iso(now() - 9 * DAY) },
-  { id: 'tr-3', nftId: 'n-8', buyerId: 'u-1', sellerId: 'u-3', price: 180, tradedAt: iso(now() - 14 * DAY) },
-  { id: 'tr-4', nftId: 'n-11', buyerId: 'u-1', sellerId: 'u-3', price: 910, tradedAt: iso(now() - 21 * DAY) },
+export const photocardTrades: MockPhotocardTrade[] = [
+  {
+    tradeId: nextTradeId(),
+    photocardId: 503,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 640,
+    tradedAt: iso(now() - 3 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 505,
+    buyerId: 'u-3',
+    sellerId: 'u-1',
+    price: 320,
+    tradedAt: iso(now() - 9 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 508,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 180,
+    tradedAt: iso(now() - 14 * DAY),
+  },
+  {
+    tradeId: nextTradeId(),
+    photocardId: 511,
+    buyerId: 'u-1',
+    sellerId: 'u-3',
+    price: 910,
+    tradedAt: iso(now() - 21 * DAY),
+  },
 ];
+
+/**
+ * 구매 멱등키 저장소. 키 = `${userId}:${Idempotency-Key}`.
+ * 같은 키가 같은 포카로 다시 오면 저장된 응답을 그대로 돌려주고(멱등),
+ * 다른 포카로 오면 NFT_010 을 냅니다 — 서버와 같은 규칙.
+ */
+export const purchaseKeys = new Map<
+  string,
+  {
+    photocardId: number;
+    response: { tradeId: number; photocardId: number; price: number; tradedAt: string };
+  }
+>();
+
+/* ─────────────────── 경매 (서버 nft_auctions 계약) ─────────────────── */
+
+export interface MockAuction {
+  auctionId: number;
+  photocardId: number;
+  sellerId: string;
+  startPrice: number;
+  buyNowPrice: number | null;
+  /** 비정규화 값. 진실은 topBidId 가 가리키는 입찰의 amount 다 (서버와 같은 구조) */
+  currentPrice: number;
+  topBidId: number | null;
+  bidCount: number;
+  endsAt: string;
+  status: 'ACTIVE' | 'SOLD' | 'EXPIRED' | 'CANCELLED';
+  winnerId: string | null;
+  createdAt: string;
+  closedAt: string | null;
+}
+
+export interface MockAuctionBid {
+  bidId: number;
+  auctionId: number;
+  bidderId: string;
+  amount: number;
+  bidAt: string;
+}
+
+/**
+ * 캣머니 홀드 원장 (서버 `cat_money_holds`).
+ * 입찰하면 그 금액이 묶이고, 밀리면 풀립니다.
+ * ⚠️ 화면 잔액은 **실서버**에서 오므로 이 홀드는 화면에 보이지 않습니다.
+ * 목업 안에서 "가용 잔액 부족" 분기를 볼 수 있게 남겨 둡니다.
+ */
+export interface MockCatMoneyHold {
+  userId: string;
+  amount: number;
+  refType: 'AUCTION_BID' | 'AUCTION_BUY_NOW';
+  refId: number;
+  status: 'ACTIVE' | 'RELEASED' | 'CAPTURED';
+}
+
+let auctionSeq = 10;
+let bidSeq = 70;
+export const nextAuctionId = () => (auctionSeq += 1);
+export const nextBidId = () => (bidSeq += 1);
+
+const HOUR = 3600_000;
+const MINUTE = 60_000;
+
+/* 경매 네 건을 심습니다. 각각 다른 상황을 화면에서 볼 수 있게:
+     a-1 입찰 여럿 + 즉시구매 있음 (u-1 은 밀린 입찰자)
+     a-2 입찰 없음
+     a-3 곧 마감 (2분) — 마감과 낙찰을 실제로 볼 수 있습니다. u-1 이 최고 입찰자
+     a-4 u-1 이 판매자 (취소 버튼 확인용)
+   경매에 올린 포카는 고정가 판매를 비웁니다 — 서버가 둘을 동시에 허용하지 않습니다. */
+const AUCTION_SEED: Array<{
+  photocardId: number;
+  sellerId: string;
+  startPrice: number;
+  buyNowPrice: number | null;
+  endsInMs: number;
+  bids: Array<{ bidderId: string; amount: number; agoMs: number }>;
+}> = [
+  {
+    photocardId: 504,
+    sellerId: 'u-3',
+    startPrice: 1000,
+    buyNowPrice: 5000,
+    endsInMs: 2 * DAY,
+    bids: [
+      { bidderId: 'u-1', amount: 1200, agoMs: 5 * HOUR },
+      { bidderId: 'u-2', amount: 1800, agoMs: 2 * HOUR },
+    ],
+  },
+  {
+    photocardId: 506,
+    sellerId: 'u-3',
+    startPrice: 300,
+    buyNowPrice: null,
+    endsInMs: 6 * HOUR,
+    bids: [],
+  },
+  {
+    photocardId: 509,
+    sellerId: 'u-3',
+    startPrice: 500,
+    buyNowPrice: 3000,
+    endsInMs: 2 * MINUTE,
+    bids: [{ bidderId: 'u-1', amount: 700, agoMs: 30 * MINUTE }],
+  },
+  {
+    photocardId: 502,
+    /* 502 는 남의 카드입니다(ownerId: 'u-3'). 주인과 판매자가 다르면
+       '내 경매' 에 내 것이 아닌 카드가 올라옵니다. */
+    sellerId: 'u-3',
+    startPrice: 900,
+    buyNowPrice: 2500,
+    endsInMs: 3 * DAY,
+    bids: [],
+  },
+];
+
+export const auctions: MockAuction[] = [];
+export const auctionBids: MockAuctionBid[] = [];
+export const catMoneyHolds: MockCatMoneyHold[] = [];
+
+for (const seed of AUCTION_SEED) {
+  const card = photocards.find((p) => p.photocardId === seed.photocardId);
+  if (card) {
+    card.ownerId = seed.sellerId;
+    card.listing = null; // 고정가와 경매는 동시에 올라갈 수 없습니다
+  }
+
+  const auction: MockAuction = {
+    auctionId: nextAuctionId(),
+    photocardId: seed.photocardId,
+    sellerId: seed.sellerId,
+    startPrice: seed.startPrice,
+    buyNowPrice: seed.buyNowPrice,
+    currentPrice: seed.startPrice,
+    topBidId: null,
+    bidCount: 0,
+    endsAt: iso(now() + seed.endsInMs),
+    status: 'ACTIVE',
+    winnerId: null,
+    createdAt: iso(now() - 2 * DAY),
+    closedAt: null,
+  };
+
+  for (const bid of seed.bids) {
+    const row: MockAuctionBid = {
+      bidId: nextBidId(),
+      auctionId: auction.auctionId,
+      bidderId: bid.bidderId,
+      amount: bid.amount,
+      bidAt: iso(now() - bid.agoMs),
+    };
+    auctionBids.push(row);
+    auction.currentPrice = bid.amount;
+    auction.topBidId = row.bidId;
+    auction.bidCount += 1;
+  }
+
+  // 홀드는 **최고 입찰 하나**만 살아 있습니다 — 밀린 입찰은 그 즉시 풀립니다.
+  if (auction.topBidId !== null) {
+    const top = auctionBids.find((b) => b.bidId === auction.topBidId);
+    if (top) {
+      catMoneyHolds.push({
+        userId: top.bidderId,
+        amount: top.amount,
+        refType: 'AUCTION_BID',
+        refId: top.bidId,
+        status: 'ACTIVE',
+      });
+    }
+  }
+
+  auctions.push(auction);
+}
 
 /* ── 세션 (목업용 아주 단순한 토큰 저장소) ── */
 export const sessions = new Map<string, string>(); // accessToken -> userId
@@ -450,6 +743,17 @@ export const findConcert = (id: string) => concerts.find((c) => c.id === id);
 export const findSchedule = (id: string) => schedules.find((s) => s.id === id);
 export const findVenue = (id: string) => venues.find((v) => v.id === id);
 export const findSeat = (id: string) => seats.find((s) => s.id === id);
+
+/**
+ * 실서버 로그인 사용자 → 시연용 사용자(u-1) 닉네임 동기화.
+ * JWT 에는 userId·role 만 있어서, `GET /users/me` 응답이 목업 어댑터를 지나갈 때
+ * 어댑터가 이 함수를 불러 닉네임을 이어 붙입니다. 상세의 `ownerNickname` 과
+ * 화면의 `user.nickname` 이 같아져 "내 카드" 판정이 맞습니다. (목업 전용)
+ */
+export const bridgeDemoNickname = (nickname: string) => {
+  const demo = users[0];
+  if (demo && nickname) demo.nickname = nickname;
+};
 
 export const userFromToken = (token: string | undefined) => {
   if (!token) return undefined;
@@ -463,6 +767,16 @@ export const userFromToken = (token: string | undefined) => {
   const restored = matched ? findUser(matched[1] ?? '') : undefined;
   if (restored) sessions.set(token, restored.id);
   return restored;
+};
+
+/**
+ * 목업이 심은 시각 문자열 → epoch ms.
+ * 목업은 `toISOString()`(Z)을 쓰고 실서버는 타임존 없는 KST 를 줍니다.
+ * 핸들러가 두 형태를 같은 방식으로 비교하도록 프론트와 같은 규칙을 씁니다.
+ */
+export const parseTime = (value: string): number => {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasZone ? value : `${value}+09:00`).getTime();
 };
 
 export { iso, DAY, now };

@@ -20,10 +20,14 @@ function hueOf(seed: string): number {
 const SWIPE_THRESHOLD = 40;
 
 /**
- * 광고·이벤트 배너 슬라이더. **4:3 비율**입니다.
+ * 광고·이벤트 배너 슬라이더. **4:3 비율**이고, 넓은 화면(lg)에서만 **21:9** 입니다.
  *
- * ⚠️ 비율을 바꾸면 홈의 검정/하양 경계가 어긋납니다.
+ * 폰의 4:3 을 그대로 넓은 화면에 쓰면 배너 하나가 700px 넘는 벽이 되어
+ * 첫 화면에 배너밖에 안 보입니다. 가로로 긴 히어로로 바꿉니다.
+ *
+ * ⚠️ **폰 비율(4:3)** 을 바꾸면 홈의 검정/하양 경계가 어긋납니다.
  *    `styles/index.css` 의 `--banner-height` 도 함께 고쳐야 합니다.
+ *    lg 비율은 무관합니다 — 그 경계판은 데스크톱에서 감춥니다(HomePage).
  *
  * 구현 메모
  *  - transform 으로 트랙을 미는 방식입니다. 슬라이드마다 컴포넌트를
@@ -76,7 +80,10 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
     <section
       aria-roledescription="carousel"
       aria-label="이벤트 배너"
-      className="shadow-pop relative overflow-hidden rounded-lg"
+      /* 넓은 화면에서는 홈의 바로가기 면이 **바로 아래에 이어 붙습니다.**
+         아래 모서리를 각지게 해야 둘이 한 덩어리로 읽힙니다 (HomePage 참고).
+         배너를 단독으로 쓰는 곳이 생기면 그때 prop 으로 빼세요 — 지금은 홈뿐입니다. */
+      className="shadow-pop relative overflow-hidden rounded-lg lg:rounded-t-2xl lg:rounded-b-none"
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0]?.clientX ?? null;
       }}
@@ -96,11 +103,12 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
         style={{ transform: `translateX(-${index * 100}%)` }}
       >
         {banners.map((banner, i) => {
-          const h = hueOf(banner.artSeed);
+          /* 이미지가 없을 때만 쓰는 폴백 색. 같은 배너는 항상 같은 색이 나옵니다 */
+          const h = hueOf(String(banner.bannerId));
 
           return (
             <button
-              key={banner.id}
+              key={banner.bannerId}
               type="button"
               // 화면에 안 보이는 슬라이드는 탭 순서에서 빼야 키보드가 헤매지 않습니다.
               tabIndex={i === index ? 0 : -1}
@@ -114,7 +122,7 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                       oklch(0.3 0.11 ${(h + 40) % 360}) 60%,
                       oklch(0.19 0.06 ${(h + 75) % 360}) 100%)`,
               }}
-              className="relative flex aspect-[4/3] w-full shrink-0 basis-full items-end bg-cover bg-center p-5 text-left"
+              className="relative flex aspect-[4/3] w-full shrink-0 basis-full items-end bg-cover bg-center p-5 text-left lg:aspect-[21/9] lg:p-8"
             >
               {/* 글자가 읽히도록 아래쪽을 어둡게 */}
               <span
@@ -123,13 +131,17 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
               />
 
               <span className="relative min-w-0 pb-4">
-                <span className="inline-flex rounded bg-white px-2 py-0.5 text-[0.6875rem] font-bold text-black">
-                  {banner.label}
-                </span>
+                {banner.label && (
+                  <span className="inline-flex rounded bg-white px-2 py-0.5 text-[0.6875rem] font-bold text-black">
+                    {banner.label}
+                  </span>
+                )}
                 <span className="mt-2.5 block text-xl leading-tight font-bold text-white">
                   {banner.title}
                 </span>
-                <span className="mt-1 block text-[0.8125rem] text-white/85">{banner.subtitle}</span>
+                {banner.subtitle && (
+                  <span className="mt-1 block text-[0.8125rem] text-white/85">{banner.subtitle}</span>
+                )}
               </span>
             </button>
           );
@@ -147,7 +159,7 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
           <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
             {banners.map((banner, i) => (
               <button
-                key={banner.id}
+                key={banner.bannerId}
                 type="button"
                 aria-label={`${i + 1}번째 배너 보기`}
                 aria-current={i === index}
