@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, CheckCircle2, FlaskConical, RotateCcw, TriangleAlert, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, FlaskConical, TriangleAlert, XCircle } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Card } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
@@ -180,22 +180,19 @@ export function FaceVerifyPage() {
               </dl>
             </Card>
 
+            {/* "여러 번 찍어보세요" 라고 쓰지 않습니다 — 결과 화면에 재시도 버튼이 없습니다.
+                붙을 때까지 다시 누르게 하면 본인 확인이 아니라 임계값 넘기기 연습이 됩니다. */}
             <p className="text-subtle px-1 text-xs leading-relaxed">
-              같은 사람이면 보통 0.4~0.7 사이가 나옵니다. 조명·각도·거리에 따라 흔들리니 여러 번
-              찍어보며 분포를 보세요.
+              같은 사람도 조명·각도·거리에 따라 점수가 흩어집니다. 합격선을 넘지 못했다면 밝은
+              곳에서 정면으로 다시 시도해 주세요.
             </p>
 
-            <Button
-              variant="dark"
-              size="lg"
-              fullWidth
-              leftIcon={<RotateCcw size={18} />}
-              onClick={() => verify.reset()}
-            >
-              다시 확인하기
-            </Button>
+            {/* 결과를 받은 뒤에는 **다시 찍지 못하게** 둡니다.
+                재시도 버튼이 있으면 붙을 때까지 각도·조명을 바꿔가며 누르게 되고,
+                그건 본인 확인이 아니라 임계값을 넘기는 연습이 됩니다.
+                다시 하려면 화면을 나갔다 들어와야 합니다(헤더의 뒤로가기). */}
             {backTo && (
-              <Button variant="ghost" fullWidth onClick={() => navigate(backTo)}>
+              <Button variant="dark" size="lg" fullWidth onClick={() => navigate(backTo)}>
                 티켓으로 돌아가기
               </Button>
             )}
