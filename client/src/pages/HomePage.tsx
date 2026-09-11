@@ -149,8 +149,12 @@ export function HomePage() {
       />
 
       {/* 같은 배경판의 데스크톱판.
-          규칙은 폰과 **똑같습니다** — 배너 위쪽 90% 까지 짙은 면이고, 배너가 그
-          경계에 걸쳐 내려옵니다. 다른 것은 둘뿐입니다.
+          규칙은 폰과 같습니다 — 짙은 면이 배너 중간까지 올라오고 배너가 그 경계에
+          걸쳐 내려옵니다. 다른 것은 셋입니다.
+
+          0. 경계가 배너의 90% 가 아니라 **65%** 입니다. 21:9 배너는 4:3 보다 납작해서
+             같은 90% 를 쓰면 초록이 배너 아래끝까지 닿아 "걸쳐 있다" 가 안 보이고
+             그냥 초록 위에 얹힌 네모가 됩니다.
 
           1. 위로 덮을 상단바가 없습니다 (그 헤더는 lg 에서 숨기고 TopNav 가 대신합니다)
              → 본문 맨 위에서 시작합니다. AppLayout 이 본문에 위 여백을 주지 않는
@@ -163,7 +167,7 @@ export function HomePage() {
       <div
         aria-hidden
         className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
-        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.9)' }}
+        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.65)' }}
       />
 
       {/* ── 최상단 줄 (검정 위) ──
@@ -193,24 +197,26 @@ export function HomePage() {
       {/* 넓은 화면에서는 좌우 여백을 본문(AppLayout 의 px-6)에 맡깁니다 */}
       <div className="relative px-4 pt-2 lg:px-0 lg:pt-6">
         {bannersPending ? (
-          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-2xl" />
+          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-t-2xl lg:rounded-b-none" />
         ) : (
           banners && <BannerCarousel banners={banners} onSelect={openBanner} />
         )}
       </div>
 
-      {/* ── 흰 배경 영역 ── */}
-      <div className="relative space-y-6 px-4 pt-6 lg:space-y-10 lg:px-0 lg:pt-8">
-        {/* 바로가기 — 아이콘 타일 + 아래 라벨.
+      {/* ── 바로가기 ──
+          폰에서는 배너 아래 한 칸 띄우고, **데스크톱에서는 배너에 이어 붙습니다**
+          (`lg:pt-0` + 맞닿는 모서리만 각지게). 배너와 한 덩어리로 보이게 하려는 것이라
+          위치를 CSS 로만 바꿉니다 — 화면마다 따로 그리면 둘이 갈라집니다.
 
-            폰에서는 흰 타일 다섯 개가 오프화이트 바탕 위에 떠 있는 것으로 충분합니다
-            (폭이 좁아 그 자체가 한 줄로 읽힙니다). 넓은 화면에서는 같은 타일이
-            빈 벌판에 흩어진 점 다섯 개가 됩니다 — **하나의 면**으로 묶습니다.
-            묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
-            같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
+          폰에서는 흰 타일 다섯 개가 오프화이트 바탕 위에 떠 있는 것으로 충분합니다
+          (폭이 좁아 그 자체가 한 줄로 읽힙니다). 넓은 화면에서는 같은 타일이
+          빈 벌판에 흩어진 점 다섯 개가 됩니다 — **하나의 면**으로 묶습니다.
+          묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
+          같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
+      <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
         <Stagger
           as="ul"
-          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-2xl lg:px-8 lg:py-7"
+          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
         >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
@@ -235,7 +241,10 @@ export function HomePage() {
             </Stagger.Item>
           ))}
         </Stagger>
+      </div>
 
+      {/* ── 흰 배경 영역 ── */}
+      <div className="relative space-y-6 px-4 pt-6 lg:space-y-10 lg:px-0 lg:pt-10">
         {/* 시간이 걸린 일이라 얼굴 등록 안내보다 위입니다 */}
         {activeHold && (
           <ResumeBookingCard

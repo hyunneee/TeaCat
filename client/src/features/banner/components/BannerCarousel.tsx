@@ -80,7 +80,10 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
     <section
       aria-roledescription="carousel"
       aria-label="이벤트 배너"
-      className="shadow-pop relative overflow-hidden rounded-lg"
+      /* 넓은 화면에서는 홈의 바로가기 면이 **바로 아래에 이어 붙습니다.**
+         아래 모서리를 각지게 해야 둘이 한 덩어리로 읽힙니다 (HomePage 참고).
+         배너를 단독으로 쓰는 곳이 생기면 그때 prop 으로 빼세요 — 지금은 홈뿐입니다. */
+      className="shadow-pop relative overflow-hidden rounded-lg lg:rounded-t-2xl lg:rounded-b-none"
       onTouchStart={(e) => {
         touchStartX.current = e.touches[0]?.clientX ?? null;
       }}

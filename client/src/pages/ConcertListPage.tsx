@@ -49,7 +49,10 @@ export function ConcertListPage() {
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:flex lg:items-center lg:gap-3 lg:px-0 lg:pt-3">
         {/* 검색·포카 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고)
             서버 검색은 공연명 부분 일치입니다 (API-201). */}
-        <div className="lg:max-w-md lg:flex-1">
+        {/* 가로로 펼 때만 자리를 바꿉니다 — **왼쪽 토글 · 오른쪽 검색** (내 티켓과 같은 배치).
+            폰에서는 세로로 쌓이고, 그때는 검색창이 머리말 바로 아래 와야 합니다
+            (목록 화면들의 검색창이 모두 같은 높이에 있어야 눈이 헤매지 않습니다). */}
+        <div className="lg:order-2 lg:ml-auto lg:w-full lg:max-w-xs">
           <Input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -68,7 +71,7 @@ export function ConcertListPage() {
           options={TABS}
           value={tab}
           onChange={setTab}
-          className="mt-2 lg:mt-0 lg:ml-auto lg:w-56 lg:shrink-0"
+          className="mt-2 lg:order-1 lg:mt-0 lg:w-72 lg:shrink-0"
         />
       </div>
 
