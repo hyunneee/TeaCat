@@ -12,6 +12,7 @@ import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
 import com.teacat.server.nft.client.PhotocardChainClient;
 import com.teacat.server.nft.client.PhotocardIssueResult;
 import com.teacat.server.nft.exception.NftErrorCode;
+import com.teacat.server.nft.repository.NftMarketQueryRepository;
 import com.teacat.server.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -929,6 +930,89 @@ class NftServiceIntegrationTests {
         assertThat(sent.getAllValues().get(1)).hasSize(1);
     }
 
+    // ── 뽑기 풀 도안과의 경계 (B1 · C4 · C3) ────────────────────────────────
+
+    @Test
+    void 뽑기_풀_도안_id로_수동_발급을_요청하면_거절되고_카드가_생기지_않는다() {
+        // 🔴 B1: 요청 본문의 designId 를 그대로 받는 경로다. 뽑기 풀 도안(그 공연 팩이 뽑을 재고)을
+        // 넣으면 티켓 보유자에게 직접(회수 불가로) 민팅되던 결함
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("b1@test.com", "발급대상"), fixture);
+        Long poolDesignId = insertPoolDesign(fixture.performanceId(), "뽑기 풀 도안", 5);
+
+        assertNftError(NftErrorCode.DESIGN_POOL_CONFLICT,
+                () -> nftService.issuePhotocards(fixture.performanceId(),
+                        new NftPhotocardIssueRequest(
+                                List.of(new NftDesignAllocationRequest(poolDesignId, 1)))));
+
+        // 결과 상태를 DB 에서 확인한다 — 카드가 한 장도 만들어지지 않았어야 한다
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isZero();
+    }
+
+    @Test
+    void 이벤트_풀_도안_id로_수동_발급을_요청해도_NPE_없이_거절된다() {
+        // 🔴 B1: 이벤트 풀 도안은 performanceId 가 NULL 이라, isDrawPool() 검사보다
+        // getPerformanceId().equals(performanceId) 가 먼저면 NPE(500)가 난다
+        Fixture fixture = insertPerformanceFixture();
+        insertTicket(insertUser("b1b@test.com", "발급대상"), fixture);
+        Long eventPoolDesignId = insertPoolDesign(null, "이벤트 풀 도안", 5);
+
+        assertNftError(NftErrorCode.DESIGN_POOL_CONFLICT,
+                () -> nftService.issuePhotocards(fixture.performanceId(),
+                        new NftPhotocardIssueRequest(
+                                List.of(new NftDesignAllocationRequest(eventPoolDesignId, 1)))));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class)).isZero();
+    }
+
+    @Test
+    void 공연_팩에서_카드가_한_번_뽑힌_뒤에도_수동_발급은_여전히_가능하다() {
+        // 🔴 C4: existsByDesignPerformanceId(전체) 는 뽑힌 카드(ticket_id NULL)도 세어, 그 공연
+        // 팩을 한 번만 열어도 수동 일괄 발급이 영구히 막혔다
+        Fixture fixture = insertPerformanceFixture();
+        Long poolDesignId = insertPoolDesign(fixture.performanceId(), "뽑기 풀 도안", 5);
+        insertDrawnPhotocard(poolDesignId, insertUser("drawer@test.com", "뽑은사람"));
+
+        Long recipientId = insertUser("c4@test.com", "발급대상");
+        insertTicket(recipientId, fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 1);
+
+        NftPhotocardIssueResponse response = nftService.issuePhotocards(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1))));
+
+        // 결과 상태를 DB 에서 확인한다 — 뽑힌 카드 1장 + 이번에 발급된 티켓 카드 1장
+        assertThat(response.issuedCount()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM nft_photocards", Long.class))
+                .isEqualTo(2L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocards WHERE ticket_id IS NOT NULL", Long.class))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void 뽑은_카드는_발행_재시도_조회에_잡히지_않는다() {
+        // 🔴 C3: findPendingMints 가 d.performance_general_id 로만 걸러서, 그 공연 팩에서 뽑힌
+        // 카드(티켓 NULL)까지 발행 재시도 대상에 들어가 수동 발행 재시도와 뽑기 스위퍼가 같은
+        // 카드를 동시에 보내는 중복 트랜잭션이 생겼었다
+        Fixture fixture = insertPerformanceFixture();
+        Long recipientId = insertUser("recipient@test.com", "수령자");
+        insertTicket(recipientId, fixture);
+        Long designId = insertDesign(fixture.performanceId(), "한정 포토카드", 1);
+        nftService.issuePhotocards(fixture.performanceId(),
+                new NftPhotocardIssueRequest(List.of(new NftDesignAllocationRequest(designId, 1))));
+
+        Long poolDesignId = insertPoolDesign(fixture.performanceId(), "뽑기 풀 도안", 5);
+        insertDrawnPhotocard(poolDesignId, insertUser("drawer2@test.com", "뽑은사람2"));
+
+        List<NftMarketQueryRepository.PendingMintRow> pending =
+                nftMarketQueryRepository.findPendingMints(fixture.performanceId(), 100);
+
+        // 티켓 기반 카드만 나와야 한다 — 뽑힌 카드(poolDesignId)는 결과에 없어야 한다
+        assertThat(pending).extracting(NftMarketQueryRepository.PendingMintRow::designId)
+                .containsExactly(designId)
+                .doesNotContain(poolDesignId);
+    }
+
     // ── 회차(performance_detail) 단위 자동 발급 ────────────────────────────────
 
     @Test
@@ -1211,11 +1295,34 @@ class NftServiceIntegrationTests {
                 """, Long.class, performanceId, name, totalSupply);
     }
 
+    /** 뽑기 풀 도안(draw_pool = true) 한 행. performanceId 가 null 이면 이벤트 풀 도안 */
+    private Long insertPoolDesign(Long performanceId, String name, int totalSupply) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_designs
+                    (performance_general_id, name, image_url, total_supply, image_cid, metadata_cid,
+                     chain_status, draw_pool, group_name, grade)
+                VALUES (?, ?, '/draw.png', ?, 'bafyIMG', 'bafyMETA',
+                        'REGISTERED', true, '서울 5반', 'SPECIAL'::nft_photocard_grade)
+                RETURNING id
+                """, Long.class, performanceId, name, totalSupply);
+    }
+
     private Long insertPhotocard(Long designId, Long ticketId, Long ownerId) {
         return jdbcTemplate.queryForObject("""
                 INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
                 VALUES (?, ?, ?, 'PENDING') RETURNING id
                 """, Long.class, designId, ticketId, ownerId);
+    }
+
+    /** 카드팩에서 뽑힌 카드처럼 ticket_id 없이 카드 행을 만든다. ownerId 는 지갑까지 갖춘 회원이어야 한다 */
+    private Long insertDrawnPhotocard(Long designId, Long ownerId) {
+        Long walletId = jdbcTemplate.queryForObject("""
+                SELECT w.id FROM wallets w JOIN wallet_owners o ON o.id = w.owner_id WHERE o.user_id = ?
+                """, Long.class, ownerId);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, wallet_id, status)
+                VALUES (?, NULL, ?, ?, 'PENDING') RETURNING id
+                """, Long.class, designId, ownerId, walletId);
     }
 
     private void insertListing(Long photocardId, Long sellerId, Long price) {

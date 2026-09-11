@@ -25,6 +25,13 @@ public record NftPhotocardDesignResponse(
         @Schema(description = "뽑기 풀 도안인가")
         boolean drawPool,
 
+        @Schema(description = "이 도안을 만든 템플릿 ID. 템플릿 없이 직접 등록된 기존 도안은 null",
+                example = "3")
+        Long templateId,
+
+        @Schema(description = "남은 수량 (totalSupply - issuedSupply)", example = "18")
+        int remaining,
+
         @Schema(description = "소속 (뽑기 풀 도안만)", example = "서울 5반")
         String group,
 
@@ -75,6 +82,8 @@ public record NftPhotocardDesignResponse(
                 design.getId(),
                 design.getPerformanceId(),
                 design.isDrawPool(),
+                design.getTemplateId(),
+                design.remaining(),
                 design.getGroupName(),
                 design.getGrade(),
                 design.getName(),

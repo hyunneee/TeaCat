@@ -89,7 +89,24 @@ public enum NftErrorCode implements ErrorCode {
     // ── 카드팩 이벤트 ────────────────────────────────────────────────────
     /** code 는 계정당 1회의 기준이라 유일해야 한다 */
     PACK_EVENT_CODE_DUPLICATED(HttpStatus.CONFLICT, "NFT_044", "이미 등록된 이벤트 코드입니다."),
-    PACK_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_045", "존재하지 않는 카드팩 이벤트입니다.");
+    PACK_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_045", "존재하지 않는 카드팩 이벤트입니다."),
+
+    // ── 템플릿 · 공연별 뽑기 풀 ────────────────────────────────────────────
+    TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_046", "존재하지 않는 포토카드 템플릿입니다."),
+    /**
+     * 같은 템플릿을 같은 공연(또는 이벤트 풀)에 두 번 넣지 않는다.
+     *
+     * <p>🔴 코드 문자열(NFT_047)은 프론트가 분기에 쓰므로 바꾸지 않는다. 이벤트 풀 경로와
+     * "요청 안 중복"에도 같은 코드를 쓰므로 메시지는 "공연"을 특정하지 않는다(Q2).
+     */
+    TEMPLATE_ALREADY_IN_POOL(HttpStatus.CONFLICT, "NFT_047",
+            "이미 넣은 카드입니다."),
+    /** 공연이 없는 도안을 풀에서 내리면 공연도 없고 풀도 아닌 행이 된다 (CHECK 위반) */
+    DESIGN_EVENT_POOL_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_048",
+            "이벤트 풀 카드는 뽑기 풀에서 뺄 수 없습니다."),
+    /** 도안 이름은 "{템플릿 이름} · {공연 제목}" 이고 nft_photocard_designs.name 이 varchar(100) 이다 */
+    DESIGN_NAME_TOO_LONG(HttpStatus.BAD_REQUEST, "NFT_049",
+            "카드 이름과 공연 제목을 합치면 100자를 넘습니다. 둘 중 하나를 줄여 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

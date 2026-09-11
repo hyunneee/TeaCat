@@ -47,4 +47,19 @@ public record PhotocardNftMetadata(
         return new PhotocardNftMetadata(name, description, IPFS_SCHEME + imageCid,
                 List.of(new Attribute("소속", group), new Attribute("등급", grade)));
     }
+
+    /**
+     * 공연별 뽑기 풀 도안. {@code 공연} attribute 가 하나 더 붙는다.
+     *
+     * <p>🔴 이 문서가 핀되는 순간 이름·설명·속성이 CID 하나로 굳고, 그 CID 가 온체인에 박힌다.
+     * <b>이름 규칙과 attribute 구성을 나중에 바꾸면</b> 이미 등록된 도안의 온체인 문서는 그대로
+     * 남아 새 규칙과 어긋난다. 처음에 정하고 유지한다.
+     */
+    public static PhotocardNftMetadata ofPerformancePool(String name, String description, String imageCid,
+                                                         String group, String grade, String performanceTitle) {
+        return new PhotocardNftMetadata(name, description, IPFS_SCHEME + imageCid,
+                List.of(new Attribute("소속", group),
+                        new Attribute("등급", grade),
+                        new Attribute("공연", performanceTitle)));
+    }
 }

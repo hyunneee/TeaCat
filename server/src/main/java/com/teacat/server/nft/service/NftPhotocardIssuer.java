@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
  *
  * <p>다른 하나는 <b>②가 실패해도 ①을 되돌리면 안 되기 때문</b>이다. 카드 행은 남겨두고 발행만
  * 다시 보내면 된다 — 도안 등록에서와 같은 판단이다. 되돌리면 어드민이 발급을 다시 눌러야 하는데,
- * {@code existsByDesignPerformanceId} 가 재발급을 막고 있어 손쓸 방법이 없어진다.
+ * {@code existsByDesignPerformanceIdAndTicketIdIsNotNull} 이 재발급을 막고 있어 손쓸 방법이 없어진다.
  *
  * <p>그래서 ②만 다시 부르는 경로({@code mintPending})를 따로 연다.
  */

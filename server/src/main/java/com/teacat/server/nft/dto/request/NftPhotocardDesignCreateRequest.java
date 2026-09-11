@@ -44,7 +44,10 @@ public record NftPhotocardDesignCreateRequest(
         @Schema(description = "도안 이미지 (jpg/png/webp/gif)")
         MultipartFile image,
 
-        @Schema(description = "뽑기 풀 도안인가. true 면 공연 없이 소속·등급을 함께 보낸다", example = "false")
+        @Schema(description = "사용하지 않습니다. 뽑기 풀 카드는 템플릿 경로로 만드세요 "
+                + "(POST /admin/photocard-templates → POST /admin/performances/{id}/draw-designs). "
+                + "true 로 보내면 NFT_042 로 거절됩니다",
+                deprecated = true, example = "false")
         Boolean drawPool,
 
         @Schema(description = "소속 (뽑기 풀 도안만). 화면 문구에 쓴다", example = "서울 5반")

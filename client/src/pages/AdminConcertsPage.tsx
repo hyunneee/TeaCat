@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Eye, EyeOff, Music, Pencil, Plus, Search } from 'lucide-react';
+import { CalendarDays, Eye, EyeOff, Music, Pencil, Plus, Search, Sparkles } from 'lucide-react';
 import { Badge, Button, Card, Input, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
@@ -79,6 +79,9 @@ export function AdminConcertsPage() {
               <ConcertRow
                 concert={concert}
                 onEdit={() => navigate(ROUTES.ADMIN_CONCERT_EDIT(String(concert.concertId)))}
+                onDrawPool={() =>
+                  navigate(ROUTES.ADMIN_CONCERT_DRAW_POOL(String(concert.concertId)))
+                }
               />
             </li>
           ))}
@@ -88,7 +91,15 @@ export function AdminConcertsPage() {
   );
 }
 
-function ConcertRow({ concert, onEdit }: { concert: ConcertSummary; onEdit: () => void }) {
+function ConcertRow({
+  concert,
+  onEdit,
+  onDrawPool,
+}: {
+  concert: ConcertSummary;
+  onEdit: () => void;
+  onDrawPool: () => void;
+}) {
   return (
     <Card className="flex items-center gap-4">
       {/* 포스터가 없는 공연도 있습니다. 빈 칸을 두면 줄마다 높이가 달라집니다 */}
@@ -127,6 +138,11 @@ function ConcertRow({ concert, onEdit }: { concert: ConcertSummary; onEdit: () =
 
       <Button variant="soft" size="md" leftIcon={<Pencil size={15} />} onClick={onEdit}>
         관리
+      </Button>
+
+      {/* 🔴 이 공연에 카드를 넣지 않으면 관객이 카드팩을 열어도 받지 못합니다 */}
+      <Button variant="soft" size="md" leftIcon={<Sparkles size={15} />} onClick={onDrawPool}>
+        뽑기 카드
       </Button>
 
       {/* 공개 상세는 비공개 공연이 404 라 링크를 걸지 않습니다 */}

@@ -109,8 +109,12 @@ export const ROUTES = {
   ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
   ADMIN_INQUIRIES: '/admin/inquiries',
   ADMIN_BANNERS: '/admin/banners',
-  /** 뽑기 도안 — 여기 등록한 것만 카드팩에서 나옵니다 */
+  /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
+  ADMIN_POCA_TEMPLATES: '/admin/poca-templates',
+  /** 이벤트 카드팩에서 나올 카드 (공연과 무관) */
   ADMIN_POCA_DESIGNS: '/admin/poca-designs',
+  /** 그 공연 카드팩에서 나올 카드 */
+  ADMIN_CONCERT_DRAW_POOL: (concertId: string) => `/admin/concerts/${concertId}/draw-pool`,
   ADMIN_ANALYTICS: '/admin/analytics',
   ADMIN_CONCERTS: '/admin/concerts',
   /** 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 (CONCERT_CREATE 와 같은 이유) */

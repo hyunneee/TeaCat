@@ -52,6 +52,10 @@ public class NftPhotocardDesignService {
     public NftPhotocardDesignResponse create(NftPhotocardDesignCreateRequest request) {
         /* 핀을 먼저 하면 잘못된 요청에도 IPFS 에 쓰레기가 남는다. 핀은 되돌릴 수 없으므로
            되돌릴 수 있는 검사를 전부 앞에 둔다 */
+        /* 2026-09-11: 뽑기 풀 도안은 템플릿 경로가 대신한다.
+           등록(POST /admin/photocard-templates) → 넣기(POST /admin/performances/{id}/draw-designs
+           또는 POST /admin/photocard-designs/event-pool). 등록할 때 수량을 정하지 않아도 되고,
+           쓰지 않을 카드가 온체인에 올라가지 않는다.
         boolean drawPool = request.isDrawPool();
         if (drawPool == (request.performanceId() != null)) {
             throw new BusinessException(NftErrorCode.DESIGN_POOL_CONFLICT);
@@ -59,24 +63,35 @@ public class NftPhotocardDesignService {
         if (drawPool && (request.group() == null || request.group().isBlank() || request.grade() == null)) {
             throw new BusinessException(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
         }
-        if (!drawPool && !performanceRepository.existsById(request.performanceId())) {
+        */
+        // 이 경로는 공연 전용 도안(자동 발급용)만 만든다
+        if (request.isDrawPool() || request.performanceId() == null) {
+            throw new BusinessException(NftErrorCode.DESIGN_POOL_CONFLICT);
+        }
+        if (!performanceRepository.existsById(request.performanceId())) {
             throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
         }
 
         String imageCid = ipfsPinService.pinImage(request.image());
+        /* 2026-09-11: 뽑기 풀 분기는 템플릿 경로로 옮겨갔다 (PhotocardNftMetadata.ofDrawPool 은
+           NftPhotocardPoolService 가 쓴다).
         PhotocardNftMetadata metadata = drawPool
-                ? PhotocardNftMetadata.ofDrawPool(request.name(), request.description(), imageCid,
-                        request.group().trim(), request.grade().name())
+                ? PhotocardNftMetadata.ofDrawPool(...)
                 : PhotocardNftMetadata.of(request.name(), request.description(), imageCid);
+        */
+        PhotocardNftMetadata metadata =
+                PhotocardNftMetadata.of(request.name(), request.description(), imageCid);
         String metadataCid = ipfsPinService.pinJson(METADATA_FILENAME, metadata);
 
         // ipfs:// 는 브라우저가 못 연다. 화면 코드가 그대로 쓰도록 게이트웨이 주소를 넣는다
         String imageUrl = ipfsPinService.gatewayUrl(imageCid);
+        /* 2026-09-11: 같은 이유로 writer.createDrawPool 분기도 빠졌다.
         NftPhotocardDesign design = drawPool
-                ? writer.createDrawPool(request.name(), imageUrl, request.totalSupply(),
-                        imageCid, metadataCid, request.group().trim(), request.grade())
-                : writer.create(request.performanceId(), request.name(), imageUrl, request.totalSupply(),
-                        imageCid, metadataCid);
+                ? writer.createDrawPool(...)
+                : writer.create(...);
+        */
+        NftPhotocardDesign design = writer.create(request.performanceId(), request.name(), imageUrl,
+                request.totalSupply(), imageCid, metadataCid);
 
         try {
             registrar.register(design.getId(), false);
@@ -103,15 +118,15 @@ public class NftPhotocardDesignService {
                 .orElseThrow(() -> new BusinessException(NftErrorCode.DESIGN_NOT_FOUND)));
     }
 
-    /** 어드민이 보는 뽑기 풀 — 몇 종이 등록됐고 몇 장 남았나 */
+    /** 어드민이 보는 이벤트 풀 — 몇 종이 등록됐고 몇 장 남았나. 공연별 도안은 빠진다 */
     public List<NftPhotocardDesignResponse> getDrawPool() {
-        return designRepository.findAllByDrawPoolTrueOrderByIdAsc().stream()
+        return designRepository.findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc().stream()
                 .map(NftPhotocardDesignResponse::from)
                 .toList();
     }
 
     public List<NftPhotocardDesignResponse> getByPerformance(Long performanceId) {
-        return designRepository.findAllByPerformanceIdOrderByIdAsc(performanceId).stream()
+        return designRepository.findAllByPerformanceIdAndDrawPoolFalseOrderByIdAsc(performanceId).stream()
                 .map(NftPhotocardDesignResponse::from)
                 .toList();
     }

@@ -83,6 +83,14 @@ const AdminPocaDesignsPage = page(
   () => import('@/pages/AdminPocaDesignsPage'),
   'AdminPocaDesignsPage',
 );
+const AdminPocaTemplatesPage = page(
+  () => import('@/pages/AdminPocaTemplatesPage'),
+  'AdminPocaTemplatesPage',
+);
+const AdminPerformanceDrawPoolPage = page(
+  () => import('@/pages/AdminPerformanceDrawPoolPage'),
+  'AdminPerformanceDrawPoolPage',
+);
 const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
 const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
 const AdminConcertCreatePage = page(
@@ -250,8 +258,16 @@ const routes: RouteObject[] = [
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
                   {
+                    path: ROUTES.ADMIN_POCA_TEMPLATES,
+                    element: withBoundary(<AdminPocaTemplatesPage />),
+                  },
+                  {
                     path: ROUTES.ADMIN_POCA_DESIGNS,
                     element: withBoundary(<AdminPocaDesignsPage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_CONCERT_DRAW_POOL(':concertId'),
+                    element: withBoundary(<AdminPerformanceDrawPoolPage />),
                   },
                   { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
