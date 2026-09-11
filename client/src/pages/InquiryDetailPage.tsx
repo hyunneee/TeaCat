@@ -51,14 +51,14 @@ export function InquiryDetailPage() {
             <p className="text-subtle mt-1 text-xs">{formatDateTime(inquiry.createdAt)}</p>
           </div>
 
-          <Card className="text-sm leading-relaxed whitespace-pre-wrap">{inquiry.content}</Card>
+          <Card className="text-sm leading-relaxed break-words whitespace-pre-wrap">{inquiry.content}</Card>
         </section>
 
         <section>
           <SectionTitle>답변</SectionTitle>
           {inquiry.answer ? (
             <Card className="space-y-2">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{inquiry.answer}</p>
+              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{inquiry.answer}</p>
               <p className="text-subtle text-xs">
                 {inquiry.answeredByNickname}
                 {inquiry.answeredAt ? ` · ${formatDateTime(inquiry.answeredAt)}` : ''}

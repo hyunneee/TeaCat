@@ -29,8 +29,14 @@ public record ScheduleSummaryResponse(
         boolean bookable
 ) {
 
-    public static ScheduleSummaryResponse of(PerformanceDetail detail, LocalDateTime now) {
-        BookingOpenStatus bookingStatus = detail.bookingStatus(now);
+    /**
+     * @param soldOut 좌석이 다 팔렸는가 ({@code ScheduleSeatAvailability} 가 판정).
+     *                🔴 회차 상태만으로는 알 수 없다 — SOLD_OUT 은 운영자가 손으로 바꾸는
+     *                값이라, 이걸 안 넘기면 매진된 회차가 "예매 가능" 으로 나간다
+     */
+    public static ScheduleSummaryResponse of(PerformanceDetail detail, LocalDateTime now,
+            boolean soldOut) {
+        BookingOpenStatus bookingStatus = detail.bookingStatus(now).soldOutIf(soldOut);
 
         return new ScheduleSummaryResponse(
                 detail.getId(),

@@ -4,6 +4,7 @@ import com.teacat.server.booking.dto.response.SeatHoldResponse;
 import com.teacat.server.booking.entity.PerformanceSeatId;
 import com.teacat.server.booking.entity.SeatBookingStatus;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
+import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.TicketingWindow;
 import com.teacat.server.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,9 @@ class BookingServiceTests {
 
     @Mock private PerformanceSeatRepository performanceSeatRepository;
     @Mock private UserRepository userRepository;
+    /* 선점 목록의 포스터 키를 조회 URL 로 바꿀 때만 쓴다. 여기 테스트는 선점만 보므로
+       호출되지 않아, 불필요한 스텁으로 잡히지 않게 lenient 로 둔다 */
+    @Mock(strictness = Mock.Strictness.LENIENT) private FileStorageService fileStorageService;
     @Mock private TicketingWindow ticketingWindow;
 
     private BookingService bookingService;
@@ -38,6 +42,7 @@ class BookingServiceTests {
         bookingService = new BookingService(
                 performanceSeatRepository,
                 userRepository,
+                fileStorageService,
                 Duration.ofMinutes(5));
     }
 

@@ -31,15 +31,20 @@ public class Face {
     public static final int EMBEDDING_DIMENSION = 128;
 
     /**
-     * 같은 사람으로 볼 최소 코사인 유사도. SFace 의 공식 권장값이다(OpenCV Zoo).
+     * 같은 사람으로 볼 최소 코사인 유사도.
      *
-     * <p>클라이언트의 {@code SFACE_COSINE_THRESHOLD} 와 <b>같은 값이어야 한다.</b> 다르면
-     * 화면이 보여주는 합격선과 서버 판정이 어긋난다.
+     * <p>SFace 의 공식 권장값은 <b>0.363</b> 이지만(OpenCV Zoo) 우리는 더 엄격하게 잡았다.
+     * 입장 통제라 남을 통과시키는 쪽(오인)이 본인을 한 번 더 찍게 하는 쪽(거절)보다
+     * 훨씬 비싸다 — 남의 티켓으로 들어가는 걸 막는 게 이 기능의 목적이다.
      *
-     * <p>실제 사람들로 재보고 조정할 값이라, 튜닝이 끝나면 설정(application.yaml)으로 옮기는
-     * 편이 낫다. 지금은 검증 단계라 코드에 둔다.
+     * <p>⚠️ <b>본인이 거절되는 일이 늘어난다.</b> 같은 사람도 조명·각도·거리에 따라
+     * 0.4~0.7 사이로 흩어지므로, 0.65 는 그 분포의 위쪽만 통과시킨다. 실제 사람들로
+     * 재보면서 조정할 값이고, 확정되면 설정(application.yaml)으로 옮기는 편이 낫다.
+     *
+     * <p>🔴 화면이 보여주는 합격선은 이 값이다 — 응답의 {@code threshold} 로 내려간다.
+     * 클라이언트에 같은 숫자를 또 적지 마세요(두 곳이 갈라집니다).
      */
-    public static final double SAME_PERSON_THRESHOLD = 0.363;
+    public static final double SAME_PERSON_THRESHOLD = 0.65;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

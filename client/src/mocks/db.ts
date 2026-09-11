@@ -389,29 +389,16 @@ export const tickets: MockTicket[] = [
 
 /* 대기 중과 당첨, 두 상태를 다 넣어둡니다.
    당첨 카드(예매하기 / 포기하기)는 시연에서 확인할 방법이 없으면 검증이 안 됩니다. */
-export const resaleEntries: MockResaleEntry[] = [
-  {
-    id: 're-1',
-    scheduleId: 's-1',
-    sectionId: 's-1-sec-4',
-    userId: 'u-1',
-    quantity: 1,
-    status: 'WAITING',
-    deadlineAt: null,
-    createdAt: iso(now() - 6 * 3600_000),
-  },
-  {
-    id: 're-2',
-    scheduleId: 's-2',
-    sectionId: 's-2-sec-2',
-    userId: 'u-1',
-    quantity: 1,
-    status: 'WON',
-    // 당첨 후 12시간 안에 결제 (RESALE_PAYMENT_HOURS)
-    deadlineAt: iso(now() + 9 * 3600_000),
-    createdAt: iso(now() - 20 * 3600_000),
-  },
-];
+/**
+ * 취소표 대기 신청 내역.
+ *
+ * 🔴 **비워 둡니다.** 예전에는 대기중 1건·당첨 1건을 심어 뒀는데, 신청한 적이 없는
+ *    사용자에게 "내 대기 내역" 에 남의 신청처럼 보이는 항목이 떠서 QA 에서 오류로
+ *    잡혔습니다. 화면을 채워 보려고 심은 데이터가 기능을 잘못 설명하고 있었습니다.
+ *
+ * 여기서 신청하면 이 배열에 쌓이므로, 흐름을 확인하는 데는 문제가 없습니다.
+ */
+export const resaleEntries: MockResaleEntry[] = [];
 
 const NFT_NAMES = [
   '보라빛 인사',

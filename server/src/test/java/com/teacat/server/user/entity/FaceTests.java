@@ -67,10 +67,16 @@ class FaceTests {
         assertThat(f.isSameModel("sface@2")).isFalse();
     }
 
-    /** 임계값이 화면과 어긋나면 "0.5 인데 불합격" 같은 일이 생긴다 */
+    /**
+     * 임계값은 응답의 {@code threshold} 로 내려가 화면의 합격선이 된다.
+     *
+     * <p>SFace 공식 권장값(0.363)보다 엄격하다 — 입장 통제라 오인이 거절보다 비싸다.
+     * 조정할 때 이 테스트도 함께 고치게 해서, 숫자가 조용히 바뀌지 않도록 한다.
+     */
     @Test
-    void 임계값은_SFace_공식_권장값이다() {
-        assertThat(Face.SAME_PERSON_THRESHOLD).isEqualTo(0.363);
+    void 임계값은_공식_권장값보다_엄격하다() {
+        assertThat(Face.SAME_PERSON_THRESHOLD).isEqualTo(0.65);
+        assertThat(Face.SAME_PERSON_THRESHOLD).isGreaterThan(0.363);
     }
 
     private static Face face(float[] embedding) {

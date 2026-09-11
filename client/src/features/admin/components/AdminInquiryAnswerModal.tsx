@@ -100,7 +100,7 @@ export function AdminInquiryAnswerModal({
             </span>
           </div>
 
-          <div className="surface-2 rounded-xl p-3 text-sm leading-relaxed whitespace-pre-wrap">
+          <div className="surface-2 rounded-xl p-3 text-sm leading-relaxed break-words whitespace-pre-wrap">
             {inquiry.content}
           </div>
 

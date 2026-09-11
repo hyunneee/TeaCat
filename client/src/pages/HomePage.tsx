@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   ChevronRight,
   Hourglass,
-  Coins,
+  MessageSquare,
   Images,
   ScanFace,
   Search,
@@ -28,7 +28,7 @@ import { ROUTES } from '@/shared/constants';
 import { cn, formatDateTime } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
-import { ResumeBookingCard, useActiveHold } from '@/features/booking';
+import { ResumeBookingCard, useActiveHolds } from '@/features/booking';
 import {
   CONCERT_BOOKING_LABEL,
   isConcertOpen,
@@ -46,7 +46,9 @@ import {
 const SHORTCUTS = [
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
   { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
-  { to: ROUTES.TOKEN, label: '캣머니', icon: Coins },
+  /* 캣머니 자리였습니다. 잔액은 MY 상단에 이미 큰 숫자로 있어서 같은 목적지가 두 번
+     나오는 셈이었고, 대신 막혔을 때 말할 곳이 홈에 없었습니다 */
+  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
   { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
 ] as const;
@@ -99,7 +101,7 @@ export function HomePage() {
   const { data: banners, isPending: bannersPending } = useBanners();
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
-  const { hold: activeHold, remainSeconds: holdRemainSeconds } = useActiveHold();
+  const activeHolds = useActiveHolds();
 
   /**
    * 레일에 실을 공연 — **열린 것이 없으면 곧 열릴 것**을 보여줍니다.
@@ -252,13 +254,22 @@ export function HomePage() {
 
       {/* ── 흰 배경 영역 ── */}
       <div className="relative space-y-6 px-4 pt-6 lg:space-y-10 lg:px-0 lg:pt-10">
-        {/* 시간이 걸린 일이라 얼굴 등록 안내보다 위입니다 */}
-        {activeHold && (
-          <ResumeBookingCard
-            hold={activeHold}
-            remainSeconds={holdRemainSeconds}
-            onContinue={() => navigate(ROUTES.BOOKING_REVIEW(activeHold.scheduleId))}
-          />
+        {/* 시간이 걸린 일이라 얼굴 등록 안내보다 위입니다.
+            🔴 **전부** 보여줍니다. 1인 1매는 회차 단위 제약이라 공연이 다르면 여러 자리를
+               잡아둘 수 있는데, 예전에는 맨 앞 하나만 떠서 나머지는 돌아갈 길 없이
+               10분간 묶여 있었습니다. */}
+        {activeHolds.length > 0 && (
+          <ul className="space-y-2">
+            {activeHolds.map(({ hold, remainSeconds }) => (
+              <li key={`${hold.scheduleId}:${hold.seatId}`}>
+                <ResumeBookingCard
+                  hold={hold}
+                  remainSeconds={remainSeconds}
+                  onContinue={() => navigate(ROUTES.BOOKING_REVIEW(hold.scheduleId))}
+                />
+              </li>
+            ))}
+          </ul>
         )}
 
         {isLoggedIn && user && !user.faceRegistered && (
