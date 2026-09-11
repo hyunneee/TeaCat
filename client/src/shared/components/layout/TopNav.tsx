@@ -40,12 +40,22 @@ export function TopNav() {
   return (
     <header className="surface border-line sticky top-0 z-30 hidden border-b lg:block">
       {/* ── 1줄 — 로고 · 검색 · 계정 ── */}
-      <div className={cn(ROW, 'h-16 gap-6')}>
+      <div className={cn(ROW, 'relative h-16 gap-6')}>
         <Link to={ROUTES.HOME} aria-label="티캣 홈" className="shrink-0">
           <Logo size={24} markSize={36} />
         </Link>
 
-        <form role="search" onSubmit={submit} className="max-w-md flex-1">
+        {/* 검색창은 **화면 한가운데**입니다.
+            흐름에 그대로 두면(`flex-1`) 로고 오른쪽에 붙어 왼쪽으로 쏠립니다.
+            로고와 계정의 폭이 서로 달라 `mx-auto` 로도 진짜 가운데가 나오지 않아
+            (남는 공간의 가운데일 뿐), 줄 기준으로 직접 가운데에 놓습니다.
+            줄 폭은 최소 976px(64rem - px-6)이고 창은 448px 이라 좌우로 264px 씩
+            남습니다 — 로고·계정과 겹치지 않습니다. */}
+        <form
+          role="search"
+          onSubmit={submit}
+          className="absolute left-1/2 w-full max-w-md -translate-x-1/2"
+        >
           <div className="surface-sunken border-line flex h-10 items-center gap-2 rounded-full border px-4">
             <Search size={17} className="text-ink-subtle shrink-0" />
             <input
