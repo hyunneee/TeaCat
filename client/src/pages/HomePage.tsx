@@ -110,13 +110,7 @@ export function HomePage() {
 
   return (
     <div className="relative">
-      {/* 짙은 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다.
-
-          데스크톱에서는 **걷습니다.** 이 판은 배너가 짙은 상단바에서 흰 바닥으로
-          걸쳐 내려오는 것처럼 보이게 하려고 있는 것인데, 그 상단바(아래 `header`)가
-          lg 에서 숨겨집니다. 판만 남으면 배너 좌우로 녹색 띠가 삐져나온 것으로 읽히고,
-          높이도 어긋납니다 — `--banner-height` 는 기둥 폭(30rem) 기준이라
-          넓은 화면의 실제 배너 높이와 맞지 않습니다. */}
+      {/* 짙은 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다 */}
       <div
         aria-hidden
         className="surface-strong absolute inset-x-0 top-0 lg:hidden"
@@ -125,6 +119,24 @@ export function HomePage() {
           height:
             'calc(env(safe-area-inset-top) + 0.75rem + var(--spacing-header) + 0.5rem + var(--banner-height) * 0.9)',
         }}
+      />
+
+      {/* 같은 배경판의 데스크톱판.
+          규칙은 폰과 **똑같습니다** — 배너 위쪽 90% 까지 짙은 면이고, 배너가 그
+          경계에 걸쳐 내려옵니다. 다른 것은 둘뿐입니다.
+
+          1. 위로 덮을 상단바가 없습니다 (그 헤더는 lg 에서 숨기고 TopNav 가 대신합니다)
+             → 본문 맨 위에서 시작합니다. AppLayout 이 본문에 위 여백을 주지 않는
+               이유도 이것입니다 — 여백이 있으면 내비와 이 면 사이에 흰 띠가 생깁니다.
+          2. **화면 끝까지** 갑니다(`w-screen`). 본문 폭(1024px)에서 끊으면 짙은 면이
+             화면 한가운데 떠 있는 네모가 되어 배경이 아니라 카드처럼 보입니다.
+             가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다.
+
+          높이는 `--banner-height` 가 lg 에서 21:9 로 다시 계산됩니다 (styles/index.css) */}
+      <div
+        aria-hidden
+        className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
+        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.9)' }}
       />
 
       {/* ── 최상단 줄 (검정 위) ──
@@ -152,7 +164,7 @@ export function HomePage() {
 
       {/* ── 배너 (검정 → 하양 경계에 걸침) ── */}
       {/* 넓은 화면에서는 좌우 여백을 본문(AppLayout 의 px-6)에 맡깁니다 */}
-      <div className="relative px-4 pt-2 lg:px-0 lg:pt-4">
+      <div className="relative px-4 pt-2 lg:px-0 lg:pt-6">
         {bannersPending ? (
           <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-2xl" />
         ) : (
@@ -163,9 +175,16 @@ export function HomePage() {
       {/* ── 흰 배경 영역 ── */}
       <div className="relative space-y-6 px-4 pt-6 lg:space-y-10 lg:px-0 lg:pt-8">
         {/* 바로가기 — 아이콘 타일 + 아래 라벨.
-            넓은 화면에서 다섯 칸을 폭에 그대로 펴면 아이콘 사이가 200px 씩 벌어져
-            한 묶음으로 안 읽힙니다. 폭을 묶고 가운데에 둡니다. */}
-        <Stagger as="ul" className="grid grid-cols-5 gap-x-1.5 lg:mx-auto lg:max-w-2xl lg:gap-x-4">
+
+            폰에서는 흰 타일 다섯 개가 오프화이트 바탕 위에 떠 있는 것으로 충분합니다
+            (폭이 좁아 그 자체가 한 줄로 읽힙니다). 넓은 화면에서는 같은 타일이
+            빈 벌판에 흩어진 점 다섯 개가 됩니다 — **하나의 면**으로 묶습니다.
+            묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
+            같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
+        <Stagger
+          as="ul"
+          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-2xl lg:px-8 lg:py-7"
+        >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
               <motion.button
@@ -175,7 +194,11 @@ export function HomePage() {
                 className="flex w-full flex-col items-center gap-1.5"
               >
                 {/* 흰 면 + 얕은 그림자. 회색 면은 "비활성" 처럼 보입니다. */}
-                <span className="surface shadow-card text-ink flex size-14 items-center justify-center rounded-2xl lg:size-16">
+                {/* `.surface` 대신 `bg-surface-1` 을 씁니다 — `.surface` 는 유틸리티
+                    레이어의 **평범한 CSS 클래스**라 `lg:` 변형이 이기지 못합니다
+                    (같은 레이어·같은 specificity → 나중에 선언된 쪽이 이김).
+                    색은 같은 값이라 폰에서 보이는 것은 달라지지 않습니다. */}
+                <span className="bg-surface-1 shadow-card text-ink lg:bg-surface-2 flex size-14 items-center justify-center rounded-2xl lg:size-[3.25rem] lg:shadow-none">
                   <Icon size={26} strokeWidth={1.7} />
                 </span>
                 <span className="text-ink text-center text-[0.75rem] leading-tight font-semibold">

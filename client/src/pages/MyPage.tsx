@@ -73,7 +73,10 @@ export function MyPage() {
         <div className="relative px-4">
           <div
             aria-hidden
-            className="surface-strong absolute inset-x-0 bottom-1/2"
+            /* 넓은 화면에서는 홈과 같이 **화면 끝까지** 갑니다. 본문 폭(1024px)에서
+               끊으면 짙은 면이 화면 한가운데 뜬 네모가 되어 배경이 아니라 카드로
+               보입니다. 가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다. */
+            className="surface-strong absolute inset-x-0 bottom-1/2 lg:right-auto lg:left-1/2 lg:w-screen lg:-translate-x-1/2"
             style={{
               /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다.
                  위 여백과 **같은 값**이어야 경계가 카드 중앙에 옵니다 (HEADER_GAP) */

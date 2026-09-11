@@ -21,10 +21,16 @@ export function AppLayout() {
     <div className="app-frame app-shell mx-auto flex min-h-dvh w-full flex-col">
       <TopNav />
 
-      <main className="pb-nav flex-1 lg:pb-10">
+      {/* `overflow-x-clip` — 홈의 초록 배경판처럼 본문 폭을 뚫고 화면 끝까지 가는
+          요소(`w-screen`)가 가로 스크롤을 만들지 않게 잡아 둡니다.
+          `hidden` 이 아니라 `clip` 이라 안쪽의 sticky 는 그대로 동작합니다. */}
+      <main className="pb-nav flex-1 overflow-x-clip lg:pb-10">
         {/* 데스크톱에서도 본문을 화면 끝까지 늘리지는 않습니다 — 글줄이 너무 길어집니다.
-            상단 내비(TopNav 의 ROW)와 **같은 폭**이라 로고와 본문 왼쪽 끝이 한 줄로 섭니다. */}
-        <div className="mx-auto w-full lg:max-w-5xl lg:px-6 lg:pt-2">
+            상단 내비(TopNav 의 ROW)와 **같은 폭**이라 로고와 본문 왼쪽 끝이 한 줄로 섭니다.
+
+            위 여백은 **화면마다 다릅니다.** 여기서 한 줄 띄우면 홈의 초록 배경판이
+            상단 내비에서 떨어져 그 사이에 흰 띠가 생깁니다. 각 화면이 직접 줍니다. */}
+        <div className="mx-auto w-full lg:max-w-5xl lg:px-6">
           <PageTransition />
         </div>
       </main>
