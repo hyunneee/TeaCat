@@ -20,6 +20,7 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
+const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -315,6 +316,8 @@ const routes: RouteObject[] = [
         children: [
           { path: ROUTES.FACE_REGISTER, element: withMask(withBoundary(<FaceRegisterPage />)) },
           { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
+          /* 본인 확인 — 등록 화면과 같은 이유로 마스킹합니다 (얼굴·판정 결과가 뜹니다) */
+          { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
