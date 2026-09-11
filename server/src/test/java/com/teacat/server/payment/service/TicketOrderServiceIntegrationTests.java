@@ -29,6 +29,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,7 +55,10 @@ import static org.mockito.Mockito.verify;
         "payment.recovery.initial-delay=1h",
         "blockchain.confirm-poll.interval=1h",
         "blockchain.confirm-poll.initial-delay=1h",
-        "nft.auction.sweep-enabled=false"
+        "nft.auction.sweep-enabled=false",
+        // 10분(기본값)이 아닌 값으로 둔다 — 개봉 시각·취소 마감 테스트가 실제로 이 설정을
+        // 읽어서 계산하는지, 10분을 하드코딩해 우연히 통과하는 게 아닌지를 가려낸다
+        "booking.policy.cancel-deadline-lead=7m"
 })
 class TicketOrderServiceIntegrationTests {
 
@@ -104,6 +108,9 @@ class TicketOrderServiceIntegrationTests {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private com.teacat.server.common.config.BookingPolicyProperties bookingPolicy;
+
     private Long userId;
     private Long detailId;
     private Long seatId;
@@ -112,7 +119,8 @@ class TicketOrderServiceIntegrationTests {
     void setUp() {
         jdbcTemplate.execute("""
                 TRUNCATE TABLE users, faces, stadiums, performance_general, wallet_owners, wallets,
-                               cat_money_holds, cat_transactions, payments, payment_cancels, ticket_orders, tickets, nft_tickets
+                               cat_money_holds, cat_transactions, payments, payment_cancels, ticket_orders, tickets, nft_tickets,
+                               nft_photocard_packs
                 RESTART IDENTITY CASCADE""");
         userId = insertUserWithFaceAndWallet();
         Fixture fixture = insertPerformanceFixture();
@@ -594,6 +602,38 @@ class TicketOrderServiceIntegrationTests {
     }
 
     @Test
+    void 취소_마감을_지나면_취소할_수_없다() {
+        TicketOrderResponse paid = payTicket();
+        // 마감(공연 시작 − cancelDeadlineLead) 안쪽(lead − 1분 뒤)으로 공연을 당긴다 — 이미 지났다
+        long insideDeadlineMinutes = bookingPolicy.cancelDeadlineLead().toMinutes() - 1;
+        jdbcTemplate.update(
+                ("UPDATE performance_details SET performance_date = now() + interval '%d minute' WHERE id = ?")
+                        .formatted(insideDeadlineMinutes),
+                detailId);
+
+        assertThatThrownBy(() -> ticketCancelService.cancel(userId, paid.ticketOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", PaymentErrorCode.CANCEL_DEADLINE_PASSED);
+    }
+
+    @Test
+    void 취소_마감_전까지는_취소할_수_있다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        // 마감 바깥(lead + 1분 뒤)으로 공연을 당긴다 — 아직 취소할 수 있어야 한다
+        long outsideDeadlineMinutes = bookingPolicy.cancelDeadlineLead().toMinutes() + 1;
+        jdbcTemplate.update(
+                ("UPDATE performance_details SET performance_date = now() + interval '%d minute' WHERE id = ?")
+                        .formatted(outsideDeadlineMinutes),
+                detailId);
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+    }
+
+    @Test
     void 남의_예매는_취소할_수_없다() {
         TicketOrderResponse paid = payTicket();
         Long otherUserId = insertOtherUser();
@@ -649,6 +689,105 @@ class TicketOrderServiceIntegrationTests {
         assertThat(recovered.ticketId()).isNotNull();
         assertThat(paymentStatus(order.orderId())).isEqualTo("DONE");
         assertThat(seatStatus()).isEqualTo("SOLD");
+    }
+
+    @Test
+    void 티켓을_사면_카드팩이_그_회차의_것으로_하나_생긴다() {
+        TicketOrderResponse paid = payTicket();
+
+        Map<String, Object> pack = jdbcTemplate.queryForMap("""
+                SELECT source::text AS source, source_ref, performance_detail_id, consumed_at
+                  FROM nft_photocard_packs WHERE user_id = ?
+                """, userId);
+        assertThat(pack.get("source")).isEqualTo("TICKET_PURCHASE");
+        assertThat(pack.get("source_ref")).isEqualTo(paid.ticketId().toString());
+        assertThat(pack.get("consumed_at")).isNull();
+        assertThat(pack.get("performance_detail_id")).isEqualTo(detailId);
+
+        // 개봉 판정 = 공연 시작 − booking.policy.cancel-deadline-lead ≤ now() (테스트 설정: 7분)
+        long insideDeadlineMinutes = bookingPolicy.cancelDeadlineLead().toMinutes() - 1;
+        jdbcTemplate.update(
+                ("UPDATE performance_details SET performance_date = now() + interval '%d minute' WHERE id = ?")
+                        .formatted(insideDeadlineMinutes), detailId);
+        assertThat(isPackOpenable(userId)).isTrue();
+
+        long outsideDeadlineMinutes = bookingPolicy.cancelDeadlineLead().toMinutes() + 1;
+        jdbcTemplate.update(
+                ("UPDATE performance_details SET performance_date = now() + interval '%d minute' WHERE id = ?")
+                        .formatted(outsideDeadlineMinutes), detailId);
+        assertThat(isPackOpenable(userId)).isFalse();
+    }
+
+    /** 그 사용자의 미소비 팩이 지금 열 수 있는지. 경계 계산은 하드코딩하지 않고 설정값을 그대로 쓴다 */
+    private boolean isPackOpenable(Long userId) {
+        long leadMinutes = bookingPolicy.cancelDeadlineLead().toMinutes();
+        return jdbcTemplate.queryForObject("""
+                SELECT (d.performance_date - (%d * interval '1 minute')) <= now()
+                  FROM nft_photocard_packs p
+                  JOIN performance_details d ON d.id = p.performance_detail_id
+                 WHERE p.user_id = ? AND p.consumed_at IS NULL
+                """.formatted(leadMinutes), Boolean.class, userId);
+    }
+
+    @Test
+    void 예매를_취소하면_안_연_카드팩이_사라진다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        assertThat(countPacks()).isEqualTo(1L);
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        // 벌크 delete 는 ticket.cancel()/order.markCanceled() 가 flush 됐는지와 무관하게
+        // 성공하므로, 팩이 사라졌다는 것만으로는 취소 자체가 반영됐는지 알 수 없다
+        assertThat(ticketStatus(paid.ticketId())).isEqualTo("CANCELLED");
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(countPacks()).isZero();
+    }
+
+    private Long countPacks() {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocard_packs WHERE user_id = ?", Long.class, userId);
+    }
+
+    @Test
+    void 카드팩을_이미_열었으면_회차를_연기해도_취소할_수_없다() {
+        TicketOrderResponse paid = payTicket();
+        // 팩이 열리도록 뽑은 것처럼 팩을 소비 처리한다. chk_nft_photocard_packs_consumed 가
+        // consumed_at 이 있으면 photocard_id · idempotency_key 도 있을 것을 요구하므로,
+        // 실제 카드 행을 만들어 photocard_id 를 채운다
+        Long photocardId = insertDrawnPhotocard(paid.ticketId());
+        jdbcTemplate.update("""
+                UPDATE nft_photocard_packs
+                   SET consumed_at = now(), photocard_id = ?, idempotency_key = gen_random_uuid()
+                 WHERE user_id = ?
+                """, photocardId, userId);
+        // 주최자가 공연을 한참 뒤로 미뤄 취소 마감이 되돌아온 상황
+        jdbcTemplate.update(
+                "UPDATE performance_details SET performance_date = now() + interval '30 day' WHERE id = ?",
+                detailId);
+
+        assertThatThrownBy(() -> ticketCancelService.cancel(userId, paid.ticketOrderId()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", PaymentErrorCode.PACK_ALREADY_OPENED);
+
+        // 취소가 실제로 안 됐는지 확인한다
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("PAID");
+        assertThat(ticketStatus(paid.ticketId())).isEqualTo("CONFIRMED");
+    }
+
+    /** 이 티켓으로 이미 뽑은 것처럼 보이는 카드 한 장. FK 를 만족시키려고 도안도 함께 넣는다 */
+    private Long insertDrawnPhotocard(Long ticketId) {
+        Long performanceId = jdbcTemplate.queryForObject(
+                "SELECT performance_general_id FROM performance_details WHERE id = ?", Long.class, detailId);
+        Long designId = jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_designs (performance_general_id, name, image_url, total_supply)
+                VALUES (?, '테스트 도안', '/test.png', 1) RETURNING id
+                """, Long.class, performanceId);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
+                VALUES (?, ?, ?, 'PENDING') RETURNING id
+                """, Long.class, designId, ticketId, userId);
     }
 
     // ── 대역 ────────────────────────────────────────────────

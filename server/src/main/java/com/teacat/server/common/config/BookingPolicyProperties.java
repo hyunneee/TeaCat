@@ -2,15 +2,15 @@ package com.teacat.server.common.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 /**
  * application.yaml 의 booking.policy.* 설정 (API-205).
  *
  * 공연별로 다르게 줄 수 있는 값이 아니라 서비스 전체 정책이다.
- * 1인 최대 매수는 운영 판단으로 바뀌는 값이라 코드에 박지 않고 설정으로 둔다.
- * 공연마다 다르게 하려면 performance_general 에 컬럼을 추가해야 한다.
  *
- * 취소 마감은 설정이 아니다. "공연 시작 전까지" 로 고정이고,
- * 실제 시각은 회차의 공연 일시라서 회차 조회(API-203)가 내려준다.
+ * 취소 마감은 회차의 공연 일시에서 {@code cancelDeadlineLead} 를 뺀 시각이다.
+ * 실제 시각은 회차 조회(API-203)의 {@code cancelDeadlineAt} 이 내려준다.
  */
 @ConfigurationProperties(prefix = "booking.policy")
 public record BookingPolicyProperties(
@@ -27,6 +27,15 @@ public record BookingPolicyProperties(
         boolean companionRequired,
 
         /** 입장 시 얼굴 인증을 요구할지 */
-        boolean faceVerificationRequired
+        boolean faceVerificationRequired,
+
+        /**
+         * 예매 취소 마감 = 공연 시작 − 이 값.
+         *
+         * 🔴 <b>카드팩 개봉 시각도 같은 값을 읽는다</b> (TicketOrderRecorder). 둘이 어긋나면
+         * 그 차이만큼 "카드를 뽑고 예매를 취소해 전액 환불받는" 창이 열린다.
+         * 한쪽만 바꾸지 말 것.
+         */
+        Duration cancelDeadlineLead
 ) {
 }

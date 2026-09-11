@@ -1,0 +1,12 @@
+-- ================================
+-- 카드팩 출처: 티켓 구매
+-- ================================
+-- 지급 트리거가 "입장 확인" 에서 "티켓 구매" 로 바뀌었다. TICKET_ENTRY 는 지우지 않는다 —
+-- 얼굴 대조 입장 지급이 생기면 그 자리를 쓴다. 두 출처는 source_ref(티켓 id)로 공존한다.
+--
+-- 🔴 이 파일에는 이 한 줄만 둔다.
+--    PostgreSQL 은 ALTER TYPE 으로 추가한 값을 같은 트랜잭션 안에서 쓸 수 없고,
+--    Flyway 는 마이그레이션 하나를 한 트랜잭션으로 감싼다. 값을 쓰는 SQL 이 같은 파일에 있으면
+--    "unsafe use of new value" 로 실패한다.
+--    (선례: V20260909_1130__add_burned_to_nft_mint_status.sql)
+ALTER TYPE nft_photocard_pack_source ADD VALUE IF NOT EXISTS 'TICKET_PURCHASE';

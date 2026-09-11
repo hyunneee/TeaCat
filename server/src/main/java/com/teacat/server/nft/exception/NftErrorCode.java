@@ -77,7 +77,12 @@ public enum NftErrorCode implements ErrorCode {
     DESIGN_POOL_CONFLICT(HttpStatus.BAD_REQUEST, "NFT_042",
             "도안은 공연 소속이거나 뽑기 풀 중 하나여야 합니다."),
     DESIGN_POOL_ATTRIBUTES_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_043",
-            "뽑기 풀 도안은 소속과 등급이 필요합니다.");
+            "뽑기 풀 도안은 소속과 등급이 필요합니다."),
+
+    // ── 카드팩 이벤트 ────────────────────────────────────────────────────
+    /** code 는 계정당 1회의 기준이라 유일해야 한다 */
+    PACK_EVENT_CODE_DUPLICATED(HttpStatus.CONFLICT, "NFT_044", "이미 등록된 이벤트 코드입니다."),
+    PACK_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_045", "존재하지 않는 카드팩 이벤트입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
