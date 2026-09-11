@@ -68,8 +68,15 @@ public enum NftErrorCode implements ErrorCode {
             "체인에 보낼 포토카드가 없습니다."),
 
     // ── 뽑기 (카드팩) ─────────────────────────────────────────────────────
-    /** 프론트가 이 message 를 그대로 화면에 띄운다 */
-    PACK_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_040", "가진 카드팩이 없어요."),
+    /**
+     * 프론트가 이 message 를 그대로 화면에 띄운다.
+     *
+     * <p>팩이 <b>아예 없을 때</b>와 <b>있지만 아직 안 열렸을 때</b>를 함께 쓴다 —
+     * 개봉 시각은 회차에서 계산하므로 잠긴 팩도 여기로 온다. 그래서 문구가 "없다" 가 아니라
+     * "지금 열 수 있는 것이 없다" 여야 참이 된다. 프론트는 {@code GET /photocards/draw} 의
+     * {@code scheduled}·{@code nextOpenAt} 으로 누르기 전에 막을 수 있다.
+     */
+    PACK_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_040", "지금 열 수 있는 카드팩이 없어요."),
     /** 등록된 뽑기 풀 도안이 없거나 전부 소진됐다 */
     DRAW_POOL_EMPTY(HttpStatus.CONFLICT, "NFT_041",
             "지금은 뽑을 수 있는 카드가 없어요. 잠시 후 다시 시도해 주세요."),
