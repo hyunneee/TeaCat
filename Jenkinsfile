@@ -268,6 +268,14 @@ pipeline {
             steps {
                 sh '''
                     set -e
+                    # Sentry 이슈에 어느 배포에서 났는지를 붙인다. 프론트는 빌드 인자로 이미 넘기고 있고
+                    # (VITE_SENTRY_RELEASE), 서버는 런타임 값이라 여기서 넘긴다.
+                    #
+                    # 🔴 셸 환경변수가 --env-file 보다 우선한다. 그래서 .env 를 안 고쳐도 덮어써진다.
+                    #    이게 없으면 compose 기본값(teacat-server@prod)으로 고정돼, Sentry 에서
+                    #    모든 배포의 이슈가 한 릴리스에 뭉쳐 "언제부터 터졌나" 를 알 수 없다.
+                    export SENTRY_RELEASE="teacat-server@$TAG"
+
                     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" up -d --remove-orphans
                 '''
             }
