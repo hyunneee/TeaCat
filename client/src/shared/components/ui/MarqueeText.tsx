@@ -24,6 +24,13 @@ const DEFAULT_SPEED = 55;
  * 처음으로 되감깁니다. 마우스를 올리면 끝까지 밀고 **거기서 멈추고**, 떼면
  * 제자리로 돌아옵니다. 그래서 keyframes 없이 transition 하나로 됩니다.
  *
+ * ── 이동 거리는 CSS 가 계산합니다 ─────────────────────────
+ * 넘치는 만큼만 밀어야 하는데, 그 값을 JS 로 재서 넣으면 **한 번 잰 값이 굳습니다.**
+ * 칸 폭이 나중에 바뀌면(글꼴이 늦게 오거나, 접혀 있던 컨테이너가 펴지거나) 글자가
+ * 엉뚱하게 밀립니다 — 폭 0 인 상태에서 처음 재어 글자 전체를 밀어버리는 걸 실제로
+ * 확인했습니다. 그래서 이동은 컨테이너 단위(`100cqw`)로 CSS 안에서 계산합니다.
+ * 아래 측정값은 **속도(시간)와 오른쪽 흐림에만** 쓰이므로 틀려도 크게 어긋나지 않습니다.
+ *
  * 🔴 **부모에 `group` 이 있어야 동작합니다.** 글자에 마우스를 정확히 올리는 게 아니라
  *    카드 어디에나 올리면 흘러야 하기 때문입니다.
  *
@@ -63,7 +70,9 @@ export function MarqueeText({ children, speed = DEFAULT_SPEED, className }: Marq
   return (
     <span
       ref={outerRef}
-      className={cn('block overflow-hidden whitespace-nowrap', className)}
+      /* `@container` 가 `container-type: inline-size` 를 켭니다 — 아래 이동 거리를
+         CSS 로만 계산하기 위해서입니다 (`100cqw` = 이 칸의 폭) */
+      className={cn('@container block overflow-hidden whitespace-nowrap', className)}
       /* 넘칠 때만 오른쪽 끝을 흐리게. 흐르는 동안에는 걷어서 끝 글자가 또렷하게 보입니다 */
       style={
         overflowing
@@ -78,22 +87,26 @@ export function MarqueeText({ children, speed = DEFAULT_SPEED, className }: Marq
         ref={innerRef}
         className={cn(
           'inline-block max-w-none transition-transform ease-linear',
-          /* 부모 카드에 마우스가 올라가면 넘치는 만큼 왼쪽으로 밀립니다.
-             넘치지 않으면 --marquee-shift 를 안 넣으므로 움직이지 않습니다 */
-          overflowing && 'group-hover:translate-x-[var(--marquee-shift)]',
+          /* 🔴 이동 거리를 **CSS 가 직접 계산합니다.** JS 로 재서 넣지 않습니다.
+             `100%` 는 이 글자 전체 폭, `100cqw` 는 칸의 폭이므로
+             `100cqw - 100%` 가 정확히 넘치는 만큼(음수)입니다.
+             `min(0px, ...)` 이 넘치지 않는 글을 붙잡아 둡니다 — 안 그러면
+             짧은 글이 오른쪽으로 밀려납니다.
+
+             측정값을 쓰지 않는 이유: 처음 잰 뒤 칸 폭이 바뀌면(글꼴 늦게 로드,
+             화면 회전, 접혀 있다가 펴지는 컨테이너) 값이 굳어 글자가 엉뚱하게
+             밀립니다. 실제로 폭 0 인 상태에서 처음 재서 글자 전체 폭만큼
+             밀어버리는 걸 확인했습니다. CSS 계산은 항상 지금 폭을 씁니다. */
+          'group-hover:translate-x-[min(0px,calc(100cqw-100%))]',
           /* 움직임을 줄여달라고 한 사용자에게는 흐르지 않습니다 —
              대신 오른쪽 흐림이 남아 "더 있다" 는 사실은 그대로 전해집니다 */
           'motion-reduce:transition-none motion-reduce:group-hover:translate-x-0',
         )}
-        style={
-          overflowing
-            ? {
-                // 흐르는 거리에 비례한 시간이라, 긴 제목도 같은 속도로 지나갑니다
-                transitionDuration: `${Math.round((shift / speed) * 1000)}ms`,
-                ['--marquee-shift' as string]: `-${shift}px`,
-              }
-            : undefined
-        }
+        style={{
+          /* 흐르는 거리에 비례한 시간이라 긴 제목도 같은 속도로 지나갑니다.
+             이 값만 측정에 의존하는데, 틀려도 속도가 조금 달라질 뿐입니다 */
+          transitionDuration: `${Math.round((Math.max(shift, speed) / speed) * 1000)}ms`,
+        }}
         data-marquee={overflowing ? 'on' : undefined}
       >
         {children}
