@@ -28,7 +28,6 @@ import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHold } from '@/features/booking';
 import { isConcertOpen, posterSeedOf, useConcerts } from '@/features/concert';
-import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
  * 바로가기 — **5칸 한 줄.**
@@ -76,8 +75,6 @@ export function HomePage() {
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
-  /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
-  const { data: newPocas } = useNftMarket();
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const { hold: activeHold, remainSeconds: holdRemainSeconds } = useActiveHold();
@@ -85,13 +82,9 @@ export function HomePage() {
   const open = concerts?.filter((c) => isConcertOpen(c)).slice(0, RAIL_LIMIT) ?? [];
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
-     두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
-     같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
+     포토카드 레일이 돌아오면 **속도를 다르게** 두세요 (그때는 9). 같으면 두 줄이
+     한 덩어리처럼 같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
   const concertRail = useAutoScroll<HTMLDivElement>({ enabled: open.length > 1, speed: 15 });
-  const pocaRail = useAutoScroll<HTMLDivElement>({
-    enabled: (newPocas?.length ?? 0) > 1,
-    speed: 9,
-  });
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
@@ -290,41 +283,10 @@ export function HomePage() {
           )}
         </section>
 
-        {/* 새로 올라온 포토카드 — 같은 가로 레일. 마켓 전체는 포카 탭에 있습니다. */}
-        {newPocas && newPocas.length > 0 && (
-          <section>
-            <SectionTitle
-              action={
-                <button
-                  type="button"
-                  onClick={() => navigate(ROUTES.NFT_MARKET)}
-                  className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
-                >
-                  더보기 <ChevronRight size={13} />
-                </button>
-              }
-            >
-              새로 올라온 포토카드
-            </SectionTitle>
-
-            <div ref={pocaRail} className="-mx-4 overflow-x-auto">
-              <ul className="flex w-max gap-3 px-4 pt-1 pb-2">
-                {newPocas.slice(0, RAIL_LIMIT).map((card) => (
-                  <li key={card.photocardId} className="w-[8.5rem] shrink-0">
-                    <NftCard
-                      photocardId={card.photocardId}
-                      designName={card.designName}
-                      imageUrl={card.imageUrl}
-                      performanceTitle={card.performanceTitle}
-                      price={card.price}
-                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
+        {/* 🔴 "새로 올라온 포토카드" 레일은 1차 배포에서 뺐습니다.
+            마켓(구매·판매)이 닫혀 있어(`/nft` → ComingSoonPage) 살 수 없는 물건을
+            홈에서 권하는 꼴이 됩니다. 2차 배포 때 이 자리에 되돌립니다 —
+            `useNftMarket()` 조회와 `pocaRail` 자동 스크롤도 함께 지웠습니다. */}
       </div>
     </div>
   );
