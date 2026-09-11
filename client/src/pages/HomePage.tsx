@@ -18,6 +18,7 @@ import {
   LiveDot,
   Logo,
   PosterImage,
+  RAIL_ANCHOR,
   Rail,
   SectionTitle,
   Skeleton,
@@ -328,7 +329,10 @@ export function HomePage() {
                       whileTap={{ scale: 0.97 }}
                       className="w-full text-left"
                     >
-                      <div className="relative">
+                      {/* `RAIL_ANCHOR` — 화살표가 **포스터**의 세로 한가운데 앉습니다.
+                          안 붙이면 제목·공연장 두 줄까지 포함한 레일 전체의 가운데라
+                          화살표가 그림 아래로 처집니다. */}
+                      <div className="relative" {...RAIL_ANCHOR}>
                         <PosterImage
                           src={concert.posterUrl}
                           seed={posterSeedOf(concert)}
