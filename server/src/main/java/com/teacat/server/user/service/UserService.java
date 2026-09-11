@@ -3,8 +3,10 @@ package com.teacat.server.user.service;
 import com.teacat.server.auth.service.AuthService;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.user.dto.request.FaceRegisterRequest;
+import com.teacat.server.user.dto.request.FaceVerifyRequest;
 import com.teacat.server.user.dto.request.NicknameChangeRequest;
 import com.teacat.server.user.dto.request.PasswordChangeRequest;
+import com.teacat.server.user.dto.response.FaceVerifyResponse;
 import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.entity.Face;
 import com.teacat.server.user.entity.User;
@@ -103,6 +105,32 @@ public class UserService {
         }
 
         user.registerFace(Face.of(request.embedding().clone(), request.modelVersion()));
+    }
+
+    /**
+     * 본인 확인 — 지금 찍은 얼굴이 등록해 둔 얼굴과 같은 사람인가.
+     *
+     * <p><b>대조는 여기서 끝난다.</b> 저장된 임베딩은 이 메서드 밖으로 나가지 않고
+     * ({@link Face#cosineSimilarityTo}), 나가는 것은 점수와 판정뿐이다.
+     *
+     * <p>🔴 지금은 <b>확인만 하고 아무것도 바꾸지 않습니다.</b> 입장 처리(티켓 사용 표시)는
+     * 아직 없습니다 — 검증용 화면이라 판정만 돌려줍니다.
+     */
+    @Transactional(readOnly = true)
+    public FaceVerifyResponse verifyFace(Long userId, FaceVerifyRequest request) {
+        User user = getUser(userId);
+
+        if (!user.hasFace()) {
+            throw new BusinessException(UserErrorCode.FACE_NOT_FOUND);
+        }
+
+        Face face = user.getFace();
+        if (!face.isSameModel(request.modelVersion())) {
+            throw new BusinessException(UserErrorCode.FACE_MODEL_MISMATCH);
+        }
+
+        return FaceVerifyResponse.of(
+                face.cosineSimilarityTo(request.embedding()), Face.SAME_PERSON_THRESHOLD);
     }
 
     /** 얼굴 정보 삭제 (API-110) */

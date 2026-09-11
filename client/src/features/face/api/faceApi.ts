@@ -1,5 +1,5 @@
 import { http } from '@/shared/api';
-import type { FaceEnrollRequest } from '../model/face.types';
+import type { FaceEnrollRequest, FaceVerifyRequest, FaceVerifyResult } from '../model/face.types';
 
 /**
  * 얼굴 등록 API.
@@ -13,6 +13,14 @@ import type { FaceEnrollRequest } from '../model/face.types';
  */
 export const faceApi = {
   enroll: (body: FaceEnrollRequest) => http.post<void>('/users/me/face', body),
+
+  /**
+   * 본인 확인 — 지금 찍은 얼굴이 등록해 둔 얼굴과 같은 사람인지 서버에 묻습니다.
+   *
+   * 🔴 **대조는 서버가 합니다.** 저장된 임베딩을 받아와 브라우저에서 비교하는 함수를
+   *    여기 만들지 마세요. 생체 특징값이 기기로 나가고, 판정을 콘솔로 뒤집을 수 있게 됩니다.
+   */
+  verify: (body: FaceVerifyRequest) => http.post<FaceVerifyResult>('/users/me/face/verify', body),
 
   /** 등록 해제 — 되돌릴 수 없는 동작입니다 (확인 모달 필수) */
   remove: () => http.delete<void>('/users/me/face'),
