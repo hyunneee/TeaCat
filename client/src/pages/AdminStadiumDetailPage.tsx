@@ -65,8 +65,8 @@ export function AdminStadiumDetailPage() {
           <h1 className="text-ink truncate text-xl font-bold">{stadium.name}</h1>
           <p className="text-ink-muted mt-1 text-sm">{stadium.address}</p>
           <p className="text-ink-subtle mt-0.5 text-xs">
-            {stadium.phone ?? '전화번호 없음'} · 구역 {stadium.areaCount}개 · 수용 인원{' '}
-            {stadium.totalCapacity.toLocaleString()}명
+            {stadium.phone ?? '전화번호 없음'} · 구역 {stadium.areaCount}개 · 최대 수용 인원{' '}
+            {stadium.maxCapacity.toLocaleString()}명
           </p>
         </div>
         <Button
@@ -125,8 +125,12 @@ export function AdminStadiumDetailPage() {
                           </span>
                         </span>
                         <span className="text-ink-muted shrink-0 text-xs">
-                          {layout.seatCount.toLocaleString()}석
+                          합계 {layout.capacity.toLocaleString()}명
                         </span>
+                      </span>
+                      <span className="text-ink-muted mt-1 block text-xs">
+                        좌석 {layout.seatCount.toLocaleString()}석 · 스탠딩{' '}
+                        {layout.standingCapacity.toLocaleString()}명
                       </span>
                       <span className="mt-3 flex items-center justify-end gap-1">
                         <Button

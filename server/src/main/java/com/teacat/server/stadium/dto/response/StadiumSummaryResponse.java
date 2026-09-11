@@ -9,6 +9,6 @@ public record StadiumSummaryResponse(
         @Schema(description = "공연장 주소", example = "서울 구로구 경인로 430") String address,
         @Schema(description = "공연장 전화번호", example = "02-2128-2300") String phone,
         @Schema(description = "구역 수", example = "3") long areaCount,
-        @Schema(description = "전체 수용 인원", example = "25000") long totalCapacity
+        @Schema(description = "물리적인 최대 수용 인원", example = "25000") int maxCapacity
 ) {
 }

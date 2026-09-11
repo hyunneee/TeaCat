@@ -2,6 +2,7 @@ package com.teacat.server.nft.dto.response;
 
 import com.teacat.server.nft.entity.NftDesignChainStatus;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
+import com.teacat.server.nft.entity.NftPhotocardGrade;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -18,8 +19,17 @@ public record NftPhotocardDesignResponse(
         @Schema(description = "도안 ID. 이 값이 그대로 온체인 tokenId 다", example = "11")
         Long designId,
 
-        @Schema(description = "공연 ID", example = "1")
+        @Schema(description = "공연 ID. 뽑기 풀 도안이면 null", example = "1")
         Long performanceId,
+
+        @Schema(description = "뽑기 풀 도안인가")
+        boolean drawPool,
+
+        @Schema(description = "소속 (뽑기 풀 도안만)", example = "서울 5반")
+        String group,
+
+        @Schema(description = "연출 등급 (뽑기 풀 도안만)", example = "SPECIAL")
+        NftPhotocardGrade grade,
 
         @Schema(description = "도안 이름", example = "티캣 콘서트 포토카드 A")
         String name,
@@ -64,6 +74,9 @@ public record NftPhotocardDesignResponse(
         return new NftPhotocardDesignResponse(
                 design.getId(),
                 design.getPerformanceId(),
+                design.isDrawPool(),
+                design.getGroupName(),
+                design.getGrade(),
                 design.getName(),
                 design.getImageUrl(),
                 design.getTotalSupply(),

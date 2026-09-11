@@ -30,7 +30,8 @@ public class NftPhotocardDesign {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "performance_general_id", nullable = false)
+    /** 공연 도안이면 공연 id. 뽑기 풀 도안은 null 이다 (DB CHECK 가 둘 중 하나임을 강제한다) */
+    @Column(name = "performance_general_id")
     private Long performanceId;
 
     @Column(name = "name", nullable = false, length = 100)
@@ -50,6 +51,20 @@ public class NftPhotocardDesign {
 
     @Column(name = "issued_supply", nullable = false)
     private int issuedSupply;
+
+    /** 뽑기 풀 도안인가. true 면 performanceId 가 null 이고 groupName·grade 가 있다 */
+    @Column(name = "draw_pool", nullable = false)
+    private boolean drawPool;
+
+    /** 소속. 예 "서울 3반" · "15기" · "개발자". 화면 문구에 쓴다 */
+    @Column(name = "group_name", length = 50)
+    private String groupName;
+
+    /** 연출 등급. 화면은 이 값만 보고 금색/보라 · 먼지를 고른다 */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "grade", columnDefinition = "nft_photocard_grade")
+    private NftPhotocardGrade grade;
 
     /** 그림 파일의 CID. 메타데이터 JSON 의 {@code image} 가 이 값을 가리킨다 */
     @Column(name = "image_cid", length = 80)
@@ -102,6 +117,22 @@ public class NftPhotocardDesign {
         this.imageCid = imageCid;
         this.metadataCid = metadataCid;
         this.chainStatus = NftDesignChainStatus.PENDING;
+        this.drawPool = false;
+    }
+
+    /**
+     * 뽑기 풀 도안. 공연이 없다. 규칙은 {@link #create} 와 같다 — 핀이 끝난 뒤에만 만들 수 있다.
+     *
+     * <p>{@code totalSupply} 가 희귀도다. 뽑기는 균등 랜덤이라 수량이 적은 도안이 먼저 소진된다.
+     */
+    public static NftPhotocardDesign createDrawPool(String name, String imageUrl, int totalSupply,
+                                                    String imageCid, String metadataCid,
+                                                    String groupName, NftPhotocardGrade grade) {
+        NftPhotocardDesign design = new NftPhotocardDesign(null, name, imageUrl, totalSupply, imageCid, metadataCid);
+        design.drawPool = true;
+        design.groupName = groupName;
+        design.grade = grade;
+        return design;
     }
 
     /**

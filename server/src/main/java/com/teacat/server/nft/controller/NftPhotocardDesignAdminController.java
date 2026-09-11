@@ -80,6 +80,13 @@ public class NftPhotocardDesignAdminController {
         return ResponseEntity.ok(BaseResponse.success(designService.get(designId)));
     }
 
+    @Operation(summary = "뽑기 풀 도안 목록 조회",
+            description = "ADMIN 전용 API입니다. 뽑기에 나오는 도안 전체와 등록 상태·남은 수량을 봅니다. 등록(REGISTERED)되지 않은 도안은 뽑기에 나오지 않습니다.")
+    @GetMapping("/draw-pool")
+    public ResponseEntity<BaseResponse<List<NftPhotocardDesignResponse>>> getDrawPool() {
+        return ResponseEntity.ok(BaseResponse.success(designService.getDrawPool()));
+    }
+
     @Operation(summary = "공연의 도안 목록 조회", description = "ADMIN 전용 API입니다. 발급 전에 도안이 전부 등록됐는지 확인하는 용도입니다.")
     @GetMapping
     public ResponseEntity<BaseResponse<List<NftPhotocardDesignResponse>>> getByPerformance(

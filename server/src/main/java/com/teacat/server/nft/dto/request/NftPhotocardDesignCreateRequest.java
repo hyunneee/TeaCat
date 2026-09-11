@@ -1,5 +1,6 @@
 package com.teacat.server.nft.dto.request;
 
+import com.teacat.server.nft.entity.NftPhotocardGrade;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -17,8 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Schema(description = "포토카드 도안 등록 요청 (multipart/form-data)")
 public record NftPhotocardDesignCreateRequest(
 
-        @Schema(description = "공연 ID", example = "1")
-        @NotNull(message = "공연을 선택해 주세요.")
+        @Schema(description = "공연 ID. 뽑기 풀 도안(drawPool=true)이면 비운다", example = "1")
         Long performanceId,
 
         @Schema(description = "도안 이름. 지갑에 그대로 뜬다", example = "티캣 콘서트 포토카드 A")
@@ -42,6 +42,20 @@ public record NftPhotocardDesignCreateRequest(
         Integer totalSupply,
 
         @Schema(description = "도안 이미지 (jpg/png/webp/gif)")
-        MultipartFile image
+        MultipartFile image,
+
+        @Schema(description = "뽑기 풀 도안인가. true 면 공연 없이 소속·등급을 함께 보낸다", example = "false")
+        Boolean drawPool,
+
+        @Schema(description = "소속 (뽑기 풀 도안만). 화면 문구에 쓴다", example = "서울 5반")
+        @Size(max = 50, message = "소속은 50자 이하여야 합니다.")
+        String group,
+
+        @Schema(description = "연출 등급 (뽑기 풀 도안만)", example = "SPECIAL")
+        NftPhotocardGrade grade
 ) {
+
+    public boolean isDrawPool() {
+        return Boolean.TRUE.equals(drawPool);
+    }
 }

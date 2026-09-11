@@ -37,7 +37,8 @@ public class NftPhotocard {
     @JoinColumn(name = "design_id", nullable = false)
     private NftPhotocardDesign design;
 
-    @Column(name = "ticket_id", nullable = false, updatable = false)
+    /** 공연 발급 카드의 티켓. 뽑기 카드는 null 이다 */
+    @Column(name = "ticket_id", updatable = false)
     private Long ticketId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -100,6 +101,22 @@ public class NftPhotocard {
 
     public static NftPhotocard issue(NftPhotocardDesign design, Long ticketId, User owner) {
         return new NftPhotocard(design, ticketId, owner);
+    }
+
+    private NftPhotocard(NftPhotocardDesign design, User owner, Long walletId) {
+        this.design = design;
+        this.ticketId = null;
+        this.owner = owner;
+        this.walletId = walletId;
+        this.status = NftMintStatus.PENDING;
+    }
+
+    /**
+     * 뽑기로 나온 카드. 티켓이 없고 지갑을 여기서 채운다 — 공연 발급은 배치 INSERT 가 wallet_id 를
+     * 넣지만 뽑기는 한 장씩 JPA 로 저장하기 때문이다. 받는 주소가 이 값에서 나오므로 null 이면 안 된다.
+     */
+    public static NftPhotocard draw(NftPhotocardDesign design, User owner, Long walletId) {
+        return new NftPhotocard(design, owner, walletId);
     }
 
     public void transferTo(User buyer) {

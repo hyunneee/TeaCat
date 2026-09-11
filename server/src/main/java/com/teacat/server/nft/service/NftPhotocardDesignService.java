@@ -50,24 +50,33 @@ public class NftPhotocardDesignService {
     private final NftDesignChainRegistrar registrar;
 
     public NftPhotocardDesignResponse create(NftPhotocardDesignCreateRequest request) {
-        /* 핀을 먼저 하면 공연이 없을 때 IPFS 에 쓰레기가 남는다. 핀은 되돌릴 수 없으므로
-           되돌릴 수 있는 검사를 앞에 둔다 */
-        if (!performanceRepository.existsById(request.performanceId())) {
+        /* 핀을 먼저 하면 잘못된 요청에도 IPFS 에 쓰레기가 남는다. 핀은 되돌릴 수 없으므로
+           되돌릴 수 있는 검사를 전부 앞에 둔다 */
+        boolean drawPool = request.isDrawPool();
+        if (drawPool == (request.performanceId() != null)) {
+            throw new BusinessException(NftErrorCode.DESIGN_POOL_CONFLICT);
+        }
+        if (drawPool && (request.group() == null || request.group().isBlank() || request.grade() == null)) {
+            throw new BusinessException(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
+        }
+        if (!drawPool && !performanceRepository.existsById(request.performanceId())) {
             throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
         }
 
         String imageCid = ipfsPinService.pinImage(request.image());
-        String metadataCid = ipfsPinService.pinJson(METADATA_FILENAME,
-                PhotocardNftMetadata.of(request.name(), request.description(), imageCid));
+        PhotocardNftMetadata metadata = drawPool
+                ? PhotocardNftMetadata.ofDrawPool(request.name(), request.description(), imageCid,
+                        request.group().trim(), request.grade().name())
+                : PhotocardNftMetadata.of(request.name(), request.description(), imageCid);
+        String metadataCid = ipfsPinService.pinJson(METADATA_FILENAME, metadata);
 
-        NftPhotocardDesign design = writer.create(
-                request.performanceId(),
-                request.name(),
-                // ipfs:// 는 브라우저가 못 연다. 화면 코드가 그대로 쓰도록 게이트웨이 주소를 넣는다
-                ipfsPinService.gatewayUrl(imageCid),
-                request.totalSupply(),
-                imageCid,
-                metadataCid);
+        // ipfs:// 는 브라우저가 못 연다. 화면 코드가 그대로 쓰도록 게이트웨이 주소를 넣는다
+        String imageUrl = ipfsPinService.gatewayUrl(imageCid);
+        NftPhotocardDesign design = drawPool
+                ? writer.createDrawPool(request.name(), imageUrl, request.totalSupply(),
+                        imageCid, metadataCid, request.group().trim(), request.grade())
+                : writer.create(request.performanceId(), request.name(), imageUrl, request.totalSupply(),
+                        imageCid, metadataCid);
 
         try {
             registrar.register(design.getId(), false);
@@ -92,6 +101,13 @@ public class NftPhotocardDesignService {
     public NftPhotocardDesignResponse get(Long designId) {
         return NftPhotocardDesignResponse.from(designRepository.findById(designId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.DESIGN_NOT_FOUND)));
+    }
+
+    /** 어드민이 보는 뽑기 풀 — 몇 종이 등록됐고 몇 장 남았나 */
+    public List<NftPhotocardDesignResponse> getDrawPool() {
+        return designRepository.findAllByDrawPoolTrueOrderByIdAsc().stream()
+                .map(NftPhotocardDesignResponse::from)
+                .toList();
     }
 
     public List<NftPhotocardDesignResponse> getByPerformance(Long performanceId) {

@@ -39,6 +39,9 @@ public class Stadium {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    @Column(name = "max_capacity", nullable = false)
+    private int maxCapacity;
+
     @Column(name = "layout_image_key", length = 500)
     private String layoutImageKey;
 
@@ -52,18 +55,19 @@ public class Stadium {
     @JoinColumn(name = "manager_id")
     private User manager;
 
-    private Stadium(String name, String address, String phone, User manager) {
+    private Stadium(String name, String address, String phone, int maxCapacity, User manager) {
         this.name = name;
         this.address = address;
         this.phone = phone;
+        this.maxCapacity = maxCapacity;
         this.manager = manager;
     }
 
-    public static Stadium create(String name, String address, String phone, User manager) {
-        return new Stadium(name, address, phone, manager);
+    public static Stadium create(String name, String address, String phone, int maxCapacity, User manager) {
+        return new Stadium(name, address, phone, maxCapacity, manager);
     }
 
-    public void update(String name, String address, String phone) {
+    public void update(String name, String address, String phone, Integer maxCapacity) {
         if (name != null) {
             this.name = name;
         }
@@ -72,6 +76,9 @@ public class Stadium {
         }
         if (phone != null) {
             this.phone = phone;
+        }
+        if (maxCapacity != null) {
+            this.maxCapacity = maxCapacity;
         }
     }
 

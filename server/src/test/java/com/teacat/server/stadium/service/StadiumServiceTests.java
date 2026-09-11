@@ -8,6 +8,7 @@ import com.teacat.server.stadium.dto.request.AreaBatchCreateRequest;
 import com.teacat.server.stadium.dto.request.AreaCreateRequest;
 import com.teacat.server.stadium.dto.request.SeatCreateRequest;
 import com.teacat.server.stadium.dto.request.StadiumCreateRequest;
+import com.teacat.server.stadium.dto.request.StadiumUpdateRequest;
 import com.teacat.server.stadium.entity.AreaType;
 import com.teacat.server.stadium.entity.Stadium;
 import com.teacat.server.stadium.entity.StadiumLayout;
@@ -70,7 +71,7 @@ class StadiumServiceTests {
         AuthUser user = new AuthUser(3L, UserRole.USER);
 
         assertThatThrownBy(() -> stadiumService.createStadium(
-                user, new StadiumCreateRequest("테스트 공연장", "서울", null)))
+                user, new StadiumCreateRequest("테스트 공연장", "서울", null, 1000)))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode())
                         .isEqualTo(AuthErrorCode.ACCESS_DENIED));
@@ -78,8 +79,25 @@ class StadiumServiceTests {
     }
 
     @Test
+    void 최대_수용_인원은_기존_배치_수용_인원보다_작게_수정할_수_없다() {
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 200, null);
+        StadiumLayout layout = mock(StadiumLayout.class);
+        when(layout.getId()).thenReturn(10L);
+        when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
+        when(stadiumLayoutRepository.findAllByStadiumIdOrderByDefaultLayoutDescCreatedAtAsc(1L))
+                .thenReturn(List.of(layout));
+        when(seatRepository.countByLayoutId(10L)).thenReturn(80L);
+        when(areaRepository.sumStandingCapacityByLayoutId(10L)).thenReturn(30L);
+
+        assertStadiumError(StadiumErrorCode.MAX_CAPACITY_BELOW_LAYOUT,
+                () -> stadiumService.updateStadium(
+                        1L, ADMIN, new StadiumUpdateRequest(null, null, null, 100)));
+        assertThat(stadium.getMaxCapacity()).isEqualTo(200);
+    }
+
+    @Test
     void STADIUM은_본인_소속이_아닌_공연장을_관리할_수_없다() throws Exception {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         MockMultipartFile image = png(320, 180);
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
 
@@ -92,7 +110,7 @@ class StadiumServiceTests {
 
     @Test
     void 정상_PNG를_업로드하면_실제_크기와_URL을_반환한다() throws Exception {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         MockMultipartFile image = png(320, 180);
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
         when(fileStorageService.uploadImage(image, "stadium/layout", DataSize.ofMegabytes(10)))
@@ -111,7 +129,7 @@ class StadiumServiceTests {
 
     @Test
     void 이미지라고_속인_파일은_업로드하지_않는다() {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         MockMultipartFile image = new MockMultipartFile(
                 "image", "fake.png", "image/png", "not-an-image".getBytes());
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
@@ -123,7 +141,7 @@ class StadiumServiceTests {
 
     @Test
     void 배치_좌표가_있으면_다른_크기의_이미지로_교체하지_않는다() throws Exception {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         stadium.updateLayoutImage("stadium/layout/old.png", 100, 100);
         MockMultipartFile image = png(200, 100);
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
@@ -136,7 +154,7 @@ class StadiumServiceTests {
 
     @Test
     void 이미지_경계를_벗어난_구역과_좌석은_일괄_생성하지_않는다() {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         stadium.updateLayoutImage("stadium/layout/layout.png", 100, 100);
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
         when(stadiumLayoutRepository.findDefaultByStadiumId(1L))
@@ -153,7 +171,7 @@ class StadiumServiceTests {
 
     @Test
     void 좌석_좌표는_구역_안에_있어야_한다() {
-        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, null);
+        Stadium stadium = Stadium.create("테스트 공연장", "서울", null, 1000, null);
         stadium.updateLayoutImage("stadium/layout/layout.png", 500, 500);
         when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
         when(stadiumLayoutRepository.findDefaultByStadiumId(1L))

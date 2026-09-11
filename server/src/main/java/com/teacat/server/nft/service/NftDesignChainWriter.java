@@ -4,6 +4,7 @@ import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.client.ChainTxReport;
 import com.teacat.server.nft.client.PhotocardDesignRegisterResult;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
+import com.teacat.server.nft.entity.NftPhotocardGrade;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,14 @@ public class NftDesignChainWriter {
                                      String imageCid, String metadataCid) {
         return designRepository.save(
                 NftPhotocardDesign.create(performanceId, name, imageUrl, totalSupply, imageCid, metadataCid));
+    }
+
+    @Transactional
+    public NftPhotocardDesign createDrawPool(String name, String imageUrl, int totalSupply,
+                                             String imageCid, String metadataCid,
+                                             String group, NftPhotocardGrade grade) {
+        return designRepository.save(NftPhotocardDesign.createDrawPool(
+                name, imageUrl, totalSupply, imageCid, metadataCid, group, grade));
     }
 
     /**

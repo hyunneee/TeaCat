@@ -18,6 +18,7 @@ export interface StadiumLayoutCreatePayload {
   analysisId?: string;
   name: string;
   isDefault: boolean;
+  saveMode: 'DRAFT' | 'PUBLISH';
   sourceSheet?: string;
   layoutWidth: number;
   layoutHeight: number;
@@ -35,6 +36,7 @@ export const stadiumApi = {
       name: info.name.trim(),
       address: info.address.trim(),
       phone: info.phone.trim() || null,
+      maxCapacity: Number(info.maxCapacity),
     }),
 
   update: (stadiumId: number, body: StadiumUpdateRequest) =>
@@ -57,6 +59,7 @@ export const stadiumApi = {
     http.post<StadiumLayoutCreateResponse>(`/admin/stadium-layouts/${layoutId}/copies`, {
       name: name.trim(),
       isDefault: false,
+      saveMode: 'PUBLISH',
     }),
 
   layouts: (stadiumId: number) => http.get<StadiumLayoutList>(`/stadiums/${stadiumId}/layouts`),

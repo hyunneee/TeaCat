@@ -25,3 +25,4 @@ export {
   reduceIfNeeded,
 } from './motion';
 export { initSentry, reportError, setSentryUser } from './sentry';
+export { initClarity, setClarityUser, trackClarityEvent } from './clarity';

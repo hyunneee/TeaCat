@@ -68,6 +68,23 @@ public class NftPhotocardMinter {
                 queryRepository.findPendingMintsForSchedule(scheduleId, SWEEP_LIMIT));
     }
 
+    /**
+     * 뽑기 직후 그 카드 한 장을 보낸다. 트랜잭션 밖에서 부른다.
+     *
+     * <p>실패하면 예외가 그대로 나간다 — 부르는 쪽({@link NftPhotocardDrawService})이 삼키고
+     * 카드는 PENDING 으로 남아 {@link #mintPendingDraws} 가 다음 주기에 다시 보낸다.
+     */
+    public void mintDrawn(Long photocardId, Long designId, String address) {
+        chainClient.issuePhotocards(List.of(
+                new IssueItem(photocardId.toString(), designId.toString(), address)));
+        log.info("뽑기 포토카드 발행 요청 photocardId={}", photocardId);
+    }
+
+    /** 체인에 못 보낸 뽑기 카드(티켓 없는 PENDING)를 이어서 보낸다. 스위퍼가 부른다 */
+    public int mintPendingDraws(int limit) {
+        return send("draw", queryRepository.findPendingDrawMints(Math.min(limit, SWEEP_LIMIT)));
+    }
+
     private int send(String scope, List<PendingMintRow> rows) {
         if (rows.isEmpty()) {
             return 0;

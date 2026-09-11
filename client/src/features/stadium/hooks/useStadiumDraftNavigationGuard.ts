@@ -27,6 +27,7 @@ function toDraftData(controller: StadiumEditorController): StadiumEditorDraftDat
 
 export function useStadiumDraftNavigationGuard(controller: StadiumEditorController) {
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const completed = controller.confirmLayout.isSuccess || controller.copyLayout.isSuccess;
   const hasProgress =
     !completed &&
@@ -80,8 +81,22 @@ export function useStadiumDraftNavigationGuard(controller: StadiumEditorControll
     blocker.proceed();
   };
 
-  const saveAndLeave = () => {
+  const saveAndLeave = async () => {
     if (blocker.state !== 'blocked') return;
+    if (controller.step === 4) {
+      setSaving(true);
+      setSaveError(null);
+      try {
+        await controller.confirmLayout.mutateAsync('DRAFT');
+        controller.reset();
+        blocker.proceed();
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : '임시저장에 실패했습니다.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const result = saveStadiumEditorDraft(draftData);
     if (!result.ok) {
       setSaveError(result.message ?? '임시저장에 실패했습니다.');
@@ -94,6 +109,7 @@ export function useStadiumDraftNavigationGuard(controller: StadiumEditorControll
   return {
     blocked: blocker.state === 'blocked',
     saveError,
+    saving,
     stay,
     discardAndLeave,
     saveAndLeave,

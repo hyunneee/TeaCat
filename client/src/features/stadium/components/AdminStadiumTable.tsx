@@ -103,7 +103,7 @@ export function AdminStadiumTable({
               </td>
               <td className="text-ink px-4 py-3 tabular-nums">{stadium.areaCount}개</td>
               <td className="text-ink px-4 py-3 tabular-nums">
-                {stadium.totalCapacity.toLocaleString()}명
+                {stadium.maxCapacity.toLocaleString()}명
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1">
