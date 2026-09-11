@@ -100,7 +100,13 @@ export function ConcertListPage() {
            넓은 화면에서는 두 열로 접습니다 — 한 열로 두면 카드가 가로로 늘어나
            포스터는 그대로인 채 오른쪽이 비어 보입니다. 열이 늘어도 카드 자체는
            폰에서와 같은 모양(포스터 왼쪽 · 정보 오른쪽)입니다. */
-        <ul className="grid gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3 lg:px-0">
+        /* 🔴 `grid-cols-1` 을 빼먹으면 안 됩니다. 칸을 안 정한 그리드의 암묵 칸은
+           `auto` 라 **내용의 min-content 보다 작아지지 않습니다** — 카드가 칸을
+           비집고 나와 오른쪽이 잘립니다(폰에서 7px 넘쳤습니다).
+           `grid-cols-N` 은 `minmax(0, 1fr)` 이라 그 바닥을 풀어 주고,
+           그래야 안쪽 제목의 truncate 도 제때 걸립니다.
+           (예전 `space-y-2` 일 때는 블록이라 이 문제가 없었습니다) */
+        <ul className="grid grid-cols-1 gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3 lg:px-0">
           {concerts.map((concert) => (
             <li key={concert.concertId}>
               <ConcertCard
