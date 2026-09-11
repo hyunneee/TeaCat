@@ -159,7 +159,7 @@ export function HomePage() {
              화면 한가운데 떠 있는 네모가 되어 배경이 아니라 카드처럼 보입니다.
              가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다.
 
-          높이는 `--banner-height` 가 lg 에서 21:9 로 다시 계산됩니다 (styles/index.css) */}
+          높이는 `--banner-height` 가 lg 에서 2:1 로 다시 계산됩니다 (styles/index.css) */}
       <div
         aria-hidden
         className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
@@ -193,7 +193,7 @@ export function HomePage() {
       {/* 넓은 화면에서는 좌우 여백을 본문(AppLayout 의 px-6)에 맡깁니다 */}
       <div className="relative px-4 pt-2 lg:px-0 lg:pt-6">
         {bannersPending ? (
-          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-t-2xl lg:rounded-b-none" />
+          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[2/1] lg:rounded-t-2xl lg:rounded-b-none" />
         ) : (
           banners && <BannerCarousel banners={banners} onSelect={openBanner} />
         )}

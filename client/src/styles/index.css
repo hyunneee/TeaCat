@@ -656,7 +656,7 @@
   }
 
   /* 데스크톱(lg)부터는 기둥이 아니라 **본문 폭**이 기준이고, 배너도 가로로 긴
-     히어로(21:9)로 바뀝니다. 홈의 초록/하양 경계가 이 값을 그대로 씁니다.
+     히어로(2:1)로 바뀝니다. 홈의 초록/하양 경계가 이 값을 그대로 씁니다.
 
      64rem = AppLayout 본문 상한(max-w-5xl), 3rem = 그 본문의 좌우 여백(px-6).
      ⚠️ 셋 중 하나라도 바꾸면 홈 경계가 배너에서 떨어집니다
@@ -664,7 +664,7 @@
   @media (width >= 64rem) {
     :root {
       --banner-width: calc(min(100vw, 64rem) - 3rem);
-      --banner-height: calc(var(--banner-width) * 9 / 21);
+      --banner-height: calc(var(--banner-width) * 1 / 2);
       --banner-gap: 3rem;
     }
   }
