@@ -44,22 +44,32 @@ export function ConcertListPage() {
           바깥 면은 목록과 같은 바탕색이라 흰 입력창만 떠 보입니다.
           (헤더와 같은 흰색으로 두면 헤더가 그만큼 두꺼워진 것처럼 읽힙니다)
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
-      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
+      {/* 넓은 화면에서는 두 줄을 **한 줄**로 폅니다. 세로로 쌓아 두면 1024px 짜리
+          검색창과 1024px 짜리 세그먼트가 위아래로 붙어 필터가 화면의 절반을 먹습니다. */}
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:flex lg:items-center lg:gap-3 lg:px-0 lg:pt-3">
         {/* 검색·포카 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고)
             서버 검색은 공연명 부분 일치입니다 (API-201). */}
-        <Input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onClear={() => setKeyword('')}
-          placeholder="공연명으로 검색"
-          leftIcon={<Search size={17} />}
-          type="search"
-          tone="contrast"
-        />
+        <div className="lg:max-w-md lg:flex-1">
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onClear={() => setKeyword('')}
+            placeholder="공연명으로 검색"
+            leftIcon={<Search size={17} />}
+            type="search"
+            tone="contrast"
+          />
+        </div>
 
         {/* 내 티켓·포카와 같은 세그먼트입니다. 검색창과 한 덩어리로 붙여 두면
-            스크롤해도 "무엇을 보고 있는지" 가 함께 따라옵니다. */}
-        <Segmented options={TABS} value={tab} onChange={setTab} className="mt-2" />
+            스크롤해도 "무엇을 보고 있는지" 가 함께 따라옵니다.
+            알약 위치는 폭의 비율로 계산하므로 폭을 좁혀도 어긋나지 않습니다. */}
+        <Segmented
+          options={TABS}
+          value={tab}
+          onChange={setTab}
+          className="mt-2 lg:mt-0 lg:ml-auto lg:w-56 lg:shrink-0"
+        />
       </div>
 
       {isPending ? (
@@ -87,7 +97,7 @@ export function ConcertListPage() {
            넓은 화면에서는 두 열로 접습니다 — 한 열로 두면 카드가 가로로 늘어나
            포스터는 그대로인 채 오른쪽이 비어 보입니다. 열이 늘어도 카드 자체는
            폰에서와 같은 모양(포스터 왼쪽 · 정보 오른쪽)입니다. */
-        <ul className="grid gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3">
+        <ul className="grid gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3 lg:px-0">
           {concerts.map((concert) => (
             <li key={concert.concertId}>
               <ConcertCard

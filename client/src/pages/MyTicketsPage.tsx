@@ -31,8 +31,11 @@ export function MyTicketsPage() {
     <>
       <Header title="내 티켓" />
 
-      <div className="space-y-4 p-4">
-        <Segmented options={TABS} value={tab} onChange={setTab} />
+      {/* 티켓 카드는 가로로 길어서 넓은 화면에서 두 열로 접습니다.
+          세그먼트는 폭을 따라 늘리지 않습니다 — 1024px 짜리 두 칸 알약은
+          누르는 것이 아니라 띠로 보입니다. */}
+      <div className="space-y-4 p-4 lg:space-y-5 lg:px-0">
+        <Segmented options={TABS} value={tab} onChange={setTab} className="lg:w-72" />
 
         {isPending ? (
           <Loading label="티켓을 불러오는 중" />
@@ -43,7 +46,7 @@ export function MyTicketsPage() {
             description={tab === 'UPCOMING' ? '공연을 둘러보고 예매해 보세요.' : undefined}
           />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
             {filtered.map((ticket) => (
               <li key={ticket.id}>
                 <TicketCard
