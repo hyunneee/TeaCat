@@ -25,7 +25,7 @@ import {
 } from '@/shared/components/ui';
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { formatDateTime } from '@/shared/lib';
+import { cn, formatDateTime } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHold } from '@/features/booking';
@@ -53,6 +53,21 @@ const SHORTCUTS = [
 
 /** 가로 레일에 몇 장까지 실을지. 너무 많으면 끝까지 미는 사람이 없습니다. */
 const RAIL_LIMIT = 8;
+
+/**
+ * 데스크톱에서 레일 한 화면에 들어갈 카드 수와, 거기서 나온 카드 폭.
+ *
+ * 폭을 먼저 정하면(예전 `lg:w-[10.5rem]`) 레일 폭과 딱 나눠떨어지지 않아
+ * **맨 끝 카드가 반쯤 잘린 채** 걸립니다. 그래서 순서를 뒤집어, "다섯 장이 딱
+ * 맞으려면 한 장이 몇 px 이어야 하나" 를 CSS 가 계산하게 둡니다.
+ *
+ * `100%` 는 트랙 폭(= 레일 폭)이고, 빼는 값은 카드 **사이** 간격의 총합입니다
+ * (다섯 장이면 사이가 넷, `lg:gap-4` = 1rem × 4).
+ *
+ * ⚠️ 칸 수·간격 중 하나를 바꾸면 식의 두 숫자를 **같이** 고쳐야 합니다.
+ *    어긋나면 다시 잘립니다.
+ */
+const RAIL_CARD_WIDTH = 'lg:w-[calc((100%-4rem)/5)]';
 
 /**
  * 홈.
@@ -310,19 +325,25 @@ export function HomePage() {
             /* 여기까지 왔으면 열린 것도 예정도 없습니다 — 등록된 공연 자체가 없는 경우 */
             <p className="text-subtle py-8 text-center text-sm">아직 등록된 공연이 없어요.</p>
           ) : (
-            /* -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
+            /* 폰: -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
                그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다.
-               데스크톱 화살표와 자동 흐름은 Rail 이 맡습니다 (포카 레일이 돌아오면
-               **속도를 다르게** 두세요 — 같으면 두 줄이 한 덩어리처럼 같이 밀립니다). */
-            <Rail
-              autoScroll={rail.length > 1}
-              speed={15}
-              label="진행 중인 티켓팅"
-              className="-mx-4 lg:mx-0"
-            >
-              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:gap-4 lg:px-0">
+
+               데스크톱: 카드가 **잘리지 않습니다.** 한 화면에 딱 다섯 장이 들어가도록
+               카드 폭을 레일에서 거꾸로 계산합니다 (아래 `RAIL_COLUMNS`).
+               자동 흐름은 여기서 끕니다 — 매 프레임 조금씩 미는 방식이라
+               멈춰 있는 대부분의 순간에 카드가 반쯤 잘려 있습니다. 넘기는 건 화살표가 합니다. */
+            <Rail label="진행 중인 티켓팅" className="-mx-4 lg:mx-0">
+              {/* 🔴 `lg:w-full` 이 핵심입니다. 폰에서는 `w-max`(내용만큼)라 카드가 넘쳐
+                  흐르지만, 데스크톱에서는 트랙을 **레일 폭에 묶어** 둡니다. 그래야 아래
+                  카드의 `100%` 가 레일 폭을 가리켜서 "다섯 장이 딱 맞는 폭"이 나옵니다.
+                  (`w-max` 인 채로 %를 쓰면 폭이 내용에서 나오고 내용이 폭에서 나와 순환합니다)
+                  카드는 `shrink-0` 이라 트랙 밖으로 넘쳐 흐르고, 스크롤은 그대로 됩니다. */}
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
                 {rail.map((concert) => (
-                  <li key={concert.concertId} className="w-[8.5rem] shrink-0 lg:w-[10.5rem]">
+                  <li
+                    key={concert.concertId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
                     <motion.button
                       type="button"
                       onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
