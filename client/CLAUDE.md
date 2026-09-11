@@ -66,7 +66,7 @@
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
 | 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
 | 에러 리포팅 | **@sentry/react** (`shared/lib/sentry.ts` 만 사용) | 화면에서 `Sentry.*` 직접 호출, **Session Replay** |
-| 행동 분석 | **@microsoft/clarity** (`shared/lib/clarity.ts` 만 사용) | 화면에서 `window.clarity` 직접 호출, `index.html` 의 `data-clarity-mask` 제거, 세 번째 분석 도구 |
+| 행동 분석 | **@microsoft/clarity** (`shared/lib/clarity.ts` 만 사용) | 화면에서 `window.clarity` 직접 호출, `router.tsx` 의 `withMask` 없이 개인정보 화면 추가, 세 번째 분석 도구 |
 | 얼굴 인식 | **onnxruntime-web** (`/wasm` 빌드 하나만) + INT8 ONNX 모델 | MediaPipe·tfjs 등 **두 번째 런타임**, FP32 모델 |
 
 ---
@@ -588,13 +588,27 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
   잠깐 켜서 확인할 때는 `.env.development.local` 을 쓰세요 (gitignore 됨).
 - 화면 코드에서 `window.clarity` 를 직접 부르지 마세요. `shared/lib/clarity.ts` 의
   `initClarity` / `setClarityUser` / `trackClarityEvent` 만 씁니다.
-- 🔴 **`index.html` 의 `data-clarity-mask="true"` 를 지우지 마세요** (0번 절차).
-  `#root` 와 `#modal-root` 두 곳에 붙어 있고, 이게 **화면 전체를 기본 차단**합니다.
-  지우면 그 순간부터 화면 내용이 그대로 업로드됩니다.
-  - React 밖(`index.html`)에 둔 이유: 새 화면을 만들 때 아무것도 안 해도 가려집니다.
-    페이지마다 붙이는 방식은 새 화면이 생길 때마다 빠뜨립니다 —
-    `sentry.ts` 의 `httpBodies: []` 와 같은 발상입니다.
-  - `#modal-root` 는 `#root` 의 자식이 **아닙니다.** 둘 다 필요합니다.
+- 🔴 **개인정보가 뜨는 화면은 `router.tsx` 의 `withMask` 로 감싸세요** (0번 절차).
+  리플레이를 읽을 수 있어야 "어디서 막히나" 를 보는데, 전부 가리면 그게 안 됩니다.
+  그래서 **기본은 열려 있고, 가릴 화면만 골라서 감쌉니다.**
+
+  ```tsx
+  { path: ROUTES.MY, element: withMask(withBoundary(<MyPage />)) },   // 가림
+  { path: ROUTES.HOME, element: withBoundary(<HomePage />) },          // 열림
+  ```
+
+  - **감싸는 기준**: 화면에 사람을 특정할 수 있는 값이 뜨면 — 이메일·전화번호·닉네임·
+    주소·티켓/주문 정보·결제 내역·문의 본문. 남의 데이터를 보는 `/admin` 전체도 포함.
+  - **일부러 여는 것**: 홈·공연 목록·상세·검색·마켓, 그리고 **구역·좌석 선택**.
+    좌석 화면이 Clarity 를 붙인 이유(선점 실패 후 연타)라 여기를 가리면 의미가 없습니다.
+  - 🔴 **예전에는 `index.html` 이 전부 가리는 기본 차단이었습니다.** 그때는 새 화면을
+    만들어도 자동으로 안전했는데, 지금은 **사람이 판단해서 붙여야 하고 빠뜨리면
+    조용히 노출됩니다.** 화면을 추가할 때 이 항목을 확인하세요.
+  - 🔴 **포탈 모달은 `withMask` 가 닿지 않습니다.** `#modal-root` 가 `#root` 의 자식이
+    아니라서, 감싼 화면에서 연 모달 내용은 리플레이에 남습니다. 민감한 값을 모달에
+    띄운다면 그 컴포넌트에 `data-clarity-mask="true"` 를 직접 붙이세요.
+  - `withMask` 는 `display: contents` 라 레이아웃 상자를 만들지 않습니다 —
+    감싸도 flex/grid 가 틀어지지 않습니다(375px 에서 확인).
 - 🔴 **라우트 단위로 끌 수 없습니다.** Clarity 공식 API 에는 `stop` 이 없습니다
   (`init`·`setTag`·`identify`·`consent`·`event`·`upgrade` 뿐). 홈에서 한 번 로드되면
   결제 화면으로 이동해도 계속 기록됩니다. **그래서 마스킹이 유일한 방어선입니다.**
@@ -800,3 +814,17 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
   진입로는 **홈 배너의 `linkPath`** 입니다 — 배너가 실서버로 넘어갔으므로 어드민에서
   `linkPath: /nft/draw` 인 배너를 하나 만들면 열리고, 그 배너를 내리면 닫힙니다.
   포카 응답의 `group`·`grade`·`averagePrice` 는 **선택 필드**로 목업만 채웁니다(8장)
+- 2026-09-11 **Clarity 마스킹을 전체 차단 → 선택 차단으로 전환** (1장 표, 7장 "행동 분석").
+  `index.html` 의 `#root`·`#modal-root` `data-clarity-mask` 를 걷고, `router.tsx` 에
+  `withMask` 를 만들어 **개인정보가 뜨는 라우트 22곳만** 감쌌습니다
+  (마이페이지·티켓·로그인/가입·얼굴 등록·설정·문의·예매 확인/결제/완료·`/admin` 전체).
+  이유: 전부 가리니 리플레이가 `•••` 뿐이라 **"어디서 막히나" 를 볼 수 없었습니다.**
+  히트맵·rage click 은 원래 마스킹과 무관하므로(문서: heat maps are based on element
+  attributes, not content) 잃은 것 없이 리플레이 가독성만 되찾는 거래입니다.
+  🔴 **기본 차단이라는 안전망이 없어졌습니다.** 새 화면에 개인정보가 뜨면 `withMask` 를
+     **사람이 직접** 붙여야 하고, 빠뜨리면 조용히 노출됩니다.
+  🔴 포탈 모달(`#modal-root`)은 `withMask` 가 닿지 않는 **남은 구멍**입니다.
+  🔴 대시보드 마스킹 모드도 함께 내려야 효과가 납니다 — HTML 속성이 대시보드 설정을
+     덮으므로 Strict 로 둔 채 속성만 걷으면 프로젝트 설정이 그대로 적용됩니다.
+  ⚠️ `index.html` 은 환경 구분이 없어 **이 완화가 운영에도 그대로 갑니다.**
+     운영 오픈 전에 이 결정을 다시 검토하세요 (8장 처리방침·동의와 함께). 사용자 승인
