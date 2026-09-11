@@ -18,13 +18,13 @@ import {
   LiveDot,
   Logo,
   PosterImage,
+  Rail,
   SectionTitle,
   Skeleton,
 } from '@/shared/components/ui';
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
-import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHold } from '@/features/booking';
@@ -107,11 +107,6 @@ export function HomePage() {
           .filter((c) => c.bookingStatus === 'BEFORE')
           .sort((a, b) => a.ticketingStartAt.localeCompare(b.ticketingStartAt))
   ).slice(0, RAIL_LIMIT);
-
-  /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
-     포토카드 레일이 돌아오면 **속도를 다르게** 두세요 (그때는 9). 같으면 두 줄이
-     한 덩어리처럼 같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
-  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: rail.length > 1, speed: 15 });
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
@@ -212,7 +207,7 @@ export function HomePage() {
       <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
         <Stagger
           as="ul"
-          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
+          className="lg:bg-surface-1 lg:shadow-card grid grid-cols-5 gap-x-1.5 lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
         >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
@@ -315,8 +310,15 @@ export function HomePage() {
             <p className="text-subtle py-8 text-center text-sm">아직 등록된 공연이 없어요.</p>
           ) : (
             /* -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
-               그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다. */
-            <div ref={concertRail} className="-mx-4 overflow-x-auto lg:mx-0">
+               그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다.
+               데스크톱 화살표와 자동 흐름은 Rail 이 맡습니다 (포카 레일이 돌아오면
+               **속도를 다르게** 두세요 — 같으면 두 줄이 한 덩어리처럼 같이 밀립니다). */
+            <Rail
+              autoScroll={rail.length > 1}
+              speed={15}
+              label="진행 중인 티켓팅"
+              className="-mx-4 lg:mx-0"
+            >
               <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:gap-4 lg:px-0">
                 {rail.map((concert) => (
                   <li key={concert.concertId} className="w-[8.5rem] shrink-0 lg:w-[10.5rem]">
@@ -359,7 +361,7 @@ export function HomePage() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Rail>
           )}
         </section>
 
