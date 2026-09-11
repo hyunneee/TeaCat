@@ -53,11 +53,16 @@ export function usePhotocardDetail(photocardId: number) {
  * 팩이 어떻게 늘어나는지는 서버가 정합니다. 화면은 남은 수만 봅니다.
  */
 export function useDrawAvailability() {
+  // 개인 데이터입니다 (useMyPhotocards 와 같은 이유로 막아둡니다).
+  // 쓰는 화면은 로그인 뒤에만 열리지만, 세션 중에 토큰이 만료되면 비로그인 상태로 호출됩니다.
+  const isLoggedIn = useIsLoggedIn();
+
   return useQuery({
     queryKey: nftKeys.drawAvailability(),
     queryFn: nftApi.drawAvailability,
     /* 뽑고 나면 mutation 이 nftKeys.all 을 무효화해 곧바로 다시 물어봅니다 */
     staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
   });
 }
 
