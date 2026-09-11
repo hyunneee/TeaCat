@@ -628,6 +628,13 @@
     --banner-width: calc(100vw - 2rem);
     --banner-height: calc(var(--banner-width) * 3 / 4);
 
+    /* 슬라이드 사이 간격. **폰에서는 0 입니다** — 화면 폭을 꽉 쓰므로 옆 배너가
+       보일 자리가 없고, 간격만 두면 넘길 때 빈 틈이 스쳐 지나갑니다.
+       넓은 화면에서만 값이 생기고, 그때 앞뒤 배너가 좌우에 살짝 걸쳐 보입니다.
+       🔴 배너를 미는 거리(`translateX`)가 이 값을 더해서 계산합니다
+          (BannerCarousel). 여기만 바꾸면 이동 거리도 따라옵니다. */
+    --banner-gap: 0px;
+
     /* ── 짙은 면 — 이 값 하나가 앱의 "큰 어두운 면" 전부를 정합니다 ──
        홈 상단 배경 · 마이페이지 상단 배경 · 세그먼트(구매/판매, 관람예정/지난)의
        선택 알약이 **모두 여기를 봅니다.** 색을 바꾸려면 이 한 줄만 고치세요.
@@ -658,6 +665,7 @@
     :root {
       --banner-width: calc(min(100vw, 64rem) - 3rem);
       --banner-height: calc(var(--banner-width) * 9 / 21);
+      --banner-gap: 1rem;
     }
   }
 
