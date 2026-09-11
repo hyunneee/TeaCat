@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
-import { Coins, ShieldCheck, Smartphone } from 'lucide-react';
+// 베타: Smartphone 은 간편결제 수단의 아이콘입니다 (①)
+import { Coins, ShieldCheck } from 'lucide-react';
 import { PageLoader } from '@/shared/components/common';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { AnimatedNumber, Button, Card, SectionTitle, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
-import { env } from '@/shared/config';
+// 베타: env.payment 는 토스 위젯 판단에만 쓰였습니다 (③)
+// import { env } from '@/shared/config';
 import { cn, formatPoints, formatPrice } from '@/shared/lib';
 import {
   HoldTimer,
@@ -17,7 +19,8 @@ import {
   useSeatMap,
 } from '@/features/booking';
 import { useTokenBalance } from '@/features/token';
-import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment';
+// 베타: TossPaymentSheet 는 ④ 에서 다시 켭니다
+import { usePayment, type PayMethod } from '@/features/payment';
 
 /**
  * 결제수단 — 지금은 둘뿐입니다.
@@ -27,13 +30,20 @@ import { TossPaymentSheet, usePayment, type PayMethod } from '@/features/payment
  *
  * 수단을 늘리기 전에 계약된 결제수단인지 확인하세요.
  */
+/* 🔴 베타 기간에는 토스페이먼츠 결제를 막아 두었습니다 — 캣머니 전용입니다.
+ *
+ * 되돌리려면 이 파일에서 ① ② ③ ④ 로 표시한 네 곳의 주석만 풀면 됩니다
+ * (맨 위 import 세 줄 포함). 서버·토스 키·결과 처리 화면은 그대로 두었으므로
+ * 프론트만 되돌리면 즉시 복구됩니다.
+ */
 const METHODS: { id: PayMethod; label: string; hint: string; icon: typeof Coins }[] = [
-  {
-    id: 'EASY_PAY',
-    label: '캣머니 + 간편결제',
-    hint: '캣머니 우선 사용 · 부족분만 결제',
-    icon: Smartphone,
-  },
+  // ① 베타: 간편결제(토스) 수단을 감춥니다
+  // {
+  //   id: 'EASY_PAY',
+  //   label: '캣머니 + 간편결제',
+  //   hint: '캣머니 우선 사용 · 부족분만 결제',
+  //   icon: Smartphone,
+  // },
   { id: 'POINT', label: '캣머니로 결제', hint: '결제창 없이 바로 차감', icon: Coins },
 ];
 
@@ -47,8 +57,9 @@ const STAGE_LABEL = {
 
 export function PaymentPage() {
   const { scheduleId = '' } = useParams();
-  const [payMethod, setPayMethod] = useState<PayMethod>('EASY_PAY');
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // ② 베타: 캣머니 전용이라 POINT 로 시작합니다 (원래 'EASY_PAY')
+  const [payMethod, setPayMethod] = useState<PayMethod>('POINT');
+  // const [sheetOpen, setSheetOpen] = useState(false);
 
   const hold = useBookingStore((s) => s.hold);
   const { remainSeconds } = useSeatHold(scheduleId);
@@ -70,12 +81,13 @@ export function PaymentPage() {
   const pointBalance = token?.available ?? 0;
   const payingWithPoints = payMethod === 'POINT';
   const shortOfPoints = payingWithPoints && pointBalance < pointsNeeded;
-  const estimatedCashAmount = Math.max(total - pointBalance, 0);
+  // ③ 베타: 결제창을 띄우지 않으므로 카드 결제액을 계산하지 않습니다
+  // const estimatedCashAmount = Math.max(total - pointBalance, 0);
 
   /* 위젯 키(test_gck_)면 결제수단 UI 가 페이지에 삽입되므로 시트에 담아 띄웁니다.
      개별 연동 키(test_ck_)면 토스가 새 창을 띄우니 시트가 필요 없습니다. */
-  const usesSheet = env.payment.mode === 'toss' && env.payment.widgetKey;
-  const needsSheet = payMethod === 'EASY_PAY' && usesSheet && estimatedCashAmount > 0;
+  // const usesSheet = env.payment.mode === 'toss' && env.payment.widgetKey;
+  // const needsSheet = payMethod === 'EASY_PAY' && usesSheet && estimatedCashAmount > 0;
 
   // 선점이 없으면 결제할 게 없습니다. (만료·직접 진입)
   // 단, 서버에 남은 선점을 확인하는 중이면 기다립니다 — 결제 직전에 튕기는 게 제일 아깝습니다
@@ -191,7 +203,9 @@ export function PaymentPage() {
           // 중복 결제 방어: 요청 중에는 버튼이 잠깁니다.
           loading={isPaying}
           disabled={shortOfPoints}
-          onClick={() => (needsSheet ? setSheetOpen(true) : void pay(payMethod))}
+          // ④ 베타: 시트를 거치지 않고 바로 캣머니로 결제합니다
+          //   원래 — onClick={() => (needsSheet ? setSheetOpen(true) : void pay(payMethod))}
+          onClick={() => void pay(payMethod)}
         >
           {isPaying
             ? STAGE_LABEL[stage]
@@ -203,15 +217,15 @@ export function PaymentPage() {
         </Button>
       </BottomBar>
 
-      {/* 토스 결제위젯 — 결제할 때만 화면을 덮습니다 */}
-      <TossPaymentSheet
+      {/* ④ 베타: 토스 결제위젯 — 결제할 때만 화면을 덮습니다 */}
+      {/* <TossPaymentSheet
         open={sheetOpen}
         amount={estimatedCashAmount}
         paying={isPaying}
         stageLabel={STAGE_LABEL[stage]}
         onClose={() => setSheetOpen(false)}
         onConfirm={() => void pay('EASY_PAY')}
-      />
+      /> */}
     </div>
   );
 }
