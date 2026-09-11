@@ -7,8 +7,19 @@
 #   - 볼륨 이름이 달라 개발과 데이터가 섞이지 않는다 (compose project name 이 teacat-prod)
 #   - 도메인·쿠키·싸피 콜백 주소가 teacat.site 기준이다
 #
-# 🔴 개발 스택과 같은 teacat-net 을 쓰지만 DB/Redis 는 각자 자기 것을 본다.
-#    컨테이너 이름(dev-postgres / postgres)이 달라 서로 붙을 일이 없다.
+# 🔴🔴 스택 안에서 서로를 부를 때 **서비스 이름을 쓰지 말 것** (postgres / redis / minio).
+#
+#    compose 는 서비스마다 "서비스 이름" 네트워크 별칭을 붙인다. dev 와 prod 가 같은
+#    teacat-net 위에 있으므로, 두 스택이 뜨면 `postgres` 별칭을 **둘 다** 등록한다.
+#    그러면 도커 DNS 가 요청마다 둘 사이를 라운드로빈해서, prod-server 가 절반쯤은
+#    dev-postgres 로 붙는다. (비밀번호가 다르면 간헐적 인증 실패, 같으면 조용한 데이터 혼입)
+#
+#    dev 만 떠 있는 동안은 별칭이 유일해서 멀쩡히 동작한다 — 운영을 올리는 순간
+#    양쪽이 같이 깨진다. 그래서 컨테이너 이름(prod-postgres 등)으로만 부른다.
+#    nginx 의 proxy_pass 와 prometheus 타겟이 이미 같은 이유로 컨테이너 이름을 쓴다.
+#
+#    데이터 자체는 원래부터 갈려 있다 — 볼륨이 compose 프로젝트 이름으로 접두어가 붙어
+#    teacat-dev_postgres_data / teacat-prod_postgres_data 로 따로 만들어진다.
 
 name: teacat-prod
 
@@ -93,7 +104,7 @@ services:
       #
       # DATABASE_URL 은 **우리 DB 가 아니라 Spring 이 쓰는 그 postgres** 다.
       # 확정 결과 컬럼 몇 개만 갱신한다 (blockchain/DESIGN.md 1장).
-      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-teacat}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teacat}:${POSTGRES_PASSWORD}@prod-postgres:5432/${POSTGRES_DB:-teacat}
 
       # prod 는 env_file 을 쓰지 않으므로 개인키·시드도 여기서 넘긴다.
       CONTRACT_OPERATOR_PRIVATE_KEY: ${CONTRACT_OPERATOR_PRIVATE_KEY:-}
@@ -124,10 +135,10 @@ services:
       # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
       SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@prod}
 
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-teacat}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://prod-postgres:5432/${POSTGRES_DB:-teacat}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_HOST: prod-redis
       SPRING_DATA_REDIS_PORT: '6379'
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
 
@@ -137,12 +148,12 @@ services:
       # MINIO_ENDPOINT 는 컨테이너 내부 주소라 브라우저가 열 수 없다. 그래서 presigned URL 은
       # MINIO_PUBLIC_BASE_URL 로 바꿔 내려주고, nginx 의 /storage/ 가 MinIO 로 넘긴다
       # (docker/nginx/conf.d/prod.conf). 서명이 내부 Host 로 계산되므로 nginx 가 Host 를 되돌려 보낸다.
-      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: http://prod-minio:9000
       MINIO_PUBLIC_BASE_URL: https://teacat.site/storage
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
 
-      BLOCKCHAIN_API_URL: http://blockchain:4000
+      BLOCKCHAIN_API_URL: http://prod-blockchain:4000
       # blockchain 의 INTERNAL_API_KEY 와 같은 값이어야 한다. 틀리면 가입이 401 로 실패한다.
       BLOCKCHAIN_INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       BLOCKCHAIN_CHAIN_ID: ${CHAIN_ID:-31221}
