@@ -51,10 +51,14 @@ public record ScheduleDetailResponse(
         LocalDateTime ticketingStartAt
 ) {
 
+    /**
+     * @param soldOut 좌석이 다 팔렸는가 ({@code ScheduleSeatAvailability} 가 판정).
+     *                회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다
+     */
     public static ScheduleDetailResponse of(PerformanceDetail detail, LocalDateTime now,
-                                            Duration cancelDeadlineLead) {
+                                            Duration cancelDeadlineLead, boolean soldOut) {
         PerformanceGeneral performance = detail.getPerformance();
-        BookingOpenStatus bookingStatus = detail.bookingStatus(now);
+        BookingOpenStatus bookingStatus = detail.bookingStatus(now).soldOutIf(soldOut);
 
         return new ScheduleDetailResponse(
                 detail.getId(),

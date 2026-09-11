@@ -56,6 +56,8 @@ class AdminPerformanceServiceImageLimitTests {
     @Mock private PerformanceAreaRepository performanceAreaRepository;
     @Mock private AreaRepository areaRepository;
     @Mock private TicketRepository ticketRepository;
+    /* 회차 목록의 매진 판정에만 쓴다 — 이 테스트들은 등록·이미지 한도만 보므로 호출되지 않는다 */
+    @Mock(strictness = Mock.Strictness.LENIENT) private ScheduleSeatAvailability seatAvailability;
     @Mock private StadiumRepository stadiumRepository;
     @Mock private StadiumLayoutRepository stadiumLayoutRepository;
     @Mock private FileStorageService fileStorageService;
@@ -67,7 +69,8 @@ class AdminPerformanceServiceImageLimitTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, ticketRepository, stadiumRepository, stadiumLayoutRepository, fileStorageService,
+                areaRepository, ticketRepository, seatAvailability, stadiumRepository, stadiumLayoutRepository,
+                fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
 
         // 티켓팅 시작 전 공연. 이미지 교체는 티켓팅과 무관하지만 다른 검사에 걸리지 않게 해둔다

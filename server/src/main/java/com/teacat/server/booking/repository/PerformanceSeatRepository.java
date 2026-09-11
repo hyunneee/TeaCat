@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,6 +75,43 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              WHERE ps.performance_detail_id = :performanceDetailId
             """, nativeQuery = true)
     List<SeatStatusView> findEffectiveStatuses(@Param("performanceDetailId") Long performanceDetailId);
+
+    /**
+     * 회차별 좌석 수 — 준비된 좌석과 그중 지금 고를 수 있는 좌석.
+     *
+     * <p><b>매진을 알아내기 위한 쿼리다.</b> {@code performance_details.status} 의 SOLD_OUT 은
+     * 운영자가 손으로 바꾸는 값이라, 좌석이 실제로 다 팔려도 자동으로 바뀌지 않는다. 그래서
+     * 공연 목록과 회차 목록이 매진된 회차를 계속 "예매 가능" 으로 보여주고 있었다.
+     *
+     * <p>🔴 만료 판정을 SQL 안에서 한다 — {@link #findEffectiveStatuses} 와 같은 이유다.
+     * 자바 시계로 비교하면 좌석맵·선점 API 와 답이 달라진다.
+     *
+     * <p>좌석 행이 아예 없는 회차는 결과에 <b>나오지 않는다</b>(GROUP BY). 그건 매진이 아니라
+     * 좌석을 아직 만들지 않은 것이므로, 부르는 쪽이 "없으면 매진 아님" 으로 다뤄야 한다.
+     */
+    @Query(value = """
+            SELECT ps.performance_detail_id AS "scheduleId",
+                   COUNT(*)                 AS "totalCount",
+                   COUNT(*) FILTER (
+                       WHERE ps.status = 'AVAILABLE'
+                          OR (ps.status = 'HELD' AND ps.held_until < now())
+                   )                        AS "availableCount"
+              FROM performance_seats ps
+             WHERE ps.performance_detail_id IN (:scheduleIds)
+             GROUP BY ps.performance_detail_id
+            """, nativeQuery = true)
+    List<SeatCountView> findSeatCounts(@Param("scheduleIds") Collection<Long> scheduleIds);
+
+    /** {@link #findSeatCounts} 결과 한 줄 */
+    interface SeatCountView {
+        Long getScheduleId();
+
+        /** 이 회차에 만들어진 좌석 수 */
+        long getTotalCount();
+
+        /** 그중 지금 고를 수 있는 좌석 수 (만료된 HELD 포함) */
+        long getAvailableCount();
+    }
 
     /** {@link #findEffectiveStatuses} 결과 한 줄 */
     interface SeatStatusView {

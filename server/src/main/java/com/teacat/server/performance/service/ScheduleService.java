@@ -24,12 +24,13 @@ import java.time.LocalDateTime;
 public class ScheduleService {
 
     private final PerformanceDetailRepository performanceDetailRepository;
+    private final ScheduleSeatAvailability seatAvailability;
     private final BookingPolicyProperties bookingPolicy;
 
     /** 회차 단건 조회 (API-203) */
     public ScheduleDetailResponse getSchedule(Long scheduleId) {
         return ScheduleDetailResponse.of(getDetail(scheduleId), LocalDateTime.now(),
-                bookingPolicy.cancelDeadlineLead());
+                bookingPolicy.cancelDeadlineLead(), seatAvailability.isSoldOut(scheduleId));
     }
 
     /**
@@ -43,7 +44,10 @@ public class ScheduleService {
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime ticketingStartAt = detail.getPerformance().getTicketingStartAt();
-        BookingOpenStatus status = detail.bookingStatus(now);
+        /* 매진도 좌석을 세서 판정한다 — 예매 버튼을 누른 순간 이 API 로 확인하므로,
+           여기서 OPEN 이라고 하면 좌석이 하나도 없는 회차로 들여보내게 된다 */
+        BookingOpenStatus status = detail.bookingStatus(now)
+                .soldOutIf(seatAvailability.isSoldOut(scheduleId));
 
         long secondsUntilOpen = status == BookingOpenStatus.BEFORE
                 ? Math.max(0, Duration.between(now, ticketingStartAt).toSeconds())

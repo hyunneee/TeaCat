@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -44,6 +45,7 @@ public class PerformanceService {
     private final PerformanceDetailRepository performanceDetailRepository;
     private final PerformanceAreaRepository performanceAreaRepository;
     private final TicketRepository ticketRepository;
+    private final ScheduleSeatAvailability seatAvailability;
     private final FileStorageService fileStorageService;
     private final BookingPolicyProperties bookingPolicy;
 
@@ -86,11 +88,16 @@ public class PerformanceService {
             return List.of();
         }
 
-        Map<Long, List<PerformanceDetail>> schedulesByConcert =
-                performanceDetailRepository.findByPerformanceIdIn(
-                                performances.stream().map(PerformanceGeneral::getId).toList())
-                        .stream()
-                        .collect(Collectors.groupingBy(detail -> detail.getPerformance().getId()));
+        List<PerformanceDetail> allSchedules = performanceDetailRepository.findByPerformanceIdIn(
+                performances.stream().map(PerformanceGeneral::getId).toList());
+
+        Map<Long, List<PerformanceDetail>> schedulesByConcert = allSchedules.stream()
+                .collect(Collectors.groupingBy(detail -> detail.getPerformance().getId()));
+
+        /* 매진 판정도 한 번에 묻는다. 이게 없으면 회차가 전부 팔린 공연도 목록에서
+           "예매중" 으로 보인다 — 들어가 보면 고를 좌석이 없다 (QA 에서 잡힌 증상) */
+        Set<Long> soldOut = seatAvailability.findSoldOut(
+                allSchedules.stream().map(PerformanceDetail::getId).toList());
 
         return performances.stream()
                 .map(p -> ConcertSummaryResponse.of(
@@ -98,7 +105,8 @@ public class PerformanceService {
                         fileStorageService.presignedUrl(p.getPosterImageKey()),
                         BookingOpenStatus.aggregate(
                                 schedulesByConcert.getOrDefault(p.getId(), List.of()).stream()
-                                        .map(detail -> detail.bookingStatus(now))
+                                        .map(detail -> detail.bookingStatus(now)
+                                                .soldOutIf(soldOut.contains(detail.getId())))
                                         .toList(),
                                 p.getTicketingStartAt(),
                                 now)))
@@ -192,8 +200,16 @@ public class PerformanceService {
     private List<ScheduleSummaryResponse> findSchedules(Long concertId) {
         LocalDateTime now = LocalDateTime.now();
 
-        return performanceDetailRepository.findByPerformanceIdOrderByPerformanceNumAsc(concertId).stream()
-                .map(detail -> ScheduleSummaryResponse.of(detail, now))
+        List<PerformanceDetail> details =
+                performanceDetailRepository.findByPerformanceIdOrderByPerformanceNumAsc(concertId);
+
+        /* 매진 여부는 좌석을 세서 판정한다. 회차 수만큼 세면 N+1 이라 한 번에 묻는다.
+           (회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다) */
+        Set<Long> soldOut = seatAvailability.findSoldOut(
+                details.stream().map(PerformanceDetail::getId).toList());
+
+        return details.stream()
+                .map(detail -> ScheduleSummaryResponse.of(detail, now, soldOut.contains(detail.getId())))
                 .toList();
     }
 
