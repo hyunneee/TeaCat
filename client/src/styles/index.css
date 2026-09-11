@@ -857,6 +857,29 @@
     }
   }
 
+  /**
+   * 화면 껍데기(AppLayout · PlainLayout)의 폭.
+   *
+   * `app-width` 와 다른 점은 **lg(64rem)부터 상한이 풀린다**는 것 하나입니다.
+   * 그 지점부터 하단 탭이 좌측 사이드 내비로 바뀌고 본문이 화면을 넓게 씁니다.
+   *
+   *   ~30rem    화면을 꽉 씀 (폰)
+   *   30~64rem  한 기둥으로 고정 (`--container-app`) — 태블릿·작은 창
+   *   64rem~    상한 없음. 사이드 내비 + 넓은 본문 (데스크톱)
+   *
+   * 🔴 `app-width` 를 여기에 쓰면 안 됩니다. 그건 모달·토스트·하단 탭처럼
+   *    **넓은 화면에서도 한 기둥으로 남아야 하는** 것들이 쓰는 유틸리티입니다.
+   *    둘을 합치면 데스크톱에서 모달이 화면 끝까지 늘어납니다.
+   */
+  .app-shell {
+    width: 100%;
+  }
+  @media (width >= 30rem) and (width < 64rem) {
+    .app-shell {
+      max-width: var(--container-app);
+    }
+  }
+
   /* 좌석맵 드래그 시 텍스트 선택 방지 */
   .no-select {
     user-select: none;

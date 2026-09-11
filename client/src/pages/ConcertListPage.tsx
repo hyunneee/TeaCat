@@ -83,8 +83,11 @@ export function ConcertListPage() {
           }
         />
       ) : (
-        // 카드마다 테두리가 있으므로 구분선 대신 간격으로 나눕니다.
-        <ul className="space-y-2 p-4 pt-3">
+        /* 카드마다 테두리가 있으므로 구분선 대신 간격으로 나눕니다.
+           넓은 화면에서는 두 열로 접습니다 — 한 열로 두면 카드가 가로로 늘어나
+           포스터는 그대로인 채 오른쪽이 비어 보입니다. 열이 늘어도 카드 자체는
+           폰에서와 같은 모양(포스터 왼쪽 · 정보 오른쪽)입니다. */
+        <ul className="grid gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3">
           {concerts.map((concert) => (
             <li key={concert.concertId}>
               <ConcertCard

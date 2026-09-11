@@ -1,19 +1,34 @@
 import { PageTransition } from '@/shared/components/common';
 import { BottomNav } from './BottomNav';
+import { SideNav } from './SideNav';
 
 /**
- * 하단 탭이 있는 기본 레이아웃.
+ * 주요 화면의 껍데기.
  *
- * 본문 아래 여백(.pb-nav)은 탭 높이 + 여유 + 노치입니다.
- * 여유가 없으면 목록 마지막 항목이 탭에 가리고, 폰에서 화면 맨 아래는
- * 엄지가 닿기 어려워 그 항목을 누르기도 힘듭니다.
+ * ── 폭에 따라 껍데기가 바뀝니다 ─────────────────────────────
+ *   ~64rem(1024px)  지금까지와 같습니다 — 한 기둥 + 하단 탭
+ *   64rem~          좌측 사이드 내비 + 넓은 본문
+ *
+ * 내비는 `navTabs` 하나를 보므로 탭 목록이 갈라지지 않습니다.
+ * 둘 중 하나만 보이도록 CSS 로 숨기는 것이지, 화면을 두 벌 만드는 것이 아닙니다.
+ *
+ * 본문 아래 여백(`.pb-nav`)은 탭 높이 + 여유 + 노치입니다. 여유가 없으면 목록 마지막
+ * 항목이 탭에 가리고, 폰에서 화면 맨 아래는 엄지가 닿기 어려워 누르기도 힘듭니다.
+ * 데스크톱에는 하단 탭이 없으므로 그 여백을 걷습니다(`lg:pb-0`).
  */
 export function AppLayout() {
   return (
-    <div className="app-frame mx-auto flex min-h-dvh w-full app-width flex-col">
-      <main className="pb-nav flex-1">
-        <PageTransition />
+    <div className="app-frame app-shell mx-auto flex min-h-dvh w-full flex-col lg:flex-row">
+      <SideNav />
+
+      <main className="pb-nav flex-1 lg:pb-0">
+        {/* 데스크톱에서도 본문을 화면 끝까지 늘리지는 않습니다 — 글줄이 너무 길어집니다.
+            사이드 내비를 뺀 나머지 안에서 가운데로 모읍니다. */}
+        <div className="mx-auto w-full lg:max-w-4xl">
+          <PageTransition />
+        </div>
       </main>
+
       <BottomNav />
     </div>
   );
