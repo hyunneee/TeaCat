@@ -27,9 +27,13 @@ export interface RailProps {
  */
 export const RAIL_ANCHOR = { 'data-rail-anchor': '' } as const;
 
-/** 한 번에 넘길 폭 — 칸 폭이 제각각일 수 있어 **보이는 폭의 비율**로 셉니다.
- *  1.0 으로 두면 방금 보던 마지막 카드가 사라져 "어디까지 봤더라" 가 됩니다. */
-const PAGE_RATIO = 0.8;
+/**
+ * 한 번에 넘길 칸 수 = 보이는 칸 수 **빼기 하나**.
+ *
+ * 화면을 통째로 갈아치우면 방금 보던 카드가 하나도 안 남아 "어디까지 봤더라" 가
+ * 됩니다. 한 장을 남겨 두면 이어 보는 느낌이 유지됩니다.
+ */
+const KEEP_ONE = 1;
 
 /**
  * 가로 레일 — 옆으로 미는 목록. (홈의 "진행 중인 티켓팅" 등)
@@ -87,17 +91,34 @@ export function Rail({ children, autoScroll = false, speed = 14, className, labe
     return () => observer.disconnect();
   }, [ref, children]);
 
+  /**
+   * 한 칸의 **간격(pitch)** — 칸 폭 + 칸 사이 여백.
+   *
+   * 넘기는 거리를 이 값의 배수로 맞춰야 카드가 잘린 채 멈추지 않습니다.
+   * 보이는 폭의 몇 % 같은 어림값으로 밀면 매번 어중간한 자리에 섭니다.
+   */
+  const pitchOf = useCallback((el: HTMLElement) => {
+    const track = el.firstElementChild;
+    const item = track?.firstElementChild;
+    if (!(track instanceof HTMLElement) || !(item instanceof HTMLElement)) return 0;
+    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+    return item.getBoundingClientRect().width + gap;
+  }, []);
+
   const page = useCallback(
     (direction: 1 | -1) => {
       const el = ref.current;
       if (!el) return;
       hold();
-      el.scrollBy({
-        left: direction * Math.round(el.clientWidth * PAGE_RATIO),
-        behavior: 'smooth',
-      });
+
+      const pitch = pitchOf(el);
+      /* 칸을 못 재면(빈 레일 등) 예전처럼 보이는 폭의 80% 만큼 밉니다 */
+      const steps = pitch > 0 ? Math.max(1, Math.floor(el.clientWidth / pitch) - KEEP_ONE) : 0;
+      const distance = steps > 0 ? steps * pitch : Math.round(el.clientWidth * 0.8);
+
+      el.scrollBy({ left: direction * distance, behavior: 'smooth' });
     },
-    [ref, hold],
+    [ref, hold, pitchOf],
   );
 
   return (
