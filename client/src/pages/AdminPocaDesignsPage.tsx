@@ -1,135 +1,93 @@
-import { useState } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
-import { Badge, Button, Card, Skeleton } from '@/shared/components/ui';
+import { Card, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
+import { useModal } from '@/app/providers';
 import {
-  AdminPocaDesignFormModal,
-  useAdminDrawPoolDesigns,
-  useCreatePocaDesign,
+  AdminPocaDesignTable,
+  AdminPocaPoolPicker,
+  useAddEventPoolDesigns,
+  useAdminEventPoolDesigns,
+  useAdminPocaTemplates,
   useRetryDesignRegistration,
-  type PocaDesignChainStatus,
+  notYetDrawable,
 } from '@/features/admin';
 
-/** 온체인 등록 상태를 한 눈에 — 색은 상태 칩 규칙을 따릅니다 (DESIGN.md 1장) */
-const CHAIN: Record<
-  PocaDesignChainStatus,
-  { label: string; tone: 'success' | 'warning' | 'danger' }
-> = {
-  REGISTERED: { label: '등록 완료', tone: 'success' },
-  REGISTERING: { label: '확정 대기', tone: 'warning' },
-  PENDING: { label: '등록 안 됨', tone: 'warning' },
-  FAILED: { label: '등록 실패', tone: 'danger' },
-};
-
 /**
- * 뽑기 도안 관리.
+ * 이벤트 뽑기 풀 — **공연과 무관하게** 이벤트 카드팩에서 나올 카드입니다.
  *
- * 여기 등록한 도안만 카드팩에서 나옵니다. 도안이 하나도 없으면 뽑기가 `NFT_041` 로 거절됩니다.
+ * 🔴 이벤트 풀은 **하나를 공유**합니다. 이벤트를 여러 개 열어도 같은 카드에서 뽑히므로
+ * "이벤트별 카드 세트" 를 약속하지 마세요.
  *
- * 페이지는 조립만 합니다 — 훅을 불러 컴포넌트에 내려줍니다 (CLAUDE.md 3-6).
- * 접근 제어는 라우터의 `RequireRole(['ADMIN'])` 이 이미 끝냈습니다.
+ * 공연 관람으로 받은 팩은 그 공연 풀에서 뽑힙니다 — 공연 관리 > 뽑기 카드 에서 정합니다.
+ *
+ * 페이지는 조립만 합니다 (CLAUDE.md 3-6). 접근 제어는 라우터의 `RequireRole(['ADMIN'])`.
  */
 export function AdminPocaDesignsPage() {
-  const { data: designs, isPending } = useAdminDrawPoolDesigns();
-  const create = useCreatePocaDesign();
+  const { data: designs, isPending } = useAdminEventPoolDesigns();
+  const { data: templates } = useAdminPocaTemplates();
+
+  const add = useAddEventPoolDesigns();
+  const { open } = useModal();
   const retry = useRetryDesignRegistration();
 
-  const [adding, setAdding] = useState(false);
+  const unregistered = designs ? notYetDrawable(designs) : [];
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-ink text-lg font-bold">뽑기 도안 관리</h1>
-          <p className="text-ink-muted text-sm">
-            카드팩에서 나올 도안입니다. 그림을 올리면 서버가 IPFS 에 핀하고 온체인에 등록합니다.
-            한정 수량이 소진된 도안은 뽑기 풀에서 빠집니다.
-          </p>
-        </div>
-        <Button variant="dark" leftIcon={<Plus size={16} />} onClick={() => setAdding(true)}>
-          도안 등록
-        </Button>
+      <div>
+        <h1 className="text-ink text-lg font-bold">이벤트 뽑기 풀</h1>
+        <p className="text-ink-muted text-sm">
+          이벤트 카드팩에서 나올 카드입니다. 이벤트를 여러 개 열어도 <b>같은 풀</b>에서 뽑힙니다.
+          공연 관람으로 받은 팩은 그 공연의 풀에서 뽑힙니다.
+        </p>
       </div>
 
-      {isPending ? (
-        <div className="grid grid-cols-3 gap-3">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : !designs || designs.length === 0 ? (
-        <EmptyState
-          title="등록된 뽑기 도안이 없어요"
-          description="도안을 하나도 등록하지 않으면 카드팩을 열어도 뽑을 카드가 없습니다."
+      <Card className="space-y-3 p-4">
+        <p className="text-ink font-semibold">카드 넣기</p>
+        {/* 🔴 이벤트 풀 도안은 나중에 뽑기에서 뺄 수 없습니다(409). 넣기 전에 확인합니다 */}
+        <AdminPocaPoolPicker
+          templates={templates ?? []}
+          addedTemplateIds={(designs ?? [])
+            .map((d) => d.templateId)
+            .filter((id): id is number => id !== null)}
+          isPending={add.isPending}
+          onSubmit={(items, summary) => {
+            const total = items.reduce((sum, item) => sum + item.totalSupply, 0);
+
+            open('common/confirm', {
+              title: '이 내용으로 이벤트 풀에 넣을까요?',
+              message:
+                `${summary} (총 ${items.length}종 ${total.toLocaleString()}장)
+
+` +
+                '수량은 온체인에 박히고 첫 장이 발급되면 바꿀 수 없습니다. 이벤트 풀 카드는 나중에 뽑기에서 뺄 수도 없습니다.',
+              confirmText: '넣기',
+              onConfirm: () => add.mutate(items),
+            });
+          }}
         />
-      ) : (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[52rem] text-sm">
-            <thead className="border-line text-ink-muted border-b text-left">
-              <tr>
-                <th className="p-3 font-medium">그림</th>
-                <th className="p-3 font-medium">이름</th>
-                <th className="p-3 font-medium">소속</th>
-                <th className="p-3 font-medium">등급</th>
-                <th className="p-3 font-medium">발급 / 한정</th>
-                <th className="p-3 font-medium">온체인</th>
-                <th className="p-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {designs.map((design) => (
-                <tr key={design.designId} className="border-line/70 border-b last:border-0">
-                  <td className="p-3">
-                    {design.imageUrl ? (
-                      <img
-                        src={design.imageUrl}
-                        alt=""
-                        className="h-16 w-11 rounded-md object-cover"
-                      />
-                    ) : (
-                      <span className="surface-2 block h-16 w-11 rounded-md" />
-                    )}
-                  </td>
-                  <td className="p-3 font-semibold">{design.name}</td>
-                  <td className="p-3">{design.group ?? '—'}</td>
-                  <td className="p-3">
-                    {design.grade === 'COMMON' ? '보라 (개발자)' : '금색 (코치·교육생)'}
-                  </td>
-                  <td className="p-3 tabular-nums">
-                    {design.issuedCount} / {design.totalSupply}
-                  </td>
-                  <td className="p-3">
-                    <Badge tone={CHAIN[design.chainStatus].tone} size="sm">
-                      {CHAIN[design.chainStatus].label}
-                    </Badge>
-                  </td>
-                  <td className="p-3 text-right">
-                    {/* 등록이 안 끝난 도안만 — 그림을 다시 올리지 않고 등록만 다시 보냅니다 */}
-                    {design.chainStatus !== 'REGISTERED' && (
-                      <Button
-                        variant="soft"
-                        size="sm"
-                        leftIcon={<RefreshCw size={14} />}
-                        loading={retry.isPending}
-                        onClick={() => retry.mutate({ designId: design.designId })}
-                      >
-                        다시 등록
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+      </Card>
+
+      {unregistered.length > 0 && (
+        <p className="text-ink-muted text-sm">
+          {unregistered.length}종은 아직 온체인 등록이 끝나지 않아 뽑히지 않습니다.
+        </p>
       )}
 
-      <AdminPocaDesignFormModal
-        open={adding}
-        onClose={() => setAdding(false)}
-        isPending={create.isPending}
-        onSubmit={(body) => create.mutate(body, { onSuccess: () => setAdding(false) })}
-      />
+      {isPending ? (
+        <Skeleton className="h-40" />
+      ) : !designs || designs.length === 0 ? (
+        <EmptyState
+          title="이벤트 풀에 카드가 없어요"
+          description="카드를 넣지 않으면 이벤트 카드팩을 열어도 뽑을 카드가 없습니다."
+        />
+      ) : (
+        /* 이벤트 풀 도안은 뽑기에서 뺄 수 없어(NFT_048) 제외 버튼을 주지 않습니다 */
+        <AdminPocaDesignTable
+          designs={designs}
+          isPending={retry.isPending}
+          onRetry={(designId) => retry.mutate({ designId })}
+        />
+      )}
     </div>
   );
 }

@@ -53,7 +53,9 @@ export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
-export { AdminPocaDesignFormModal } from './components/AdminPocaDesignFormModal';
+export { AdminPocaTemplateFormModal } from './components/AdminPocaTemplateFormModal';
+export { AdminPocaPoolPicker } from './components/AdminPocaPoolPicker';
+export { AdminPocaDesignTable } from './components/AdminPocaDesignTable';
 
 // View — 운영 통계
 // 🔴 recharts 는 어드민 전용입니다 (CLAUDE.md 1장). 차트 컴포넌트를 사용자 화면에서
@@ -67,15 +69,30 @@ export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
 export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
 export { adminPocaDesignApi, adminPocaDesignKeys } from './api/adminPocaDesignApi';
 export {
-  useAdminDrawPoolDesigns,
-  useCreatePocaDesign,
+  useAdminPocaTemplates,
+  useCreatePocaTemplate,
+  useSetTemplateHidden,
+  usePerformanceDrawPool,
+  useAddPerformanceDesigns,
+  useAdminEventPoolDesigns,
+  useAddEventPoolDesigns,
+  useSetDesignDrawPool,
   useRetryDesignRegistration,
 } from './hooks/useAdminPocaDesigns';
+export {
+  DESIGN_NAME_MAX,
+  designNameLength,
+  isDrawable,
+  notYetDrawable,
+} from './model/adminPocaDesign.model';
 export type {
+  AdminPerformanceDrawPool,
   AdminPocaDesign,
-  AdminPocaDesignCreateRequest,
+  AdminPocaTemplate,
+  AdminPocaTemplateCreateRequest,
   PocaDesignChainStatus,
   PocaDesignGrade,
+  PocaPoolItem,
 } from './model/adminPocaDesign.types';
 export { adminAnalyticsApi, adminAnalyticsKeys } from './api/adminAnalyticsApi';
 export {

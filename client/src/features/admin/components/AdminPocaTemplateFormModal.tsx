@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { Button, Input, Modal, Segmented } from '@/shared/components/ui';
-import type { AdminPocaDesignCreateRequest, PocaDesignGrade } from '../model/adminPocaDesign.types';
-
-/** 서버 제한과 같은 값 (`@Max(100_000)`) */
-const SUPPLY_MAX = 100_000;
+import { DESIGN_NAME_MAX } from '../model/adminPocaDesign.model';
+import type {
+  AdminPocaTemplateCreateRequest,
+  PocaDesignGrade,
+} from '../model/adminPocaDesign.types';
 
 const GRADES: { value: PocaDesignGrade; label: string }[] = [
   { value: 'SPECIAL', label: '금색 (코치·교육생)' },
@@ -15,35 +16,32 @@ interface Props {
   open: boolean;
   onClose: () => void;
   isPending: boolean;
-  onSubmit: (body: AdminPocaDesignCreateRequest) => void;
+  onSubmit: (body: AdminPocaTemplateCreateRequest) => void;
 }
 
 /**
- * 뽑기 풀 도안 등록.
+ * 카드 그림 등록.
  *
- * 🔴 **한정 수량은 첫 장이 발급되는 순간 온체인에서 동결됩니다.** 그 뒤로는 아무도 못 바꿉니다 —
- * 그래서 폼에서 한 번 더 말해 줍니다.
+ * 🔴 **수량을 받지 않습니다.** 수량은 이 그림을 공연이나 이벤트 풀에 넣을 때 정합니다 —
+ * 같은 그림이라도 공연마다 다른 온체인 카드가 되기 때문입니다.
  *
  * 그림은 서버가 IPFS 에 올립니다. 프론트는 파일만 넘기고 CID 도 키도 모릅니다.
  */
-export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }: Props) {
+export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
   const [grade, setGrade] = useState<PocaDesignGrade>('SPECIAL');
-  const [totalSupply, setTotalSupply] = useState('100');
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const supply = Number(totalSupply);
   const canSubmit =
     name.trim().length > 0 &&
+    name.trim().length <= DESIGN_NAME_MAX &&
     group.trim().length > 0 &&
-    image !== null &&
-    supply > 0 &&
-    supply <= SUPPLY_MAX;
+    image !== null;
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
@@ -55,22 +53,14 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
     setSubmitted(true);
     if (!canSubmit || !image) return;
 
-    onSubmit({
-      name: name.trim(),
-      group: group.trim(),
-      grade,
-      totalSupply: supply,
-      image,
-      /* 뽑기 풀 도안이라 공연은 비웁니다 — 서버가 둘 다 있으면 거절합니다 */
-      drawPool: true,
-    });
+    onSubmit({ name: name.trim(), group: group.trim(), grade, image });
   };
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="뽑기 도안 등록"
+      title="카드 그림 등록"
       footer={
         <div className="flex gap-2">
           <Button variant="soft" fullWidth onClick={onClose}>
@@ -83,7 +73,6 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
       }
     >
       <div className="space-y-4">
-        {/* 그림 — 서버가 IPFS 에 핀합니다 */}
         <div>
           <button
             type="button"
@@ -118,7 +107,7 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="김예린"
-          hint="지갑과 카드 화면에 그대로 뜹니다"
+          hint={`공연 풀에 넣으면 "이름 · 공연 제목" 이 되고, 합쳐서 ${DESIGN_NAME_MAX}자를 넘을 수 없습니다`}
         />
 
         <Input
@@ -135,16 +124,6 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
           <p className="text-ink-muted text-sm font-medium">연출 등급</p>
           <Segmented options={GRADES} value={grade} onChange={setGrade} />
         </div>
-
-        <Input
-          label="한정 수량"
-          showRequirement
-          required
-          value={totalSupply}
-          onChange={(e) => setTotalSupply(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          inputMode="numeric"
-          hint="🔴 첫 장이 발급되면 온체인에서 동결돼 바꿀 수 없습니다. 소진되면 뽑기 풀에서 빠집니다"
-        />
       </div>
     </Modal>
   );
