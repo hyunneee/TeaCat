@@ -149,12 +149,8 @@ export function HomePage() {
       />
 
       {/* 같은 배경판의 데스크톱판.
-          규칙은 폰과 같습니다 — 짙은 면이 배너 중간까지 올라오고 배너가 그 경계에
-          걸쳐 내려옵니다. 다른 것은 셋입니다.
-
-          0. 경계가 배너의 90% 가 아니라 **65%** 입니다. 21:9 배너는 4:3 보다 납작해서
-             같은 90% 를 쓰면 초록이 배너 아래끝까지 닿아 "걸쳐 있다" 가 안 보이고
-             그냥 초록 위에 얹힌 네모가 됩니다.
+          규칙은 폰과 **똑같습니다** — 배너 위쪽 90% 까지 짙은 면이고, 배너가 그
+          경계에 걸쳐 내려옵니다. 다른 것은 둘뿐입니다.
 
           1. 위로 덮을 상단바가 없습니다 (그 헤더는 lg 에서 숨기고 TopNav 가 대신합니다)
              → 본문 맨 위에서 시작합니다. AppLayout 이 본문에 위 여백을 주지 않는
@@ -167,7 +163,7 @@ export function HomePage() {
       <div
         aria-hidden
         className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
-        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.65)' }}
+        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.9)' }}
       />
 
       {/* ── 최상단 줄 (검정 위) ──
