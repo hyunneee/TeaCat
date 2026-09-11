@@ -665,7 +665,7 @@
     :root {
       --banner-width: calc(min(100vw, 64rem) - 3rem);
       --banner-height: calc(var(--banner-width) * 9 / 21);
-      --banner-gap: 1rem;
+      --banner-gap: 2rem;
     }
   }
 
