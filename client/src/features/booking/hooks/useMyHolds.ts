@@ -26,19 +26,41 @@ export function useMyHolds() {
   });
 }
 
+/** 선점 하나 + 지금 남은 초 */
+export interface ActiveHold {
+  hold: MyHold;
+  remainSeconds: number;
+}
+
 /**
- * 지금 이어서 결제할 선점 하나와 남은 시간.
+ * 아직 살아 있는 선점 **전부**와 각자의 남은 시간.
+ *
+ * 🔴 예전에는 맨 앞 하나만 돌려줬습니다(`useActiveHold`). 공연 두 개에서 자리를 잡아두면
+ *    홈에 하나만 떠서, 나머지 자리는 **돌아갈 길이 없이 10분간 묶여 있었습니다.**
+ *    1인 1매는 회차 단위 제약이라 회차가 다르면 여러 건이 정상입니다.
  *
  * 남은 초는 **응답을 받은 시각**을 기준으로 다시 잽니다. 서버가 준 `remainingSeconds`
  * 를 그대로 화면에 걸면 캐시된 응답에서 시간이 되감긴 것처럼 보입니다.
  * (`expiresAt` 을 클라이언트 시계로 계산하지 않는 이유는 `booking.types` 참고)
+ *
+ * 시계는 **하나만** 돌립니다 — 선점마다 타이머를 붙이면 초가 서로 어긋나 보입니다.
+ * 가장 늦게 끝나는 선점까지 1초마다 리렌더하고, 남은 초는 렌더할 때 다시 계산합니다
+ * (백그라운드 탭에서 밀리지 않게 — `useCountdown` 과 같은 방식).
  */
-export function useActiveHold(): { hold: MyHold | null; remainSeconds: number } {
+export function useActiveHolds(): ActiveHold[] {
   const { data, dataUpdatedAt } = useMyHolds();
 
-  // 서버가 만료 임박 순으로 주므로 맨 앞이 가장 급한 선점입니다
-  const next = data?.[0] ?? null;
-  const remainSeconds = useCountdown(next ? dataUpdatedAt + next.remainingSeconds * 1000 : null);
+  const deadlineOf = (hold: MyHold) => dataUpdatedAt + hold.remainingSeconds * 1000;
+  const last = data?.length ? Math.max(...data.map(deadlineOf)) : null;
 
-  return { hold: remainSeconds > 0 ? next : null, remainSeconds };
+  // 리렌더를 트리거하기만 합니다. 값은 아래에서 매번 다시 잽니다
+  useCountdown(last);
+
+  const now = Date.now();
+  return (data ?? [])
+    .map((hold) => ({
+      hold,
+      remainSeconds: Math.max(0, Math.ceil((deadlineOf(hold) - now) / 1000)),
+    }))
+    .filter((entry) => entry.remainSeconds > 0);
 }
