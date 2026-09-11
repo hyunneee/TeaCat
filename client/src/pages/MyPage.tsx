@@ -73,7 +73,10 @@ export function MyPage() {
         <div className="relative px-4">
           <div
             aria-hidden
-            className="surface-strong absolute inset-x-0 bottom-1/2"
+            /* 넓은 화면에서는 홈과 같이 **화면 끝까지** 갑니다. 본문 폭(1024px)에서
+               끊으면 짙은 면이 화면 한가운데 뜬 네모가 되어 배경이 아니라 카드로
+               보입니다. 가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다. */
+            className="surface-strong absolute inset-x-0 bottom-1/2 lg:right-auto lg:left-1/2 lg:w-screen lg:-translate-x-1/2"
             style={{
               /* 헤더 위쪽(노치)까지 거슬러 올라가 화면 맨 위를 덮습니다.
                  위 여백과 **같은 값**이어야 경계가 카드 중앙에 옵니다 (HEADER_GAP) */
@@ -81,7 +84,10 @@ export function MyPage() {
             }}
           />
 
-          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center">
+          {/* 넓은 화면에서는 **카드만** 좁힙니다 — 짙은 배경판(위 div)은 full-bleed 로
+              둬야 경계가 화면을 가로지릅니다. 카드를 감싸는 컨테이너를 좁히면
+              `bottom-1/2` 가 기대는 높이는 그대로지만 배경판까지 같이 줄어듭니다. */}
+          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center lg:mx-auto lg:max-w-3xl">
             {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7).
                 위 절반이 짙은 배경 위에 놓이므로 **밝은 원**이어야 보입니다 —
                 배경과 같은 어두운 원이면 흰 테두리만 동동 뜬 것처럼 보입니다. */}
@@ -131,7 +137,7 @@ export function MyPage() {
         </div>
       </div>
 
-      <div className="space-y-6 p-4">
+      <div className="space-y-6 p-4 lg:mx-auto lg:max-w-3xl lg:px-0">
         {!user?.faceRegistered && (
           <Card
             tone="warning"
