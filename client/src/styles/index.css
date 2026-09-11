@@ -916,11 +916,6 @@
     display: none;
   }
 
-  /* 하단 탭에 가리지 않도록 본문 아래에 두는 여백. */
-  .pb-nav {
-    padding-bottom: calc(var(--spacing-nav) + var(--spacing-nav-gap) + env(safe-area-inset-bottom));
-  }
-
   /* 티켓 카드 좌우 절취선 */
   .ticket-notch {
     background-image:
@@ -940,6 +935,18 @@
    라이트 배경에서는 그림자가 제대로 보입니다.
    무채색 시스템이라 발광(glow)은 쓰지 않고 그림자·테두리로만 층을 만듭니다.
    ═══════════════════════════════════════════════════════════ */
+/**
+ * 하단 탭에 가리지 않도록 본문 아래에 두는 여백. (탭 높이 + 여유 + 노치)
+ *
+ * 🔴 `@layer utilities` 안의 평범한 클래스가 아니라 **`@utility`** 여야 합니다.
+ *    평범한 클래스면 `lg:pb-10` 같은 변형이 이기지 못해서(같은 레이어·같은
+ *    specificity → 나중에 선언된 쪽이 이김), 하단 탭이 없는 데스크톱에도
+ *    98px 짜리 빈 자리가 그대로 남습니다.
+ */
+@utility pb-nav {
+  padding-bottom: calc(var(--spacing-nav) + var(--spacing-nav-gap) + env(safe-area-inset-bottom));
+}
+
 @utility shadow-card {
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.06);
 }
