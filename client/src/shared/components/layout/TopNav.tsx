@@ -52,7 +52,7 @@ export function TopNav() {
     <header className="surface border-line sticky top-0 z-30 hidden border-b lg:block">
       {/* ── 1줄 — 로고 · 검색 · 계정 ── */}
       <div className={cn(ROW, 'relative h-16 gap-6')}>
-        <Link to={ROUTES.HOME} aria-label="티캣 홈" className="shrink-0">
+        <Link to={ROUTES.HOME} aria-label="TEACAT 홈" className="shrink-0">
           <Logo size={24} markSize={36} />
         </Link>
 

@@ -136,7 +136,7 @@ export function Logo({
   invert = false,
   className,
 }: {
-  /** 워드마크("티캣") 기준 크기 — 글자는 이 값의 0.7배입니다 */
+  /** 워드마크("TEACAT") 기준 크기 — 글자는 이 값의 0.7배입니다 */
   size?: number;
   /**
    * 마스코트만 따로 키울 때. 기본은 `size` 와 같습니다.
@@ -148,12 +148,12 @@ export function Logo({
 }) {
   return (
     <span className={cn('inline-flex items-center gap-1', className)}>
-      <CatMascot size={markSize ?? size} invert={invert} label="티캣" />
-      <span
-        className="font-extrabold tracking-tight"
-        style={{ fontSize: size * 0.7, lineHeight: 1 }}
-      >
-        티캣
+      <CatMascot size={markSize ?? size} invert={invert} label="TEACAT" />
+      {/* 워드마크는 여기 **한 곳**입니다 — 상단 내비와 홈 헤더가 같이 따라옵니다.
+          대문자라 `tracking-tight` 를 걷었습니다. 한글 두 글자일 때는 자간을 좁혀야
+          덩어리로 보였지만, 대문자 여섯 글자를 좁히면 글자가 서로 붙습니다. */}
+      <span className="font-extrabold" style={{ fontSize: size * 0.7, lineHeight: 1 }}>
+        TEACAT
       </span>
     </span>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useReducedMotion } from './useReducedMotion';
 
 interface Options {
@@ -26,6 +26,10 @@ const RESUME_MS = 2500;
  * ── 손을 대면 멈춥니다 ────────────────────────────────────
  * 읽는 중에 화면이 움직이면 짜증납니다. 떼고 잠시 뒤 다시 흐릅니다.
  *
+ * 목록 **안에서** 일어난 일(누르기·휠·터치)은 스스로 알아챕니다. 목록 밖의
+ * 조작(화살표 버튼 등)은 알 수 없으므로, 함께 돌려주는 `hold()` 를 부르세요 —
+ * 안 부르면 눌러서 넘긴 자리를 자동 흐름이 곧바로 되돌려 놓습니다.
+ *
  * ⚠️ 이 훅을 쓰는 목록에는 `snap-mandatory` 를 걸지 마세요.
  *    스냅이 매 프레임 위치를 되돌려 서로 싸웁니다.
  * ⚠️ `prefers-reduced-motion` 이면 전혀 움직이지 않습니다.
@@ -35,13 +39,15 @@ export function useAutoScroll<T extends HTMLElement>({ speed = 14, enabled = tru
   const pausedUntil = useRef(0);
   const reduced = useReducedMotion();
 
+  /** 잠시 멈춰 두기. 목록 밖에서 스크롤을 움직였을 때 부릅니다 */
+  const hold = useCallback(() => {
+    pausedUntil.current = Date.now() + RESUME_MS;
+  }, []);
+
   useEffect(() => {
     const el = ref.current;
     if (!el || !enabled || reduced) return;
 
-    const hold = () => {
-      pausedUntil.current = Date.now() + RESUME_MS;
-    };
     el.addEventListener('pointerdown', hold);
     el.addEventListener('wheel', hold, { passive: true });
     el.addEventListener('touchmove', hold, { passive: true });
@@ -80,7 +86,7 @@ export function useAutoScroll<T extends HTMLElement>({ speed = 14, enabled = tru
       el.removeEventListener('wheel', hold);
       el.removeEventListener('touchmove', hold);
     };
-  }, [speed, enabled, reduced]);
+  }, [speed, enabled, reduced, hold]);
 
-  return ref;
+  return { ref, hold };
 }

@@ -18,13 +18,14 @@ import {
   LiveDot,
   Logo,
   PosterImage,
+  RAIL_ANCHOR,
+  Rail,
   SectionTitle,
   Skeleton,
 } from '@/shared/components/ui';
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { formatDateTime } from '@/shared/lib';
-import { useAutoScroll } from '@/shared/hooks';
+import { cn, formatDateTime } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHolds } from '@/features/booking';
@@ -56,6 +57,21 @@ const SHORTCUTS = [
 const RAIL_LIMIT = 8;
 
 /**
+ * 데스크톱에서 레일 한 화면에 들어갈 카드 수와, 거기서 나온 카드 폭.
+ *
+ * 폭을 먼저 정하면(예전 `lg:w-[10.5rem]`) 레일 폭과 딱 나눠떨어지지 않아
+ * **맨 끝 카드가 반쯤 잘린 채** 걸립니다. 그래서 순서를 뒤집어, "다섯 장이 딱
+ * 맞으려면 한 장이 몇 px 이어야 하나" 를 CSS 가 계산하게 둡니다.
+ *
+ * `100%` 는 트랙 폭(= 레일 폭)이고, 빼는 값은 카드 **사이** 간격의 총합입니다
+ * (다섯 장이면 사이가 넷, `lg:gap-4` = 1rem × 4).
+ *
+ * ⚠️ 칸 수·간격 중 하나를 바꾸면 식의 두 숫자를 **같이** 고쳐야 합니다.
+ *    어긋나면 다시 잘립니다.
+ */
+const RAIL_CARD_WIDTH = 'lg:w-[calc((100%-4rem)/5)]';
+
+/**
  * 홈.
  *
  * ── 화면 순서 ─────────────────────────────────────────────
@@ -66,7 +82,7 @@ const RAIL_LIMIT = 8;
  * 배너가 검정에서 흰 영역으로 걸쳐 내려오면서 떠 있는 느낌을 만듭니다.
  *
  *   ┌───────────────┐
- *   │ ███ 검정 ████ │  상단바 (티캣 · 검색)
+ *   │ ███ 검정 ████ │  상단바 (TEACAT · 검색)
  *   │  ┌─────────┐  │
  *   │  │  배너   │  │  4:3
  *   │  ├ ─ ─ ─ ─ ┤  │  ← 경계 (배너 높이의 90%)
@@ -109,11 +125,6 @@ export function HomePage() {
           .filter((c) => c.bookingStatus === 'BEFORE')
           .sort((a, b) => a.ticketingStartAt.localeCompare(b.ticketingStartAt))
   ).slice(0, RAIL_LIMIT);
-
-  /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
-     포토카드 레일이 돌아오면 **속도를 다르게** 두세요 (그때는 9). 같으면 두 줄이
-     한 덩어리처럼 같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
-  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: rail.length > 1, speed: 15 });
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
@@ -161,7 +172,7 @@ export function HomePage() {
              화면 한가운데 떠 있는 네모가 되어 배경이 아니라 카드처럼 보입니다.
              가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다.
 
-          높이는 `--banner-height` 가 lg 에서 21:9 로 다시 계산됩니다 (styles/index.css) */}
+          높이는 `--banner-height` 가 lg 에서 2:1 로 다시 계산됩니다 (styles/index.css) */}
       <div
         aria-hidden
         className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
@@ -195,7 +206,7 @@ export function HomePage() {
       {/* 넓은 화면에서는 좌우 여백을 본문(AppLayout 의 px-6)에 맡깁니다 */}
       <div className="relative px-4 pt-2 lg:px-0 lg:pt-6">
         {bannersPending ? (
-          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-t-2xl lg:rounded-b-none" />
+          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[2/1] lg:rounded-t-2xl lg:rounded-b-none" />
         ) : (
           banners && <BannerCarousel banners={banners} onSelect={openBanner} />
         )}
@@ -214,7 +225,7 @@ export function HomePage() {
       <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
         <Stagger
           as="ul"
-          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
+          className="lg:bg-surface-1 lg:shadow-card grid grid-cols-5 gap-x-1.5 lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
         >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
@@ -325,19 +336,35 @@ export function HomePage() {
             /* 여기까지 왔으면 열린 것도 예정도 없습니다 — 등록된 공연 자체가 없는 경우 */
             <p className="text-subtle py-8 text-center text-sm">아직 등록된 공연이 없어요.</p>
           ) : (
-            /* -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
-               그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다. */
-            <div ref={concertRail} className="-mx-4 overflow-x-auto lg:mx-0">
-              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:gap-4 lg:px-0">
+            /* 폰: -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
+               그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다.
+
+               데스크톱: 카드가 **잘리지 않습니다.** 한 화면에 딱 다섯 장이 들어가도록
+               카드 폭을 레일에서 거꾸로 계산합니다 (아래 `RAIL_COLUMNS`).
+               자동 흐름은 여기서 끕니다 — 매 프레임 조금씩 미는 방식이라
+               멈춰 있는 대부분의 순간에 카드가 반쯤 잘려 있습니다. 넘기는 건 화살표가 합니다. */
+            <Rail label="진행 중인 티켓팅" className="-mx-4 lg:mx-0">
+              {/* 🔴 `lg:w-full` 이 핵심입니다. 폰에서는 `w-max`(내용만큼)라 카드가 넘쳐
+                  흐르지만, 데스크톱에서는 트랙을 **레일 폭에 묶어** 둡니다. 그래야 아래
+                  카드의 `100%` 가 레일 폭을 가리켜서 "다섯 장이 딱 맞는 폭"이 나옵니다.
+                  (`w-max` 인 채로 %를 쓰면 폭이 내용에서 나오고 내용이 폭에서 나와 순환합니다)
+                  카드는 `shrink-0` 이라 트랙 밖으로 넘쳐 흐르고, 스크롤은 그대로 됩니다. */}
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
                 {rail.map((concert) => (
-                  <li key={concert.concertId} className="w-[8.5rem] shrink-0 lg:w-[10.5rem]">
+                  <li
+                    key={concert.concertId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
                     <motion.button
                       type="button"
                       onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
                       whileTap={{ scale: 0.97 }}
                       className="w-full text-left"
                     >
-                      <div className="relative">
+                      {/* `RAIL_ANCHOR` — 화살표가 **포스터**의 세로 한가운데 앉습니다.
+                          안 붙이면 제목·공연장 두 줄까지 포함한 레일 전체의 가운데라
+                          화살표가 그림 아래로 처집니다. */}
+                      <div className="relative" {...RAIL_ANCHOR}>
                         <PosterImage
                           src={concert.posterUrl}
                           seed={posterSeedOf(concert)}
@@ -370,7 +397,7 @@ export function HomePage() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Rail>
           )}
         </section>
 
