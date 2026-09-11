@@ -81,7 +81,9 @@ export function usePayment(scheduleId: string) {
         // POINT를 골랐는데 서버 가용 잔액이 부족하면 임의로 카드 결제로 바꾸지 않습니다.
         if (!usesGateway(payMethod)) {
           setStage('idle');
-          toast.error('캣머니가 부족합니다. 간편결제로 부족한 금액을 결제해 주세요.');
+          // 베타: 간편결제를 막아 둬서 부족분을 메울 방법이 없습니다. 문구만 바꿉니다.
+          //   원래 — '캣머니가 부족합니다. 간편결제로 부족한 금액을 결제해 주세요.'
+          toast.error('캣머니가 부족합니다. 잔액을 확인해 주세요.');
           return;
         }
 
