@@ -68,8 +68,10 @@ public abstract class PostgresIntegrationTest {
     @BeforeEach
     void cleanDatabase() {
         // nft_photocard_designs: 뽑기 풀 도안은 공연이 없어 stadiums 의 CASCADE 로 지워지지 않는다
+        // nft_photocard_pack_events: users 의 CASCADE 로 지워지지 않는다 (외래키가 없다)
         jdbcTemplate.execute(
-                "TRUNCATE TABLE users, faces, stadiums, nft_photocard_designs RESTART IDENTITY CASCADE");
+                "TRUNCATE TABLE users, faces, stadiums, nft_photocard_designs, "
+                        + "nft_photocard_pack_events RESTART IDENTITY CASCADE");
     }
 
     protected Long insertUser(String email, String nickname) {

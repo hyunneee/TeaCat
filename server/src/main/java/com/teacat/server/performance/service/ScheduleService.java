@@ -1,5 +1,6 @@
 package com.teacat.server.performance.service;
 
+import com.teacat.server.common.config.BookingPolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.performance.dto.response.BookingStatusResponse;
 import com.teacat.server.performance.dto.response.ScheduleDetailResponse;
@@ -23,10 +24,12 @@ import java.time.LocalDateTime;
 public class ScheduleService {
 
     private final PerformanceDetailRepository performanceDetailRepository;
+    private final BookingPolicyProperties bookingPolicy;
 
     /** 회차 단건 조회 (API-203) */
     public ScheduleDetailResponse getSchedule(Long scheduleId) {
-        return ScheduleDetailResponse.of(getDetail(scheduleId), LocalDateTime.now());
+        return ScheduleDetailResponse.of(getDetail(scheduleId), LocalDateTime.now(),
+                bookingPolicy.cancelDeadlineLead());
     }
 
     /**

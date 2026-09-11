@@ -1,7 +1,10 @@
 package com.teacat.server.payment.service;
 
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
+import com.teacat.server.common.config.BookingPolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.nft.entity.NftPhotocardPackSource;
+import com.teacat.server.nft.repository.NftPhotocardPackRepository;
 import com.teacat.server.payment.entity.Payment;
 import com.teacat.server.payment.entity.PaymentCancel;
 import com.teacat.server.payment.entity.TicketOrder;
@@ -41,6 +44,8 @@ public class TicketCancelRecorder {
     private final PaymentCancelRepository paymentCancelRepository;
     private final PerformanceSeatRepository performanceSeatRepository;
     private final CatTransactionRepository catTransactionRepository;
+    private final BookingPolicyProperties bookingPolicy;
+    private final NftPhotocardPackRepository photocardPackRepository;
 
     /**
      * 예매를 무효화한다. <b>환불보다 먼저</b> 커밋된다.
@@ -62,14 +67,29 @@ public class TicketCancelRecorder {
         if (order.getStatus() != TicketOrderStatus.PAID) {
             throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_PROCESSED);
         }
-        // 취소 마감은 공연 시작 시각까지다 (예매 정책). 설정이 아니라 회차의 공연 일시가 기준이다
-        if (!order.getPerformanceDetail().getPerformanceDate().isAfter(now)) {
+        // 취소 마감은 공연 시작 − booking.policy.cancel-deadline-lead 다.
+        // 🔴 이 값은 카드팩 개봉 시각과 같은 설정에서 나온다 — 어긋나면 뽑고 나서 취소가 가능해진다
+        if (!order.getPerformanceDetail().getPerformanceDate()
+                .minus(bookingPolicy.cancelDeadlineLead()).isAfter(now)) {
             throw new BusinessException(PaymentErrorCode.CANCEL_DEADLINE_PASSED);
         }
 
         Ticket ticket = order.getTicket();
+
+        // 카드팩을 이미 열었으면 되돌릴 수 없다. 카드는 온체인에 나갔고 회수 경로가 없다.
+        // 정상 흐름에서는 개봉 시점에 취소가 이미 막혀 이 상태가 안 생기지만,
+        // 회차를 연기하면 취소 마감이 되돌아가 가능해진다.
+        if (photocardPackRepository.existsByUserIdAndSourceAndSourceRefAndConsumedAtIsNotNull(
+                userId, NftPhotocardPackSource.TICKET_PURCHASE, ticket.getId().toString())) {
+            throw new BusinessException(PaymentErrorCode.PACK_ALREADY_OPENED);
+        }
+
         ticket.cancel();
         order.markCanceled();
+
+        // 안 연 카드팩을 거둔다. 취소 시점에 위에서 이미 열렸는지 검사한다
+        photocardPackRepository.deleteUnconsumed(
+                userId, NftPhotocardPackSource.TICKET_PURCHASE, ticket.getId().toString());
 
         // 좌석을 되돌린다. 이미 남이 가져갔을 수는 없다 — SOLD 는 취소로만 풀린다
         performanceSeatRepository.release(

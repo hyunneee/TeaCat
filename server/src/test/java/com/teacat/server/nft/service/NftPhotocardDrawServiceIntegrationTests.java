@@ -92,6 +92,18 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
                 Integer.class, userId);
     }
 
+    /**
+     * 진행 중인 이벤트 하나. {@code claimEventPack} 의 판정이 설정값에서 표(Task 5)로 옮겨가
+     * 이제 기본은 비어 있다({@code cleanDatabase} 가 매번 비운다) — 이벤트 지급을 검증하는 테스트는
+     * 먼저 이 표에 진행 중인 행을 넣어야 한다.
+     */
+    private void givenActiveEvent(String code) {
+        jdbcTemplate.update("""
+                INSERT INTO nft_photocard_pack_events (code, name, active)
+                VALUES (?, '테스트 이벤트', true)
+                """, code);
+    }
+
     @Test
     void 팩_하나로_카드_한_장을_뽑는다() {
         Long userId = userWithWallet();
@@ -194,14 +206,15 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
     @Test
     void 이벤트_팩은_계정당_한_번이다() {
         Long userId = userWithWallet();
+        givenActiveEvent("OPEN_EVENT");
 
         assertThat(writer.claimEventPack(userId)).isTrue();
-        assertThat(writer.countAvailable(userId)).isEqualTo(1);
+        assertThat(writer.counts(userId).openable()).isEqualTo(1);
 
         // 두 번째는 존재 확인이 잡아 false 다. (존재 확인과 INSERT 사이에 끼어든 동시 요청만
         // UNIQUE 위반 예외로 나가고, 그건 서비스(Task 4)가 잡아 granted:false 로 바꾼다)
         assertThat(writer.claimEventPack(userId)).isFalse();
-        assertThat(writer.countAvailable(userId)).isEqualTo(1);
+        assertThat(writer.counts(userId).openable()).isEqualTo(1);
 
         // UNIQUE 가 실제로 걸려 있는지는 SQL 로 직접 확인한다
         assertThatThrownBy(() -> jdbcTemplate.update(
@@ -328,6 +341,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
     @Test
     void 이벤트_팩_지급_응답() {
         Long userId = userWithWallet();
+        givenActiveEvent("OPEN_EVENT");
 
         NftPhotocardPackClaimResponse first = drawService.claimEventPack(userId);
         NftPhotocardPackClaimResponse second = drawService.claimEventPack(userId);
@@ -347,6 +361,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
     void API_흐름_팩_받기_상태_뽑기_팩없음() throws Exception {
         givenChainAccepts();
         Long userId = userWithWallet();
+        givenActiveEvent("OPEN_EVENT");
         insertDrawPoolDesign("김예린", 100, "서울 5반", "SPECIAL");
         String bearer = "Bearer " + jwtTokenProvider.createAccessToken(userId, UserRole.USER);
 
@@ -375,7 +390,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
                         .header("Idempotency-Key", UUID.randomUUID().toString()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NFT_040"))
-                .andExpect(jsonPath("$.message").value("가진 카드팩이 없어요."));
+                .andExpect(jsonPath("$.message").value("지금 열 수 있는 카드팩이 없어요."));
 
         // 키 없이 오면 400
         mockMvc.perform(post("/photocards/draw").header("Authorization", bearer))

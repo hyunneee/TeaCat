@@ -234,19 +234,22 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                      것을 눌렀는데 페이지가 넘어가면 누른 사람 입장에서는 오작동입니다.
                      (키보드·스크린리더는 아래 화살표와 점으로 같은 일을 합니다) */
                   onClick={() => (active ? onSelect(banner) : step(cellIndex - pos))}
-                  style={{
-                    backgroundImage: banner.imageUrl
-                      ? `url(${banner.imageUrl})`
-                      : `linear-gradient(150deg,
-                        oklch(0.42 0.14 ${h}) 0%,
-                        oklch(0.3 0.11 ${(h + 40) % 360}) 60%,
-                        oklch(0.19 0.06 ${(h + 75) % 360}) 100%)`,
-                  }}
+                  /* 그림이 없을 때만 쓰는 폴백. 그림이 있으면 아래 <img> 가 맡습니다 */
+                  style={
+                    banner.imageUrl
+                      ? undefined
+                      : {
+                          backgroundImage: `linear-gradient(150deg,
+                            oklch(0.42 0.14 ${h}) 0%,
+                            oklch(0.3 0.11 ${(h + 40) % 360}) 60%,
+                            oklch(0.19 0.06 ${(h + 75) % 360}) 100%)`,
+                        }
+                  }
                   className={cn(
-                    'relative flex aspect-[4/3] w-full items-end bg-cover bg-center p-5 text-left',
+                    'relative flex aspect-[4/3] w-full items-end p-5 text-left',
                     /* 넓은 화면에서는 각 장이 스스로 둥글어집니다 (section 이 화면 폭이라
-                       거기서 둥글게 할 수 없습니다). `overflow-hidden` 이라 안쪽 덮개도
-                       같은 모양으로 잘립니다. */
+                       거기서 둥글게 할 수 없습니다). `overflow-hidden` 이라 그림과
+                       안쪽 덮개도 같은 모양으로 잘립니다. */
                     'lg:aspect-[2/1] lg:overflow-hidden lg:p-8',
                     /* 🔴 **가운데 장만 아래가 각집니다.** 바로 밑에 바로가기 면이 이어
                        붙어 한 덩어리가 되기 때문입니다. 좌우에 걸친 장은 밑에 아무것도
@@ -254,6 +257,28 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                     active ? 'lg:rounded-t-2xl' : 'lg:rounded-2xl',
                   )}
                 >
+                  {/* 🔴 배경(`background-image`)이 아니라 `<img>` 입니다. 이유가 둘입니다.
+                      ① 배경 이미지는 **프리로드 스캐너가 못 찾습니다.** HTML 파싱 → CSS 계산이
+                         끝나야 요청이 나가서, 홈의 LCP 가 그만큼 늦었습니다(19.4s).
+                         첫 장에 `fetchPriority="high"` 를 걸어 가장 먼저 받게 합니다.
+                      ② 예전에는 모든 슬라이드에 배경을 걸어 둬서 **안 보이는 배너까지 전부**
+                         내려왔습니다.
+                      ⚠️ 넓은 화면에서는 **앞뒤 배너가 눈에 보입니다.** 그래서 지금 장뿐 아니라
+                         양옆 칸까지 `eager` 입니다 — 옆을 lazy 로 두면 걸쳐 보이는 자리가
+                         빈 채로 있다가 뒤늦게 채워집니다.
+                      alt 가 빈 문자열인 건 장식이기 때문입니다 — 제목·부제가 아래 글자로 있습니다. */}
+                  {banner.imageUrl && (
+                    <img
+                      src={banner.imageUrl}
+                      alt=""
+                      loading={Math.abs(cellIndex - pos) <= 1 ? 'eager' : 'lazy'}
+                      fetchPriority={cellIndex === (looped ? 1 : 0) ? 'high' : 'auto'}
+                      decoding="async"
+                      draggable={false}
+                      className="absolute inset-0 size-full object-cover"
+                    />
+                  )}
+
                   {/* 글자가 읽히도록 아래쪽을 어둡게 */}
                   <span
                     aria-hidden
