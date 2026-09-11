@@ -16,6 +16,11 @@ import {
 interface Props {
   /** 이미 다 뜯었는가 — 두 조각이 갈라져 사라집니다 */
   opened: boolean;
+  /**
+   * 열 카드팩이 없는가.
+   * 🔴 뜯게 두고 나중에 서버가 거절하면, 다 뜯은 뒤에야 "없다" 는 말을 듣습니다.
+   */
+  locked?: boolean;
   /** 첫 손이 닿았을 때. 여기서 뽑기 API 가 나갑니다 */
   onCutStart: () => void;
   /** 끝까지 잘렸을 때 */
@@ -31,7 +36,7 @@ interface Props {
  *
  * 서버를 모릅니다 — props 로 받은 것만 씁니다. (CLAUDE.md 4-3)
  */
-export function PocaPack({ opened, onCutStart, onCutThrough, className }: Props) {
+export function PocaPack({ opened, locked = false, onCutStart, onCutThrough, className }: Props) {
   const packRef = useRef<HTMLDivElement>(null);
   const [points, setPoints] = useState<CutPoint[]>([]);
   const dragging = useRef(false);
@@ -62,13 +67,11 @@ export function PocaPack({ opened, onCutStart, onCutThrough, className }: Props)
     if (!box) return;
     const x = toPackX(clientX, box.left, box.width);
 
-    setPoints((prev) =>
-      shouldAddPoint(prev, x) ? [...prev, cutPointAt(x, Math.random())] : prev,
-    );
+    setPoints((prev) => (shouldAddPoint(prev, x) ? [...prev, cutPointAt(x, Math.random())] : prev));
   };
 
   const handleDown = (e: React.PointerEvent) => {
-    if (opened) return;
+    if (opened || locked) return;
     const box = packRef.current?.getBoundingClientRect();
     if (!box) return;
     /* 절취선 근처에서 시작할 때만 — 봉지 아무 데나 눌러도 잘리면 안 됩니다 */
@@ -131,6 +134,8 @@ export function PocaPack({ opened, onCutStart, onCutThrough, className }: Props)
       className={cn(
         'relative z-[3] touch-none select-none',
         !opened && 'motion-safe:animate-poca-float',
+        /* 열 수 없는 봉지는 한 톤 죽입니다 — 눌러도 되는 것처럼 보이면 안 됩니다 */
+        locked && 'opacity-60 saturate-50',
         className,
       )}
       style={{ width: PACK.width, height: PACK.height }}
@@ -140,7 +145,7 @@ export function PocaPack({ opened, onCutStart, onCutThrough, className }: Props)
         className={cn(
           'absolute inset-0 overflow-hidden drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)]',
           /* reduce 에서는 애니메이션이 안 돌아 봉지가 카드를 계속 가립니다 */
-          opened && 'motion-safe:animate-poca-slide-down motion-reduce:opacity-0 overflow-visible',
+          opened && 'motion-safe:animate-poca-slide-down overflow-visible motion-reduce:opacity-0',
         )}
         style={{ clipPath: clip?.bottom ?? 'polygon(0 0, 100% 0, 100% 100%, 0 100%)' }}
       >
@@ -151,7 +156,7 @@ export function PocaPack({ opened, onCutStart, onCutThrough, className }: Props)
       <div
         className={cn(
           'absolute inset-0 overflow-hidden drop-shadow-[0_14px_28px_rgba(0,0,0,0.55)]',
-          opened && 'motion-safe:animate-poca-tear motion-reduce:opacity-0 overflow-visible',
+          opened && 'motion-safe:animate-poca-tear overflow-visible motion-reduce:opacity-0',
         )}
         style={{ clipPath: clip?.top ?? 'polygon(0 0, 100% 0, 100% 0, 0 0)' }}
       >
@@ -211,12 +216,12 @@ function PocaScissors({ started, x }: { started: boolean; x: number }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <g className="motion-safe:animate-poca-snip-a [transform-box:view-box] [transform-origin:12px_12px]">
+        <g className="motion-safe:animate-poca-snip-a [transform-origin:12px_12px] [transform-box:view-box]">
           <path d="M21.4 5.4 10.36 13.15" />
           <path d="M10.36 13.15 8.26 16.93" />
           <circle cx="7" cy="19.2" r="2.6" />
         </g>
-        <g className="motion-safe:animate-poca-snip-b [transform-box:view-box] [transform-origin:12px_12px]">
+        <g className="motion-safe:animate-poca-snip-b [transform-origin:12px_12px] [transform-box:view-box]">
           <path d="M21.4 18.6 10.36 10.85" />
           <path d="M10.36 10.85 8.26 7.07" />
           <circle cx="7" cy="4.8" r="2.6" />

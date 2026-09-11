@@ -19,6 +19,12 @@ export const ROUTES = {
   FACE_REGISTER: '/face',
   /** 등록 성공 화면. 상단 알림 한 줄로는 "된 건가?" 가 남습니다. */
   FACE_DONE: '/face/done',
+  /**
+   * 본인 확인 (검증용) — 카메라 속 얼굴이 등록해 둔 얼굴과 같은 사람인지 대조합니다.
+   * 티켓 상세에서 들어오고, `state.from` 으로 돌아갈 곳을 받습니다.
+   * ⚠️ 아직 입장 처리가 아닙니다. 확인만 하고 티켓 상태는 바꾸지 않습니다.
+   */
+  FACE_VERIFY: '/face/verify',
 
   /* ── 검색 (공연 + 포토카드 한 화면) ── */
   SEARCH: '/search',
@@ -60,6 +66,8 @@ export const ROUTES = {
    * 포카 뽑기. `NFT_DETAIL` 의 `:photocardId` 와 겹쳐 보이지만
    * React Router 는 **정적 세그먼트를 동적보다 우선**해서 여기로 옵니다.
    */
+  /** 이벤트 카드팩 받기 — 배너 링크가 여기로 옵니다 */
+  NFT_PACK_CLAIM: '/nft/packs',
   NFT_DRAW: '/nft/draw',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
@@ -101,6 +109,8 @@ export const ROUTES = {
   ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
   ADMIN_INQUIRIES: '/admin/inquiries',
   ADMIN_BANNERS: '/admin/banners',
+  /** 뽑기 도안 — 여기 등록한 것만 카드팩에서 나옵니다 */
+  ADMIN_POCA_DESIGNS: '/admin/poca-designs',
   ADMIN_ANALYTICS: '/admin/analytics',
   ADMIN_CONCERTS: '/admin/concerts',
   /** 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 (CONCERT_CREATE 와 같은 이유) */

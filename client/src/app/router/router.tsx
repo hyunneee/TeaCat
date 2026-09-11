@@ -6,6 +6,7 @@ import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
+import { ComingSoonPage } from '@/pages/ComingSoonPage';
 
 /* 페이지는 전부 lazy 로 나눕니다.
    티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
@@ -19,6 +20,7 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
+const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -39,14 +41,15 @@ const MyResalePage = page(() => import('@/pages/MyResalePage'), 'MyResalePage');
 const MyTicketsPage = page(() => import('@/pages/MyTicketsPage'), 'MyTicketsPage');
 const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketDetailPage');
 
-const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
+/* 1차 배포에서 닫아 둔 화면(포토카드 마켓·내 경매·내 입찰·포카 거래 내역)의 lazy 선언은
+   ComingSoonPage 로 바꾸면서 뺐습니다. 2차 배포 때 이 자리에 되돌립니다.
+   (ComingSoonPage 는 파일 맨 위에서 바로 import 합니다 — `page()` 는 props 를 못 넘기고,
+    Header + EmptyState 뿐이라 따로 청크를 나눌 것도 없습니다) */
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
+const PocaPackClaimPage = page(() => import('@/pages/PocaPackClaimPage'), 'PocaPackClaimPage');
 const PocaDrawPage = page(() => import('@/pages/PocaDrawPage'), 'PocaDrawPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
-const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
-const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
-const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
@@ -76,6 +79,10 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminPocaDesignsPage = page(
+  () => import('@/pages/AdminPocaDesignsPage'),
+  'AdminPocaDesignsPage',
+);
 const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
 const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
 const AdminConcertCreatePage = page(
@@ -86,10 +93,7 @@ const AdminConcertEditPage = page(
   () => import('@/pages/AdminConcertEditPage'),
   'AdminConcertEditPage',
 );
-const AdminInquiriesPage = page(
-  () => import('@/pages/AdminInquiriesPage'),
-  'AdminInquiriesPage',
-);
+const AdminInquiriesPage = page(() => import('@/pages/AdminInquiriesPage'), 'AdminInquiriesPage');
 
 const InquiryListPage = page(() => import('@/pages/InquiryListPage'), 'InquiryListPage');
 const InquiryWritePage = page(() => import('@/pages/InquiryWritePage'), 'InquiryWritePage');
@@ -109,7 +113,6 @@ const InquiryDetailPage = page(() => import('@/pages/InquiryDetailPage'), 'Inqui
 const WARM_ROUTES = [
   () => import('@/pages/ConcertListPage'),
   () => import('@/pages/ConcertDetailPage'),
-  () => import('@/pages/NftMarketPage'),
   () => import('@/pages/NftDetailPage'),
   () => import('@/pages/MyTicketsPage'),
   () => import('@/pages/MyPage'),
@@ -133,6 +136,38 @@ export function warmRoutes() {
 /** lazy 페이지를 Suspense + ErrorBoundary 로 감싸는 헬퍼.
     경로가 바뀌면 에러 상태가 자동으로 풀립니다. */
 const withBoundary = (element: ReactNode) => <RouteBoundary>{element}</RouteBoundary>;
+
+/**
+ * 🔴 이 화면은 Microsoft Clarity 리플레이에 **내용이 찍히지 않습니다.**
+ *
+ * 감싼 노드와 그 자식의 텍스트·이미지는 마스킹돼 서버로 가지 않습니다
+ * (클릭 위치·횟수는 그대로 올라가서 히트맵·rage click 은 영향 없습니다).
+ *
+ * ── 어떤 화면에 붙이나 ──────────────────────────────────
+ * 화면에 **사람을 특정할 수 있는 값**이 뜨면 붙입니다 —
+ * 이메일·전화번호·닉네임·주소·티켓/주문 정보·결제 내역·문의 본문.
+ * 남의 데이터를 보는 운영 화면(`/admin`)도 포함입니다.
+ *
+ * 반대로 예매 흐름의 **좌석·구역 선택은 일부러 열어 둡니다.** 거기가 Clarity 를
+ * 붙인 이유(선점 실패 후 연타·못 누르는 좌석)이고, 개인정보가 뜨지 않습니다.
+ *
+ * 🔴 **새 화면을 만들 때 판단해서 붙이는 건 사람 몫입니다.** 예전에는
+ *    `index.html` 이 전부 가리는 기본 차단이라 아무것도 안 해도 안전했는데,
+ *    선택적으로 바꾸면서 그 보호가 없어졌습니다. 빠뜨리면 조용히 노출됩니다.
+ *
+ * 🔴 **포탈로 띄우는 모달은 이게 닿지 않습니다.** `#modal-root` 가 `#root` 의
+ *    자식이 아니라서, 감싼 화면 안에서 연 모달의 내용은 리플레이에 남습니다.
+ *    민감한 값을 모달에 띄운다면 그 컴포넌트에 `data-clarity-mask="true"` 를
+ *    직접 붙이세요. (CLAUDE.md 7장 "행동 분석")
+ *
+ * `contents` 는 이 `div` 가 레이아웃 상자를 만들지 않게 합니다 — 자식이 부모의
+ * flex/grid 에 그대로 참여하므로 감싸도 화면이 틀어지지 않습니다.
+ */
+const withMask = (element: ReactNode) => (
+  <div className="contents" data-clarity-mask="true">
+    {element}
+  </div>
+);
 
 /**
  * 🛠 개발 전용 라우트.
@@ -173,7 +208,7 @@ const routes: RouteObject[] = [
         children: [
           {
             path: ROUTES.ADMIN,
-            element: <AdminLayout />,
+            element: withMask(<AdminLayout />),
             children: [
               { index: true, element: withBoundary(<AdminDashboardPage />) },
               {
@@ -214,6 +249,10 @@ const routes: RouteObject[] = [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
+                  {
+                    path: ROUTES.ADMIN_POCA_DESIGNS,
+                    element: withBoundary(<AdminPocaDesignsPage />),
+                  },
                   { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
               },
@@ -236,13 +275,18 @@ const routes: RouteObject[] = [
          여기 앱 화면에도 같은 기능이 한 벌 더 있었는데, 관람객 화면에 관리 기능이 섞여
          있었고 화면이 두 벌이라 한쪽만 고치면 어긋났습니다. */
       { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
-      { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
+      /* 🔴 1차 배포에서 닫아 둡니다. 원래 화면은 `NftMarketPage` 이고 파일은 그대로 있습니다 —
+         2차 배포 때 이 줄만 되돌리면 됩니다 (아래 내 경매·내 입찰·포카 거래 내역도 같습니다). */
+      {
+        path: ROUTES.NFT_MARKET,
+        element: withBoundary(<ComingSoonPage title="포토카드 마켓" showBack={false} />),
+      },
 
       {
         element: <RequireAuth />,
         children: [
-          { path: ROUTES.MY, element: withBoundary(<MyPage />) },
-          { path: ROUTES.MY_TICKETS, element: withBoundary(<MyTicketsPage />) },
+          { path: ROUTES.MY, element: withMask(withBoundary(<MyPage />)) },
+          { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
         ],
       },
     ],
@@ -252,13 +296,13 @@ const routes: RouteObject[] = [
   {
     element: <PlainLayout />,
     children: [
-      { path: ROUTES.LOGIN, element: withBoundary(<LoginPage />) },
-      { path: ROUTES.SIGNUP, element: withBoundary(<SignupPage />) },
-      { path: ROUTES.SIGNUP_DONE, element: withBoundary(<SignupDonePage />) },
+      { path: ROUTES.LOGIN, element: withMask(withBoundary(<LoginPage />)) },
+      { path: ROUTES.SIGNUP, element: withMask(withBoundary(<SignupPage />)) },
+      { path: ROUTES.SIGNUP_DONE, element: withMask(withBoundary(<SignupDonePage />)) },
 
       /* SSAFY 로그인 복귀 지점. 아직 세션이 없는 상태로 들어오므로 가드 밖에 둡니다. */
-      { path: ROUTES.OAUTH_CALLBACK, element: withBoundary(<OauthCallbackPage />) },
-      { path: ROUTES.OAUTH_SIGNUP, element: withBoundary(<OauthSignupPage />) },
+      { path: ROUTES.OAUTH_CALLBACK, element: withMask(withBoundary(<OauthCallbackPage />)) },
+      { path: ROUTES.OAUTH_SIGNUP, element: withMask(withBoundary(<OauthSignupPage />)) },
       { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
       /* 경매 상세는 **가드 밖**입니다. 로그인해야 볼 수 있게 하면 경매가 열려 있는지조차
          알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
@@ -270,28 +314,51 @@ const routes: RouteObject[] = [
       {
         element: <RequireAuth />,
         children: [
-          { path: ROUTES.FACE_REGISTER, element: withBoundary(<FaceRegisterPage />) },
-          { path: ROUTES.FACE_DONE, element: withBoundary(<FaceDonePage />) },
+          { path: ROUTES.FACE_REGISTER, element: withMask(withBoundary(<FaceRegisterPage />)) },
+          { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
+          /* 본인 확인 — 등록 화면과 같은 이유로 마스킹합니다 (얼굴·판정 결과가 뜹니다) */
+          { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
+          { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
 
-          { path: ROUTES.TICKET_DETAIL(':ticketId'), element: withBoundary(<TicketDetailPage />) },
+          {
+            path: ROUTES.TICKET_DETAIL(':ticketId'),
+            element: withMask(withBoundary(<TicketDetailPage />)),
+          },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
-          { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
-          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
-          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
+          /* 🔴 1차 배포에서 닫아 둡니다 (위 포토카드 마켓과 같은 이유).
+             원래 화면은 NftTradesPage · MyAuctionsPage · MyBidsPage 이고 파일은 그대로입니다. */
+          {
+            path: ROUTES.MY_NFT_TRADES,
+            element: withBoundary(<ComingSoonPage title="포카 거래 내역" />),
+          },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<ComingSoonPage title="내 경매" />) },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<ComingSoonPage title="내 입찰" />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
-          { path: ROUTES.SETTINGS, element: withBoundary(<SettingsPage />) },
-          { path: ROUTES.SETTINGS_PASSWORD, element: withBoundary(<PasswordChangePage />) },
-          { path: ROUTES.SETTINGS_NICKNAME, element: withBoundary(<NicknameChangePage />) },
+          { path: ROUTES.SETTINGS, element: withMask(withBoundary(<SettingsPage />)) },
+          {
+            path: ROUTES.SETTINGS_PASSWORD,
+            element: withMask(withBoundary(<PasswordChangePage />)),
+          },
+          {
+            path: ROUTES.SETTINGS_NICKNAME,
+            element: withMask(withBoundary(<NicknameChangePage />)),
+          },
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
 
           /* 문의 — 목록·작성·상세. 로그인한 회원 본인 것만 봅니다 */
-          { path: ROUTES.MY_INQUIRIES, element: withBoundary(<InquiryListPage />) },
-          { path: ROUTES.MY_INQUIRY_NEW, element: withBoundary(<InquiryWritePage />) },
-          { path: '/my/inquiries/:inquiryId', element: withBoundary(<InquiryDetailPage />) },
-          { path: '/my/inquiries/:inquiryId/edit', element: withBoundary(<InquiryWritePage />) },
+          { path: ROUTES.MY_INQUIRIES, element: withMask(withBoundary(<InquiryListPage />)) },
+          { path: ROUTES.MY_INQUIRY_NEW, element: withMask(withBoundary(<InquiryWritePage />)) },
+          {
+            path: '/my/inquiries/:inquiryId',
+            element: withMask(withBoundary(<InquiryDetailPage />)),
+          },
+          {
+            path: '/my/inquiries/:inquiryId/edit',
+            element: withMask(withBoundary(<InquiryWritePage />)),
+          },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.
@@ -299,14 +366,17 @@ const routes: RouteObject[] = [
              "돈은 빠졌는데 티켓이 없는" 사고가 납니다. */
           {
             path: ROUTES.BOOKING_PAYMENT_RESULT(':scheduleId'),
-            element: withBoundary(<PaymentResultPage />),
+            element: withMask(withBoundary(<PaymentResultPage />)),
           },
 
           /* 예매 완료 화면도 같은 이유로 가드 밖입니다.
              결제·발권이 끝난 뒤에 보여주는 화면인데 여기서 튕기면
              티켓은 발급됐는데 사용자는 실패한 줄 압니다.
              (이 화면은 얼굴 미등록 사용자에게 등록을 안내하는 역할도 합니다) */
-          { path: ROUTES.BOOKING_DONE(':orderId'), element: withBoundary(<BookingDonePage />) },
+          {
+            path: ROUTES.BOOKING_DONE(':orderId'),
+            element: withMask(withBoundary(<BookingDonePage />)),
+          },
 
           /* ── 예매 플로우 ──────────────────────────────────
              봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료
@@ -334,11 +404,11 @@ const routes: RouteObject[] = [
                   },
                   {
                     path: ROUTES.BOOKING_REVIEW(':scheduleId'),
-                    element: withBoundary(<BookingReviewPage />),
+                    element: withMask(withBoundary(<BookingReviewPage />)),
                   },
                   {
                     path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
-                    element: withBoundary(<PaymentPage />),
+                    element: withMask(withBoundary(<PaymentPage />)),
                   },
                 ],
               },

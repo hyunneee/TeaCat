@@ -107,8 +107,9 @@ public class SecurityConfig {
                         .requestMatchers("/internal/**").permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
-                        // 내 카드팩 잔액은 공개가 아니다. 마켓·카드 상세를 여는 아래 permitAll 보다
-                        // 먼저 와야 효력이 있다 (먼저 걸리는 규칙이 이긴다)
+                        // 🔴 /photocards/** 보다 **먼저** 와야 한다. 남은 카드팩 수는 "내" 것이라
+                        //    아래 permitAll 에 걸리면 인증 없이 컨트롤러까지 들어가고,
+                        //    @AuthenticationPrincipal 이 null 이라 NPE(500)가 난다 — 401 이 아니라.
                         .requestMatchers(HttpMethod.GET, "/photocards/draw").authenticated()
                         // NFT 마켓·경매 조회는 비로그인도 볼 수 있다. GET 만 열리므로 입찰·즉시구매·취소는 그대로 인증이 필요하다
                         .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**",

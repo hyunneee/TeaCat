@@ -525,43 +525,6 @@ export const photocards: MockPhotocard[] = NFT_NAMES.map((designName, i) => {
 let photocardSeq = 501 + photocards.length;
 export const nextPhotocardId = () => (photocardSeq += 1);
 
-/**
- * 남이 이미 갖고 있는 포카 몇 장 — **거래 평균가를 보여주기 위한 씨앗**입니다.
- * 하나도 없으면 판매 등록 화면에서 늘 "아직 거래된 적이 없어요" 만 보입니다.
- */
-const tradedDesigns: { designName: string; imageUrl: string; prices: number[] }[] = [
-  { designName: '김예린', imageUrl: '/mock/poca/YaeRin_C.webp', prices: [1200, 1450, 980] },
-  { designName: '김권수', imageUrl: '/mock/poca/GwonSu_C.webp', prices: [2100, 1900] },
-  { designName: '최재성', imageUrl: '/mock/poca/monkey.webp', prices: [120, 90, 150] },
-];
-
-const seededTrades: MockPhotocardTrade[] = [];
-
-for (const { designName, imageUrl, prices } of tradedDesigns) {
-  prices.forEach((price, i) => {
-    const photocardId = nextPhotocardId();
-    photocards.push({
-      photocardId,
-      designName,
-      imageUrl,
-      performanceTitle: PERFORMANCE_TITLES[i % 2] as string,
-      ownerId: 'u-3',
-      issuedAt: iso(now() - (i + 2) * DAY),
-      origin: { seatGrade: 'VIP', areaCode: 'A', rowLabel: null, seatNumber: null },
-      status: 'MINTED',
-      listing: null,
-    });
-    seededTrades.push({
-      tradeId: nextTradeId(),
-      photocardId,
-      buyerId: 'u-3',
-      sellerId: 'u-1',
-      price,
-      tradedAt: iso(now() - (i + 2) * DAY),
-    });
-  });
-}
-
 /* 지난 거래 몇 건을 심어둡니다 — 빈 화면만 보면 이 화면이 뭘 하는지 알 수 없습니다. */
 export const photocardTrades: MockPhotocardTrade[] = [
   {
@@ -596,7 +559,6 @@ export const photocardTrades: MockPhotocardTrade[] = [
     price: 910,
     tradedAt: iso(now() - 21 * DAY),
   },
-  ...seededTrades,
 ];
 
 /**

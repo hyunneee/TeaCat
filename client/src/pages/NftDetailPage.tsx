@@ -18,6 +18,7 @@ import {
   isOwner,
   isSpecial,
   mintStatusLabel,
+  photocardSource,
   pocaSeed,
   useListPhotocard,
   usePhotocardDetail,
@@ -145,7 +146,7 @@ export function NftDetailPage() {
           <div className="space-y-1">
             <h1 className="text-2xl leading-snug font-extrabold">{card.designName}</h1>
             {/* 어느 공연에서 얻은 카드인지 — 이름만 있으면 어디서 온 카드인지 알 수 없습니다 */}
-            <p className="text-subtle text-[0.9375rem]">{card.performanceTitle}</p>
+            <p className="text-subtle text-[0.9375rem]">{photocardSource(card.performanceTitle)}</p>
           </div>
 
           {/* 나머지는 폼을 펼치면 감춥니다 — 가격·설명·출처를 그대로 둔 채 폼까지 얹으면
@@ -230,11 +231,18 @@ export function NftDetailPage() {
               <div className="surface-2 flex gap-2.5 rounded-2xl p-4">
                 <BadgeCheck size={19} className="text-ink-muted mt-0.5 shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-[0.9375rem] font-semibold">공연 좌석에서 발행된 카드입니다</p>
+                  {/* 🔴 뽑기로 얻은 카드는 좌석이 없습니다(origin: null).
+                      한 문장으로 뭉뚱그리지 않고 어디서 온 카드인지 그대로 말해 줍니다. */}
+                  <p className="text-[0.9375rem] font-semibold">
+                    {card.origin
+                      ? '공연 좌석에서 발행된 카드입니다'
+                      : '이벤트 카드팩에서 나온 카드입니다'}
+                  </p>
                   <p className="text-muted mt-1 flex items-center gap-1.5 text-sm">
-                    <Armchair size={15} className="shrink-0" />
+                    {card.origin && <Armchair size={15} className="shrink-0" />}
                     <span className="truncate">
-                      {formatOrigin(card.origin)} · {formatDate(card.issuedAt)} 발행
+                      {card.origin && `${formatOrigin(card.origin)} · `}
+                      {formatDate(card.issuedAt)} 발행
                     </span>
                   </p>
                   {/* 발행이 끝나지 않은 카드에만 한 줄 (MINTED 면 null) */}

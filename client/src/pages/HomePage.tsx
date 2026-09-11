@@ -23,12 +23,17 @@ import {
 } from '@/shared/components/ui';
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
+import { formatDateTime } from '@/shared/lib';
 import { useAutoScroll } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHold } from '@/features/booking';
-import { isConcertOpen, posterSeedOf, useConcerts } from '@/features/concert';
-import { NftCard, useNftMarket } from '@/features/nft';
+import {
+  CONCERT_BOOKING_LABEL,
+  isConcertOpen,
+  posterSeedOf,
+  useConcerts,
+} from '@/features/concert';
 
 /**
  * 바로가기 — **5칸 한 줄.**
@@ -76,22 +81,37 @@ export function HomePage() {
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
-  /* 홈에서는 최신 몇 장만 보여줍니다. 마켓 전체는 포카 탭에 있습니다. */
-  const { data: newPocas } = useNftMarket();
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const { hold: activeHold, remainSeconds: holdRemainSeconds } = useActiveHold();
 
-  const open = concerts?.filter((c) => isConcertOpen(c)).slice(0, RAIL_LIMIT) ?? [];
+  /**
+   * 레일에 실을 공연 — **열린 것이 없으면 곧 열릴 것**을 보여줍니다.
+   *
+   * 예매중인 공연만 걸러 놓으면 티켓팅 사이는 홈의 이 자리가 통째로 빕니다.
+   * 실제로 그런 날이 훨씬 많습니다(오픈은 몇 분이고 그 사이는 몇 주). 빈 자리를
+   * 본 사람은 "여기 공연이 없구나" 로 읽고 나갑니다 — 등록된 공연이 있는데도요.
+   *
+   * 두 목록을 섞지는 않습니다. 섞으면 "예매중" 칩을 일일이 확인해야 지금 살 수
+   * 있는 게 뭔지 알 수 있습니다. 열린 게 하나라도 있으면 그것만, 없을 때만
+   * 예정을 보여주고 **제목도 함께 바꿉니다.**
+   */
+  const all = concerts ?? [];
+  const openConcerts = all.filter(isConcertOpen);
+  const liveRail = openConcerts.length > 0;
+  const rail = (
+    liveRail
+      ? openConcerts
+      : /* 오픈이 임박한 순서로. 서버 목록 순서는 오픈 시각 기준이 아닙니다 */
+        all
+          .filter((c) => c.bookingStatus === 'BEFORE')
+          .sort((a, b) => a.ticketingStartAt.localeCompare(b.ticketingStartAt))
+  ).slice(0, RAIL_LIMIT);
 
   /* 레일이 스스로 흐릅니다. 손을 대면 멈추고 잠시 뒤 다시 움직입니다.
-     두 레일의 **속도를 다르게** 둡니다. 같으면 두 줄이 한 덩어리처럼
-     같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
-  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: open.length > 1, speed: 15 });
-  const pocaRail = useAutoScroll<HTMLDivElement>({
-    enabled: (newPocas?.length ?? 0) > 1,
-    speed: 9,
-  });
+     포토카드 레일이 돌아오면 **속도를 다르게** 두세요 (그때는 9). 같으면 두 줄이
+     한 덩어리처럼 같이 밀려서 화면 전체가 흔들리는 것처럼 보입니다. */
+  const concertRail = useAutoScroll<HTMLDivElement>({ enabled: rail.length > 1, speed: 15 });
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
@@ -120,7 +140,7 @@ export function HomePage() {
       {/* 짙은 배경판 — 상단바 + 배너 위쪽 90% 를 덮습니다 */}
       <div
         aria-hidden
-        className="surface-strong absolute inset-x-0 top-0"
+        className="surface-strong absolute inset-x-0 top-0 lg:hidden"
         style={{
           /* env(노치) + 헤더 위 여백 + 헤더 높이 + 배너 위 여백 + 배너의 90% */
           height:
@@ -128,8 +148,28 @@ export function HomePage() {
         }}
       />
 
-      {/* ── 최상단 줄 (검정 위) ── */}
-      <header className="relative pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      {/* 같은 배경판의 데스크톱판.
+          규칙은 폰과 **똑같습니다** — 배너 위쪽 90% 까지 짙은 면이고, 배너가 그
+          경계에 걸쳐 내려옵니다. 다른 것은 둘뿐입니다.
+
+          1. 위로 덮을 상단바가 없습니다 (그 헤더는 lg 에서 숨기고 TopNav 가 대신합니다)
+             → 본문 맨 위에서 시작합니다. AppLayout 이 본문에 위 여백을 주지 않는
+               이유도 이것입니다 — 여백이 있으면 내비와 이 면 사이에 흰 띠가 생깁니다.
+          2. **화면 끝까지** 갑니다(`w-screen`). 본문 폭(1024px)에서 끊으면 짙은 면이
+             화면 한가운데 떠 있는 네모가 되어 배경이 아니라 카드처럼 보입니다.
+             가로 스크롤은 AppLayout 의 `overflow-x-clip` 이 막습니다.
+
+          높이는 `--banner-height` 가 lg 에서 21:9 로 다시 계산됩니다 (styles/index.css) */}
+      <div
+        aria-hidden
+        className="surface-strong absolute top-0 left-1/2 hidden w-screen -translate-x-1/2 lg:block"
+        style={{ height: 'calc(1.5rem + var(--banner-height) * 0.9)' }}
+      />
+
+      {/* ── 최상단 줄 (검정 위) ──
+          데스크톱에서는 감춥니다 — 상단 내비(TopNav)에 로고와 검색이 이미 있어서
+          그대로 두면 로고가 한 화면에 두 번 나옵니다. */}
+      <header className="relative pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:hidden">
         <div className="flex h-(--spacing-header) items-center justify-between px-4">
           {/* 마스코트만 크게 — 글자는 26 기준(18px)이라 헤더 높이를 넘지 않습니다 */}
           <span className="text-white">
@@ -150,18 +190,30 @@ export function HomePage() {
       </header>
 
       {/* ── 배너 (검정 → 하양 경계에 걸침) ── */}
-      <div className="relative px-4 pt-2">
+      {/* 넓은 화면에서는 좌우 여백을 본문(AppLayout 의 px-6)에 맡깁니다 */}
+      <div className="relative px-4 pt-2 lg:px-0 lg:pt-6">
         {bannersPending ? (
-          <Skeleton className="aspect-[4/3] w-full rounded-lg" />
+          <Skeleton className="aspect-[4/3] w-full rounded-lg lg:aspect-[21/9] lg:rounded-t-2xl lg:rounded-b-none" />
         ) : (
           banners && <BannerCarousel banners={banners} onSelect={openBanner} />
         )}
       </div>
 
-      {/* ── 흰 배경 영역 ── */}
-      <div className="relative space-y-6 px-4 pt-6">
-        {/* 바로가기 — 아이콘 타일 + 아래 라벨 */}
-        <Stagger as="ul" className="grid grid-cols-5 gap-x-1.5">
+      {/* ── 바로가기 ──
+          폰에서는 배너 아래 한 칸 띄우고, **데스크톱에서는 배너에 이어 붙습니다**
+          (`lg:pt-0` + 맞닿는 모서리만 각지게). 배너와 한 덩어리로 보이게 하려는 것이라
+          위치를 CSS 로만 바꿉니다 — 화면마다 따로 그리면 둘이 갈라집니다.
+
+          폰에서는 흰 타일 다섯 개가 오프화이트 바탕 위에 떠 있는 것으로 충분합니다
+          (폭이 좁아 그 자체가 한 줄로 읽힙니다). 넓은 화면에서는 같은 타일이
+          빈 벌판에 흩어진 점 다섯 개가 됩니다 — **하나의 면**으로 묶습니다.
+          묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
+          같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
+      <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
+        <Stagger
+          as="ul"
+          className="grid grid-cols-5 gap-x-1.5 lg:bg-surface-1 lg:shadow-card lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
+        >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
             <Stagger.Item as="li" key={label}>
               <motion.button
@@ -171,7 +223,11 @@ export function HomePage() {
                 className="flex w-full flex-col items-center gap-1.5"
               >
                 {/* 흰 면 + 얕은 그림자. 회색 면은 "비활성" 처럼 보입니다. */}
-                <span className="surface shadow-card text-ink flex size-14 items-center justify-center rounded-2xl">
+                {/* `.surface` 대신 `bg-surface-1` 을 씁니다 — `.surface` 는 유틸리티
+                    레이어의 **평범한 CSS 클래스**라 `lg:` 변형이 이기지 못합니다
+                    (같은 레이어·같은 specificity → 나중에 선언된 쪽이 이김).
+                    색은 같은 값이라 폰에서 보이는 것은 달라지지 않습니다. */}
+                <span className="bg-surface-1 shadow-card text-ink lg:bg-surface-2 flex size-14 items-center justify-center rounded-2xl lg:size-[3.25rem] lg:shadow-none">
                   <Icon size={26} strokeWidth={1.7} />
                 </span>
                 <span className="text-ink text-center text-[0.75rem] leading-tight font-semibold">
@@ -181,7 +237,10 @@ export function HomePage() {
             </Stagger.Item>
           ))}
         </Stagger>
+      </div>
 
+      {/* ── 흰 배경 영역 ── */}
+      <div className="relative space-y-6 px-4 pt-6 lg:space-y-10 lg:px-0 lg:pt-10">
         {/* 시간이 걸린 일이라 얼굴 등록 안내보다 위입니다 */}
         {activeHold && (
           <ResumeBookingCard
@@ -245,19 +304,22 @@ export function HomePage() {
               </button>
             }
           >
-            진행 중인 티켓팅
+            {liveRail ? '진행 중인 티켓팅' : '곧 열리는 티켓팅'}
           </SectionTitle>
 
           {isPending ? (
             /* 홈은 페이지 일부라 화면 가운데로 밀지 않습니다 (min-h-0) */
             <Loading label="공연을 불러오는 중" className="min-h-0 py-8" />
+          ) : rail.length === 0 ? (
+            /* 여기까지 왔으면 열린 것도 예정도 없습니다 — 등록된 공연 자체가 없는 경우 */
+            <p className="text-subtle py-8 text-center text-sm">아직 등록된 공연이 없어요.</p>
           ) : (
             /* -mx-4 로 화면 끝까지 흐르게 하고, 안쪽 px-4 로 첫/마지막 카드를 맞춥니다.
                그래야 옆에 다음 카드가 살짝 걸쳐 보여 "더 있다"는 게 읽힙니다. */
-            <div ref={concertRail} className="-mx-4 overflow-x-auto">
-              <ul className="flex w-max gap-3 px-4 pt-1 pb-2">
-                {open.map((concert) => (
-                  <li key={concert.concertId} className="w-[8.5rem] shrink-0">
+            <div ref={concertRail} className="-mx-4 overflow-x-auto lg:mx-0">
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:gap-4 lg:px-0">
+                {rail.map((concert) => (
+                  <li key={concert.concertId} className="w-[8.5rem] shrink-0 lg:w-[10.5rem]">
                     <motion.button
                       type="button"
                       onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
@@ -271,16 +333,27 @@ export function HomePage() {
                           alt={`${concert.title} 포스터`}
                           className="w-full"
                         />
+                        {/* 붉은 LIVE 칩은 **지금 살 수 있을 때만** 입니다 (CLAUDE.md 4-6).
+                            오픈 예정에 붉은 점을 달면 눌렀다가 못 사고 돌아옵니다. */}
                         <span className="absolute top-1.5 left-1.5">
-                          <Badge tone="live" icon={<LiveDot />} className="shadow-card">
-                            예매중
-                          </Badge>
+                          {liveRail ? (
+                            <Badge tone="live" icon={<LiveDot />} className="shadow-card">
+                              {CONCERT_BOOKING_LABEL.OPEN}
+                            </Badge>
+                          ) : (
+                            <Badge tone="neutral" className="shadow-card">
+                              {CONCERT_BOOKING_LABEL.BEFORE}
+                            </Badge>
+                          )}
                         </span>
                       </div>
 
                       <p className="mt-2 truncate text-[0.875rem] font-bold">{concert.title}</p>
+                      {/* 예정 카드에서 가장 궁금한 건 장소가 아니라 **언제 열리나** 입니다 */}
                       <p className="text-ink-muted truncate text-[0.8125rem]">
-                        {concert.stadiumName}
+                        {liveRail
+                          ? concert.stadiumName
+                          : `${formatDateTime(concert.ticketingStartAt)} 오픈`}
                       </p>
                     </motion.button>
                   </li>
@@ -290,41 +363,10 @@ export function HomePage() {
           )}
         </section>
 
-        {/* 새로 올라온 포토카드 — 같은 가로 레일. 마켓 전체는 포카 탭에 있습니다. */}
-        {newPocas && newPocas.length > 0 && (
-          <section>
-            <SectionTitle
-              action={
-                <button
-                  type="button"
-                  onClick={() => navigate(ROUTES.NFT_MARKET)}
-                  className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
-                >
-                  더보기 <ChevronRight size={13} />
-                </button>
-              }
-            >
-              새로 올라온 포토카드
-            </SectionTitle>
-
-            <div ref={pocaRail} className="-mx-4 overflow-x-auto">
-              <ul className="flex w-max gap-3 px-4 pt-1 pb-2">
-                {newPocas.slice(0, RAIL_LIMIT).map((card) => (
-                  <li key={card.photocardId} className="w-[8.5rem] shrink-0">
-                    <NftCard
-                      photocardId={card.photocardId}
-                      designName={card.designName}
-                      imageUrl={card.imageUrl}
-                      performanceTitle={card.performanceTitle}
-                      price={card.price}
-                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
+        {/* 🔴 "새로 올라온 포토카드" 레일은 1차 배포에서 뺐습니다.
+            마켓(구매·판매)이 닫혀 있어(`/nft` → ComingSoonPage) 살 수 없는 물건을
+            홈에서 권하는 꼴이 됩니다. 2차 배포 때 이 자리에 되돌립니다 —
+            `useNftMarket()` 조회와 `pocaRail` 자동 스크롤도 함께 지웠습니다. */}
       </div>
     </div>
   );

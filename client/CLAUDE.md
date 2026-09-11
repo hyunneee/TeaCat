@@ -66,7 +66,7 @@
 | 애니메이션 | **motion** (`motion/react`) + Tailwind transition | GSAP, react-spring |
 | 결제 | **토스페이먼츠** (`@tosspayments/tosspayments-sdk`) | 다른 PG SDK 직접 호출, 프론트에서 금액 확정 |
 | 에러 리포팅 | **@sentry/react** (`shared/lib/sentry.ts` 만 사용) | 화면에서 `Sentry.*` 직접 호출, **Session Replay** |
-| 행동 분석 | **@microsoft/clarity** (`shared/lib/clarity.ts` 만 사용) | 화면에서 `window.clarity` 직접 호출, `index.html` 의 `data-clarity-mask` 제거, 세 번째 분석 도구 |
+| 행동 분석 | **@microsoft/clarity** (`shared/lib/clarity.ts` 만 사용) | 화면에서 `window.clarity` 직접 호출, `router.tsx` 의 `withMask` 없이 개인정보 화면 추가, 세 번째 분석 도구 |
 | 얼굴 인식 | **onnxruntime-web** (`/wasm` 빌드 하나만) + INT8 ONNX 모델 | MediaPipe·tfjs 등 **두 번째 런타임**, FP32 모델 |
 
 ---
@@ -212,10 +212,15 @@ export function Card({ className, ...rest }: CardProps) {
 
 ### 4-4. 모바일 우선
 
-- 폭은 `.app-width` 클래스 하나로 정합니다 (`--container-app` = 21rem/336px).
-  **폰에서는 화면을 꽉 쓰고**, 480px(30rem)부터 폰 폭으로 고정돼 데스크톱에서도
+- 폭은 `.app-width` 클래스 하나로 정합니다 (`--container-app` = **30rem/480px**).
+  **폰에서는 화면을 꽉 쓰고**, 480px(30rem)부터 그 폭으로 고정돼 데스크톱에서도
   가운데 한 기둥으로 보입니다 — 새로 만드는 `fixed`·`portal` 요소에도
   `mx-auto app-width` 를 잊지 마세요. (DESIGN.md 5장)
+  - 🔴 **한 기둥 규칙은 그대로입니다.** 넓은 화면이라고 2단으로 펼치지 마세요.
+    넓힌 것은 기둥의 폭뿐이고 화면 구성은 폰과 같습니다.
+  - 상한값의 기준은 "폰 폭" 이 아니라 **지금 디자인이 견디는 폭** 입니다.
+    36rem(576px)을 넘기면 목록 카드가 늘어져 보이기 시작합니다 —
+    그보다 넓히려면 화면별 배치를 다시 짜야 하므로 0번 절차입니다.
 - 터치 타겟 최소 44px → `Button` 은 `md` 이상
 - 노치 대응: 상단 `pt-safe`, 하단 고정 요소 `pb-safe`
 - 고정 하단 버튼이 있으면 본문에 그만큼 `padding-bottom` 을 줘서 안 가리게
@@ -296,11 +301,10 @@ export function Card({ className, ...rest }: CardProps) {
 | 내 티켓·예매 취소 | **실서버** (`/users/me/tickets`, 취소는 `/payments/ticket-orders/{orderId}/cancel`) |
 | 캣머니 잔액·배너 | **실서버** |
 | 취소표(NRF)·앱정보 | 목업 (`mocks/handlers/resale.ts`, `appInfo.ts`) |
-| 포카(포토카드) | **목업 — 서버 계약 기준** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`). 타입·경로·에러 코드가 서버와 같아, 서버에 포카가 발행되면 `mocks/handlers/nft.ts` 만 지운다 |
-| 포카 뽑기 | **목업** (`POST /photocards/draw`). 🔴 **어떤 카드가 나오는지는 목업(=서버 자리)이 정합니다** — 프론트에서 뽑으면 콘솔로 바꿀 수 있습니다. 카드 그림은 `public/mock/poca/` |
+| 포카(포토카드)·뽑기 | **실서버** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`, `/photocards/draw`, `/photocards/packs/claim`) |
 | 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
-⚠️ 남은 목업(취소표·포카·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
+⚠️ 남은 목업(취소표·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
 들어가면 404 가 납니다. 해당 도메인이 실서버로 바뀌면 함께 풀립니다.
 
 🔴 **예매 취소는 티켓이 아니라 주문에 걸려 있습니다.** 카드 취소·캣머니 환급·NFT 소각이 한 주문에 묶여
@@ -588,13 +592,27 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
   잠깐 켜서 확인할 때는 `.env.development.local` 을 쓰세요 (gitignore 됨).
 - 화면 코드에서 `window.clarity` 를 직접 부르지 마세요. `shared/lib/clarity.ts` 의
   `initClarity` / `setClarityUser` / `trackClarityEvent` 만 씁니다.
-- 🔴 **`index.html` 의 `data-clarity-mask="true"` 를 지우지 마세요** (0번 절차).
-  `#root` 와 `#modal-root` 두 곳에 붙어 있고, 이게 **화면 전체를 기본 차단**합니다.
-  지우면 그 순간부터 화면 내용이 그대로 업로드됩니다.
-  - React 밖(`index.html`)에 둔 이유: 새 화면을 만들 때 아무것도 안 해도 가려집니다.
-    페이지마다 붙이는 방식은 새 화면이 생길 때마다 빠뜨립니다 —
-    `sentry.ts` 의 `httpBodies: []` 와 같은 발상입니다.
-  - `#modal-root` 는 `#root` 의 자식이 **아닙니다.** 둘 다 필요합니다.
+- 🔴 **개인정보가 뜨는 화면은 `router.tsx` 의 `withMask` 로 감싸세요** (0번 절차).
+  리플레이를 읽을 수 있어야 "어디서 막히나" 를 보는데, 전부 가리면 그게 안 됩니다.
+  그래서 **기본은 열려 있고, 가릴 화면만 골라서 감쌉니다.**
+
+  ```tsx
+  { path: ROUTES.MY, element: withMask(withBoundary(<MyPage />)) },   // 가림
+  { path: ROUTES.HOME, element: withBoundary(<HomePage />) },          // 열림
+  ```
+
+  - **감싸는 기준**: 화면에 사람을 특정할 수 있는 값이 뜨면 — 이메일·전화번호·닉네임·
+    주소·티켓/주문 정보·결제 내역·문의 본문. 남의 데이터를 보는 `/admin` 전체도 포함.
+  - **일부러 여는 것**: 홈·공연 목록·상세·검색·마켓, 그리고 **구역·좌석 선택**.
+    좌석 화면이 Clarity 를 붙인 이유(선점 실패 후 연타)라 여기를 가리면 의미가 없습니다.
+  - 🔴 **예전에는 `index.html` 이 전부 가리는 기본 차단이었습니다.** 그때는 새 화면을
+    만들어도 자동으로 안전했는데, 지금은 **사람이 판단해서 붙여야 하고 빠뜨리면
+    조용히 노출됩니다.** 화면을 추가할 때 이 항목을 확인하세요.
+  - 🔴 **포탈 모달은 `withMask` 가 닿지 않습니다.** `#modal-root` 가 `#root` 의 자식이
+    아니라서, 감싼 화면에서 연 모달 내용은 리플레이에 남습니다. 민감한 값을 모달에
+    띄운다면 그 컴포넌트에 `data-clarity-mask="true"` 를 직접 붙이세요.
+  - `withMask` 는 `display: contents` 라 레이아웃 상자를 만들지 않습니다 —
+    감싸도 flex/grid 가 틀어지지 않습니다(375px 에서 확인).
 - 🔴 **라우트 단위로 끌 수 없습니다.** Clarity 공식 API 에는 `stop` 이 없습니다
   (`init`·`setTag`·`identify`·`consent`·`event`·`upgrade` 뿐). 홈에서 한 번 로드되면
   결제 화면으로 이동해도 계속 기록됩니다. **그래서 마스킹이 유일한 방어선입니다.**
@@ -712,13 +730,16 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
 - [ ] 라이브니스(위조 방지) — 이번 단계 제외, 다음 작업
 - [ ] 좌석맵 좌표 데이터 형식 (공연장별)
 - [ ] 실시간 통신 (WebSocket / SSE)
-- [ ] **포카 뽑기 서버 계약** — `POST /photocards/draw`. 지금은 목업이 도안을 뽑고
-      `{ photocardId, designName, imageUrl, group, grade }` 를 돌려줍니다.
-      **횟수 제한·캣머니 비용·확률**은 정해지지 않았습니다 (전부 서버가 판정할 값)
+- [x] **포카 뽑기 서버 계약** — **확정·연동 완료.** `GET/POST /photocards/draw`,
+      `POST /photocards/packs/claim`. 팩 지급·도안 선택·멱등·횟수 판정 전부 서버입니다.
+      뽑기 카드는 `performanceTitle`·`origin` 이 **null** 이고 발행 직후 `PENDING` →
+      약 10초 뒤 `MINTED` 라, 화면이 그동안만 다시 물어봅니다
+- [ ] **입장 확인 시 팩 지급** — 서버에 체크인 기능이 없어 다음 작업입니다.
+      지금은 이벤트 팩(계정당 1개)만 생깁니다
 - [ ] 뽑기 진입로 — 어드민에서 `linkPath: /nft/draw` 배너를 만들어야 열립니다.
       상시 메뉴로 둘지, 이벤트 기간에만 배너로 열지 정해야 합니다
-- [ ] 포카 응답의 `group`·`grade`(등급 연출·호칭)와 `averagePrice`(판매가 기준) —
-      지금은 목업만 채우는 **선택 필드**입니다. 서버가 주기 시작하면 물음표를 뗍니다
+- [x] 포카 응답의 `group`·`grade`·`averagePrice` — 서버가 줍니다. **뽑기 풀 도안에만** 붙고,
+      공연 좌석에서 나온 카드에는 없습니다(그때는 이름만·금색으로 그립니다)
 - [ ] NRF 추첨 결과 통지 방식 (메일 + 인앱?)
 - [ ] 티켓 QR 규격 (플로우차트 주석: "QR은 추후 논의")
 - [ ] 토큰 벌기 / 순발력 컨텐츠 내용 (현재 `features/token` 은 빈 계획)
@@ -726,6 +747,14 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
 ---
 
 ## [규칙 변경 이력]
+
+- 2026-09-10 **포카가 실서버로 넘어갔습니다** (5장 현황표·8장 갱신).
+  `mocks/handlers/nft.ts` 를 통째로 지웠습니다 — 마켓·상세·내 포카·판매·구매·뽑기가 전부 실서버입니다.
+  🔴 **뽑기 카드는 `performanceTitle`·`origin` 이 null 입니다**(공연·좌석에서 나온 것이 아니라서).
+  화면은 `photocardSource()` 로 "이벤트 카드팩" 이라 적고, 출처 블록은 좌석이 있을 때만 그립니다.
+  발행 직후 `PENDING` → 약 10초 뒤 `MINTED` 라, 목록·상세가 **그동안만** 3초 간격으로 다시 물어봅니다
+  (확정되면 스스로 멈춥니다). 이벤트 팩은 뽑기 화면에 들어올 때 `POST /photocards/packs/claim`
+  을 한 번 부릅니다 — `granted: false` 는 실패가 아니라 "이미 받음" 이라 조용히 지나갑니다
 
 - 2026-09-07 `/admin/stadium` 좌석 배치 편집 화면에 한해 `AdminWorkspaceLayout` 데스크톱 작업 폭 허용 (사용자 승인)
 - 2026-09-03 회원·인증·얼굴 API 실서버 연동에 맞춰 5장(목업 현황)·7장(로그인 식별자·SSAFY)·
@@ -800,3 +829,26 @@ Sentry 가 "무엇이 터졌나" 라면 이쪽은 **"어디서 막히나"** 입�
   진입로는 **홈 배너의 `linkPath`** 입니다 — 배너가 실서버로 넘어갔으므로 어드민에서
   `linkPath: /nft/draw` 인 배너를 하나 만들면 열리고, 그 배너를 내리면 닫힙니다.
   포카 응답의 `group`·`grade`·`averagePrice` 는 **선택 필드**로 목업만 채웁니다(8장)
+- 2026-09-11 **Clarity 마스킹을 전체 차단 → 선택 차단으로 전환** (1장 표, 7장 "행동 분석").
+  `index.html` 의 `#root`·`#modal-root` `data-clarity-mask` 를 걷고, `router.tsx` 에
+  `withMask` 를 만들어 **개인정보가 뜨는 라우트 22곳만** 감쌌습니다
+  (마이페이지·티켓·로그인/가입·얼굴 등록·설정·문의·예매 확인/결제/완료·`/admin` 전체).
+  이유: 전부 가리니 리플레이가 `•••` 뿐이라 **"어디서 막히나" 를 볼 수 없었습니다.**
+  히트맵·rage click 은 원래 마스킹과 무관하므로(문서: heat maps are based on element
+  attributes, not content) 잃은 것 없이 리플레이 가독성만 되찾는 거래입니다.
+  🔴 **기본 차단이라는 안전망이 없어졌습니다.** 새 화면에 개인정보가 뜨면 `withMask` 를
+     **사람이 직접** 붙여야 하고, 빠뜨리면 조용히 노출됩니다.
+  🔴 포탈 모달(`#modal-root`)은 `withMask` 가 닿지 않는 **남은 구멍**입니다.
+  🔴 대시보드 마스킹 모드도 함께 내려야 효과가 납니다 — HTML 속성이 대시보드 설정을
+     덮으므로 Strict 로 둔 채 속성만 걷으면 프로젝트 설정이 그대로 적용됩니다.
+  ⚠️ `index.html` 은 환경 구분이 없어 **이 완화가 운영에도 그대로 갑니다.**
+     운영 오픈 전에 이 결정을 다시 검토하세요 (8장 처리방침·동의와 함께). 사용자 승인
+- 2026-09-11 **앱 폭 21rem(336px) → 30rem(480px)** (4-4, `styles/index.css` 의 `--container-app`).
+  데스크톱에서 지나치게 좁아 보인다는 요청입니다. **한 기둥 규칙과 전체 디자인은 그대로**이고
+  기둥의 상한값만 올렸습니다 — 480px 이하 화면은 달라지는 것이 없습니다(상한이 걸리는
+  지점과 상한값이 둘 다 30rem 이라 그 아래는 여전히 화면을 꽉 씁니다).
+  🔴 넓은 화면이라고 2단으로 펼치지 마세요. 그건 화면별 재설계라 0번 절차입니다.
+  기준은 "폰 폭" 이 아니라 **지금 디자인이 견디는 폭** 입니다 — 36rem(576px)을 넘기면
+  목록 카드의 포스터는 그대로인 채 오른쪽이 비어 늘어져 보입니다.
+  배너(`--banner-width`)와 홈의 검정/하양 경계도 이 값을 따라 함께 넓어집니다.
+  사용자 승인 (프론트 리드와는 미상의 — 리드가 다르게 보면 이 커밋만 되돌리면 됩니다)

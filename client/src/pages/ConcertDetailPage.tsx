@@ -116,7 +116,10 @@ export function ConcertDetailPage() {
         <PosterImage src={concert.posterUrl} seed={seed} alt={`${concert.title} 포스터`} />
       </Lightbox>
 
-      <div className="space-y-6 p-4">
+      {/* 넓은 화면에서도 본문을 1024px 까지 늘리지는 않습니다 — 회차 한 줄과
+          "티켓 오픈" 한 줄이 양 끝으로 벌어져 왼쪽 글자와 오른쪽 값이 따로 놉니다.
+          읽는 폭(768px)으로 묶고 가운데에 둡니다. */}
+      <div className="space-y-6 p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
         {/* 헤드 — 제목은 포스터 위쪽에, 장소는 **포스터 아래쪽에** 맞춥니다.
             제목 바로 밑에 붙이면 한 덩어리로 뭉쳐 제목이 묻히고,
             포스터 오른쪽에 빈 공간이 남아 화면이 성의 없어 보입니다.
@@ -128,12 +131,12 @@ export function ConcertDetailPage() {
             type="button"
             onClick={() => setPosterZoomed(true)}
             aria-label="포스터 크게 보기"
-            className="w-28 shrink-0 rounded-xl transition-opacity active:opacity-80"
+            className="w-28 shrink-0 rounded-xl transition-opacity active:opacity-80 lg:w-40"
           >
             <PosterImage src={concert.posterUrl} seed={seed} alt={`${concert.title} 포스터`} />
           </button>
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
-            <h1 className="text-lg leading-tight font-extrabold">{concert.title}</h1>
+            <h1 className="text-lg leading-tight font-extrabold lg:text-2xl">{concert.title}</h1>
 
             <p className="text-muted flex items-start gap-1.5 text-[0.8125rem]">
               <MapPin size={13} className="mt-0.5 shrink-0" />

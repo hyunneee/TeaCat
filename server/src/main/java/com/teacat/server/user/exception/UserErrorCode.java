@@ -24,7 +24,12 @@ public enum UserErrorCode implements ErrorCode {
        관리자가 스스로 관리자 권한을 잃어 아무도 들어올 수 없게 되는 걸 막는 규칙들. */
 
     CANNOT_MODIFY_SELF(HttpStatus.BAD_REQUEST, "USER_011", "본인 계정은 회원 관리 화면에서 변경할 수 없습니다."),
-    LAST_ADMIN_REQUIRED(HttpStatus.BAD_REQUEST, "USER_012", "마지막 관리자 계정입니다. 다른 관리자를 먼저 지정해 주세요.");
+    LAST_ADMIN_REQUIRED(HttpStatus.BAD_REQUEST, "USER_012", "마지막 관리자 계정입니다. 다른 관리자를 먼저 지정해 주세요."),
+
+    /* 모델이 다르면 임베딩의 좌표계가 달라 두 값을 비교하는 것 자체가 무의미하다.
+       "안 닮았다" 가 아니라 "비교할 수 없다" 이므로 판정을 내리지 않고 거절한다. */
+    FACE_MODEL_MISMATCH(HttpStatus.CONFLICT, "USER_013",
+            "얼굴 인식 모델이 바뀌었습니다. 얼굴을 다시 등록해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

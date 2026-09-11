@@ -44,22 +44,35 @@ export function ConcertListPage() {
           바깥 면은 목록과 같은 바탕색이라 흰 입력창만 떠 보입니다.
           (헤더와 같은 흰색으로 두면 헤더가 그만큼 두꺼워진 것처럼 읽힙니다)
           스크롤해도 따라오게 해서 언제든 다시 찾을 수 있게 합니다. */}
-      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3">
+      {/* 넓은 화면에서는 두 줄을 **한 줄**로 폅니다. 세로로 쌓아 두면 1024px 짜리
+          검색창과 1024px 짜리 세그먼트가 위아래로 붙어 필터가 화면의 절반을 먹습니다. */}
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:flex lg:items-center lg:gap-3 lg:px-0 lg:pt-3">
         {/* 검색·포카 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고)
             서버 검색은 공연명 부분 일치입니다 (API-201). */}
-        <Input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onClear={() => setKeyword('')}
-          placeholder="공연명으로 검색"
-          leftIcon={<Search size={17} />}
-          type="search"
-          tone="contrast"
-        />
+        {/* 가로로 펼 때만 자리를 바꿉니다 — **왼쪽 토글 · 오른쪽 검색** (내 티켓과 같은 배치).
+            폰에서는 세로로 쌓이고, 그때는 검색창이 머리말 바로 아래 와야 합니다
+            (목록 화면들의 검색창이 모두 같은 높이에 있어야 눈이 헤매지 않습니다). */}
+        <div className="lg:order-2 lg:ml-auto lg:w-full lg:max-w-xs">
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onClear={() => setKeyword('')}
+            placeholder="공연명으로 검색"
+            leftIcon={<Search size={17} />}
+            type="search"
+            tone="contrast"
+          />
+        </div>
 
         {/* 내 티켓·포카와 같은 세그먼트입니다. 검색창과 한 덩어리로 붙여 두면
-            스크롤해도 "무엇을 보고 있는지" 가 함께 따라옵니다. */}
-        <Segmented options={TABS} value={tab} onChange={setTab} className="mt-2" />
+            스크롤해도 "무엇을 보고 있는지" 가 함께 따라옵니다.
+            알약 위치는 폭의 비율로 계산하므로 폭을 좁혀도 어긋나지 않습니다. */}
+        <Segmented
+          options={TABS}
+          value={tab}
+          onChange={setTab}
+          className="mt-2 lg:order-1 lg:mt-0 lg:w-72 lg:shrink-0"
+        />
       </div>
 
       {isPending ? (
@@ -83,8 +96,17 @@ export function ConcertListPage() {
           }
         />
       ) : (
-        // 카드마다 테두리가 있으므로 구분선 대신 간격으로 나눕니다.
-        <ul className="space-y-2 p-4 pt-3">
+        /* 카드마다 테두리가 있으므로 구분선 대신 간격으로 나눕니다.
+           넓은 화면에서는 두 열로 접습니다 — 한 열로 두면 카드가 가로로 늘어나
+           포스터는 그대로인 채 오른쪽이 비어 보입니다. 열이 늘어도 카드 자체는
+           폰에서와 같은 모양(포스터 왼쪽 · 정보 오른쪽)입니다. */
+        /* 🔴 `grid-cols-1` 을 빼먹으면 안 됩니다. 칸을 안 정한 그리드의 암묵 칸은
+           `auto` 라 **내용의 min-content 보다 작아지지 않습니다** — 카드가 칸을
+           비집고 나와 오른쪽이 잘립니다(폰에서 7px 넘쳤습니다).
+           `grid-cols-N` 은 `minmax(0, 1fr)` 이라 그 바닥을 풀어 주고,
+           그래야 안쪽 제목의 truncate 도 제때 걸립니다.
+           (예전 `space-y-2` 일 때는 블록이라 이 문제가 없었습니다) */
+        <ul className="grid grid-cols-1 gap-2 p-4 pt-3 lg:grid-cols-2 lg:gap-3 lg:px-0">
           {concerts.map((concert) => (
             <li key={concert.concertId}>
               <ConcertCard
