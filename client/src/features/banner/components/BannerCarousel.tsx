@@ -114,16 +114,38 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
               tabIndex={i === index ? 0 : -1}
               aria-hidden={i !== index}
               onClick={() => onSelect(banner)}
-              style={{
-                backgroundImage: banner.imageUrl
-                  ? `url(${banner.imageUrl})`
-                  : `linear-gradient(150deg,
-                      oklch(0.42 0.14 ${h}) 0%,
-                      oklch(0.3 0.11 ${(h + 40) % 360}) 60%,
-                      oklch(0.19 0.06 ${(h + 75) % 360}) 100%)`,
-              }}
-              className="relative flex aspect-[4/3] w-full shrink-0 basis-full items-end bg-cover bg-center p-5 text-left lg:aspect-[21/9] lg:p-8"
+              style={
+                banner.imageUrl
+                  ? undefined
+                  : {
+                      backgroundImage: `linear-gradient(150deg,
+                        oklch(0.42 0.14 ${h}) 0%,
+                        oklch(0.3 0.11 ${(h + 40) % 360}) 60%,
+                        oklch(0.19 0.06 ${(h + 75) % 360}) 100%)`,
+                    }
+              }
+              className="relative flex aspect-[4/3] w-full shrink-0 basis-full items-end p-5 text-left lg:aspect-[21/9] lg:p-8"
             >
+              {/* 🔴 배경(`background-image`)이 아니라 `<img>` 입니다. 이유가 둘입니다.
+                  ① 배경 이미지는 **프리로드 스캐너가 못 찾습니다.** HTML 파싱 → CSS 계산이
+                     끝나야 요청이 나가서, 홈의 LCP 가 그만큼 늦었습니다(19.4s).
+                     첫 장에 `fetchPriority="high"` 를 걸어 가장 먼저 받게 합니다.
+                  ② 예전에는 모든 슬라이드에 배경을 걸어 둬서 **안 보이는 배너까지 전부**
+                     내려왔습니다. 지금은 지금 보는 장과 바로 다음 장만 받고, 나머지는
+                     그 배너로 넘어갈 때 받습니다 (전환에서 깜빡이지 않을 만큼만 미리).
+                  alt 가 빈 문자열인 건 장식이기 때문입니다 — 제목·부제가 아래 글자로 있습니다. */}
+              {banner.imageUrl && (
+                <img
+                  src={banner.imageUrl}
+                  alt=""
+                  loading={i === 0 || i === index || i === (index + 1) % count ? 'eager' : 'lazy'}
+                  fetchPriority={i === 0 ? 'high' : 'auto'}
+                  decoding="async"
+                  draggable={false}
+                  className="absolute inset-0 size-full object-cover"
+                />
+              )}
+
               {/* 글자가 읽히도록 아래쪽을 어둡게 */}
               <span
                 aria-hidden

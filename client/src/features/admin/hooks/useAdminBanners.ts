@@ -2,12 +2,21 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { toast } from '@/shared/stores';
 import { STALE_TIME } from '@/shared/constants';
+import { downscaleImage } from '@/shared/lib';
 import { bannerKeys } from '@/features/banner';
 import { adminBannerApi, adminBannerKeys } from '../api/adminBannerApi';
 import type { AdminBannerWriteRequest } from '../model/adminBanner.types';
 
 const message = (error: unknown, fallback: string) =>
   ApiError.isApiError(error) ? error.message : fallback;
+
+/**
+ * 올릴 때 줄일 배너 긴 변(px).
+ *
+ * 배너는 폰에서 4:3, 넓은 화면에서 21:9 로 최대 1024px 폭까지 늘어납니다.
+ * 고해상도 화면을 감당할 만큼만 두고 그 위는 잘라냅니다.
+ */
+const BANNER_MAX_WIDTH = 1440;
 
 /**
  * 관리 화면 목록 — 노출을 끈 배너까지 전부 옵니다.
@@ -78,7 +87,11 @@ export function useReorderBanners() {
  */
 export function useUploadBannerImage() {
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (original: File) => {
+      /* 🔴 줄이기가 URL 발급보다 **먼저** 와야 합니다 — 발급받은 URL 은 콘텐츠 타입에
+         묶여 있어서, 나중에 WebP 로 바꿔 PUT 하면 스토리지가 거절합니다.
+         배너는 홈에서 가장 먼저·가장 크게 보이는 그림이라(LCP) 여기가 제일 중요합니다. */
+      const file = await downscaleImage(original, { maxWidth: BANNER_MAX_WIDTH });
       const issued = await adminBannerApi.issueUploadUrl(file.type);
 
       if (file.size > issued.maxFileSizeBytes) {

@@ -181,13 +181,12 @@ export function useUpdateConcert(
     mutationFn: async ({ form, original }: { form: ConcertCreateForm; original: ConcertDetail }) => {
       const body: ConcertUpdateRequest = toConcertUpdateRequest(form, original);
 
+      /* uploadImage 가 줄이기 → URL 발급 → PUT 을 한 번에 합니다 (organizerApi 주석) */
       if (form.poster) {
-        const upload = await organizerApi.issueUploadUrl('POSTER', form.poster.type);
-        body.posterImageKey = await organizerApi.uploadToStorage(upload, form.poster);
+        body.posterImageKey = await organizerApi.uploadImage('POSTER', form.poster);
       }
       if (form.detailImage) {
-        const upload = await organizerApi.issueUploadUrl('DETAIL', form.detailImage.type);
-        body.detailImageKey = await organizerApi.uploadToStorage(upload, form.detailImage);
+        body.detailImageKey = await organizerApi.uploadImage('DETAIL', form.detailImage);
       }
 
       if (Object.keys(body).length === 0) return false;

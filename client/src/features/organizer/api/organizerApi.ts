@@ -1,4 +1,5 @@
 import { http } from '@/shared/api';
+import { downscaleImage } from '@/shared/lib';
 import type { ConcertDetail, ConcertSummary, PerformanceArea } from '@/features/concert';
 import type { AreaSaveRequest, StadiumAreaListResponse } from '../model/areaPricing';
 import {
@@ -33,8 +34,11 @@ export const organizerApi = {
    * FormData 를 받으면 **JSON 으로 바꿔 보냅니다**(파일이 날아가고 서버는 415). 그래서
    * multipart 를 명시합니다 — boundary 는 브라우저가 붙입니다.
    */
-  createConcert: (form: ConcertCreateForm) =>
-    http.post<ConcertCreateResponse>('/admin/concerts', toConcertCreateFormData(form), {
+  createConcert: async (form: ConcertCreateForm) =>
+    /* 등록은 파일을 multipart 로 서버에 보내고(수정은 스토리지로 직접 PUT 합니다),
+       서버는 크기만 검사하고 변환하지 않습니다. 그래서 여기서도 줄여 보냅니다 —
+       한쪽만 줄이면 "등록한 공연은 가볍고 수정한 공연은 무거운" 상태가 됩니다. */
+    http.post<ConcertCreateResponse>('/admin/concerts', toConcertCreateFormData(await shrink(form)), {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
@@ -142,7 +146,46 @@ export const organizerApi = {
     if (!res.ok) throw new Error('이미지를 올리지 못했어요. 잠시 후 다시 시도해 주세요.');
     return upload.key;
   },
+
+  /**
+   * 줄여서 올리고 저장 키를 돌려줍니다. **이미지 업로드는 이걸 쓰세요.**
+   *
+   * 🔴 순서가 중요합니다 — 발급받은 URL 은 **콘텐츠 타입에 묶여** 있어서, 먼저 줄여
+   *    WebP 로 바꾼 뒤에 URL 을 받아야 합니다. 반대로 하면 스토리지가 PUT 을 거절합니다.
+   *
+   * 원본을 그대로 올리면 그대로 서빙됩니다 — 서버는 크기만 검사하고 변환하지 않고,
+   * 업로드도 서버를 거치지 않습니다. 줄일 수 있는 지점이 여기뿐입니다.
+   */
+  uploadImage: async (imageType: ImageType, file: File): Promise<string> => {
+    const shrunk = await downscaleImage(file, { maxWidth: MAX_IMAGE_WIDTH[imageType] });
+    const upload = await organizerApi.issueUploadUrl(imageType, shrunk.type);
+    return organizerApi.uploadToStorage(upload, shrunk);
+  },
 };
+
+/**
+ * 올릴 때 줄일 긴 변의 한도(px).
+ *
+ * 화면에서 실제로 쓰이는 크기 + 고해상도 화면(3배)을 감당할 만큼만 둡니다.
+ * 포스터는 가장 크게 보이는 곳이 라이트박스(폭 768px)이고, 상세 이미지는 본문 폭
+ * 768px 에 세로로 긴 한 장입니다.
+ */
+const MAX_IMAGE_WIDTH: Record<ImageType, number> = {
+  POSTER: 1000,
+  DETAIL: 1440,
+};
+
+/** 등록 폼에 담긴 포스터·상세 이미지를 줄인 사본으로 바꿔 돌려줍니다 */
+async function shrink(form: ConcertCreateForm): Promise<ConcertCreateForm> {
+  const [poster, detailImage] = await Promise.all([
+    form.poster ? downscaleImage(form.poster, { maxWidth: MAX_IMAGE_WIDTH.POSTER }) : form.poster,
+    form.detailImage
+      ? downscaleImage(form.detailImage, { maxWidth: MAX_IMAGE_WIDTH.DETAIL })
+      : form.detailImage,
+  ]);
+
+  return { ...form, poster, detailImage };
+}
 
 export const organizerKeys = {
   all: ['organizer'] as const,
