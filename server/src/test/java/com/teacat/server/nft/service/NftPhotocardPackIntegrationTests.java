@@ -237,6 +237,52 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 시작일이_비어_있는_이벤트는_만든_시각을_시작으로_본다() {
+        // 이틀 전에 시작한 이벤트가 켜져 있는 상태에서, 상시 이벤트(시작일 없음)를 새로 연다.
+        // 시작일이 비어 있다고 뒤로 밀면 방금 연 쪽이 아니라 예전 것이 지급된다
+        insertEvent("OLD", "예전", "now() - interval '2 day'", "NULL", true);
+        insertEvent("ALWAYS", "상시", "NULL", "NULL", true);
+
+        assertThat(eventRepository.findOngoing()).get()
+                .extracting(NftPhotocardPackEvent::getCode).isEqualTo("ALWAYS");
+    }
+
+    @Test
+    void 종료가_시작보다_앞서면_등록을_거절한다() throws Exception {
+        mockMvc.perform(post("/admin/photocard-pack-events")
+                        .header("Authorization", adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"BACKWARD","name":"뒤집힘",
+                                 "startsAt":"2026-10-01T00:00:00","endsAt":"2026-09-01T00:00:00"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocard_pack_events WHERE code = 'BACKWARD'",
+                Long.class)).isZero();
+    }
+
+    @Test
+    void 한쪽만_비어_있는_기간은_정상이다() throws Exception {
+        mockMvc.perform(post("/admin/photocard-pack-events")
+                        .header("Authorization", adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"OPEN_ENDED","name":"무기한","startsAt":"2026-10-01T00:00:00"}
+                                """))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void 잠긴_팩만_있을_때의_거절_문구는_카드팩이_없다고_말하지_않는다() {
+        // NFT_040 은 "팩이 아예 없을 때" 와 "있지만 아직 안 열렸을 때" 를 같이 쓴다.
+        // 문구가 두 경우 모두에서 참이어야 한다
+        assertThat(NftErrorCode.PACK_NOT_AVAILABLE.getMessage())
+                .isEqualTo("지금 열 수 있는 카드팩이 없어요.");
+    }
+
+    @Test
     void 어드민이_이벤트를_등록하고_목록에서_지급_수를_본다() throws Exception {
         String token = adminToken();
         Long userId = insertUser("claimer@test.com", "받는사람");

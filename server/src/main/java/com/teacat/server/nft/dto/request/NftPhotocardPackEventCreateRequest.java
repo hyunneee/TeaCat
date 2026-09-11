@@ -1,6 +1,7 @@
 package com.teacat.server.nft.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -28,4 +29,19 @@ public record NftPhotocardPackEventCreateRequest(
         @Schema(description = "종료 시각. 비우면 무기한")
         LocalDateTime endsAt
 ) {
+
+    /**
+     * 기간이 뒤집히지 않았는가.
+     *
+     * <p>뒤집어 넣으면 진행 중 판정({@code starts_at <= now() AND ends_at > now()})이 영원히
+     * 거짓이라 <b>아무 소리 없이 지급되지 않는 이벤트</b>가 만들어진다. code 는 나중에 고칠 수
+     * 없으므로 새로 등록해야 한다 — 들어오기 전에 막는다.
+     *
+     * <p>한쪽만 비어 있는 것은 정상이다(즉시 시작 · 무기한).
+     */
+    @AssertTrue(message = "종료 시각은 시작 시각보다 뒤여야 합니다.")
+    @Schema(hidden = true)
+    public boolean isPeriodValid() {
+        return startsAt == null || endsAt == null || endsAt.isAfter(startsAt);
+    }
 }

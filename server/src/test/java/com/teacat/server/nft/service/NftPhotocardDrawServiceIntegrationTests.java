@@ -390,7 +390,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
                         .header("Idempotency-Key", UUID.randomUUID().toString()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NFT_040"))
-                .andExpect(jsonPath("$.message").value("가진 카드팩이 없어요."));
+                .andExpect(jsonPath("$.message").value("지금 열 수 있는 카드팩이 없어요."));
 
         // 키 없이 오면 400
         mockMvc.perform(post("/photocards/draw").header("Authorization", bearer))
