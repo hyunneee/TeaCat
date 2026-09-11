@@ -121,8 +121,10 @@ export function HomePage() {
         }}
       />
 
-      {/* ── 최상단 줄 (검정 위) ── */}
-      <header className="relative pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      {/* ── 최상단 줄 (검정 위) ──
+          데스크톱에서는 감춥니다 — 상단 내비(TopNav)에 로고와 검색이 이미 있어서
+          그대로 두면 로고가 한 화면에 두 번 나옵니다. */}
+      <header className="relative pt-[calc(env(safe-area-inset-top)+0.75rem)] lg:hidden">
         <div className="flex h-(--spacing-header) items-center justify-between px-4">
           {/* 마스코트만 크게 — 글자는 26 기준(18px)이라 헤더 높이를 넘지 않습니다 */}
           <span className="text-white">

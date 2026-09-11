@@ -44,12 +44,23 @@ export function Header({
 }: HeaderProps) {
   const navigate = useNavigate();
 
+  /**
+   * 제목만 있는 머리말인가 (뒤로가기·닫기·좌우 요소가 하나도 없음).
+   *
+   * 이런 머리말은 **데스크톱에서 감춥니다.** 상단 내비(TopNav)의 탭이 이미 "지금 어디"
+   * 를 말하고 있어서, 그 바로 아래 같은 말을 가운데 정렬로 한 번 더 쓰면 머리말이
+   * 두 겹으로 보입니다. 뒤로가기가 있는 하위 화면은 그대로 둡니다 — 거기서는 머리말이
+   * 제목이 아니라 **돌아갈 길**이라 데스크톱에도 있어야 합니다.
+   */
+  const titleOnly = !showBack && !onClose && !left && !right;
+
   return (
     <header
       className={cn(
         'pt-safe z-30',
         sticky && 'sticky top-0',
         transparent ? 'bg-transparent' : 'surface',
+        titleOnly && 'lg:hidden',
         className,
       )}
     >

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, SectionTitle } from '@/shared/components/ui';
@@ -26,7 +26,9 @@ const LIMIT = 6;
  */
 export function SearchPage() {
   const navigate = useNavigate();
-  const [keyword, setKeyword] = useState('');
+  /* 데스크톱 상단 검색창이 `?q=` 로 넘겨줍니다. 그 글자로 시작해야 두 번 치지 않습니다 */
+  const [searchParams] = useSearchParams();
+  const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
   const query = useDebouncedValue(keyword.trim());
   const enabled = query.length > 0;
 

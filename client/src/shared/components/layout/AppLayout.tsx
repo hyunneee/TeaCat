@@ -1,13 +1,13 @@
 import { PageTransition } from '@/shared/components/common';
 import { BottomNav } from './BottomNav';
-import { SideNav } from './SideNav';
+import { TopNav } from './TopNav';
 
 /**
  * 주요 화면의 껍데기.
  *
  * ── 폭에 따라 껍데기가 바뀝니다 ─────────────────────────────
  *   ~64rem(1024px)  지금까지와 같습니다 — 한 기둥 + 하단 탭
- *   64rem~          좌측 사이드 내비 + 넓은 본문
+ *   64rem~          상단 내비(로고·검색·탭) + 넓은 본문
  *
  * 내비는 `navTabs` 하나를 보므로 탭 목록이 갈라지지 않습니다.
  * 둘 중 하나만 보이도록 CSS 로 숨기는 것이지, 화면을 두 벌 만드는 것이 아닙니다.
@@ -18,13 +18,13 @@ import { SideNav } from './SideNav';
  */
 export function AppLayout() {
   return (
-    <div className="app-frame app-shell mx-auto flex min-h-dvh w-full flex-col lg:flex-row">
-      <SideNav />
+    <div className="app-frame app-shell mx-auto flex min-h-dvh w-full flex-col">
+      <TopNav />
 
-      <main className="pb-nav flex-1 lg:pb-0">
+      <main className="pb-nav flex-1 lg:pb-10">
         {/* 데스크톱에서도 본문을 화면 끝까지 늘리지는 않습니다 — 글줄이 너무 길어집니다.
-            사이드 내비를 뺀 나머지 안에서 가운데로 모읍니다. */}
-        <div className="mx-auto w-full lg:max-w-4xl">
+            상단 내비(TopNav 의 ROW)와 **같은 폭**이라 로고와 본문 왼쪽 끝이 한 줄로 섭니다. */}
+        <div className="mx-auto w-full lg:max-w-5xl lg:px-6 lg:pt-2">
           <PageTransition />
         </div>
       </main>
