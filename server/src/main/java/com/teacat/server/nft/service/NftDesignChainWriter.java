@@ -5,8 +5,10 @@ import com.teacat.server.nft.client.ChainTxReport;
 import com.teacat.server.nft.client.PhotocardDesignRegisterResult;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardGrade;
+import com.teacat.server.nft.entity.NftPhotocardTemplate;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
+import com.teacat.server.nft.repository.NftPhotocardTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -30,6 +32,7 @@ import java.time.LocalDateTime;
 public class NftDesignChainWriter {
 
     private final NftPhotocardDesignRepository designRepository;
+    private final NftPhotocardTemplateRepository templateRepository;
 
     /** 등록 요청에 실어 보낼 값. 이걸 꺼낸 뒤에는 트랜잭션 없이 체인을 부른다 */
     public record RegistrationTarget(Long designId, int maxSupply, String metadataCid) {
@@ -48,6 +51,19 @@ public class NftDesignChainWriter {
                                              String group, NftPhotocardGrade grade) {
         return designRepository.save(NftPhotocardDesign.createDrawPool(
                 name, imageUrl, totalSupply, imageCid, metadataCid, group, grade));
+    }
+
+    /**
+     * 템플릿으로 도안을 저장한다. 템플릿을 다시 읽는다 — 부르는 쪽이 들고 온 엔티티는 이
+     * 트랜잭션에 속하지 않는다.
+     */
+    @Transactional
+    public NftPhotocardDesign createFromTemplate(Long templateId, Long performanceId, String name,
+                                                 int totalSupply, String metadataCid) {
+        NftPhotocardTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.TEMPLATE_NOT_FOUND));
+        return designRepository.save(NftPhotocardDesign.fromTemplate(
+                template, performanceId, name, totalSupply, metadataCid));
     }
 
     /**

@@ -276,7 +276,9 @@ public class NftService {
         if (!queryRepository.lockPerformance(performanceId)) {
             throw new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND);
         }
-        if (photocardRepository.existsByDesignPerformanceId(performanceId)) {
+        // 🔴 C4: existsByDesignPerformanceId(전체) 는 뽑힌 카드(티켓 NULL)도 세어, 그 공연 팩을 한
+        // 번만 열어도 수동 발급이 영구히 막힌다. 티켓이 있는 카드로 좁힌다
+        if (photocardRepository.existsByDesignPerformanceIdAndTicketIdIsNotNull(performanceId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARDS_ALREADY_ISSUED);
         }
 
@@ -292,6 +294,12 @@ public class NftService {
         }
         Map<Long, NftPhotocardDesign> designById = new LinkedHashMap<>();
         for (NftPhotocardDesign design : designs) {
+            // 🔴 B1: isDrawPool() 을 performanceId 비교보다 먼저 본다. 이벤트 풀 도안(공연 NULL)이
+            // 섞이면 아래 equals 에서 NPE(500)가 나고, 뽑기 풀 도안(공연이 있어도)을 그대로 배정하면
+            // 티켓 보유자에게 직접 민팅돼 회수 불가 + 그 공연 팩이 뽑을 카드가 사라진다
+            if (design.isDrawPool()) {
+                throw new BusinessException(NftErrorCode.DESIGN_POOL_CONFLICT);
+            }
             if (!design.getPerformanceId().equals(performanceId)) {
                 throw new BusinessException(NftErrorCode.DESIGN_PERFORMANCE_MISMATCH);
             }
@@ -360,7 +368,10 @@ public class NftService {
         Long performanceId = queryRepository.findPerformanceIdBySchedule(scheduleId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PERFORMANCE_NOT_FOUND));
 
-        List<NftPhotocardDesign> allDesigns = designRepository.findAllByPerformanceIdOrderByIdAsc(performanceId);
+        // 🔴 draw_pool 도안은 배정 대상이 아니다 — 그건 그 공연 카드팩이 뽑을 재고다.
+        // 여기서 잡으면 티켓 보유자에게 직접 발급되어 팩에서 뽑을 카드가 사라진다
+        List<NftPhotocardDesign> allDesigns =
+                designRepository.findAllByPerformanceIdAndDrawPoolFalseOrderByIdAsc(performanceId);
         if (allDesigns.isEmpty()) {
             log.info("회차 자동 발급 건너뜀 — 공연에 도안이 없습니다 scheduleId={} performanceId={}",
                     scheduleId, performanceId);

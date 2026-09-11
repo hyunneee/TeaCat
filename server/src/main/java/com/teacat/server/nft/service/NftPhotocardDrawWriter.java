@@ -84,7 +84,11 @@ public class NftPhotocardDrawWriter {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(NftErrorCode.RECIPIENT_WALLET_NOT_FOUND));
 
-        NftPhotocardDesign design = designRepository.lockRandomDrawCandidate()
+        // 팩이 회차를 들고 있으면 그 공연의 도안에서, 이벤트 팩(회차 없음)이면 이벤트 풀에서 고른다.
+        // 공연에 카드를 안 넣었으면 이벤트 풀로 떨어지지 않고 실패한다 — 그건 이벤트 팩의 재고다
+        NftPhotocardDesign design = (pack.getPerformanceDetailId() == null
+                ? designRepository.lockRandomDrawCandidate()
+                : designRepository.lockRandomDrawCandidateForSchedule(pack.getPerformanceDetailId()))
                 .orElseThrow(() -> new BusinessException(NftErrorCode.DRAW_POOL_EMPTY));
         User owner = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_OWNER_NOT_FOUND));

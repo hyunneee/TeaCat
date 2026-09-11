@@ -66,6 +66,10 @@ public class NftPhotocardDesign {
     @Column(name = "grade", columnDefinition = "nft_photocard_grade")
     private NftPhotocardGrade grade;
 
+    /** 어느 템플릿에서 만들어졌나. 템플릿 없이 직접 등록된 기존 도안은 null */
+    @Column(name = "template_id", updatable = false)
+    private Long templateId;
+
     /** 그림 파일의 CID. 메타데이터 JSON 의 {@code image} 가 이 값을 가리킨다 */
     @Column(name = "image_cid", length = 80)
     private String imageCid;
@@ -147,11 +151,64 @@ public class NftPhotocardDesign {
         return new NftPhotocardDesign(performanceId, name, imageUrl, totalSupply, imageCid, metadataCid);
     }
 
+    /**
+     * 템플릿으로 도안을 만든다 — 이것이 <b>발행 단위</b>다.
+     *
+     * <p><b>그림은 다시 올리지 않는다.</b> CID 는 내용 주소라 같은 그림이면 같은 값이고,
+     * 재업로드는 변조 방지에 아무것도 더하지 않는다. 템플릿의 {@code imageCid} 를 그대로 가리킨다.
+     *
+     * <p>반대로 <b>메타데이터는 새로 핀한 것을 받는다.</b> 이름에 공연이 들어가고 {@code 공연}
+     * attribute 가 붙어 JSON 이 달라지기 때문이다. 그래서 같은 템플릿으로 만든 공연 A의 도안과
+     * 공연 B의 도안은 <b>다른 온체인 tokenId</b> 이고 마켓에서 따로 거래된다 — 그게 "공연마다 한정"
+     * 의 실체다.
+     *
+     * <p>🔴 {@code totalSupply} 는 온체인 {@code maxSupply} 로 박히고 <b>첫 장이 나가면 동결</b>된다
+     * (컨트랙트가 {@code DesignFrozen} 으로 거절한다). 한 장도 안 나갔으면 재등록으로 고칠 수 있다.
+     *
+     * @param performanceId null 이면 이벤트 팩이 뽑는 풀
+     * @param name          {@code "{템플릿 이름} · {공연 제목}"}. 규칙을 바꾸면 이미 핀된 도안과 어긋난다
+     * @param metadataCid   attribute 까지 넣어 새로 핀한 메타데이터 JSON 의 CID
+     */
+    public static NftPhotocardDesign fromTemplate(NftPhotocardTemplate template, Long performanceId,
+                                                  String name, int totalSupply, String metadataCid) {
+        NftPhotocardDesign design = new NftPhotocardDesign(
+                performanceId, name, template.getImageUrl(), totalSupply,
+                template.getImageCid(), metadataCid);
+        design.drawPool = true;
+        design.groupName = template.getGroupName();
+        design.grade = template.getGrade();
+        design.templateId = template.getId();
+        return design;
+    }
+
+    /** 이벤트 팩이 뽑는 풀인가 (공연에 묶이지 않은 뽑기 풀 도안) */
+    public boolean isEventPool() {
+        return drawPool && performanceId == null;
+    }
+
+    /** 남은 수량 */
+    public int remaining() {
+        return totalSupply - issuedSupply;
+    }
+
     public void reserve(int quantity) {
         if (quantity <= 0 || issuedSupply + quantity > totalSupply) {
             throw new BusinessException(NftErrorCode.DESIGN_QUANTITY_EXCEEDED);
         }
         issuedSupply += quantity;
+    }
+
+    /**
+     * 뽑기 후보에 넣거나 뺀다. 온체인 등록·발행된 카드는 건드리지 않는다.
+     *
+     * <p>수량이 남았는데 더 안 나가게 하려면 이걸 쓴다. 온체인 {@code maxSupply} 는 줄일 수 없지만
+     * (컨트랙트가 거절) 실제 발행은 여기서 멈춘다.
+     *
+     * <p>🔴 공연이 없는 도안(이벤트 풀)을 false 로 내리면
+     * {@code chk_nft_photocard_designs_pool} 에 걸린다. 부르는 쪽이 먼저 막는다.
+     */
+    public void changeDrawPool(boolean drawPool) {
+        this.drawPool = drawPool;
     }
 
     /** 등록 트랜잭션을 보냈다. txHash 를 <b>여기서</b> 채운다 — 확정 때 채우면 훑기가 대상을 못 찾는다 */
