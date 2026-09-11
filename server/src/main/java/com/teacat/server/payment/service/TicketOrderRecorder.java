@@ -4,8 +4,14 @@ import com.teacat.server.booking.entity.PerformanceSeat;
 import com.teacat.server.booking.entity.PerformanceSeatId;
 import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
+/* 2026-09-11: 카드팩 개봉 시각을 더 이상 여기서 계산하지 않는다(회차에서 매번 계산하도록
+   NftPhotocardPackRepository 로 옮겼다). 이 클래스에서는 더 안 쓴다.
+import com.teacat.server.common.config.BookingPolicyProperties;
+*/
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.exception.ErrorCode;
+import com.teacat.server.nft.entity.NftPhotocardPack;
+import com.teacat.server.nft.repository.NftPhotocardPackRepository;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.dto.response.TicketOrderResponse;
 import com.teacat.server.payment.entity.Payment;
@@ -52,6 +58,11 @@ public class TicketOrderRecorder {
     private final CatTransactionRepository catTransactionRepository;
     private final NftTicketRepository nftTicketRepository;
     private final CatMoneyHoldService catMoneyHoldService;
+    private final NftPhotocardPackRepository photocardPackRepository;
+    /* 2026-09-11: 카드팩 개봉 시각을 더 이상 여기서 계산하지 않는다(회차에서 매번 계산하도록
+       NftPhotocardPackRepository 로 옮겼다). 이 클래스에서는 더 안 쓴다.
+    private final BookingPolicyProperties bookingPolicy;
+    */
 
     /**
      * 승인 요청 직전 선점.
@@ -149,6 +160,12 @@ public class TicketOrderRecorder {
         Ticket ticket = ticketRepository.save(Ticket.issue(
                 user, order.getPerformanceDetail(), order.getArea(), order.getSeat(), user.getFace()));
         order.markPaid(ticket);
+
+        // 카드팩 1개. 티켓 발권과 같은 트랜잭션이라 "결제는 됐는데 팩이 없다" 가 불가능하다.
+        // 개봉 시각은 저장하지 않는다 — 그 회차의 공연 일시에서 매번 계산하므로
+        // 공연을 연기해도 예매 취소 마감과 어긋나지 않는다.
+        photocardPackRepository.save(NftPhotocardPack.grantForTicket(
+                user.getId(), ticket.getId(), order.getPerformanceDetail().getId()));
 
         // 묶어둔 캣머니를 확정한다. 실제 소각은 트랜잭션 밖에서 뒤따라간다
         if (order.usesToken()) {

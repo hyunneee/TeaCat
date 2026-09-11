@@ -60,14 +60,43 @@ public class NftPhotocardPack {
     @Column(name = "idempotency_key")
     private UUID idempotencyKey;
 
-    private NftPhotocardPack(Long userId, NftPhotocardPackSource source, String sourceRef) {
+    /**
+     * 이 팩이 어느 회차의 것인가. 이벤트 팩은 null 이고 즉시 열 수 있다.
+     *
+     * <p><b>개봉 시각을 저장하지 않는 이유가 여기 있다.</b> 값을 얼려 두면 공연을 연기했을 때
+     * 개봉 시각만 옛 자리에 남아, 예매 취소 마감(회차에서 매번 계산된다)과 어긋난 그 차이만큼
+     * "카드를 뽑고 예매를 취소해 전액 환불받는" 창이 열린다. 회차만 들고 있으면 두 값이
+     * 같은 행·같은 식에서 나와 어긋날 수가 없다.
+     */
+    @Column(name = "performance_detail_id", updatable = false)
+    private Long performanceDetailId;
+
+    private NftPhotocardPack(Long userId, NftPhotocardPackSource source, String sourceRef,
+                             Long performanceDetailId) {
         this.userId = userId;
         this.source = source;
         this.sourceRef = sourceRef;
+        this.performanceDetailId = performanceDetailId;
     }
 
+    /* 2026-09-11: grantEvent / grantForTicket 으로 나눴다. 인자를 한 팩토리로 받으면
+       이벤트 쪽 호출부에 null 이 붙는다.
     public static NftPhotocardPack grant(Long userId, NftPhotocardPackSource source, String sourceRef) {
         return new NftPhotocardPack(userId, source, sourceRef);
+    }
+    */
+
+    /** 이벤트 팩. 회차에 매이지 않고 바로 열 수 있다 */
+    public static NftPhotocardPack grantEvent(Long userId, String eventCode) {
+        return new NftPhotocardPack(userId, NftPhotocardPackSource.EVENT, eventCode, null);
+    }
+
+    /**
+     * 티켓 구매 팩. 개봉 시각은 저장하지 않는다 — 그 회차의 공연 일시에서 매번 계산한다.
+     */
+    public static NftPhotocardPack grantForTicket(Long userId, Long ticketId, Long performanceDetailId) {
+        return new NftPhotocardPack(userId, NftPhotocardPackSource.TICKET_PURCHASE,
+                ticketId.toString(), performanceDetailId);
     }
 
     public void consume(Long photocardId, UUID idempotencyKey, LocalDateTime now) {

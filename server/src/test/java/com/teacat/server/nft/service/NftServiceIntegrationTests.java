@@ -68,6 +68,8 @@ class NftServiceIntegrationTests {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // 운영에서는 꺼져 있다(티켓 1장 = 카드 1장). 이 클래스는 스케줄러 자체를 검증하므로 켠다
+        registry.add("nft.photocard.issue.scheduler-enabled", () -> "true");
     }
 
     @Autowired

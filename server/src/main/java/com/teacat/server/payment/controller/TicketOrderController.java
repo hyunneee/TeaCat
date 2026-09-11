@@ -215,8 +215,8 @@ public class TicketOrderController {
             description = """
                     예매를 취소하고 환불을 시작합니다.
 
-                    - **공연 시작 시각까지만 취소할 수 있습니다** (예매 정책). 지난 뒤에는
-                      `PAYMENT_014`로 거절됩니다.
+                    - **취소 마감(공연 시작 전 일정 시간)이 지나면 취소할 수 없습니다** (예매 정책).
+                      지난 뒤에는 `PAYMENT_014`로 거절됩니다.
                     - 응답이 돌아온 시점에 **예매는 이미 무효화됐고 좌석도 풀렸습니다.**
                       환불(카드 취소 · 캣머니 환급 · NFT 소각)은 뒤이어 비동기로 진행됩니다.
                     - **환불이 아직 안 끝났어도 취소는 성공입니다.** 서버가 끝까지 재시도하므로
@@ -240,8 +240,9 @@ public class TicketOrderController {
                     responseCode = "409",
                     description = """
                             - `PAYMENT_006` : 결제가 끝나지 않은 주문
-                            - `PAYMENT_014` : 공연이 시작되어 취소 불가
+                            - `PAYMENT_014` : 취소 마감(공연 시작 전 일정 시간)이 지나 취소 불가
                             - `PAYMENT_015` : 이미 취소된 예매
+                            - `PAYMENT_017` : 카드팩을 이미 열어 카드가 발행된 예매라 취소 불가
                             """,
                     content = @Content(
                             schema = @Schema(implementation = BaseResponse.class),
@@ -251,7 +252,7 @@ public class TicketOrderController {
                                             {
                                               "success": false,
                                               "code": "PAYMENT_014",
-                                              "message": "공연이 시작되어 취소할 수 없습니다."
+                                              "message": "공연 시작이 임박하여 취소할 수 없습니다."
                                             }
                                             """
                             )

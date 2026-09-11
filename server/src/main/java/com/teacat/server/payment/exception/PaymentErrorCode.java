@@ -55,9 +55,9 @@ public enum PaymentErrorCode implements ErrorCode {
      */
     PAYMENT_CANCEL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "PAYMENT_013",
             "결제 취소에 실패했습니다. 잠시 후 다시 시도해 주세요."),
-    /** 공연이 시작된 뒤에는 취소할 수 없다 (예매 정책) */
+    /** 취소 마감(공연 시작 − {@code booking.policy.cancel-deadline-lead})이 지나면 취소할 수 없다 (예매 정책) */
     CANCEL_DEADLINE_PASSED(HttpStatus.CONFLICT, "PAYMENT_014",
-            "공연이 시작되어 취소할 수 없습니다."),
+            "공연 시작이 임박하여 취소할 수 없습니다."),
     /** 이미 취소된 예매 */
     ALREADY_CANCELED(HttpStatus.CONFLICT, "PAYMENT_015",
             "이미 취소된 예매입니다."),
@@ -69,7 +69,15 @@ public enum PaymentErrorCode implements ErrorCode {
      * 동시에 들어와 한쪽이 밀린 경우이고, 다시 부르면 앞선 주문을 받는다.
      */
     TICKET_ORDER_IN_PROGRESS(HttpStatus.CONFLICT, "PAYMENT_016",
-            "이미 진행 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요.");
+            "이미 진행 중인 결제가 있습니다. 잠시 후 다시 시도해 주세요."),
+
+    /**
+     * 카드팩을 이미 열어 카드가 발행된 예매. 컨트랙트에 소각 함수가 없어 카드를 회수할 수 없으므로
+     * 환불만 돌려주면 공짜로 카드를 얻는 길이 된다. 정상 흐름에서는 개봉 시점에 이미 취소가
+     * 막혀 있어 이 상태가 생기지 않지만, 회차를 연기하면 취소 마감이 되돌아가 가능해진다.
+     */
+    PACK_ALREADY_OPENED(HttpStatus.CONFLICT, "PAYMENT_017",
+            "카드팩을 이미 열어 예매를 취소할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
