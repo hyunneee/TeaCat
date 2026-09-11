@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import {
   ChevronRight,
   Hourglass,
-  Coins,
+  MessageSquare,
   Images,
   ScanFace,
   Search,
@@ -45,7 +45,9 @@ import {
 const SHORTCUTS = [
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
   { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
-  { to: ROUTES.TOKEN, label: '캣머니', icon: Coins },
+  /* 캣머니 자리였습니다. 잔액은 MY 상단에 이미 큰 숫자로 있어서 같은 목적지가 두 번
+     나오는 셈이었고, 대신 막혔을 때 말할 곳이 홈에 없었습니다 */
+  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
   { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
 ] as const;
