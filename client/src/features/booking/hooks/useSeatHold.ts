@@ -50,6 +50,10 @@ const BOOKING_ERROR = {
   ALREADY_HOLDING: 'ERR_BOOKING_006',
   /** 본인이 이미 선점한 좌석 — 연장 불가 */
   SAME_SEAT: 'ERR_BOOKING_010',
+  /** 판매 가능한 스탠딩 구역이 아님 */
+  STANDING_AREA_NOT_AVAILABLE: 'ERR_BOOKING_012',
+  /** 스탠딩 구역 재고 없음 */
+  STANDING_SOLD_OUT: 'ERR_BOOKING_013',
 } as const;
 
 export function useSeatHold(scheduleId: string) {
@@ -206,6 +210,50 @@ export function useSeatHold(scheduleId: string) {
     },
   });
 
+  const standingHoldMutation = useMutation({
+    mutationFn: async (areaId: string) => {
+      gaveUpPrevious.current = false;
+
+      try {
+        return await bookingApi.holdStanding(scheduleId, areaId);
+      } catch (error) {
+        // 다른 구역/좌석에 남은 활성 선점이 있으면 기존 좌석 변경 흐름처럼 해제 후 한 번만 재시도한다.
+        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING) throw error;
+
+        const released = await releaseServerHolds();
+        if (!released) throw error;
+
+        setHold(null);
+        gaveUpPrevious.current = true;
+        return await bookingApi.holdStanding(scheduleId, areaId);
+      }
+    },
+    onSuccess: (result) => {
+      setHold(result);
+      clearSelection();
+      void invalidateSeats();
+      void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+      navigate(ROUTES.BOOKING_REVIEW(scheduleId));
+    },
+    onError: (error) => {
+      const lostPrevious = gaveUpPrevious.current ? ' 이전에 잡아둔 자리는 풀렸어요.' : '';
+
+      if (!ApiError.isApiError(error)) {
+        toast.error(`스탠딩 입장권 선점에 실패했어요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.STANDING_SOLD_OUT) {
+        toast.error(`방금 스탠딩 입장권이 매진되었어요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.STANDING_AREA_NOT_AVAILABLE) {
+        toast.error(`현재 판매 중인 스탠딩 구역이 아니에요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.NOT_OPEN) {
+        toast.error('아직 예매 가능한 시간이 아니에요.');
+      } else {
+        toast.error(`${error.message}${lostPrevious}`);
+      }
+
+      void invalidateSeats();
+    },
+  });
+
   const releaseMutation = useMutation({
     mutationFn: (seatId: string) => bookingApi.releaseHold(scheduleId, seatId),
     /* 실패해도 스토어를 비웁니다(onSettled). 해제가 실패하는 경우는 대개
@@ -235,7 +283,11 @@ export function useSeatHold(scheduleId: string) {
       if (!seatId) return;
       holdMutation.mutate(seatId);
     },
-    isHolding: holdMutation.isPending,
+    /** 스탠딩처럼 화면에서 좌석을 직접 고르지 않는 흐름이 특정 재고를 바로 선점할 때 사용합니다. */
+    holdSeat: (seatId: string) => holdMutation.mutate(seatId),
+    /** 스탠딩 구역의 가상 좌석 선택은 서버에 맡기고, 성공하면 확인 단계로 이동합니다. */
+    holdStanding: (areaId: string) => standingHoldMutation.mutate(areaId),
+    isHolding: holdMutation.isPending || standingHoldMutation.isPending,
     releaseHold: () => {
       if (hold) releaseMutation.mutate(hold.seatId);
     },

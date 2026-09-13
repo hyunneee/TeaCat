@@ -249,6 +249,113 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              @Param("heldUntil") LocalDateTime heldUntil);
 
     /**
+     * 회차에 설정된 판매 구역이 실제 스탠딩 구역인지 확인한다.
+     *
+     * <p>단순히 {@code seats.area_id} 만 확인하면 좌석 구역의 좌석도 자동 배정할 수 있으므로,
+     * 공연별 판매 설정인 {@code performance_areas.sale_type} 까지 함께 검증한다.
+     */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1
+                  FROM performance_details pd
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                 WHERE pd.id = :performanceDetailId
+                   AND pa.area_id = :areaId
+                   AND pa.sale_type = 'STANDING'::area_type
+                   AND pa.price IS NOT NULL
+            )
+            """, nativeQuery = true)
+    boolean existsSellableStandingArea(@Param("performanceDetailId") Long performanceDetailId,
+                                       @Param("areaId") Long areaId);
+
+    /**
+     * 스탠딩 가상 좌석 하나를 서버가 골라 원자적으로 선점한다.
+     *
+     * <p>{@code locked_user} 로 같은 사용자의 중복 요청을 직렬화한다. 첫 요청이 끝난 뒤 두 번째 요청은
+     * {@code existing} 에서 이미 잡은 좌석을 반환하므로, 더블 클릭이나 네트워크 재시도로 홀드가
+     * 두 개 생기지 않고 만료 시각도 연장되지 않는다.
+     *
+     * <p>서로 다른 사용자는 {@code FOR UPDATE SKIP LOCKED} 로 같은 후보를 기다리지 않고 각자 다른
+     * 가상 좌석을 고른다. 후보 선택과 UPDATE 는 한 SQL 문 안에서 실행되므로 클라이언트가 보았던
+     * 오래된 {@code seatId} 때문에 충돌하는 창이 없다.
+     */
+    @Query(value = """
+            WITH locked_user AS MATERIALIZED (
+                SELECT u.id
+                  FROM users u
+                 WHERE u.id = :userId
+                   FOR UPDATE
+            ),
+            existing AS MATERIALIZED (
+                SELECT ps.seat_id, ps.held_until
+                  FROM performance_seats ps
+                  JOIN seats s ON s.id = ps.seat_id
+                  CROSS JOIN locked_user
+                 WHERE ps.performance_detail_id = :performanceDetailId
+                   AND s.area_id = :areaId
+                   AND ps.status = 'HELD'::seat_booking_status
+                   AND ps.held_by = :userId
+                   AND ps.held_until >= now()
+                 LIMIT 1
+            ),
+            candidate AS MATERIALIZED (
+                SELECT ps.performance_detail_id, ps.seat_id
+                  FROM performance_seats ps
+                  JOIN seats s ON s.id = ps.seat_id
+                  JOIN performance_details pd ON pd.id = ps.performance_detail_id
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                   AND pa.area_id = s.area_id
+                  CROSS JOIN locked_user
+                 WHERE ps.performance_detail_id = :performanceDetailId
+                   AND s.area_id = :areaId
+                   AND pa.sale_type = 'STANDING'::area_type
+                   AND pa.price IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM existing)
+                   AND (ps.status = 'AVAILABLE'::seat_booking_status
+                        OR (ps.status = 'HELD'::seat_booking_status AND ps.held_until < now()))
+                 ORDER BY s.seat_number, s.id
+                   FOR UPDATE OF ps SKIP LOCKED
+                 LIMIT 1
+            ),
+            allocated AS (
+                UPDATE performance_seats ps
+                   SET status = 'HELD'::seat_booking_status,
+                       held_by = :userId,
+                       held_until = :heldUntil,
+                       updated_at = now()
+                  FROM candidate c
+                 WHERE ps.performance_detail_id = c.performance_detail_id
+                   AND ps.seat_id = c.seat_id
+                RETURNING ps.seat_id, ps.held_until
+            )
+            SELECT result.seat_id AS "seatId",
+                   result.held_until AS "heldUntil",
+                   GREATEST(EXTRACT(EPOCH FROM (result.held_until - now()))::bigint, 0)
+                       AS "remainingSeconds"
+              FROM (
+                    SELECT seat_id, held_until FROM existing
+                    UNION ALL
+                    SELECT seat_id, held_until FROM allocated
+              ) result
+             LIMIT 1
+            """, nativeQuery = true)
+    Optional<StandingSeatAllocation> holdAvailableStandingSeat(
+            @Param("performanceDetailId") Long performanceDetailId,
+            @Param("areaId") Long areaId,
+            @Param("userId") Long userId,
+            @Param("heldUntil") LocalDateTime heldUntil);
+
+    interface StandingSeatAllocation {
+        Long getSeatId();
+
+        LocalDateTime getHeldUntil();
+
+        long getRemainingSeconds();
+    }
+
+    /**
      * 내가 선점한 좌석을 해제한다.
      *
      * <p>{@code held_by = :userId} 를 WHERE 에 두는 것이 <b>권한 검사 그 자체</b>다. 조회로 소유자를

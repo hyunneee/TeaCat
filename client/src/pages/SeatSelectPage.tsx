@@ -74,6 +74,12 @@ export function SeatSelectPage() {
     );
   }
 
+  // 스탠딩은 구역 선택 화면에서 서버 자동 배정 후 확인 단계로 바로 이동한다.
+  // 향후 다매 구매 UI는 StandingQuantitySelector.tsx에 렌더링하지 않는 코드로 보존한다.
+  if (section?.type === 'STANDING') {
+    return <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+  }
+
   /* 고를 수 있는 좌석이 하나도 없으면 이유를 말해 줍니다.
      🔴 이걸 안 하면 회색 좌석만 잔뜩 그려 놓고 눌러도 아무 반응이 없는 화면이 됩니다 —
         "좌석이 안 눌린다" 는 신고가 여기서 나옵니다. 구역 화면에서 이미 막고 있지만,

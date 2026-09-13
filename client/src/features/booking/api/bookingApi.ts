@@ -31,15 +31,15 @@ interface ApiSeat {
   seatId: number;
   rowLabel: string;
   seatNumber: number;
-  seatX: number;
-  seatY: number;
+  seatX: number | null;
+  seatY: number | null;
   status: SeatStatus;
 }
 
 interface ApiSeatArea {
   areaId: number;
   areaCode: string;
-  type: string;
+  type: 'SEATED' | 'STANDING';
   grade: string | null;
   price: number | null;
   areaX: number;
@@ -87,6 +87,7 @@ interface ApiMyHold {
 const toSection = (area: ApiSeatArea): Section => ({
   id: String(area.areaId),
   name: area.areaCode,
+  type: area.type,
   grade: area.grade,
   price: area.price,
   totalSeats: area.seatCount,
@@ -101,13 +102,15 @@ const toSection = (area: ApiSeatArea): Section => ({
 const toSeat = (area: ApiSeatArea) => (seat: ApiSeat): Seat => ({
   id: String(seat.seatId),
   sectionId: String(area.areaId),
+  type: area.type,
   row: seat.rowLabel,
   number: seat.seatNumber,
   // 좌석 가격은 구역에서 내려옵니다 (좌석별 가격 개념이 서버에 없습니다)
   price: area.price,
   status: seat.status,
-  x: seat.seatX,
-  y: seat.seatY,
+  // 스탠딩 가상 좌석은 위치가 없다. 좌석맵에는 그리지 않으므로 모델 기본값만 둔다.
+  x: seat.seatX ?? 0,
+  y: seat.seatY ?? 0,
 });
 
 function toSeatMap(api: ApiSeatMap): SeatMapData {
@@ -176,6 +179,16 @@ export const bookingApi = {
         // 더블클릭·재시도로 요청이 두 번 나가도 서버가 한 번만 처리하도록
         idempotencyKey: newIdempotencyKey(),
       })
+      .then(toSeatHold),
+
+  /** 스탠딩 구역에서 서버가 가상 좌석 하나를 골라 원자적으로 선점한다. */
+  holdStanding: (scheduleId: string, areaId: string) =>
+    http
+      .post<ApiSeatHold>(
+        `/performance-details/${scheduleId}/areas/${areaId}/standing-hold`,
+        undefined,
+        { idempotencyKey: newIdempotencyKey() },
+      )
       .then(toSeatHold),
 
   releaseHold: (scheduleId: string, seatId: string) =>

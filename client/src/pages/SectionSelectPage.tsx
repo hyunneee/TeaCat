@@ -15,6 +15,7 @@ import {
   useSeatHold,
   useSeatMap,
   useSections,
+  type Section,
 } from '@/features/booking';
 import { useConcertLayout, useSchedule } from '@/features/concert';
 import { useModal } from '@/app/providers';
@@ -40,7 +41,8 @@ export function SectionSelectPage() {
   const { data: sections, isPending, isError } = useSections(scheduleId);
   const { data: seatMap } = useSeatMap(scheduleId);
   const hold = useBookingStore((s) => s.hold);
-  const { remainSeconds, releaseHold, isReleasing } = useSeatHold(scheduleId);
+  const { remainSeconds, releaseHold, isReleasing, holdStanding, isHolding } =
+    useSeatHold(scheduleId);
   /* 배치도(도면 크기 + 기둥·출입구)는 좌석맵에 없어 따로 부릅니다.
      실패해도 화면은 그려집니다 — VenueMap 이 구역만으로 좌표계를 잡습니다 */
   const { data: layout } = useConcertLayout(schedule ? String(schedule.concertId) : undefined);
@@ -54,6 +56,22 @@ export function SectionSelectPage() {
       danger: true,
       onConfirm: releaseHold,
     });
+
+  const handleSectionSelect = (section: Section) => {
+    if (isHolding) return;
+    selectSection(section.id);
+  };
+
+  const selectedSection = sections?.find((section) => section.id === sectionId);
+  const proceedWithSelectedSection = () => {
+    if (!selectedSection || isHolding) return;
+
+    if (selectedSection.type === 'STANDING') {
+      holdStanding(selectedSection.id);
+      return;
+    }
+    navigate(ROUTES.BOOKING_SEATS(scheduleId));
+  };
 
   if (isPending) return <PageLoader />;
   if (isError || !sections) {
@@ -92,13 +110,13 @@ export function SectionSelectPage() {
         <VenueMap
           sections={sections}
           selectedId={sectionId}
-          onSelect={(s) => selectSection(s.id)}
+          onSelect={handleSectionSelect}
           layout={layout}
         />
 
         <VenueMapLegend layout={layout} />
 
-        <SectionGrid sections={sections} selectedId={sectionId} onSelect={(s) => selectSection(s.id)} />
+        <SectionGrid sections={sections} selectedId={sectionId} onSelect={handleSectionSelect} />
 
         {/* 취소표 추첨 대기 진입 (플로우차트: 구역 → 취소표 예약대기) */}
         <button
@@ -123,10 +141,11 @@ export function SectionSelectPage() {
           variant="dark"
           size="lg"
           fullWidth
-          disabled={!sectionId}
-          onClick={() => navigate(ROUTES.BOOKING_SEATS(scheduleId))}
+          disabled={!sectionId || isHolding}
+          loading={isHolding}
+          onClick={proceedWithSelectedSection}
         >
-          좌석 선택하기
+          {selectedSection?.type === 'STANDING' ? '다음' : '좌석 선택하기'}
         </Button>
       </BottomBar>
     </div>

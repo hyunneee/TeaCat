@@ -36,6 +36,7 @@ export function totalPrice(seats: Seat[], selectedIds: readonly string[]): numbe
 
 /** 'VIP석 12열 5번' */
 export function seatLabel(seat: Seat, sectionName: string): string {
+  if (seat.type === 'STANDING') return `${sectionName} 스탠딩 입장권`;
   return `${sectionName} ${seat.row}열 ${seat.number}번`;
 }
 
@@ -46,6 +47,7 @@ export function seatLabel(seat: Seat, sectionName: string): string {
  * 서버가 조립해 준 이름만 갖고 있어서 `Seat` 를 만들 수 없습니다.
  */
 export function myHoldSeatLabel(hold: MyHold): string {
+  if (hold.row === 'STANDING') return `${hold.sectionName} 스탠딩 입장권`;
   return `${hold.sectionName} ${hold.row}열 ${hold.number}번`;
 }
 

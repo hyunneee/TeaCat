@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { AnimatedNumber } from '@/shared/components/ui';
 import { popIn } from '@/shared/lib';
 import type { Seat } from '../model/booking.types';
+import { seatLabel } from '../model/seat.model';
 
 interface Props {
   seats: Seat[];
@@ -32,10 +33,10 @@ export function SelectedSeatBar({ seats, sectionName, maxPerUser, onRemove }: Pr
                   <button
                     type="button"
                     onClick={() => onRemove(seat)}
-                    aria-label={`${sectionName} ${seat.row}열 ${seat.number}번 선택 해제`}
+                    aria-label={`${seatLabel(seat, sectionName)} 선택 해제`}
                     className="surface-2 text-ink hover:bg-danger-soft hover:text-danger flex shrink-0 items-center gap-1 rounded-full py-1 pr-1.5 pl-2.5 text-xs font-semibold transition-colors"
                   >
-                    {sectionName} {seat.row}열 {seat.number}번
+                    {seatLabel(seat, sectionName)}
                     <X size={13} />
                   </button>
                 </motion.li>
