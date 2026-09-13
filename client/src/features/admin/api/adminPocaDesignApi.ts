@@ -30,7 +30,12 @@ export const adminPocaDesignApi = {
     form.append('grade', body.grade);
     if (body.description) form.append('description', body.description);
 
-    return http.post<AdminPocaTemplate>('/admin/photocard-templates', form);
+    // 🔴 multipart 를 명시합니다 — boundary 는 브라우저가 붙입니다.
+    //    axios 기본 헤더가 application/json 이라 안 붙이면 FormData 가 JSON 으로 직렬화돼
+    //    이미지가 통째로 사라지고, 서버는 415 를 냅니다 (화면에는 500 으로 보입니다)
+    return http.post<AdminPocaTemplate>('/admin/photocard-templates', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
   },
 
   /**
