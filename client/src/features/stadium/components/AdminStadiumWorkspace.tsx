@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   LayoutGrid,
+  ListOrdered,
   MousePointer2,
   RefreshCw,
   Scan,
@@ -421,6 +422,8 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     releasedManualSeatCount: number;
   } | null>(null);
   const [areaEditError, setAreaEditError] = useState<string | null>(null);
+  const [rowStartNumber, setRowStartNumber] = useState(1);
+  const [rowEditMessage, setRowEditMessage] = useState<string | null>(null);
   const {
     analysis,
     selectedSheet,
@@ -437,6 +440,7 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     autoFitAreaBounds,
     splitArea,
     updateLabelingRule,
+    renumberManualRow,
     removeArea,
     acceptCandidates,
     removeCandidates,
@@ -536,6 +540,30 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     }
     setAreaEditError(null);
     splitArea(areaId, splitBounds);
+  };
+
+  const renumberSelectedRow = (areaId: string, selection: LayoutRect) => {
+    const area = areas.find((item) => item.clientId === areaId);
+    if (!area || area.type !== 'SEATED') return;
+    const rowLabels = new Set(
+      area.manualSeats
+        .filter((seat) => isInsideRect({ x: seat.seatX, y: seat.seatY }, selection))
+        .map((seat) => seat.rowLabel),
+    );
+    setRowEditMessage(null);
+    if (rowLabels.size === 0) {
+      setAreaEditError('번호를 바꿀 기존 좌석 행이 포함되도록 드래그해 주세요.');
+      return;
+    }
+    if (rowLabels.size > 1) {
+      setAreaEditError('한 번에 한 행만 선택할 수 있어요. 드래그 높이를 줄여 주세요.');
+      return;
+    }
+    const rowLabel = [...rowLabels][0]!;
+    renumberManualRow(areaId, rowLabel, rowStartNumber);
+    setAreaEditError(null);
+    setRowEditMessage(`${rowLabel}행을 ${rowStartNumber}번부터 다시 매겼어요.`);
+    setTool('pick-seats');
   };
   return (
     <>
@@ -642,6 +670,13 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
                   onClick={() => setTool('remove-seat-range')}
                 />
                 <ToolButton
+                  icon={<ListOrdered size={16} />}
+                  label="기존 좌석 행 번호 다시 매기기"
+                  active={tool === 'renumber-row'}
+                  disabled={!selectedArea || selectedArea.manualSeats.length === 0}
+                  onClick={() => setTool('renumber-row')}
+                />
+                <ToolButton
                   icon={<LayoutGrid size={16} />}
                   label="고정 요소 그리기"
                   active={tool === 'draw-element'}
@@ -656,6 +691,8 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
                 '새 경계를 드래그하세요. 경계 밖 좌석은 확인 후 미할당 상태로 전환됩니다.'}
               {tool === 'split-area' &&
                 '기존 구역에서 새 구역으로 옮길 좌석 범위를 드래그하세요. 두 구역 경계는 좌석에 맞춰 자동 조정됩니다.'}
+              {tool === 'renumber-row' &&
+                `번호를 바꿀 기존 좌석 한 행을 드래그하세요. ${rowStartNumber}번부터 다시 매깁니다.`}
               {tool === 'pick-seats' && '셀·도형을 클릭해 좌석을 개별적으로 켜거나 끌 수 있습니다.'}
               {tool === 'add-seat-range' &&
                 '선택한 구역 안을 드래그하면 범위에 포함된 미선택 좌석을 한 번에 추가합니다.'}
@@ -681,6 +718,7 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
               onAddArea={addArea}
               onUpdateAreaBounds={requestAreaBoundsChange}
               onSplitArea={requestSplitArea}
+              onRenumberRowSelection={renumberSelectedRow}
               onSelectArea={selectArea}
               onToggleCandidate={toggleCandidate}
               onRemoveManualSeats={removeManualSeats}
@@ -724,6 +762,11 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
           {areaEditError && (
             <Card tone="warning">
               <p className="text-sm">{areaEditError}</p>
+            </Card>
+          )}
+          {rowEditMessage && (
+            <Card>
+              <p className="text-sm">{rowEditMessage}</p>
             </Card>
           )}
         </div>
@@ -772,6 +815,13 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
               onRedefineBounds={() => setTool('resize-area')}
               onAutoFitBounds={() => autoFitAreaBounds(selectedArea.clientId)}
               onSplit={() => setTool('split-area')}
+              rowStartNumber={rowStartNumber}
+              onRowStartNumberChange={setRowStartNumber}
+              onBeginRowRenumber={() => {
+                setAreaEditError(null);
+                setRowEditMessage(null);
+                setTool('renumber-row');
+              }}
               onRemove={() => removeArea(selectedArea.clientId)}
             />
           )}
@@ -945,6 +995,9 @@ function AreaDetailPanel({
   onRedefineBounds,
   onAutoFitBounds,
   onSplit,
+  rowStartNumber,
+  onRowStartNumberChange,
+  onBeginRowRenumber,
   onRemove,
 }: {
   area: DraftArea;
@@ -962,6 +1015,9 @@ function AreaDetailPanel({
   onRedefineBounds: () => void;
   onAutoFitBounds: () => void;
   onSplit: () => void;
+  rowStartNumber: number;
+  onRowStartNumberChange: (value: number) => void;
+  onBeginRowRenumber: () => void;
   onRemove: () => void;
 }) {
   const labelPreview = buildSeatLabelPreview(area, candidates);
@@ -1031,6 +1087,28 @@ function AreaDetailPanel({
           />
         ) : (
           <>
+            {area.manualSeats.length > 0 && (
+              <div className="surface-2 space-y-2 rounded-xl p-3">
+                <p className="text-ink text-sm font-semibold">기존 좌석 행 번호 수정</p>
+                <p className="text-subtle text-xs">
+                  시작 번호를 정한 뒤 버튼을 누르고 캔버스에서 한 행을 드래그하세요.
+                </p>
+                <Input
+                  label="선택할 행 시작 번호"
+                  type="number"
+                  min={1}
+                  value={rowStartNumber}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    onRowStartNumberChange(
+                      Math.max(1, Math.trunc(Number(event.target.value) || 1)),
+                    )
+                  }
+                />
+                <Button variant="soft" size="sm" fullWidth onClick={onBeginRowRenumber}>
+                  드래그로 행 선택
+                </Button>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-ink-muted text-sm font-medium">행 순서</span>
               <Select

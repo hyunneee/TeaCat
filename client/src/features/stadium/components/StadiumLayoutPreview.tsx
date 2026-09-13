@@ -122,6 +122,7 @@ export function StadiumLayoutPreview({
         onAddArea={noopRect}
         onUpdateAreaBounds={noopAreaBounds}
         onSplitArea={noopAreaBounds}
+        onRenumberRowSelection={noopAreaBounds}
         onSelectArea={setSelectedAreaId}
         onToggleCandidate={noopCandidate}
         onRemoveManualSeats={noopSeats}

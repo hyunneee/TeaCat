@@ -42,6 +42,7 @@ interface StadiumLayoutCanvasProps {
   onAddArea: (rect: LayoutRect) => void;
   onUpdateAreaBounds: (areaId: string, rect: LayoutRect) => void;
   onSplitArea: (areaId: string, rect: LayoutRect) => void;
+  onRenumberRowSelection: (areaId: string, rect: LayoutRect) => void;
   onSelectArea: (areaId: string | null) => void;
   onToggleCandidate: (areaId: string, candidateId: string) => void;
   onRemoveManualSeats: (areaId: string, seatClientIds: string[]) => void;
@@ -59,6 +60,7 @@ type Interaction =
   | { mode: 'draw-area'; start: LayoutPoint }
   | { mode: 'resize-area'; start: LayoutPoint; areaId: string }
   | { mode: 'split-area'; start: LayoutPoint; areaId: string }
+  | { mode: 'renumber-row'; start: LayoutPoint; areaId: string }
   | { mode: 'draw-element'; start: LayoutPoint }
   | { mode: 'seat-range'; start: LayoutPoint; areaId: string; operation: 'ADD' | 'REMOVE' }
   | null;
@@ -80,6 +82,7 @@ export function StadiumLayoutCanvas({
   onAddArea,
   onUpdateAreaBounds,
   onSplitArea,
+  onRenumberRowSelection,
   onSelectArea,
   onToggleCandidate,
   onRemoveManualSeats,
@@ -355,6 +358,8 @@ export function StadiumLayoutCanvas({
             onUpdateAreaBounds(interaction.areaId, rect);
           } else if (interaction.mode === 'split-area') {
             onSplitArea(interaction.areaId, rect);
+          } else if (interaction.mode === 'renumber-row') {
+            onRenumberRowSelection(interaction.areaId, rect);
           } else if (interaction.mode === 'draw-element') onAddElement(rect);
           else onBulkCandidateChange(interaction.areaId, rect, interaction.operation);
         }
@@ -370,7 +375,15 @@ export function StadiumLayoutCanvas({
       window.removeEventListener('pointerup', handleUp);
       window.removeEventListener('pointercancel', handleUp);
     };
-  }, [onAddArea, onAddElement, onBulkCandidateChange, onSplitArea, onUpdateAreaBounds, scale]);
+  }, [
+    onAddArea,
+    onAddElement,
+    onBulkCandidateChange,
+    onRenumberRowSelection,
+    onSplitArea,
+    onUpdateAreaBounds,
+    scale,
+  ]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
@@ -383,7 +396,7 @@ export function StadiumLayoutCanvas({
       return;
     }
 
-    if (tool === 'resize-area' || tool === 'split-area') {
+    if (tool === 'resize-area' || tool === 'split-area' || tool === 'renumber-row') {
       if (!selectedAreaId) return;
       interactionRef.current = { mode: tool, start: point, areaId: selectedAreaId };
       setDrawingRect({ x: point.x, y: point.y, width: 0, height: 0 });
@@ -504,6 +517,7 @@ export function StadiumLayoutCanvas({
               tool === 'draw-element' ||
               tool === 'resize-area' ||
               tool === 'split-area' ||
+              tool === 'renumber-row' ||
               tool === 'add-seat-range' ||
               tool === 'remove-seat-range') &&
               'cursor-crosshair',
