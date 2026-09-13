@@ -41,7 +41,7 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
             """, nativeQuery = true)
     void deleteAllByStadiumId(Long stadiumId);
 
-    @Query(value = "SELECT COUNT(*) FROM seats s JOIN areas a ON a.id = s.area_id WHERE a.stadium_layout_id = :layoutId",
+    @Query(value = "SELECT COUNT(*) FROM seats s JOIN areas a ON a.id = s.area_id WHERE a.stadium_layout_id = :layoutId AND a.type = 'SEATED'",
             nativeQuery = true)
     long countByLayoutId(Long layoutId);
 

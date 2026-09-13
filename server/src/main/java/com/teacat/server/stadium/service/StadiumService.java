@@ -248,7 +248,9 @@ public class StadiumService {
                         stadium, layout, areaRequest.levelCodeOrDefault(),
                         areaRequest.areaCode(), areaRequest.type(), areaRequest.maxSeat(),
                         areaRequest.areaX(), areaRequest.areaY(), areaRequest.height(), areaRequest.width()));
-                List<SeatCreateRequest> seats = areaRequest.seatsOrEmpty();
+                List<SeatCreateRequest> seats = areaRequest.type() == AreaType.STANDING
+                        ? standingInventory(areaRequest.maxSeat())
+                        : areaRequest.seatsOrEmpty();
                 seatsToInsert.addAll(toBatchRows(area.getId(), seats));
                 createdAreas.add(new CreatedAreaResponse(area.getId(), area.getAreaCode(), seats.size()));
                 createdSeatCount += seats.size();
@@ -280,14 +282,15 @@ public class StadiumService {
                 area.getStadiumLayout().getId(), updatedLevelCode, updatedAreaCode, areaId)) {
             throw new BusinessException(StadiumErrorCode.DUPLICATE_AREA_CODE);
         }
-        if (request.maxSeat() != null && request.maxSeat() < currentSeatCount) {
+        AreaType updatedType = request.type() == null ? area.getType() : request.type();
+        if (request.maxSeat() != null && request.maxSeat() < currentSeatCount
+                && updatedType == AreaType.SEATED) {
             throw new BusinessException(StadiumErrorCode.MAX_SEAT_BELOW_CURRENT);
         }
-        if (request.type() == AreaType.STANDING && area.getType() != AreaType.STANDING && currentSeatCount > 0) {
+        if (request.type() != null && request.type() != area.getType() && currentSeatCount > 0) {
             throw new BusinessException(StadiumErrorCode.AREA_STRUCTURE_LOCKED);
         }
 
-        AreaType updatedType = request.type() == null ? area.getType() : request.type();
         int updatedMaxSeat = request.maxSeat() == null ? area.getMaxSeat() : request.maxSeat();
         long currentAreaCapacity = area.getType() == AreaType.SEATED ? currentSeatCount : area.getMaxSeat();
         long updatedAreaCapacity = updatedType == AreaType.SEATED ? currentSeatCount : updatedMaxSeat;
@@ -302,9 +305,17 @@ public class StadiumService {
                     new LayoutPoint(seat.getSeatX(), seat.getSeatY()));
         }
 
+        boolean typeChangedToStanding = area.getType() != updatedType && updatedType == AreaType.STANDING;
         area.update(request.areaCode(), request.levelCode() == null ? null : request.levelCode().strip(),
                 request.type(), request.maxSeat(), request.areaX(), request.areaY(),
                 request.height(), request.width());
+
+        boolean standingInventoryChanged = updatedType == AreaType.STANDING
+                && (typeChangedToStanding || currentSeatCount != updatedMaxSeat);
+        if (standingInventoryChanged) {
+            seatRepository.deleteAllByAreaId(areaId);
+            insertSeats(toBatchRows(areaId, standingInventory(updatedMaxSeat)));
+        }
     }
 
     @Transactional
@@ -420,6 +431,14 @@ public class StadiumService {
                 .map(seat -> new SeatBatchRepository.SeatBatchRow(
                         areaId, seat.seatX(), seat.seatY(), seat.rowLabel(), seat.seatNumber()))
                 .toList();
+    }
+
+    private List<SeatCreateRequest> standingInventory(int capacity) {
+        List<SeatCreateRequest> seats = new ArrayList<>(capacity);
+        for (int number = 1; number <= capacity; number++) {
+            seats.add(new SeatCreateRequest("STANDING", number, null, null));
+        }
+        return seats;
     }
 
     private void insertSeats(List<SeatBatchRepository.SeatBatchRow> seats) {

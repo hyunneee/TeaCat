@@ -167,6 +167,9 @@ public class StadiumLayoutService {
             int maxSeat = areaRequest.type() == AreaType.SEATED
                     ? seats.size() : (areaRequest.maxSeat() == null ? 0 : areaRequest.maxSeat());
             if (maxSeat <= 0) throw new BusinessException(StadiumErrorCode.INVALID_EXCEL_MAPPING);
+            if (areaRequest.type() == AreaType.STANDING) {
+                seats = buildStandingInventory(maxSeat);
+            }
             layoutCapacity += maxSeat;
             validateLayoutCapacity(stadium, layoutCapacity);
 
@@ -382,6 +385,15 @@ public class StadiumLayoutService {
             else rows.add(new ArrayList<>(List.of(candidate)));
         }
         return rows;
+    }
+
+    /** 스탠딩의 seat는 위치가 아니라 선점 가능한 입장권 재고 단위다. */
+    private List<LabeledSeat> buildStandingInventory(int capacity) {
+        List<LabeledSeat> seats = new ArrayList<>(capacity);
+        for (int number = 1; number <= capacity; number++) {
+            seats.add(new LabeledSeat("STANDING", number, null, null, null));
+        }
+        return seats;
     }
 
     private boolean inside(LayoutImportAreaRequest area, ExcelCandidateResponse candidate) {

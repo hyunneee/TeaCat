@@ -167,6 +167,36 @@ public class BookingController {
     }
 
     @Operation(
+            summary = "스탠딩 입장권 자동 선점",
+            description = """
+                    선택한 스탠딩 구역에서 판매 가능한 가상 좌석 하나를 서버가 자동 배정해 선점합니다.
+                    후보 좌석은 `FOR UPDATE SKIP LOCKED`로 잠그므로 동시 요청에도 같은 `seatId`가
+                    중복 배정되지 않습니다. 같은 사용자가 같은 요청을 반복하면 기존 선점을 반환하며
+                    선점 만료 시각은 연장하지 않습니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "스탠딩 입장권 선점 성공"),
+            @ApiResponse(responseCode = "404",
+                    description = "ERR_BOOKING_001: 회차 없음, ERR_BOOKING_012: 판매 중인 스탠딩 구역 아님"),
+            @ApiResponse(responseCode = "409",
+                    description = "ERR_BOOKING_003: 예매 가능 시간 아님, ERR_BOOKING_013: 스탠딩 매진")
+    })
+    @PostMapping("/performance-details/{performanceDetailId}/areas/{areaId}/standing-hold")
+    public ResponseEntity<BaseResponse<SeatHoldResponse>> holdStandingSeat(
+            @Parameter(description = "공연 회차 ID", example = "45")
+            @PathVariable Long performanceDetailId,
+
+            @Parameter(description = "스탠딩 구역 ID", example = "20")
+            @PathVariable Long areaId,
+
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                bookingService.holdStandingSeat(performanceDetailId, areaId, authUser.id())));
+    }
+
+    @Operation(
             summary = "좌석 선점 해제",
             description = """
                     본인이 선점한 좌석을 해제하여 다시 예매 가능한 상태로 되돌립니다.

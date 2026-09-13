@@ -19,6 +19,9 @@ function invalidateStadium(stadiumId?: number) {
   if (stadiumId !== undefined) {
     void queryClient.invalidateQueries({ queryKey: stadiumKeys.detail(stadiumId) });
     void queryClient.invalidateQueries({ queryKey: stadiumKeys.layouts(stadiumId) });
+    void queryClient.invalidateQueries({
+      queryKey: ['organizer', 'stadiumLayouts', String(stadiumId)],
+    });
   }
 }
 

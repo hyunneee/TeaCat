@@ -38,7 +38,11 @@ public enum BookingErrorCode implements ErrorCode {
      * 남의 좌석을 10분간 묶어두는 행위이기도 하다.
      */
     FACE_NOT_REGISTERED(HttpStatus.FORBIDDEN, "ERR_BOOKING_011",
-            "얼굴 정보를 먼저 등록해 주세요.");
+            "얼굴 정보를 먼저 등록해 주세요."),
+    STANDING_AREA_NOT_AVAILABLE(HttpStatus.NOT_FOUND, "ERR_BOOKING_012",
+            "해당 회차에서 판매 중인 스탠딩 구역이 아닙니다."),
+    STANDING_AREA_SOLD_OUT(HttpStatus.CONFLICT, "ERR_BOOKING_013",
+            "선택한 스탠딩 구역의 입장권이 매진되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
