@@ -54,17 +54,15 @@ public class PerformanceArea {
     @Column(name = "price")
     private Integer price;
 
-    /** 이 구역에서 팔 최대 수량. 스탠딩처럼 좌석이 없는 구역에서 특히 필요하다 */
+    /** 이 구역에서 팔 최대 수량. 스탠딩은 이 수만큼 가상 좌석 재고를 회차에 연다. */
     @Column(name = "max_cnt")
     private Integer maxCnt;
 
     /**
      * 이 공연에서 이 구역을 파는 방식.
      *
-     * <p>공연장 구역의 형태(area.type)와 다를 수 있다 — 같은 플로어를 이번 공연은 스탠딩으로,
-     * 다음 공연은 좌석제로 파는 일이 흔하다. 좌석 생성(API-269)과 좌석맵은 이 값을 본다.
-     *
-     * <p>반대 방향은 성립하지 않는다: 스탠딩 구역에는 좌석 좌표가 없어 좌석제로 팔 수 없다.
+     * <p>새 설정은 공연장 구역의 형태(area.type)와 일치해야 한다. 스탠딩 구역의 seats 행은
+     * 위치가 없는 입장권 재고이므로 좌석제로 해석할 수 없다.
      */
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)

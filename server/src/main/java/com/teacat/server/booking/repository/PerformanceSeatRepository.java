@@ -14,6 +14,74 @@ import java.util.Optional;
 
 public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat, PerformanceSeatId> {
 
+    /**
+     * 한 회차에 아직 없는 판매 좌석을 추가한다.
+     *
+     * <p>스탠딩 구역에도 좌표 없는 가상 좌석이 저장된다. 공연별 최대 인원(max_cnt)까지만
+     * 회차 좌석으로 옮기고, 지정석은 등록된 좌석을 모두 옮긴다. PK 충돌은 무시하므로
+     * 관리자 재시도와 자동 스케줄러가 동시에 실행돼도 중복 생성되지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            WITH inventory AS (
+                SELECT pd.id AS performance_detail_id,
+                       s.id AS seat_id,
+                       pa.sale_type,
+                       pa.max_cnt,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY pd.id, pa.area_id
+                           ORDER BY s.seat_number, s.id
+                       ) AS inventory_number
+                  FROM performance_details pd
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                  JOIN seats s ON s.area_id = pa.area_id
+                 WHERE pd.id = :scheduleId
+            )
+            INSERT INTO performance_seats
+                (performance_detail_id, seat_id, status, updated_at)
+            SELECT performance_detail_id, seat_id, 'AVAILABLE'::seat_booking_status, now()
+              FROM inventory
+             WHERE sale_type = 'SEATED'::area_type
+                OR inventory_number <= max_cnt
+            ON CONFLICT (performance_detail_id, seat_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertMissingForSchedule(@Param("scheduleId") Long scheduleId);
+
+    /**
+     * 예매 오픈 시각이 지난, 아직 공연 전인 모든 회차의 누락 좌석을 채운다.
+     * DB now()를 사용해 앱/DB 컨테이너의 타임존 차이로 오픈 시점이 어긋나지 않게 한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            WITH inventory AS (
+                SELECT pd.id AS performance_detail_id,
+                       s.id AS seat_id,
+                       pa.sale_type,
+                       pa.max_cnt,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY pd.id, pa.area_id
+                           ORDER BY s.seat_number, s.id
+                       ) AS inventory_number
+                  FROM performance_details pd
+                  JOIN performance_general pg ON pg.id = pd.performance_general_id
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                  JOIN seats s ON s.area_id = pa.area_id
+                 WHERE pg.ticketing_start_at <= now()
+                   AND pd.performance_date > now()
+                   AND pd.status IN ('SCHEDULED'::ticketing_status, 'OPEN'::ticketing_status)
+                   AND pg.status IN ('UPCOMING'::performance_status, 'ONGOING'::performance_status)
+            )
+            INSERT INTO performance_seats
+                (performance_detail_id, seat_id, status, updated_at)
+            SELECT performance_detail_id, seat_id, 'AVAILABLE'::seat_booking_status, now()
+              FROM inventory
+             WHERE (sale_type = 'SEATED'::area_type OR inventory_number <= max_cnt)
+            ON CONFLICT (performance_detail_id, seat_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertMissingForOpenedSchedules();
+
     @Query(value = """
             SELECT COUNT(*) FROM performance_seats ps
             JOIN performance_details pd ON pd.id = ps.performance_detail_id

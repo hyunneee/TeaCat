@@ -49,12 +49,7 @@ export function useGenerateSeats() {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
       void queryClient.invalidateQueries({ queryKey: bookingKeys.all });
 
-      if (createdSeatCount === 0) {
-        // 전 구역을 스탠딩으로 팔기로 한 경우다. 실패가 아니라 만들 게 없었던 것
-        toast.info('만들 좌석이 없어요. 좌석제로 파는 구역이 있어야 합니다.');
-        return;
-      }
-      toast.success(`${seatedAreaCount}개 구역에 좌석 ${createdSeatCount}개를 만들었어요.`);
+      toast.success(`${seatedAreaCount}개 구역에 좌석 재고 ${createdSeatCount}개를 만들었어요.`);
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : '좌석을 만들지 못했어요.');

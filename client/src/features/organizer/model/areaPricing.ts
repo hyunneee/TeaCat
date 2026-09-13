@@ -73,8 +73,8 @@ export function capacityOf(row: Pick<AreaPricingRow, 'saleType' | 'maxSeat' | 's
  * 배치도에 좌석 행이 없으면 배정할 자리가 없어서, 켜 두면 회차 좌석 생성(API-269)이
  * 만들 좌석을 못 찾습니다(NO_SEATS_TO_GENERATE).
  */
-export function canSellSeated(row: Pick<AreaPricingRow, 'seatCount'>): boolean {
-  return row.seatCount > 0;
+export function canSellSeated(row: Pick<AreaPricingRow, 'type' | 'seatCount'>): boolean {
+  return row.type === 'SEATED' && row.seatCount > 0;
 }
 
 /**
@@ -84,7 +84,7 @@ export function canSellSeated(row: Pick<AreaPricingRow, 'seatCount'>): boolean {
  * 의자를 치운 구성은 무대 형식(배치)을 따로 만들어 표현합니다.
  */
 export function canSellStanding(row: Pick<AreaPricingRow, 'type'>): boolean {
-  return row.type !== 'SEATED';
+  return row.type === 'STANDING';
 }
 
 /**
@@ -230,12 +230,9 @@ export function validateAreaRows(rows: AreaPricingRow[]): (string | undefined)[]
     if (maxCnt < row.soldCnt) {
       return `전 회차 합계로 이미 ${row.soldCnt}장 팔려서 그보다 적게 줄일 수 없어요.`;
     }
-
-    /* 좌석 수를 상한으로 걸지 않습니다.
-       판매량(soldCnt)은 **공연 전체(회차 합산)** 인데 최대 수량은 회차 구분이 없는 안내값이라,
-       회차가 둘 이상이면 판매량이 한 구역의 좌석 수를 넘을 수 있습니다. 그때 좌석 수를 상한으로 걸면
-       "판매량보다 적게 못 줄임" 과 "좌석 수보다 많이 못 팖" 이 동시에 걸려 저장 자체가 막힙니다.
-       서버도 판매량 조건만 봅니다. 좌석 수는 줄에 그대로 보여주니 판단은 관리자에게 맡깁니다. */
+    if (maxCnt > row.maxSeat) {
+      return `스탠딩 최대 인원은 구역 수용 인원 ${row.maxSeat}명을 넘을 수 없어요.`;
+    }
     return undefined;
   });
 }

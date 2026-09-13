@@ -1218,7 +1218,7 @@ function ConfirmStep({ controller }: { controller: StadiumEditorController }) {
           <p className="font-bold">공연장 배치가 저장되었습니다.</p>
         </div>
         <p className="text-muted mt-2 text-sm">
-          구역 {result.createdAreaCount}개, 좌석 {result.createdSeatCount}석이 등록됐습니다.
+          구역 {result.createdAreaCount}개, 좌석 재고 {result.createdSeatCount}개가 등록됐습니다.
         </p>
         <Button
           className="mt-4"

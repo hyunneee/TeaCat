@@ -15,7 +15,7 @@ public enum StadiumErrorCode implements ErrorCode {
     DUPLICATE_AREA_CODE(HttpStatus.CONFLICT, "STADIUM_005", "같은 배치에 동일한 구역 코드가 이미 존재합니다."),
     DUPLICATE_SEAT(HttpStatus.CONFLICT, "STADIUM_006", "같은 구역에 동일한 열과 번호의 좌석이 이미 존재합니다."),
     MAX_SEAT_EXCEEDED(HttpStatus.BAD_REQUEST, "STADIUM_007", "구역의 최대 좌석 수를 초과할 수 없습니다."),
-    STANDING_AREA_HAS_SEATS(HttpStatus.BAD_REQUEST, "STADIUM_008", "스탠딩 구역에는 개별 좌석을 생성할 수 없습니다."),
+    STANDING_AREA_HAS_SEATS(HttpStatus.BAD_REQUEST, "STADIUM_008", "스탠딩 구역에는 좌표가 있는 개별 좌석을 직접 생성할 수 없습니다."),
     STADIUM_IN_USE(HttpStatus.CONFLICT, "STADIUM_009", "공연 또는 예매에서 사용 중인 공연장은 삭제할 수 없습니다."),
     AREA_IN_USE(HttpStatus.CONFLICT, "STADIUM_010", "공연 또는 예매에서 사용 중인 구역은 삭제할 수 없습니다."),
     SEAT_IN_USE(HttpStatus.CONFLICT, "STADIUM_011", "공연 또는 예매에서 사용 중인 좌석은 삭제할 수 없습니다."),

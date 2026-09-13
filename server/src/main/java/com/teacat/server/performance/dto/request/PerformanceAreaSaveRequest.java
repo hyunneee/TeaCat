@@ -42,8 +42,8 @@ public record PerformanceAreaSaveRequest(
             @Schema(description = """
                     이 구역에서 받을 인원의 상한.
 
-                    - `STANDING` 으로 파는 구역은 **필수**입니다. 좌석 행이 없어 이 값이 인원을 제한하는
-                      유일한 근거이고, 비우면 무제한이 됩니다 (PERFORMANCE_024).
+                    - `STANDING` 으로 파는 구역은 **필수**입니다. 이 수만큼 위치 없는 가상 좌석 재고를
+                      회차에 만들며, 공연장 구역 수용 인원을 넘을 수 없습니다 (PERFORMANCE_024, 025).
                     - `SEATED` 로 파는 구역은 생략할 수 있습니다. 좌석 행 수가 곧 상한입니다.
                     """, example = "500")
             @Min(value = 0, message = "받을 인원 상한은 0 이상이어야 합니다.")
@@ -53,14 +53,8 @@ public record PerformanceAreaSaveRequest(
                     이 공연에서 이 구역을 파는 방식. 생략하면 이미 저장된 방식을 그대로 둡니다
                     (아직 설정하지 않은 구역이면 공연장 구역의 형태를 씁니다).
 
-                    기준은 의자가 설치돼 있는지 하나입니다.
-
-                    - 의자가 깔린 구역(`areas.type = SEATED`)은 `SEATED` 로만 팝니다.
-                      `STANDING` 은 거절합니다 — 의자가 그 자리에 있어 사람을 세울 수 없습니다
-                      (PERFORMANCE_022). 의자를 치운 구성은 무대 형식을 따로 만들어 표현하세요.
-                    - 의자가 없는 구역(`areas.type = STANDING`)은 둘 다 됩니다.
-                      `STANDING` 이면 좌석을 만들지 않고 `maxCnt` 로 인원만 관리하고,
-                      `SEATED` 면 그 구역에 등록된 좌석을 그대로 팝니다.
+                    공연장 배치의 구역 형태와 같아야 합니다. 스탠딩 구역의 seats 행은 지정석이 아니라
+                    입장권마다 seatId를 부여하기 위한 위치 없는 가상 재고입니다 (PERFORMANCE_022).
                     - 판매 이력이 있는 구역은 바꿀 수 없습니다 (PERFORMANCE_023).
                     """, example = "SEATED")
             AreaType saleType
