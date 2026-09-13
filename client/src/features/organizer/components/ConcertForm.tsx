@@ -1,4 +1,4 @@
-import { ImagePlus, Lock, Plus, X } from 'lucide-react';
+import { ImagePlus, Lock, Plus, RefreshCw, X } from 'lucide-react';
 import type { ChangeEvent, FormEvent, ReactNode } from 'react';
 import { Button, IconButton, Input } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
@@ -41,6 +41,8 @@ interface Props {
     /** 고를 수 있는 형식 — `ACTIVE` 만 담아 넘깁니다 */
     options: StadiumLayoutSummary[];
     loading: boolean;
+    refreshing?: boolean;
+    onRefresh?: () => void;
   };
   /**
    * 구역별 등급·가격 (등록 화면). 무대 형식을 고르면 그 형식의 구역이 줄로 뜹니다.
@@ -172,6 +174,20 @@ export function ConcertForm({
           error={errors.stadiumLayoutId}
           hint="같은 공연장도 무대 형식에 따라 구역이 다르게 나뉘어요. 등록 후에는 바꿀 수 없습니다."
         >
+          {form.stadiumId && layouts.onRefresh && (
+            <div className="mb-1 flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                leftIcon={<RefreshCw size={14} />}
+                loading={layouts.refreshing}
+                onClick={layouts.onRefresh}
+              >
+                목록 새로고침
+              </Button>
+            </div>
+          )}
           {!form.stadiumId ? (
             <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
               공연장을 먼저 선택하면 무대 형식이 나타나요.

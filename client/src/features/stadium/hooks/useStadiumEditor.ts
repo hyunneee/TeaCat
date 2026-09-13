@@ -130,6 +130,9 @@ export function useStadiumEditor() {
     onSuccess: () => {
       if (editor.stadiumId !== null) {
         void queryClient.invalidateQueries({ queryKey: stadiumKeys.layouts(editor.stadiumId) });
+        void queryClient.invalidateQueries({
+          queryKey: ['organizer', 'stadiumLayouts', String(editor.stadiumId)],
+        });
       }
       editor.goToStep(4);
     },
@@ -214,6 +217,9 @@ export function useStadiumEditor() {
     onSuccess: (result) => {
       if (editor.stadiumId !== null) {
         void queryClient.invalidateQueries({ queryKey: stadiumKeys.layouts(editor.stadiumId) });
+        void queryClient.invalidateQueries({
+          queryKey: ['organizer', 'stadiumLayouts', String(editor.stadiumId)],
+        });
       }
       editor.goToStep(4);
       return result;

@@ -1,4 +1,4 @@
-import { ArrowLeft, CopyPlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CopyPlus, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Badge, Button, Card, ConfirmModal, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
@@ -81,11 +81,23 @@ export function AdminStadiumDetailPage() {
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <Card className="self-start" padded={false}>
-          <div className="border-line border-b px-4 py-3">
-            <h2 className="text-ink font-bold">저장된 배치</h2>
-            <p className="text-ink-muted text-xs">
-              기본 배치를 포함해 {management.layouts.data?.layouts.length ?? 0}개
-            </p>
+          <div className="border-line flex items-start justify-between gap-2 border-b px-4 py-3">
+            <div>
+              <h2 className="text-ink font-bold">저장된 배치</h2>
+              <p className="text-ink-muted text-xs">
+                기본 배치를 포함해 {management.layouts.data?.layouts.length ?? 0}개
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<RefreshCw size={14} />}
+              loading={management.layouts.isFetching}
+              onClick={() => void management.layouts.refetch()}
+              aria-label="저장된 배치 새로고침"
+            >
+              새로고침
+            </Button>
           </div>
 
           {management.layouts.isPending ? (
