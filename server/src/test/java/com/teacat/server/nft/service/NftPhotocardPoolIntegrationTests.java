@@ -3,6 +3,7 @@ package com.teacat.server.nft.service;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.ipfs.IpfsPinService;
+import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.nft.client.PhotocardChainClient;
 import com.teacat.server.nft.client.PhotocardDesignRegisterResult;
 import com.teacat.server.nft.client.PhotocardNftMetadata;
@@ -66,6 +67,9 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
 
     @MockitoBean
     private IpfsPinService ipfsPinService;
+
+    @MockitoBean
+    private FileStorageService fileStorageService;
 
     @Autowired
     private NftPhotocardPackRepository packRepository;
@@ -494,7 +498,12 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
 
     @Test
     void 풀_조회는_전_회차_좌석_합계와_잔여_합계를_함께_준다() throws Exception {
-        Fixture fixture = insertPerformanceFixture();   // 1회차, 구역 max_cnt = 1000
+        Fixture fixture = insertPerformanceFixture();
+        // 지정석은 max_cnt 를 저장하지 않는다. 공연장 구역의 좌석 수(max_seat)를 사용해야 한다.
+        jdbcTemplate.update("""
+                UPDATE performance_areas SET max_cnt = NULL
+                 WHERE performance_general_id = ? AND area_id = ?
+                """, fixture.performanceId(), fixture.areaId());
         Long templateId = insertTemplate("김예린", "서울 5반", "SPECIAL");
         insertPoolDesign(fixture.performanceId(), templateId, 20);
         // 공연 전용 도안(draw_pool = false)은 이 목록에서 빠진다
@@ -512,8 +521,24 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void 회차가_늘면_좌석_합계도_늘어난다() throws Exception {
+    void 지정석과_스탠딩_수용인원을_전_회차만큼_합산한다() throws Exception {
         Fixture fixture = insertPerformanceFixture();
+        jdbcTemplate.update("""
+                UPDATE performance_areas SET max_cnt = NULL
+                 WHERE performance_general_id = ? AND area_id = ?
+                """, fixture.performanceId(), fixture.areaId());
+        Long standingAreaId = jdbcTemplate.queryForObject("""
+                INSERT INTO areas
+                    (stadium_id, stadium_layout_id, level_code, area_code, type, max_seat)
+                SELECT stadium_id, stadium_layout_id, '1F', 'B', 'STANDING', 800
+                  FROM areas WHERE id = ?
+                RETURNING id
+                """, Long.class, fixture.areaId());
+        jdbcTemplate.update("""
+                INSERT INTO performance_areas
+                    (performance_general_id, area_id, grade, price, max_cnt, sale_type)
+                VALUES (?, ?, 'R', 80000, 600, 'STANDING')
+                """, fixture.performanceId(), standingAreaId);
         jdbcTemplate.update("""
                 INSERT INTO performance_details (performance_general_id, performance_num,
                                                  performance_date, status)
@@ -523,8 +548,8 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         mockMvc.perform(get("/admin/performances/" + fixture.performanceId() + "/draw-designs")
                         .header("Authorization", adminToken()))
                 .andExpect(status().isOk())
-                // 구역 1000석 × 회차 2 = 2000. 회차 수만큼 곱해야 한다는 것이 여기서 드러난다
-                .andExpect(jsonPath("$.data.seatCapacity").value(2000));
+                // (지정석 1000석 + 스탠딩 정원 600명) × 2회차
+                .andExpect(jsonPath("$.data.seatCapacity").value(3200));
     }
 
     @Test
