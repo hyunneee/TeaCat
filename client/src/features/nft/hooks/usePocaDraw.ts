@@ -23,11 +23,14 @@ const REVEAL_MS = 2200;
  *
  * ⭐ **API 를 언제 부르는지**가 이 훅의 핵심입니다.
  *
- * 다 자른 뒤에 부르면 연출이 끝난 자리에서 응답을 기다리며 멈춥니다.
- * 화면에 들어오자마자 부르면 뜯지도 않았는데 카드가 발행됩니다.
+ * 🔴 **끝까지 잘린 뒤에 부릅니다.** 예전에는 첫 손가락이 닿는 순간 불렀습니다 —
+ * 뜯는 1~2초를 로딩 시간으로 쓰려던 것인데, **뜯다가 멈추면 그 팩이 그대로
+ * 사라졌습니다.** 절취선 근처를 한 번 누르기만 해도 카드가 발행돼서, 뽑은 적이
+ * 없는 사람에게 "이미 뽑았어요" 가 떴습니다. 온체인이라 되돌릴 수도 없습니다.
  *
- * 그래서 **첫 손가락이 닿는 순간** 호출합니다. 뜯는 1~2초가 자연스러운
- * 로딩 시간이 되고, 다 뜯었을 때는 이미지까지 준비돼 있습니다.
+ * 응답을 기다리는 시간은 봉지가 벗겨지는 연출(`REVEAL_MS`)이 덮고, 그보다 늦어지면
+ * `isWaiting` 으로 기다린다고 알려줍니다. 매끄러움보다 **안 뜯은 팩을 지키는 쪽**이
+ * 먼저입니다.
  */
 export function usePocaDraw() {
   const [phase, setPhase] = useState<DrawPhase>('sealed');
@@ -74,6 +77,9 @@ export function usePocaDraw() {
       /* 실패했으면 다시 뜯어볼 수 있어야 합니다 */
       requested.current = false;
 
+      /* 🔴 벗겨지는 타이머가 살아 있으면 카드도 없는데 `revealed` 로 넘어갑니다 */
+      if (timer.current) clearTimeout(timer.current);
+
       setPhase('sealed');
     },
   });
@@ -86,16 +92,13 @@ export function usePocaDraw() {
     [],
   );
 
-  /** 봉지에 손이 닿았습니다 — 여기서 뽑기가 나갑니다 */
+  /**
+   * 봉지에 손이 닿았습니다. **여기서는 아무것도 보내지 않습니다** —
+   * 뜯다 만 봉지가 소모되면 안 됩니다. 자르는 모습만 보여줍니다.
+   */
   const startCut = useCallback(() => {
-    /* 🔴 setPhase 업데이터 안에서 mutate 를 부르면 안 됩니다 —
-       React 는 개발 모드에서 업데이터를 두 번 실행해서 **카드가 두 장 나갑니다.** */
-    if (requested.current) return;
-    requested.current = true;
-
-    setPhase('cutting');
-    draw.mutate();
-  }, [draw]);
+    setPhase((prev) => (prev === 'sealed' ? 'cutting' : prev));
+  }, []);
 
   /**
    * 다시 뽑기 — 팩이 남아 있을 때만 화면이 이 버튼을 보여줍니다.
@@ -111,11 +114,17 @@ export function usePocaDraw() {
     setPhase('sealed');
   }, [draw]);
 
-  /** 다 잘렸습니다 */
+  /** 끝까지 잘렸습니다 — **이제야** 뽑기가 나갑니다 */
   const finishCut = useCallback(() => {
-    setPhase((prev) => (prev === 'cutting' ? 'opening' : prev));
+    /* 🔴 상태가 아니라 ref 로 막습니다. 상태로 막으면 같은 프레임에 두 번 들어온
+       호출이 둘 다 옛 값을 보고 통과해서 카드가 두 장 나갑니다. */
+    if (requested.current) return;
+    requested.current = true;
+
+    setPhase('opening');
     timer.current = setTimeout(() => setPhase('revealed'), REVEAL_MS);
-  }, []);
+    draw.mutate();
+  }, [draw]);
 
   return {
     phase,
