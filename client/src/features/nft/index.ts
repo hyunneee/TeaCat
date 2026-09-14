@@ -15,6 +15,7 @@ export { PocaArt } from './components/PocaArt';
 export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
 export { PocaPack } from './components/PocaPack';
+export { PocaPackArt } from './components/PocaPackArt';
 export { PocaPackTile } from './components/PocaPackTile';
 export { PocaDust } from './components/PocaDust';
 export { PocaReveal } from './components/PocaReveal';

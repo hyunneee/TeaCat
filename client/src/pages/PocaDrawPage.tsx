@@ -23,7 +23,7 @@ import {
 export function PocaDrawPage() {
   const navigate = useNavigate();
   const { open } = useModal();
-  const { phase, card, isWaiting, startCut, finishCut, reset, usedUp } = usePocaDraw();
+  const { phase, card, isWaiting, rising, startCut, finishCut, reset, usedUp } = usePocaDraw();
 
   const opened = phase === 'opening' || phase === 'revealed';
   const revealed = phase === 'revealed' && card !== null;
@@ -95,7 +95,9 @@ export function PocaDrawPage() {
 
         {/* 카드는 **처음부터 봉지 안에** 있습니다 (z:2 — 봉지가 z:3).
             뜯을 때 마운트하면 없던 것이 튀어나온 것처럼 갑작스럽습니다. */}
-        <PocaReveal opening={opened} revealed={revealed} card={card} />
+        {/* 🔴 봉지가 벗겨지는 것(opened)과 카드가 올라오는 것(rising)은 시점이 다릅니다 —
+            카드는 응답이 도착해야 시작합니다. 같이 묶으면 아직 뒷면인 채로 회전이 끝납니다 */}
+        <PocaReveal opening={rising} revealed={revealed} card={card} />
         {/* 봉지도 뜯은 뒤에 남겨 둡니다 — 바로 지우면 갈라져 사라지는 연출이 안 보입니다 */}
         <PocaPack opened={opened} locked={locked} onCutStart={startCut} onCutThrough={finishCut} />
 

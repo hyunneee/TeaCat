@@ -51,6 +51,21 @@ export function usePocaDraw() {
   const requested = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * 목록·남은 팩 갱신을 **연출이 끝난 뒤로** 미룹니다.
+   *
+   * 🔴 카드가 도착하자마자 무효화하면 이 화면에 켜져 있는 `useDrawAvailability` 가
+   * 곧바로 다시 요청을 보내고, 그 응답이 **카드가 떠오르는 중에** 리렌더를 일으켜
+   * 애니메이션이 한 번 툭 끊깁니다. 갱신이 몇 초 늦어도 아무도 손해 보지 않습니다.
+   */
+  const pendingRefresh = useRef(false);
+
+  const flushRefresh = useCallback(() => {
+    if (!pendingRefresh.current) return;
+    pendingRefresh.current = false;
+    void queryClient.invalidateQueries({ queryKey: nftKeys.all });
+  }, []);
+
   const draw = useMutation({
     mutationFn: () => nftApi.draw(idempotencyKey.current),
     /* 뽑기는 재시도 금지 — 자동 재시도가 붙으면 두 장이 나갈 수 있습니다 */
@@ -64,7 +79,7 @@ export function usePocaDraw() {
         await img.decode().catch(() => undefined);
       }
       setCard(result);
-      void queryClient.invalidateQueries({ queryKey: nftKeys.all });
+      pendingRefresh.current = true;
     },
     onError: (error) => {
       const failure = ApiError.isApiError(error) ? error : null;
@@ -88,8 +103,10 @@ export function usePocaDraw() {
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
+      /* 연출을 끝까지 못 보고 나가도 목록은 최신이어야 합니다 */
+      flushRefresh();
     },
-    [],
+    [flushRefresh],
   );
 
   /**
@@ -114,6 +131,26 @@ export function usePocaDraw() {
     setPhase('sealed');
   }, [draw]);
 
+  /**
+   * 🔴 **카드가 도착한 뒤에** 착지 시각을 셉니다.
+   *
+   * 다 뜯은 순간부터 세면, 응답이 1.8초 걸렸을 때 회전(0.92s~1.74s)이 **뒷면인 채로**
+   * 끝나 버리고 그림만 갈아끼워집니다 — "안 돌고 그냥 들어오는" 것처럼 보입니다.
+   * 더 늦으면 뒷면인 채로 연출이 끝납니다.
+   */
+  useEffect(() => {
+    if (phase !== 'opening' || card === null) return;
+
+    timer.current = setTimeout(() => {
+      setPhase('revealed');
+      flushRefresh();
+    }, REVEAL_MS);
+
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [phase, card, flushRefresh]);
+
   /** 끝까지 잘렸습니다 — **이제야** 뽑기가 나갑니다 */
   const finishCut = useCallback(() => {
     /* 🔴 상태가 아니라 ref 로 막습니다. 상태로 막으면 같은 프레임에 두 번 들어온
@@ -122,13 +159,17 @@ export function usePocaDraw() {
     requested.current = true;
 
     setPhase('opening');
-    timer.current = setTimeout(() => setPhase('revealed'), REVEAL_MS);
     draw.mutate();
   }, [draw]);
 
   return {
     phase,
     card,
+    /**
+     * 카드 연출을 시작해도 되는가 — **응답이 도착한 뒤**입니다.
+     * 봉지가 벗겨지는 것과 카드가 올라오는 것을 나눠 둔 이유입니다.
+     */
+    rising: card !== null && (phase === 'opening' || phase === 'revealed'),
     /** 다 뜯었는데 아직 응답을 못 받은 상태 — 화면이 기다린다고 알려줘야 합니다 */
     isWaiting: phase === 'opening' && card === null,
     startCut,
