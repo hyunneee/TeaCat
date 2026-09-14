@@ -1,16 +1,11 @@
 import { useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { Button, Input, Modal, Segmented } from '@/shared/components/ui';
-import { DESIGN_NAME_MAX } from '../model/adminPocaDesign.model';
-import type {
-  AdminPocaTemplateCreateRequest,
-  PocaDesignGrade,
-} from '../model/adminPocaDesign.types';
+import { drawMessageOf, POCA_ROLES, withPocaRole, type PocaRole } from '@/features/nft';
+import { DESIGN_NAME_MAX, gradeForRole } from '../model/adminPocaDesign.model';
+import type { AdminPocaTemplateCreateRequest } from '../model/adminPocaDesign.types';
 
-const GRADES: { value: PocaDesignGrade; label: string }[] = [
-  { value: 'SPECIAL', label: '금색 (코치·교육생)' },
-  { value: 'COMMON', label: '보라 (개발자)' },
-];
+const ROLES = POCA_ROLES.map((role) => ({ value: role, label: role }));
 
 interface Props {
   open: boolean;
@@ -32,7 +27,7 @@ export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit 
 
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
-  const [grade, setGrade] = useState<PocaDesignGrade>('SPECIAL');
+  const [role, setRole] = useState<PocaRole>('코치');
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -53,7 +48,14 @@ export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit 
     setSubmitted(true);
     if (!canSubmit || !image) return;
 
-    onSubmit({ name: name.trim(), group: group.trim(), grade, image });
+    /* 🔴 역할을 소속에 적어 넣습니다. 예전처럼 소속이 '서울' 로 시작하는지 보고 추측하면,
+       교육생이 사실대로 '서울 5반' 이라 적는 순간 코치님이 되어 버립니다 */
+    onSubmit({
+      name: name.trim(),
+      group: withPocaRole(group, role),
+      grade: gradeForRole(role),
+      image,
+    });
   };
 
   return (
@@ -117,13 +119,24 @@ export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit 
           value={group}
           onChange={(e) => setGroup(e.target.value)}
           placeholder="서울 5반"
-          hint="'서울' 로 시작하면 화면에서 '코치님', 아니면 '교육생' 으로 부릅니다"
+          hint="어드민 목록에서 구분하려고 씁니다. 호칭은 아래 역할이 정합니다"
         />
 
         <div className="space-y-1.5">
-          <p className="text-ink-muted text-sm font-medium">연출 등급</p>
-          <Segmented options={GRADES} value={grade} onChange={setGrade} />
+          <p className="text-ink-muted text-sm font-medium">역할</p>
+          <Segmented options={ROLES} value={role} onChange={setRole} />
+          <p className="text-ink-subtle text-xs">코치·교육생은 금색, 개발자는 보라로 나옵니다.</p>
         </div>
+
+        {/* 등록하기 전에 무슨 말이 나올지 그대로 보여줍니다 — 호칭이 틀린 채로 뿌리면 되돌릴 수 없습니다 */}
+        {name.trim() && (
+          <p className="surface-2 text-ink-muted rounded-xl p-3 text-sm">
+            뽑으면 이렇게 나옵니다 —{' '}
+            <b className="text-ink">
+              {drawMessageOf(name.trim(), withPocaRole(group, role), gradeForRole(role))}
+            </b>
+          </p>
+        )}
       </div>
     </Modal>
   );

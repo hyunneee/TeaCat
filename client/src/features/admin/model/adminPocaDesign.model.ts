@@ -1,4 +1,5 @@
-import type { AdminPocaDesign } from './adminPocaDesign.types';
+import type { PocaRole } from '@/features/nft';
+import type { AdminPocaDesign, PocaDesignGrade } from './adminPocaDesign.types';
 
 /**
  * 도안 이름의 최대 길이 — 서버 `nft_photocard_designs.name` 이 varchar(100) 입니다.
@@ -42,6 +43,14 @@ export function notYetDrawable(designs: AdminPocaDesign[]): AdminPocaDesign[] {
  * 🔴 내림이 아니라 **올림**입니다 — 100석을 3종으로 나누면 33장씩(99장)이라
  * 마지막 한 사람이 카드를 못 받습니다. 남는 것은 괜찮지만 모자란 것은 사고입니다.
  */
+/**
+ * 역할이 정해지면 연출 색도 정해집니다 — 개발자만 보라, 코치·교육생은 금색.
+ * 등록하는 사람이 "이 사람이 누구인지" 말고 "무슨 색인지" 까지 알 이유가 없습니다.
+ */
+export function gradeForRole(role: PocaRole): PocaDesignGrade {
+  return role === '개발자' ? 'COMMON' : 'SPECIAL';
+}
+
 export function splitSupply(total: number, count: number): number {
   if (total <= 0 || count <= 0) return 0;
   return Math.ceil(total / count);
