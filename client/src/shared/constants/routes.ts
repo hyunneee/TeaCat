@@ -87,6 +87,9 @@ export const ROUTES = {
   SETTINGS_PASSWORD: '/my/settings/password',
   SETTINGS_NICKNAME: '/my/settings/nickname',
   SETTINGS_ABOUT: '/my/settings/about',
+  /* 개인정보처리방침 — 쿠키 동의 배너가 링크로 걸어서 **로그인 없이** 열려야 합니다.
+     그래서 /my 아래가 아니라 최상위입니다. */
+  PRIVACY: '/privacy',
 
   /* ── 문의 ── */
   MY_INQUIRIES: '/my/inquiries',
