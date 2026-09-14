@@ -289,3 +289,17 @@ Sentry 가 부트 4 를 지원하면 그 클래스를 지우고 스타터로 갈
   컨텍스트가 뜨지 않아** 쓰지 않았습니다 (9장에 원인과 복귀 조건). 로그백 어펜더만 붙였습니다.
   `sentry.dsn` / `sentry.environment` / `sentry.release` 를 `application.yaml` 에 추가하고
   compose 의 server 서비스에서 넘깁니다. DSN 이 비면 켜지지 않습니다. 사용자 승인
+- 2026-09-14 **가입할 때 기본 얼굴을 채워 넣습니다** (6장 생체정보와 한 쌍).
+  얼굴을 등록하지 않으면 예매가 막히는데, 1차 배포에서는 등록 단계를 밟지 않아도
+  끝까지 가야 합니다. `Face.defaultFace()` 를 가입 시점에 넣어(`AuthService.signup`,
+  `OauthService.completeSignup`) `faceRegistered` 를 true 로 만듭니다.
+  🔴 **사람 얼굴에서 뽑은 값이 아닙니다.** 기본 "이미지" 한 장의 임베딩을 넣으면
+     실존 인물의 생체 특징값이 모든 계정에 복사되고, 그 사진이 곧 **만능 열쇠**가 됩니다.
+     대신 사람과 무관한 균일 단위 벡터를 쓰고, `model_version` 을 실제 모델과
+     **다르게**(`bootstrap-default`) 둡니다.
+  🔴 그래서 본인 확인은 대조를 **시도하지 않고** `USER_013`(FACE_MODEL_MISMATCH)로
+     거절합니다 — "확인할 수 없음" 으로 끝나지 잘못 통과시키지 않습니다.
+  ⚠️ 자리 표시는 재등록을 막지 않습니다(`Face.isDefault`). 막으면 실제 얼굴을 넣으려는
+     사람이 `USER_007` 로 거절당해 삭제부터 해야 합니다. 진짜 얼굴이 등록된 뒤에는
+     예전처럼 `USER_007` 로 막힙니다.
+  기존 회원은 `V20260914_1600__add_default_face_for_existing_users.sql` 이 채웁니다. 사용자 요청
