@@ -10,6 +10,13 @@ export interface HeaderProps {
   left?: ReactNode;
   /** 뒤로가기 버튼 */
   showBack?: boolean;
+  /**
+   * 뒤로가기를 눌렀을 때 할 일. 안 주면 브라우저 기록을 한 칸 되돌립니다.
+   *
+   * 🔴 예매처럼 **어디서 들어왔는지에 따라 엉뚱한 곳으로 튀는** 흐름에서 씁니다 —
+   * 홈의 "결제를 마치지 않은 자리" 로 들어오면 `navigate(-1)` 은 홈으로 나갑니다.
+   */
+  onBack?: () => void;
   /** X 버튼 (플로우 이탈용). onClose 를 주면 표시됩니다. */
   onClose?: () => void;
   right?: ReactNode;
@@ -35,6 +42,7 @@ export function Header({
   title,
   left,
   showBack = false,
+  onBack,
   onClose,
   right,
   transparent = false,
@@ -66,7 +74,7 @@ export function Header({
     >
       <div className="relative flex h-(--spacing-header) items-center gap-1 px-2">
         {showBack && (
-          <IconButton label="뒤로 가기" onClick={() => navigate(-1)}>
+          <IconButton label="뒤로 가기" onClick={onBack ?? (() => navigate(-1))}>
             <ChevronLeft size={22} />
           </IconButton>
         )}
