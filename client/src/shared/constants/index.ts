@@ -1,4 +1,5 @@
 export { ROUTES, BOOKING_STEPS } from './routes';
+export { FEATURE } from './features';
 
 /** 서버 상태 캐시 정책 — 화면 성격별 프리셋 */
 export const STALE_TIME = {
