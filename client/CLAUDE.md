@@ -651,7 +651,7 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 |---|---|---|
 | 로컬 (`npm run dev`) | — | **꺼짐.** `.env.development` 를 일부러 비워 뒀습니다 |
 | dev (dev.teacat.site) | 아직 없음 | 꺼짐. 켜려면 속성을 **새로 만들어** Jenkinsfile 의 `GA_ID` 에 채웁니다 |
-| prod (teacat.site) | `G-Y46EH6RRQM` | **켜짐.** CI 가 build-arg 로 넘깁니다 |
+| prod (teacat.site) | `G-5BPSG2K5K9` | **켜짐.** CI 가 build-arg 로 넘깁니다 |
 
   🔴 Clarity 와 dev/prod 가 **반대**입니다. 헷갈리지 마세요 — Clarity 는 dev 만, GA 는 prod 만 켜져 있습니다.
 
@@ -679,6 +679,33 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 - 🔴 **서비스워커가 계측을 캐싱하지 않게** `vite.config.ts` 에 `NetworkOnly` 를 뒀습니다.
   GA 가 폴백으로 쓰는 1x1 픽셀이 바로 아래 이미지 `CacheFirst` 규칙에 잡히면,
   캐시 히트로 끝나 **이벤트가 조용히 사라집니다** (에러도 안 납니다).
+- **심어 둔 커스텀 이벤트** — 예매 퍼널입니다. GA 탐색의 *유입경로 탐색* 에 이 순서로 넣으면
+  단계별 이탈률이 나옵니다. 이벤트를 늘릴 때 이 표도 함께 갱신하세요.
+
+  | 이벤트 | 어디 | 파라미터 |
+  |---|---|---|
+  | `booking_start` | `useStartBooking` (오픈 확인 통과) | `schedule_id` |
+  | `booking_blocked` | 같은 곳, 오픈 전/마감 | `schedule_id` `fail_reason` |
+  | `captcha_pass` / `captcha_fail` | `useCaptcha` | `schedule_id` |
+  | `face_verify_success` / `_fail` | `useFaceVerify` | `fail_reason` |
+  | `seat_hold_success` / `_fail` | `useSeatHold` | `schedule_id` `fail_reason` |
+  | `payment_start` | `usePayment` | `schedule_id` `payment_method` |
+  | `purchase` | `useConfirmPayment` | `transaction_id` `value` `currency` |
+  | `payment_fail` | `usePayment` · `usePaymentResult` | `fail_reason` |
+  | `payment_confirm_failed` | `usePaymentResult` | `fail_reason` |
+
+  - 🔴 **`purchase` 는 `useConfirmPayment.onSuccess` 한 곳에서만** 보냅니다. 캣머니 0원 결제·
+    모의 PG·토스 리디렉션 복귀가 **모두 그 지점으로 합류**하기 때문입니다. 다른 데 추가하면
+    매출이 두 배로 보입니다.
+  - 🔴 **`seat_hold_fail` 이 이 서비스의 핵심 지표입니다.** 선점 실패는 요청이 실패한 것이라
+    클릭 지도에 남지 않아 Clarity 로는 **횟수를 셀 수 없습니다.** GA 가 "몇 %가 여기서
+    죽었나" 를 세고, Clarity 리코딩이 "그 사람이 뭘 했나" 를 보여주는 조합입니다.
+  - 🔴 **파라미터는 맞춤 측정기준으로 등록해야 리포트에 보입니다** — `관리 > 맞춤 정의` 에서
+    `schedule_id`·`fail_reason`·`payment_method` 를 **이벤트 범위**로 등록하세요. 등록 전에
+    쌓인 데이터에는 **소급 적용되지 않습니다.** 값은 GA 에 도착해 있는데 볼 방법만 없는
+    상태가 되고, 뒤늦게 등록해도 그 기간은 영영 비어 있습니다.
+  - 🔴 **좌석번호·주문 상세·공연명을 파라미터에 넣지 마세요.** `purchase` 에 `items` 배열을
+    붙이지 않은 것도 같은 이유입니다 (위 개인정보 항목).
 - **광고 차단기가 20~40% 를 막습니다.** 절대값이 아니라 **추세와 비율**로 읽으세요.
   매출 정산에 쓰면 안 됩니다 — 그건 서버 데이터가 기준입니다.
 - ⚠️ **미해결:** 쿠키 동의·개인정보처리방침. Clarity 와 똑같이 GA 도 쿠키를 쓰고 데이터가
@@ -811,7 +838,7 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
   npm 패키지는 늘지 않았습니다(gtag 스크립트 한 줄, `shared/lib/ga.ts` 가 직접 꽂음).
   `VITE_GA_MEASUREMENT_ID` 하나를 `.env.*` / `vite-env.d.ts` / `shared/config/env.ts` 에
   추가했고 CI 가 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
-  🔴 **Clarity 와 dev/prod 가 반대입니다** — GA 는 prod(`G-Y46EH6RRQM`)만, Clarity 는 dev 만
+  🔴 **Clarity 와 dev/prod 가 반대입니다** — GA 는 prod(`G-5BPSG2K5K9`)만, Clarity 는 dev 만
      켜져 있습니다. GA 속성이 운영용 하나뿐이라서입니다.
   🔴 **SPA 라 페이지뷰를 직접 보냅니다.** `send_page_view: false` + `app/router/analytics.ts`
      의 라우터 구독입니다. 레이아웃마다 훅을 붙이면 레이아웃 없는 라우트에서 빠집니다.
