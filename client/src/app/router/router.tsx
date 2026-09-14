@@ -57,6 +57,10 @@ const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
 const NicknameChangePage = page(() => import('@/pages/NicknameChangePage'), 'NicknameChangePage');
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
+const PrivacyPolicyPage = page(
+  () => import('@/pages/PrivacyPolicyPage'),
+  'PrivacyPolicyPage',
+);
 
 const OauthCallbackPage = page(() => import('@/pages/OauthCallbackPage'), 'OauthCallbackPage');
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
@@ -459,6 +463,11 @@ const routes: RouteObject[] = [
       },
 
       ...devRoutes,
+
+      /* 개인정보처리방침 — 가드 밖입니다. 쿠키 동의 배너에서 링크로 걸리는데
+         동의는 비로그인 첫 방문자에게도 물어야 하기 때문입니다.
+         `withMask` 는 붙이지 않습니다 — 남의 개인정보가 아니라 고지문입니다. */
+      { path: ROUTES.PRIVACY, element: withBoundary(<PrivacyPolicyPage />) },
 
       { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
     ],

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/shared/api';
+import { trackGaEvent } from '@/shared/lib';
 import { readRedirectResult } from '../api/paymentGateway';
 import { useConfirmPayment } from './usePayment';
 import type { PaymentFailure } from '../model/payment.types';
@@ -49,6 +50,9 @@ export function usePaymentResult() {
     window.history.replaceState({}, '', window.location.pathname);
 
     if (!result.ok) {
+      trackGaEvent('payment_fail', {
+        fail_reason: result.failure.canceledByUser ? 'USER_CANCELED' : result.failure.code,
+      });
       setState({ status: 'failed', failure: result.failure });
       return;
     }
@@ -60,13 +64,19 @@ export function usePaymentResult() {
          실제 수단은 백엔드가 토스 조회로 확인하므로 참고값입니다. */
       { auth: result.auth },
       {
-        onError: (error) =>
+        onError: (error) => {
+          /* 🔴 **가장 위험한 상태**입니다 — 돈은 빠졌는데 티켓이 없습니다.
+             건수가 0 이 아니면 즉시 봐야 하므로 따로 셉니다. */
+          trackGaEvent('payment_confirm_failed', {
+            fail_reason: ApiError.isApiError(error) ? error.code : 'NETWORK',
+          });
           setState({
             status: 'confirm-failed',
             message: ApiError.isApiError(error)
               ? error.message
               : '결제 승인에 실패했습니다. 결제 내역을 확인해 주세요.',
-          }),
+          });
+        },
       },
     );
     // confirm 은 매 렌더 새로 만들어지므로 의존성에서 제외합니다.

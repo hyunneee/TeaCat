@@ -37,4 +37,6 @@ export const STORAGE_KEY = {
   AUTH: 'ticket.auth',
   RECENT_CONCERTS: 'ticket.recentConcerts',
   THEME: 'ticket.theme',
+  /** 분석 쿠키 동의 (consent.ts). 없으면 '아직 안 물어봄' 입니다 */
+  CONSENT: 'ticket.consent',
 } as const;

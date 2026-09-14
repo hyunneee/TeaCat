@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/shared/components/layout';
-import { Loading } from '@/shared/components/common';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useInfiniteScroll } from '@/shared/hooks';
 import {
@@ -26,6 +26,14 @@ export function MyNftsPage() {
      눌러도 실패하는 칸이 됩니다. 응답 전에는 보여주지 않습니다(깜빡임 방지). */
   const { data: draw } = useDrawAvailability();
 
+  /* 카드도 카드팩도 없을 때만 빈 화면을 말합니다 — 팩이 있으면 할 일이 있는 화면이라
+     "없어요" 가 틀린 말이 됩니다 */
+  const nothing =
+    (cards ?? []).length === 0 &&
+    draw !== undefined &&
+    draw.remaining === 0 &&
+    draw.scheduled === 0;
+
   const sentinel = useInfiniteScroll({
     hasNext: !!hasNextPage,
     isFetching: isFetchingNextPage,
@@ -43,6 +51,11 @@ export function MyNftsPage() {
       <div className="p-4">
         {isPending ? (
           <Loading label="포토카드를 불러오는 중" />
+        ) : nothing ? (
+          <EmptyState
+            title="아직 보유한 포토카드가 없어요."
+            description="공연을 관람하거나 이벤트 카드팩을 열면 여기에 쌓입니다."
+          />
         ) : (
           <>
             <ul className="grid grid-cols-2 gap-3">
