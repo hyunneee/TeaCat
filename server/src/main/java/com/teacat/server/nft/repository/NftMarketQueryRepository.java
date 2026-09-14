@@ -206,11 +206,17 @@ public class NftMarketQueryRepository {
      * <p>도안 수량은 공연 단위로 붙는데 관객은 회차마다 있다. 그래서 "회차 수만큼 곱하는 것" 을
      * 잊으면 뒤 회차 관객이 못 뽑는다 — 어드민이 그걸 사람 기억에 맡기지 않도록 서버가 계산해 준다.
      *
-     * <p>구역이 없거나 회차가 없으면 0 이다.
+     * <p>지정석은 공연장 구역의 좌석 수({@code areas.max_seat})가 정원이고, 스탠딩은 공연별로
+     * 정한 최대 인원({@code performance_areas.max_cnt})이 정원이다. 구역이 없거나 회차가 없으면 0 이다.
      */
     public long sumSeatCapacityAcrossSchedules(Long performanceId) {
         String sql = """
-                SELECT COALESCE((SELECT sum(pa.max_cnt) FROM performance_areas pa
+                SELECT COALESCE((SELECT sum(CASE
+                                                WHEN pa.sale_type = 'SEATED' THEN a.max_seat
+                                                ELSE pa.max_cnt
+                                            END)
+                                   FROM performance_areas pa
+                                   JOIN areas a ON a.id = pa.area_id
                                   WHERE pa.performance_general_id = :performanceId), 0)
                      * (SELECT count(*) FROM performance_details pd
                          WHERE pd.performance_general_id = :performanceId)

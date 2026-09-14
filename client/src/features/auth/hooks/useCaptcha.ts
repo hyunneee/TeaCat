@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { toast } from '@/shared/stores';
+import { trackGaEvent } from '@/shared/lib';
 import { authApi, authKeys } from '../api/authApi';
 import { useAuthStore } from '../store/authStore';
 
@@ -46,11 +47,13 @@ export function useCaptcha(scheduleId: string, onVerified: () => void) {
         scheduleId,
       }),
     onSuccess: () => {
+      trackGaEvent('captcha_pass', { schedule_id: scheduleId });
       // 라우트 가드(RequireCaptcha)가 이 값을 보고 예매 플로우 진입을 허용합니다.
       setCaptchaVerified(scheduleId);
       onVerified();
     },
     onError: (error) => {
+      trackGaEvent('captcha_fail', { schedule_id: scheduleId });
       setInvalid(true);
       toast.error(ApiError.isApiError(error) ? error.message : '확인에 실패했어요.');
       // 틀린 문제를 계속 풀게 두면 무한 대입이 됩니다. 새 문제를 받습니다.

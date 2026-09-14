@@ -1,5 +1,6 @@
 import { Card, ConfirmModal } from '@/shared/components/ui';
 import {
+  AdminCatMoneyModal,
   AdminPagination,
   AdminPasswordResetModal,
   AdminUserCreateModal,
@@ -45,6 +46,7 @@ export function AdminUsersPage() {
           onResetPassword={m.openResetPassword}
           onDeleteFace={m.openDeleteFace}
           onWithdraw={m.openWithdraw}
+          onAdjustCatMoney={m.openCatMoney}
         />
 
         <AdminPagination
@@ -75,6 +77,9 @@ export function AdminUsersPage() {
         onSubmit={(userId, newPassword) => m.resetPassword.mutate({ userId, newPassword })}
         isPending={m.resetPassword.isPending}
       />
+
+      {/* 테스트용 캣머니 조정 — 지갑이 있는 역할(USER)에만 버튼이 보입니다 */}
+      <AdminCatMoneyModal user={m.adjustingCatMoney} onClose={m.closeCatMoney} />
 
       {/* 되돌릴 수 없는 동작은 확인 모달 + danger (CLAUDE.md 4-7) */}
       {m.confirming && (

@@ -1,3 +1,4 @@
+import { FEATURE } from '@/shared/constants';
 import type { User, UserRole } from './auth.types';
 
 /**
@@ -7,8 +8,23 @@ import type { User, UserRole } from './auth.types';
  * 이 파일은 순수 함수만 있어서 테스트하기도 쉽습니다.
  */
 export const can = {
-  /** 티켓을 실제로 사용(입장)할 수 있는가 — 얼굴 등록 필수 */
-  useTicket: (user: User | null): boolean => !!user?.faceRegistered,
+  /**
+   * 티켓을 실제로 사용(입장)할 수 있는가 — 얼굴 등록 필수.
+   *
+   * 🔴 얼굴을 닫아 둔 배포(`FEATURE.face === false`)에서는 **항상 true** 입니다.
+   *    등록할 방법이 없는데 등록을 요구하면 아무도 예매를 못 합니다.
+   *    예매 가드(`RequireFace`)·예매 완료·티켓 상세가 전부 이 한 줄을 보므로,
+   *    기능을 여닫을 때 화면을 하나씩 찾아다닐 필요가 없습니다.
+   */
+  useTicket: (user: User | null): boolean => !FEATURE.face || !!user?.faceRegistered,
+
+  /**
+   * 지금 얼굴로 본인 확인을 할 수 있는가 (티켓 상세의 "본인 확인").
+   *
+   * `useTicket` 과 **반대로** 움직입니다 — 닫아 둔 배포에서는 항상 false 입니다.
+   * 저쪽은 "막지 마라", 이쪽은 "보여주지 마라" 라서 한 함수로 묶을 수 없습니다.
+   */
+  verifyFace: (user: User | null): boolean => FEATURE.face && !!user?.faceRegistered,
 
   /**
    * 공연을 개설할 수 있는가 — 관리자와 공연 주최자.

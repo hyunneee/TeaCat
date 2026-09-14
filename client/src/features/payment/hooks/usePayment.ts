@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError, queryClient } from '@/shared/api';
 import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
+import { trackGaEvent } from '@/shared/lib';
 import { useBookingStore } from '@/features/booking';
 import { paymentApi } from '../api/paymentApi';
 import { requestPayment } from '../api/paymentGateway';
@@ -27,6 +28,21 @@ export function useConfirmPayment() {
         ensureIdempotencyKey(),
       ),
     onSuccess: (order) => {
+      /* GA4 표준 전자상거래 이벤트. 여기가 **모든 결제 경로가 합류하는 유일한 지점**이라
+         (캣머니 0원 결제·모의 PG·토스 리디렉션 복귀) 여기서만 보내면 중복이 없습니다.
+         다른 곳에 purchase 를 추가하지 마세요 — 매출이 두 배로 보입니다.
+
+         🔴 **정산에 쓰지 마세요.** 광고 차단기가 20~40% 를 막아서 GA 의 매출은 언제나
+            실제보다 적습니다. 돈의 기준은 서버입니다. 여기 값은 "어느 공연이 잘 팔리나"
+            같은 **비교**에만 씁니다.
+         🔴 items 배열(좌석·공연명)은 보내지 않습니다. 좌석번호는 개인을 특정할 수 있고,
+            GA4 약관이 금지하는 값입니다 (7장). */
+      trackGaEvent('purchase', {
+        transaction_id: String(order.ticketOrderId),
+        value: order.totalAmount,
+        currency: 'KRW',
+      });
+
       void queryClient.invalidateQueries({ queryKey: ['booking'] });
       void queryClient.invalidateQueries({ queryKey: ['ticket'] });
       void queryClient.invalidateQueries({ queryKey: ['token'] });
@@ -57,6 +73,9 @@ export function usePayment(scheduleId: string) {
 
       try {
         setStage('preparing');
+        /* 퍼널의 마지막 단계. 여기와 purchase 의 차이가 **결제 이탈률**입니다 —
+           토스 결제창을 띄워 놓고 닫는 사람이 얼마나 되는지가 여기서 나옵니다. */
+        trackGaEvent('payment_start', { schedule_id: scheduleId, payment_method: payMethod });
         const prepared = await paymentApi.prepare({ performanceDetailId, seatId });
 
         // 서버가 카드 결제액을 0원으로 확정하면 토스를 거치지 않고 바로 발권합니다.
@@ -103,6 +122,12 @@ export function usePayment(scheduleId: string) {
 
         if (!result.ok) {
           setStage('idle');
+          /* 사용자가 스스로 닫은 것과 진짜 실패를 **가릅니다.** 한 덩어리로 세면
+             "결제 실패율" 이 부풀어서 붙어야 할 곳에 손을 못 댑니다. */
+          trackGaEvent('payment_fail', {
+            schedule_id: scheduleId,
+            fail_reason: result.failure.canceledByUser ? 'USER_CANCELED' : result.failure.code,
+          });
           if (result.failure.canceledByUser || result.failure.code === 'REDIRECTED') return;
           toast.error(result.failure.message);
           return;

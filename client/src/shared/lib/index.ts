@@ -28,3 +28,10 @@ export {
 } from './motion';
 export { initSentry, reportError, setSentryUser } from './sentry';
 export { initClarity, setClarityUser, trackClarityEvent } from './clarity';
+export { initGa, trackPageView, trackGaEvent, setGaUser } from './ga';
+export {
+  readAnalyticsConsent,
+  writeAnalyticsConsent,
+  clearAnalyticsConsent,
+  type AnalyticsConsent,
+} from './consent';

@@ -149,6 +149,31 @@ function clarityConfig() {
   } as const;
 }
 
+/**
+ * 이용 분석 (Google Analytics 4).
+ *
+ * 측정 ID 가 비어 있으면 **아예 켜지 않습니다.** Sentry 의 DSN, Clarity 의 프로젝트 ID 와
+ * 같은 규칙입니다 — 팀원 노트북의 클릭이 세션·이탈률을 오염시키면 지표를 못 믿게 됩니다.
+ *
+ * ⚠️ 측정 ID(`G-...`)는 브라우저에 노출되는 **공개 값**입니다 (스크립트 주소에 그대로 실립니다).
+ *    리포트를 읽는 권한이 아닙니다. Data API 용 서비스 계정 키는 전혀 다른 물건이고,
+ *    절대 `VITE_` 로 두면 안 됩니다.
+ *
+ * 🔴 Clarity 와 마찬가지로 GA4 에도 Sentry 의 `environment` 같은 태그가 **없습니다.**
+ *    dev·prod 를 가르려면 **속성을 환경별로 하나씩** 만들고 CI 가 서로 다른 측정 ID 를
+ *    넘겨야 합니다. 같은 ID 를 쓰면 개발 중 클릭이 운영 지표에 그대로 섞입니다.
+ *    (지금은 운영 속성만 있습니다 — Jenkinsfile 의 GA_ID)
+ */
+function gaConfig() {
+  const measurementId = optionalString('VITE_GA_MEASUREMENT_ID', '').trim();
+
+  return {
+    measurementId,
+    /** 측정 ID 가 있어야만 켜집니다 */
+    enabled: measurementId.length > 0,
+  } as const;
+}
+
 export const env = {
   /** 'development' | 'production' */
   name: (import.meta.env.VITE_APP_ENV ?? import.meta.env.MODE) as AppEnvName,
@@ -180,6 +205,11 @@ export const env = {
      프로젝트 ID 가 없으면 꺼진 채로 동작합니다.
      🔴 켜기 전에 대시보드 마스킹을 Strict 로 바꿔야 합니다 — shared/lib/clarity.ts 참고. */
   clarity: clarityConfig(),
+
+  /* ── 이용 분석 (Google Analytics 4) ──────────────────────
+     측정 ID 가 없으면 꺼진 채로 동작합니다.
+     🔴 SPA 라 페이지뷰를 직접 보냅니다 — shared/lib/ga.ts 의 '향상된 측정' 주석을 읽으세요. */
+  ga: gaConfig(),
 
   /* ── 얼굴 등록 ───────────────────────────────────────────
      🔴 모델 파일은 **브라우저에서만** 씁니다. 서버로 얼굴 이미지를 보내는 설정은

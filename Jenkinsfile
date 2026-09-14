@@ -197,13 +197,35 @@ pipeline {
                     #    (프로젝트 ID 는 공개 값이라 여기 적어도 된다. 데이터 내보내기 API
                     #     토큰은 전혀 다른 물건이고 절대 여기 두면 안 된다)
                     case "$DEPLOY_ENV" in
-                        # 🔴 운영용 프로젝트는 아직 없다. 운영을 열 때 Clarity 에서 프로젝트를
-                        #    하나 더 만들어 여기 채운다. dev 것을 그대로 쓰면 히트맵이 섞인다.
-                        #    그때 개인정보처리방침·쿠키 동의도 함께 정리해야 한다
-                        #    (client/CLAUDE.md 8장 — 지금은 미해결).
-                        prod) CLARITY_ID="" ;;
-                        # dev.teacat.site → Clarity 프로젝트 'teacat'
-                        *)    CLARITY_ID="yfz2y32jxa" ;;
+                        # teacat.site → Clarity 프로젝트 'teacat' (프로젝트 설정의 웹사이트
+                        # URL 도 이 주소다). **실사용자가 어디서 막히는지 보려고 여기를 켠다** —
+                        # dev 만 보면 표본이 팀원뿐이라 히트맵·퍼널이 통계적으로 무의미했다.
+                        prod) CLARITY_ID="yfz2y32jxa" ;;
+
+                        # 🔴 dev 는 **일부러 끈다.** 프로젝트가 하나뿐이라 양쪽을 같은 ID 로
+                        #    보내면 dev 세션이 운영 히트맵·퍼널에 섞인다 (Clarity 에는 Sentry 의
+                        #    environment 같은 태그가 없어서 나중에 갈라낼 수도 없다).
+                        #    dev 도 보려면 Clarity 에서 프로젝트를 하나 더 만들어 여기 채운다.
+                        *)    CLARITY_ID="" ;;
+                    esac
+
+                    # 이용 분석 (GA4). Clarity 와 판단이 **반대**다 — 지금 있는 속성이
+                    # 운영(teacat.site) 것 하나뿐이라 prod 만 켠다.
+                    #
+                    # 🔴 dev 를 켜려면 GA 에서 **속성을 하나 더 만들어** 아래 dev 칸에 채워라.
+                    #    운영 것을 그대로 쓰면 개발 중 클릭이 세션 수·이탈률·퍼널에 섞인다
+                    #    (GA4 에도 Sentry 의 environment 같은 태그가 없다).
+                    #
+                    # 🔴 GA 콘솔에서 **향상된 측정 > 페이지 조회수 > "브라우저 기록 이벤트
+                    #    기반 페이지 변경" 이 꺼져 있어야 한다.** 우리가 라우트마다 직접
+                    #    보내므로(shared/lib/ga.ts) 켜 두면 화면 이동이 두 번씩 집계된다.
+                    #    코드로는 못 끈다 — 사람이 대시보드에서 꺼야 한다.
+                    #
+                    # (측정 ID 는 스크립트 주소에 실리는 공개 값이라 여기 적어도 된다.
+                    #  Data API 서비스 계정 키는 전혀 다른 물건이고 절대 여기 두면 안 된다)
+                    case "$DEPLOY_ENV" in
+                        prod) GA_ID="G-5BPSG2K5K9" ;;
+                        *)    GA_ID="" ;;
                     esac
 
                     # 소스맵 업로드 토큰 (Sentry). 없으면 조용히 건너뛴다 —
@@ -252,6 +274,7 @@ pipeline {
                         --build-arg VITE_SENTRY_ENVIRONMENT=$DEPLOY_ENV \
                         --build-arg VITE_SENTRY_RELEASE=teacat-client@$TAG \
                         --build-arg VITE_CLARITY_PROJECT_ID=$CLARITY_ID \
+                        --build-arg VITE_GA_MEASUREMENT_ID=$GA_ID \
                         --build-arg SENTRY_AUTH_TOKEN ./client
                 '''
             }

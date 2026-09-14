@@ -1,18 +1,9 @@
 import { useNavigate } from 'react-router-dom';
-import {
-  Bell,
-  Info,
-  KeyRound,
-  ScanFace,
-  ShieldX,
-  Trash2,
-  TriangleAlert,
-  UserRound,
-} from 'lucide-react';
+import { Bell, Info, KeyRound, ScanFace, ShieldCheck, ShieldX, Trash2, TriangleAlert, UserRound } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { useAuth, useWithdraw } from '@/features/auth';
 import { useFaceRemoval } from '@/features/face';
 import { PERMISSION_LABEL, useNotificationPermission } from '@/features/notification';
@@ -73,6 +64,12 @@ export function SettingsPage() {
               description={`버전 ${version.current}`}
               onClick={() => navigate(ROUTES.SETTINGS_ABOUT)}
             />
+            <ListRow
+              icon={<ShieldCheck size={18} />}
+              title="개인정보처리방침"
+              description="이용 통계 수집 동의도 여기서 바꿀 수 있어요"
+              onClick={() => navigate(ROUTES.PRIVACY)}
+            />
           </Card>
         </section>
 
@@ -80,23 +77,27 @@ export function SettingsPage() {
         <section>
           <SectionTitle description="한 번 실행하면 되돌릴 수 없어요">위험 구역</SectionTitle>
           <Card tone="danger" padded={false} className="divide-danger/20 divide-y overflow-hidden">
-            <ListRow
-              icon={<ScanFace size={18} />}
-              title="등록된 얼굴 삭제"
-              description={user?.faceRegistered ? '등록됨' : '등록된 얼굴이 없습니다'}
-              danger
-              hideChevron
-              disabled={!user?.faceRegistered}
-              onClick={() =>
-                open('common/confirm', {
-                  title: '등록된 얼굴을 삭제할까요?',
-                  message: '삭제하면 보유한 티켓으로 입장할 수 없습니다. 다시 등록해야 합니다.',
-                  confirmText: '삭제',
-                  danger: true,
-                  onConfirm: () => removeFace.mutate(),
-                })
-              }
-            />
+            {/* 얼굴을 닫아 둔 배포에서는 이 줄을 걷습니다. 지울 것이 없는데 "삭제" 가
+                보이면 무엇이 저장돼 있나 되묻게 됩니다. 삭제 훅·API 는 그대로 둡니다. */}
+            {FEATURE.face && (
+              <ListRow
+                icon={<ScanFace size={18} />}
+                title="등록된 얼굴 삭제"
+                description={user?.faceRegistered ? '등록됨' : '등록된 얼굴이 없습니다'}
+                danger
+                hideChevron
+                disabled={!user?.faceRegistered}
+                onClick={() =>
+                  open('common/confirm', {
+                    title: '등록된 얼굴을 삭제할까요?',
+                    message: '삭제하면 보유한 티켓으로 입장할 수 없습니다. 다시 등록해야 합니다.',
+                    confirmText: '삭제',
+                    danger: true,
+                    onConfirm: () => removeFace.mutate(),
+                  })
+                }
+              />
+            )}
             <ListRow
               icon={<Trash2 size={18} />}
               title="회원 탈퇴"
@@ -122,10 +123,14 @@ export function SettingsPage() {
           </p>
         </section>
 
-        <p className="text-subtle flex items-start gap-1.5 px-1 text-xs leading-relaxed">
-          <ShieldX size={13} className="mt-0.5 shrink-0" />
-          등록한 얼굴 정보는 입장 시 본인 확인 목적으로만 사용되며, 탈퇴 시 즉시 파기됩니다.
-        </p>
+        {/* 얼굴을 받지 않는 배포에서는 이 고지도 걷습니다 — 수집하지 않는 정보를
+            "이렇게 쓴다" 고 적어 두면 사실과 다른 안내가 됩니다 */}
+        {FEATURE.face && (
+          <p className="text-subtle flex items-start gap-1.5 px-1 text-xs leading-relaxed">
+            <ShieldX size={13} className="mt-0.5 shrink-0" />
+            등록한 얼굴 정보는 입장 시 본인 확인 목적으로만 사용되며, 탈퇴 시 즉시 파기됩니다.
+          </p>
+        )}
       </div>
     </>
   );

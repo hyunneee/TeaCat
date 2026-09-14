@@ -26,8 +26,12 @@ import {
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { cn, formatDateTime } from '@/shared/lib';
+<<<<<<< HEAD
 import { useModal } from '@/app/providers';
 import { useAuth } from '@/features/auth';
+=======
+import { can, useAuth } from '@/features/auth';
+>>>>>>> origin/dev
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHolds, useReleaseMyHold } from '@/features/booking';
 import {
@@ -292,7 +296,8 @@ export function HomePage() {
           </ul>
         )}
 
-        {isLoggedIn && user && !user.faceRegistered && (
+        {/* 얼굴을 닫아 둔 배포에서는 `can.useTicket` 이 늘 true 라 이 안내가 사라집니다 */}
+        {isLoggedIn && user && !can.useTicket(user) && (
           <Card
             tone="warning"
             interactive
