@@ -23,9 +23,11 @@ export function useRecipients(seatIds: readonly string[]) {
   useEffect(() => {
     if (!myLoginId) return;
     const assigned = new Set(recipients.map((r) => r.seatId));
-    seatIds.filter((seatId) => !assigned.has(seatId)).forEach((seatId) => {
-      setRecipient(seatId, myLoginId);
-    });
+    seatIds
+      .filter((seatId) => !assigned.has(seatId))
+      .forEach((seatId) => {
+        setRecipient(seatId, myLoginId);
+      });
   }, [seatIds, recipients, myLoginId, setRecipient]);
 
   const valueOf = (seatId: string) =>

@@ -63,8 +63,8 @@ export function AdminPackEventsPage() {
         <div>
           <h1 className="text-ink text-lg font-bold">카드팩 이벤트</h1>
           <p className="text-ink-muted text-sm">
-            처음 들어온 사람에게 카드팩을 하나 주는 기간입니다. 한 사람은 <b>코드당 한 번만</b>{' '}
-            받습니다.
+            열어 두면 뽑기 화면에 들어오는 것만으로 카드팩이 하나 생깁니다. 사용자가 입력할 코드는
+            없고, 한 사람은 <b>구분 코드당 한 번만</b> 받습니다.
           </p>
         </div>
         <Button variant="dark" leftIcon={<Plus size={16} />} onClick={() => setAdding(true)}>

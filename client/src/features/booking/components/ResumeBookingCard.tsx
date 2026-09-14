@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { Card, PosterImage } from '@/shared/components/ui';
+import { Button, Card, PosterImage } from '@/shared/components/ui';
 import { cn, formatDateTime } from '@/shared/lib';
 import { HoldTimer } from './HoldTimer';
 import { myHoldSeatLabel } from '../model/seat.model';
@@ -10,6 +10,9 @@ export interface ResumeBookingCardProps {
   /** 남은 초 — `useActiveHold` 가 응답 받은 시각 기준으로 계산해 줍니다 */
   remainSeconds: number;
   onContinue: () => void;
+  /** 잡아둔 자리를 놓습니다 — 확인 모달은 부르는 쪽(페이지)이 띄웁니다 */
+  onRelease: () => void;
+  isReleasing?: boolean;
   className?: string;
 }
 
@@ -27,6 +30,8 @@ export function ResumeBookingCard({
   hold,
   remainSeconds,
   onContinue,
+  onRelease,
+  isReleasing,
   className,
 }: ResumeBookingCardProps) {
   return (
@@ -52,6 +57,21 @@ export function ResumeBookingCard({
         </div>
         <ChevronRight size={18} className="text-subtle shrink-0" aria-hidden />
       </div>
+
+      {/* 🔴 카드 전체가 눌리는 자리라 전파를 끊습니다 — 안 끊으면 놓으려다 예매로 들어갑니다.
+          자리를 놓는 건 되돌릴 수 없어 붉게 둡니다 (CLAUDE.md 4-7) */}
+      <Button
+        variant="danger-ghost"
+        size="md"
+        fullWidth
+        loading={isReleasing}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRelease();
+        }}
+      >
+        자리 놓기
+      </Button>
     </Card>
   );
 }

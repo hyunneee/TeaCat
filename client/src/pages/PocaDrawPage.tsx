@@ -12,6 +12,9 @@ import {
   PocaReveal,
   useDrawAvailability,
   usePocaDraw,
+  REVEAL_BUTTON_GAP,
+  REVEAL_CARD_H,
+  REVEAL_TEXT_GAP,
 } from '@/features/nft';
 
 /**
@@ -114,7 +117,9 @@ export function PocaDrawPage() {
           max()·min() 은 낮은 화면에서 둘이 화면 밖으로 밀려나지 않게 잡아 줍니다. */}
       <p
         className="absolute inset-x-0 min-h-20 px-4 text-center text-xl font-bold text-white"
-        style={{ top: 'max(calc(50% - 282px), 12px)' }}
+        style={{
+          top: `max(calc(50% - ${REVEAL_CARD_H} / 2 - ${REVEAL_TEXT_GAP}px), 12px)`,
+        }}
       >
         {/* 응답이 늦을 때만 돌아가는 표시. 다 나오면 그 자리에 결과가 들어옵니다.
             소속(서울 N반)은 굳이 보여 주지 않습니다 — 호칭에 이미 담겨 있습니다. */}
@@ -130,7 +135,9 @@ export function PocaDrawPage() {
              invisible 이라 그 전에는 탭 순서에도 없습니다. */
           revealed ? 'visible opacity-100 delay-700' : 'invisible opacity-0',
         )}
-        style={{ top: 'min(calc(50% + 268px), calc(100% - 100px))' }}
+        style={{
+          top: `min(calc(50% + ${REVEAL_CARD_H} / 2 + ${REVEAL_BUTTON_GAP}px), calc(100% - 100px))`,
+        }}
       >
         {/* 팩이 남았을 때만 — 없는데 버튼을 두면 눌러도 반드시 실패합니다 */}
         {packs?.available && (

@@ -25,11 +25,18 @@ export function SelectedSeatBar({ seats, sectionName, maxPerUser, onRemove }: Pr
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="scrollbar-none flex gap-1.5 overflow-x-auto"
+            className="flex scrollbar-none gap-1.5 overflow-x-auto"
           >
             <AnimatePresence initial={false} mode="popLayout">
               {seats.map((seat) => (
-                <motion.li key={seat.id} layout variants={popIn} initial="hidden" animate="show" exit="exit">
+                <motion.li
+                  key={seat.id}
+                  layout
+                  variants={popIn}
+                  initial="hidden"
+                  animate="show"
+                  exit="exit"
+                >
                   <button
                     type="button"
                     onClick={() => onRemove(seat)}
