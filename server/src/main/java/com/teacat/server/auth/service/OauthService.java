@@ -19,6 +19,7 @@ import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.user.dto.response.MyInfoResponse;
+import com.teacat.server.user.entity.Face;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
@@ -128,6 +129,9 @@ public class OauthService {
                 request.phone()
         ));
         link(user, profile);
+
+        // 일반 가입과 같다 (AuthService.signup 주석 참고)
+        user.registerFace(Face.defaultFace());
 
         // 일반 가입과 같다 — 지갑 발급이 실패하면 이 가입도 통째로 롤백된다
         walletService.provision(user);

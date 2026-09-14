@@ -48,9 +48,9 @@ export function MyPage() {
   /* 얼굴 미등록 상태로 예매에 들어가려다 튕겨 온 경우 (RequireFace).
      아무 설명 없이 화면만 바뀌면 왜 못 들어갔는지 알 수 없습니다.
 
-     🔴 [1차 배포] 가드가 통과하므로 여기로 튕겨 올 일이 없습니다. 그래도 `FEATURE.face`
-        를 한 겹 더 둡니다 — 예전 주소가 담긴 링크나 뒤로가기로 `state` 가 남아 들어오면
-        할 수도 없는 일을 하라는 토스트가 뜹니다. */
+     `FEATURE.face` 를 한 겹 더 봅니다 — 얼굴을 닫아 둔 배포에서는 가드가 통과해
+     여기로 튕겨 올 일이 없는데, 예전 링크나 뒤로가기로 `state` 가 남아 들어오면
+     할 수도 없는 일을 하라는 토스트가 뜹니다. */
   const faceRequired =
     FEATURE.face && (location.state as { faceRequired?: boolean } | null)?.faceRequired;
   useEffect(() => {
