@@ -21,6 +21,9 @@ interface ImportMetaEnv {
   /* 행동 분석 — 비어 있으면 Clarity 를 아예 켜지 않습니다.
      🔴 dev/prod 는 **프로젝트를 따로** 만들어 서로 다른 ID 를 넘깁니다 (Clarity 에는 환경 태그가 없습니다) */
   readonly VITE_CLARITY_PROJECT_ID: string;
+  /* 이용 분석 — 비어 있으면 GA4 를 아예 켜지 않습니다.
+     🔴 dev/prod 는 **속성을 따로** 만들어 서로 다른 측정 ID 를 넘깁니다 (GA4 에도 환경 태그가 없습니다) */
+  readonly VITE_GA_MEASUREMENT_ID: string;
   /* 얼굴 등록 — 브라우저에서만 쓰는 모델 파일 주소와 버전 */
   readonly VITE_FACE_DETECTOR_URL: string;
   readonly VITE_FACE_EMBEDDER_URL: string;

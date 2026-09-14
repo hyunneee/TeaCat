@@ -19,7 +19,7 @@
  * 확인하는 법: 대시보드에서 지표 하나를 열어 `source` 가 `route` 인지 보세요.
  * `url` 이면 이 순서가 깨진 것입니다.
  */
-import { initClarity, initSentry } from '@/shared/lib';
+import { initClarity, initGa, initSentry } from '@/shared/lib';
 
 initSentry();
 
@@ -30,3 +30,8 @@ initSentry();
    🔴 이게 기록하는 DOM 은 `index.html` 의 `data-clarity-mask` 로 **전부 가려집니다.**
       그 속성을 지우면 화면 내용이 그대로 올라갑니다. shared/lib/clarity.ts 를 읽으세요. */
 initClarity();
+
+/* 이용 분석 (GA4). Clarity 와 마찬가지로 순서 제약이 없습니다 — 라우터를 감싸지 않습니다.
+   페이지뷰는 여기서 보내지 않습니다. SPA 라 라우트 구독이 대신 보냅니다
+   (`app/router/analytics.ts` 의 trackRouteViews — main.tsx 가 부릅니다). */
+initGa();

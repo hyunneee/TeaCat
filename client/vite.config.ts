@@ -87,6 +87,19 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkOnly',
             },
             {
+              /* 🔴 계측(GA4)은 **절대 캐싱하지 않는다.** 바로 아래 이미지 규칙이
+                 CacheFirst 라서, GA 가 fetch 를 못 쓰는 상황에서 폴백으로 쓰는
+                 1x1 픽셀(`/collect?...`)이 request.destination === 'image' 로 잡힌다.
+                 한 번 캐시되면 그 뒤 같은 주소의 전송이 네트워크로 나가지 않고
+                 **캐시 히트로 끝나서, 이벤트가 조용히 사라진다** (에러도 안 난다).
+                 googletagmanager 스크립트도 GA 가 자체 만료를 관리하므로 손대지 않는다. */
+              urlPattern: ({ url }) =>
+                url.hostname === 'www.googletagmanager.com' ||
+                url.hostname.endsWith('google-analytics.com') ||
+                url.hostname.endsWith('analytics.google.com'),
+              handler: 'NetworkOnly',
+            },
+            {
               // 포스터/포토카드 이미지는 캐싱 이득이 큼
               urlPattern: ({ request }) => request.destination === 'image',
               handler: 'CacheFirst',
