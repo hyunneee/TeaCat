@@ -5,7 +5,7 @@ import './instrument';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setupAuthBridge } from '@/app/providers';
-import { warmRoutes } from '@/app/router';
+import { trackRouteViews, warmRoutes } from '@/app/router';
 import App from './App';
 import '@/styles/index.css';
 
@@ -35,6 +35,10 @@ async function bootstrap() {
   /* 화면이 그려진 뒤, 한가할 때 자주 가는 화면의 코드를 미리 받습니다.
      (이동할 때 화면이 비었다가 채워지는 걸 없앱니다 — router.tsx 의 warmRoutes) */
   warmRoutes();
+
+  /* 화면이 그려진 **뒤에** 붙입니다. 첫 페이지뷰는 이 함수가 직접 한 번 보냅니다
+     (라우터 구독은 첫 진입에서 불리지 않습니다 — app/router/analytics.ts). */
+  trackRouteViews();
 }
 
 void bootstrap();

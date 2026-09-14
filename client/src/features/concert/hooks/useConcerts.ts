@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
+import { trackGaEvent } from '@/shared/lib';
 import { concertApi, concertKeys } from '../api/concertApi';
 import { bookingNotOpenMessage } from '../model/concert.model';
 
@@ -50,9 +51,13 @@ export function useStartBooking() {
       check.mutate(scheduleId, {
         onSuccess: (result) => {
           if (result.status === 'OPEN') {
+            /* 퍼널 1단계. **가드를 통과한 것만** 셉니다 — 오픈 전에 누른 것까지 세면
+               "예매 시작 대비 완료율" 이 실제보다 낮게 나옵니다 (아래 not_open 으로 따로 셉니다). */
+            trackGaEvent('booking_start', { schedule_id: scheduleId });
             onOpen();
             return;
           }
+          trackGaEvent('booking_blocked', { schedule_id: scheduleId, fail_reason: result.status });
           toast.info(bookingNotOpenMessage(result));
         },
         onError: (error) =>

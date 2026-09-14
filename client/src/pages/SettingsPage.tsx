@@ -1,14 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import {
-  Bell,
-  Info,
-  KeyRound,
-  ScanFace,
-  ShieldX,
-  Trash2,
-  TriangleAlert,
-  UserRound,
-} from 'lucide-react';
+import { Bell, Info, KeyRound, ScanFace, ShieldCheck, ShieldX, Trash2, TriangleAlert, UserRound } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
@@ -72,6 +63,12 @@ export function SettingsPage() {
               title="앱 정보"
               description={`버전 ${version.current}`}
               onClick={() => navigate(ROUTES.SETTINGS_ABOUT)}
+            />
+            <ListRow
+              icon={<ShieldCheck size={18} />}
+              title="개인정보처리방침"
+              description="이용 통계 수집 동의도 여기서 바꿀 수 있어요"
+              onClick={() => navigate(ROUTES.PRIVACY)}
             />
           </Card>
         </section>

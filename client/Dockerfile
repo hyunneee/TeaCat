@@ -33,11 +33,17 @@ ARG VITE_SENTRY_RELEASE=
 #    만들어 CI 가 서로 다른 ID 를 넘긴다. 같은 ID 를 넘기면 히트맵이 섞인다.
 ARG VITE_CLARITY_PROJECT_ID=
 
+# 이용 분석 (GA4). 비어 있으면 꺼진 채로 빌드된다 — 기본값이 빈 값인 이유다.
+# 🔴 Clarity 와 똑같이 GA4 에도 environment 태그가 없다. dev/prod 는 **속성을 따로**
+#    만들어 CI 가 서로 다른 측정 ID 를 넘긴다. 같은 ID 를 넘기면 지표가 섞인다.
+ARG VITE_GA_MEASUREMENT_ID=
+
 ENV VITE_USE_MOCK=$VITE_USE_MOCK \
     VITE_ENABLE_DEVTOOLS=$VITE_ENABLE_DEVTOOLS \
     VITE_SENTRY_ENVIRONMENT=$VITE_SENTRY_ENVIRONMENT \
     VITE_SENTRY_RELEASE=$VITE_SENTRY_RELEASE \
-    VITE_CLARITY_PROJECT_ID=$VITE_CLARITY_PROJECT_ID
+    VITE_CLARITY_PROJECT_ID=$VITE_CLARITY_PROJECT_ID \
+    VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
 
 # ── Sentry 소스맵 업로드 (vite.config.ts) ────────────────────────────
 # 🔴 여기만 **VITE_ 가 아니다.** 붙이는 순간 토큰이 번들에 박혀 공개된다.

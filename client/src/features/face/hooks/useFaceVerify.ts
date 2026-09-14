@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ApiError } from '@/shared/api';
 import { env } from '@/shared/config';
 import { toast } from '@/shared/stores';
+import { trackGaEvent } from '@/shared/lib';
 import { faceApi } from '../api/faceApi';
 
 /**
@@ -25,9 +26,21 @@ export function useFaceVerify() {
         embedding: Array.from(embedding),
         modelVersion: env.face.modelVersion,
       }),
-    onError: (error) =>
+    /* 🔴 `match: false` 는 **에러가 아니라 정상 응답**입니다 (안 닮았다는 답).
+       onSuccess 에서 갈라야 "인증에서 몇 %가 떨어지나" 가 잡힙니다 —
+       onError 만 세면 그 사람들이 통과한 것처럼 보입니다.
+       🔴 similarity·threshold 는 보내지 않습니다. 생체 판정 점수라 GA 에 남길 값이 아닙니다. */
+    onSuccess: (result) =>
+      trackGaEvent(result.match ? 'face_verify_success' : 'face_verify_fail', {
+        ...(result.match ? {} : { fail_reason: 'NO_MATCH' }),
+      }),
+    onError: (error) => {
+      trackGaEvent('face_verify_fail', {
+        fail_reason: ApiError.isApiError(error) ? error.code : 'NETWORK',
+      });
       toast.error(
         ApiError.isApiError(error) ? error.message : '본인 확인에 실패했어요. 다시 시도해 주세요.',
-      ),
+      );
+    },
   });
 }
