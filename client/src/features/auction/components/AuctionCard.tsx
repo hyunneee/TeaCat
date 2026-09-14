@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Gavel, Zap } from 'lucide-react';
-import { PocaArt, pocaSeed } from '@/features/nft';
+import { PocaArt, pocaName, pocaSeed } from '@/features/nft';
 import { AuctionCountdown } from './AuctionCountdown';
 
 interface Props {
@@ -37,7 +37,12 @@ export function AuctionCard({
   onClick,
 }: Props) {
   return (
-    <motion.button type="button" onClick={onClick} whileTap={{ scale: 0.97 }} className="w-full text-left">
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileTap={{ scale: 0.97 }}
+      className="w-full text-left"
+    >
       <div className="surface-2 shadow-list relative flex items-center justify-center rounded-2xl px-6 py-5">
         <PocaArt
           seed={pocaSeed(photocardId)}
@@ -56,7 +61,9 @@ export function AuctionCard({
         )}
       </div>
 
-      <p className="mt-3 line-clamp-2 text-[0.9375rem] leading-snug font-semibold">{designName}</p>
+      <p className="mt-3 line-clamp-2 text-[0.9375rem] leading-snug font-semibold">
+        {pocaName(designName)}
+      </p>
       <p className="text-subtle mt-1 truncate text-[0.8125rem]">{performanceTitle}</p>
 
       <p className="mt-1.5 text-[1.0625rem] leading-none font-extrabold tabular-nums">
