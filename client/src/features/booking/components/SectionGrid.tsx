@@ -70,7 +70,7 @@ export function SectionGrid({ sections, selectedId, onSelect }: Props) {
                    고를 때마다 격자가 흔들리지 않습니다. */
                 selected
                   ? 'border-brand-900'
-                  : 'border-transparent enabled:hover:border-line enabled:active:scale-[0.98]',
+                  : 'enabled:hover:border-line border-transparent enabled:active:scale-[0.98]',
               )}
             >
               {/* 선택 표시 — 어느 구역을 골랐는지 한눈에 */}

@@ -78,7 +78,14 @@ export function useAddPerformanceDesigns(performanceId: number) {
       queryClient.setQueryData(adminPocaDesignKeys.performancePool(performanceId), pool);
       toast.success('카드를 공연에 넣었어요.');
     },
-    onError: (error) => toast.error(message(error, '카드를 넣지 못했어요.')),
+    onError: (error) => {
+      toast.error(message(error, '카드를 넣지 못했어요.'));
+      /* 🔴 서버는 하나라도 걸리면 **전부** 거절합니다(NFT_047). 대개 목록이 낡아서
+         이미 넣은 카드를 또 고른 경우라, 다시 읽어 고를 수 없게 만들어 줍니다. */
+      void queryClient.invalidateQueries({
+        queryKey: adminPocaDesignKeys.performancePool(performanceId),
+      });
+    },
   });
 }
 
@@ -102,7 +109,11 @@ export function useAddEventPoolDesigns() {
       void queryClient.invalidateQueries({ queryKey: adminPocaDesignKeys.eventPool() });
       toast.success('카드를 이벤트 풀에 넣었어요.');
     },
-    onError: (error) => toast.error(message(error, '카드를 넣지 못했어요.')),
+    onError: (error) => {
+      toast.error(message(error, '카드를 넣지 못했어요.'));
+      /* 공연 풀과 같은 이유 — 낡은 목록으로 이미 넣은 카드를 또 고르면 전부 거절됩니다 */
+      void queryClient.invalidateQueries({ queryKey: adminPocaDesignKeys.eventPool() });
+    },
   });
 }
 

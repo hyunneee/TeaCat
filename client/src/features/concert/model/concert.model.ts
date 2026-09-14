@@ -18,6 +18,17 @@ export function isConcertOpen(concert: ConcertSummary): boolean {
   return concert.bookingStatus === 'OPEN';
 }
 
+/**
+ * 홈 레일에 남길 공연인가 — **매진도 남깁니다.**
+ *
+ * 🔴 매진됐다고 홈에서 지우면, 표를 산 사람이 자기가 가는 공연을 홈에서 찾지 못합니다.
+ * "살 수 있는가" 와 "볼 만한가" 는 다른 질문입니다. 취소표가 나올 수도 있고,
+ * 상세에 들어가면 회차별로 무엇이 남았는지 보입니다.
+ */
+export function isConcertOnRail(concert: ConcertSummary): boolean {
+  return concert.bookingStatus === 'OPEN' || concert.bookingStatus === 'SOLDOUT';
+}
+
 /** 목록 카드 칩 문구. 회차 목록의 문구(`scheduleStatusLabel`)와 달리 공연 한 건을 요약합니다 */
 export const CONCERT_BOOKING_LABEL: Record<BookingOpenStatus, string> = {
   OPEN: '예매중',

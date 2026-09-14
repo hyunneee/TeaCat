@@ -26,11 +26,13 @@ import {
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { cn, formatDateTime } from '@/shared/lib';
+import { useModal } from '@/app/providers';
 import { useAuth } from '@/features/auth';
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
-import { ResumeBookingCard, useActiveHolds } from '@/features/booking';
+import { ResumeBookingCard, useActiveHolds, useReleaseMyHold } from '@/features/booking';
 import {
   CONCERT_BOOKING_LABEL,
+  isConcertOnRail,
   isConcertOpen,
   posterSeedOf,
   useConcerts,
@@ -102,6 +104,19 @@ export function HomePage() {
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const activeHolds = useActiveHolds();
+  const releaseHold = useReleaseMyHold();
+  const { open } = useModal();
+
+  /* 되돌릴 수 없습니다 — 놓으면 그 자리는 곧바로 남이 살 수 있습니다 (CLAUDE.md 4-7) */
+  const askToRelease = (scheduleId: string, seatId: string) =>
+    open('common/confirm', {
+      title: '잡아둔 자리를 놓을까요?',
+      message:
+        '지금 자리가 풀리고 다른 사람이 살 수 있게 됩니다. 다시 잡으려면 처음부터 골라야 해요.',
+      confirmText: '놓기',
+      danger: true,
+      onConfirm: () => releaseHold.mutate({ scheduleId, seatId }),
+    });
 
   /**
    * 레일에 실을 공연 — **열린 것이 없으면 곧 열릴 것**을 보여줍니다.
@@ -115,7 +130,10 @@ export function HomePage() {
    * 예정을 보여주고 **제목도 함께 바꿉니다.**
    */
   const all = concerts ?? [];
-  const openConcerts = all.filter(isConcertOpen);
+  /* 매진도 남깁니다 — 살 수 있는 것을 앞에 두고, 매진은 그 뒤에 */
+  const openConcerts = all
+    .filter(isConcertOnRail)
+    .sort((a, b) => Number(isConcertOpen(b)) - Number(isConcertOpen(a)));
   const liveRail = openConcerts.length > 0;
   const rail = (
     liveRail
@@ -266,6 +284,8 @@ export function HomePage() {
                   hold={hold}
                   remainSeconds={remainSeconds}
                   onContinue={() => navigate(ROUTES.BOOKING_REVIEW(hold.scheduleId))}
+                  isReleasing={releaseHold.isPending}
+                  onRelease={() => askToRelease(hold.scheduleId, hold.seatId)}
                 />
               </li>
             ))}
@@ -374,13 +394,15 @@ export function HomePage() {
                         {/* 붉은 LIVE 칩은 **지금 살 수 있을 때만** 입니다 (CLAUDE.md 4-6).
                             오픈 예정에 붉은 점을 달면 눌렀다가 못 사고 돌아옵니다. */}
                         <span className="absolute top-1.5 left-1.5">
-                          {liveRail ? (
+                          {/* 🔴 칩은 **공연마다** 정합니다. 레일 전체로 정하면 매진된 공연에도
+                              "예매중" 이 붙어서, 눌렀다가 못 사고 돌아옵니다 */}
+                          {isConcertOpen(concert) ? (
                             <Badge tone="live" icon={<LiveDot />} className="shadow-card">
                               {CONCERT_BOOKING_LABEL.OPEN}
                             </Badge>
                           ) : (
                             <Badge tone="neutral" className="shadow-card">
-                              {CONCERT_BOOKING_LABEL.BEFORE}
+                              {CONCERT_BOOKING_LABEL[concert.bookingStatus]}
                             </Badge>
                           )}
                         </span>

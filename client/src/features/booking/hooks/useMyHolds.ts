@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { ApiError, queryClient } from '@/shared/api';
+import { toast } from '@/shared/stores';
 import { STALE_TIME } from '@/shared/constants';
 import { useCountdown } from '@/shared/hooks';
 import { useAuth } from '@/features/auth';
@@ -23,6 +25,30 @@ export function useMyHolds() {
     queryFn: () => bookingApi.myHolds(),
     enabled: isLoggedIn,
     staleTime: STALE_TIME.REALTIME,
+  });
+}
+
+/**
+ * 잡아둔 자리를 **직접 놓습니다** (홈의 안내 카드).
+ *
+ * 🔴 그냥 두면 10분이 지나야 풀립니다. 그동안 그 자리는 남도 못 사고, 1인 1매라
+ * 본인도 그 회차의 다른 자리를 잡을 수 없습니다. 마음이 바뀌었을 때 기다리지 않고
+ * 빠져나올 길을 둡니다.
+ */
+export function useReleaseMyHold() {
+  return useMutation({
+    mutationFn: ({ scheduleId, seatId }: { scheduleId: string; seatId: string }) =>
+      bookingApi.releaseHold(scheduleId, seatId),
+    /* 이미 만료돼 사라진 선점을 다시 놓으려 하면 404 입니다. 재시도는 의미가 없습니다 */
+    retry: false,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+      toast.success('잡아둔 자리를 놓았어요.');
+    },
+    onError: (error) => {
+      void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+      toast.error(ApiError.isApiError(error) ? error.message : '자리를 놓지 못했어요.');
+    },
   });
 }
 
