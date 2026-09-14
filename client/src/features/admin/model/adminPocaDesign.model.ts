@@ -35,3 +35,14 @@ export function isDrawable(design: AdminPocaDesign): boolean {
 export function notYetDrawable(designs: AdminPocaDesign[]): AdminPocaDesign[] {
   return designs.filter((d) => d.chainStatus !== 'REGISTERED');
 }
+
+/**
+ * 좌석 수를 고른 카드 종수로 나눠 **한 종당 몇 장**을 찍을지 정합니다.
+ *
+ * 🔴 내림이 아니라 **올림**입니다 — 100석을 3종으로 나누면 33장씩(99장)이라
+ * 마지막 한 사람이 카드를 못 받습니다. 남는 것은 괜찮지만 모자란 것은 사고입니다.
+ */
+export function splitSupply(total: number, count: number): number {
+  if (total <= 0 || count <= 0) return 0;
+  return Math.ceil(total / count);
+}

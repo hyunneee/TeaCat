@@ -118,6 +118,8 @@ export function AdminPerformanceDrawPoolPage() {
                 .map((d) => d.templateId)
                 .filter((id): id is number => id !== null)}
               performanceTitle={concert?.title}
+              /* 좌석을 채우고도 남은 만큼만 권합니다 — 이미 넣은 카드까지 다시 찍으면 낭비입니다 */
+              suggestTotal={Math.max(0, pool.seatCapacity - pool.poolRemaining)}
               isPending={add.isPending}
               onSubmit={confirmAdd}
             />
