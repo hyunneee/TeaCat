@@ -34,10 +34,15 @@ export interface BalanceResult {
   symbol: typeof SYMBOL;
 }
 
-/** 발행 사유. 온체인에는 안 남고 로그에만 남습니다 — 대사(M2) 때 씁니다. */
-export type MintReason = 'DEPOSIT' | 'REWARD' | 'REFUND';
-/** 소각 사유. */
-export type BurnReason = 'PAYMENT' | 'WITHDRAWAL';
+/**
+ * 발행 사유. 온체인에는 안 남고 로그에만 남습니다 — 대사(M2) 때 씁니다.
+ *
+ * `ADMIN_GRANT` 는 관리자가 테스트용으로 넣어주는 돈입니다. 실제 원화가 들어온 적이
+ * 없으므로 **대사에서 제외해야 합니다** — `DEPOSIT` 과 섞이면 장부가 맞지 않습니다.
+ */
+export type MintReason = 'DEPOSIT' | 'REWARD' | 'REFUND' | 'ADMIN_GRANT';
+/** 소각 사유. `ADMIN_BURN` 도 같은 이유로 대사 대상이 아닙니다. */
+export type BurnReason = 'PAYMENT' | 'WITHDRAWAL' | 'ADMIN_BURN';
 
 export interface WriteResult {
   /** 방금 보냈으면 PENDING, 이미 처리돼 있었으면 ALREADY_DONE */

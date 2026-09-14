@@ -30,6 +30,9 @@ export function useAdminUserManagement() {
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
   const [confirming, setConfirming] = useState<Confirming>(null);
+  /* 캣머니 조정(테스트용). 모달이 자기 잔액 조회와 조정을 직접 들고 있어
+     여기서는 "누구를 열었는가" 만 압니다 */
+  const [adjustingCatMoney, setAdjustingCatMoney] = useState<AdminUser | null>(null);
 
   const create = useCreateAdminUser(() => setCreating(false));
   const update = useUpdateAdminUser(() => setEditing(null));
@@ -54,18 +57,21 @@ export function useAdminUserManagement() {
     openResetPassword: setResetting,
     openDeleteFace: (user: AdminUser) => setConfirming({ kind: 'face', user }),
     openWithdraw: (user: AdminUser) => setConfirming({ kind: 'withdraw', user }),
+    openCatMoney: setAdjustingCatMoney,
 
     /* 상태 */
     creating,
     editing,
     resetting,
     confirming,
+    adjustingCatMoney,
 
     /* 닫기 */
     closeCreate: () => setCreating(false),
     closeEdit: () => setEditing(null),
     closeResetPassword: () => setResetting(null),
     closeConfirm: () => setConfirming(null),
+    closeCatMoney: () => setAdjustingCatMoney(null),
 
     /* 실행 */
     create,

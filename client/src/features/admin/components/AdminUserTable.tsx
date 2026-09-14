@@ -1,7 +1,7 @@
-import { KeyRound, Pencil, ScanFace, UserMinus } from 'lucide-react';
+import { Coins, KeyRound, Pencil, ScanFace, UserMinus } from 'lucide-react';
 import { Badge, Button, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
-import { ROLE_LABEL } from '../model/adminUser.model';
+import { ROLE_LABEL, rolesWithWallet } from '../model/adminUser.model';
 import type { AdminUser } from '../model/adminUser.types';
 
 /**
@@ -19,6 +19,8 @@ export interface AdminUserTableProps {
   onResetPassword: (user: AdminUser) => void;
   onDeleteFace: (user: AdminUser) => void;
   onWithdraw: (user: AdminUser) => void;
+  /** 캣머니 조정(테스트용) — 지갑이 있는 역할에만 보입니다 */
+  onAdjustCatMoney: (user: AdminUser) => void;
 }
 
 const HEADERS = ['회원', '연락처', '역할', '얼굴', '가입일', ''] as const;
@@ -34,6 +36,7 @@ export function AdminUserTable({
   onResetPassword,
   onDeleteFace,
   onWithdraw,
+  onAdjustCatMoney,
 }: AdminUserTableProps) {
   if (isLoading) {
     return (
@@ -127,6 +130,19 @@ export function AdminUserTable({
                       >
                         수정
                       </Button>
+
+                      {/* 지갑이 없는 역할(운영진)은 서버가 거절합니다 — 캣머니를 쓸 일도
+                          없어서 지갑을 발급하지 않습니다 (AdminUserService.create) */}
+                      {rolesWithWallet.includes(user.role) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Coins size={14} />}
+                          onClick={() => onAdjustCatMoney(user)}
+                        >
+                          캣머니
+                        </Button>
+                      )}
 
                       {/* SSAFY 전용 계정은 비밀번호가 없어 서버가 거절합니다 */}
                       {!user.socialOnly && (
