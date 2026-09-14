@@ -12,6 +12,7 @@ export { useFaceEngine, type EngineState } from './hooks/useFaceEngine';
 export { useFaceGuide } from './hooks/useFaceGuide';
 export { useFaceRegistration } from './hooks/useFaceRegistration';
 export { useFaceRemoval } from './hooks/useFaceRemoval';
+export { useFaceVerify } from './hooks/useFaceVerify';
 
 // View
 export { CameraStage } from './components/CameraStage';
@@ -22,6 +23,8 @@ export { checkFaceQuality, FACE_GUIDE_IDLE, FACE_GUIDE_READY } from './model/fac
 export { cosineSimilarity, SFACE_COSINE_THRESHOLD } from './model/embedding';
 export type {
   FaceEnrollRequest,
+  FaceVerifyRequest,
+  FaceVerifyResult,
   DetectedFace,
   FaceQualityCode,
   FaceQualityIssue,

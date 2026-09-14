@@ -6,7 +6,7 @@ import { Badge, Button, Card, Input, Segmented } from '@/shared/components/ui';
 import { AuctionCountdown, AuctionCreateForm, useCreateAuction } from '@/features/auction';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
-import { newIdempotencyKey } from '@/shared/api';
+import { ApiError, newIdempotencyKey } from '@/shared/api';
 import { ROUTES } from '@/shared/constants';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
@@ -19,6 +19,7 @@ import {
   isSpecial,
   mintStatusLabel,
   photocardSource,
+  pocaName,
   pocaSeed,
   useListPhotocard,
   usePhotocardDetail,
@@ -52,7 +53,7 @@ export function NftDetailPage() {
   const { user } = useAuth();
   const createAuction = useCreateAuction(photocardId);
 
-  const { data: card, isPending, isError } = usePhotocardDetail(photocardId);
+  const { data: card, isPending, isError, error } = usePhotocardDetail(photocardId);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();
@@ -77,10 +78,24 @@ export function NftDetailPage() {
 
   if (!invalidId && isPending) return <PageLoader />;
   if (invalidId || isError || !card) {
+    /* 🔴 "없는 카드" 와 "불러오기 실패" 를 구분합니다.
+       주소창에 아무 숫자나 넣어 들어온 사람에게 "불러오지 못했어요" 를 보여주면
+       네트워크 장애처럼 읽혀서 새로고침만 반복하게 됩니다. 서버는 없는 포토카드에
+       `NFT_001` 을 주므로 그때는 "없다" 고 분명히 말합니다. */
+    const missing = invalidId || (ApiError.isApiError(error) && error.code === 'NFT_001');
+
     return (
       <>
         <Header title="포토카드" showBack />
-        <EmptyState icon={TriangleAlert} title="포토카드를 불러오지 못했어요" />
+        {missing ? (
+          <EmptyState
+            mood="sad"
+            title="없는 포토카드예요"
+            description="주소가 잘못됐거나 삭제된 카드입니다."
+          />
+        ) : (
+          <EmptyState icon={TriangleAlert} title="포토카드를 불러오지 못했어요" />
+        )}
       </>
     );
   }
@@ -144,7 +159,7 @@ export function NftDetailPage() {
           {/* 이름은 **판매 폼을 펼쳐도 남깁니다** — 무엇을 파는지가 안 보이는 채로
               가격을 적게 하면 안 됩니다. */}
           <div className="space-y-1">
-            <h1 className="text-2xl leading-snug font-extrabold">{card.designName}</h1>
+            <h1 className="text-2xl leading-snug font-extrabold">{pocaName(card.designName)}</h1>
             {/* 어느 공연에서 얻은 카드인지 — 이름만 있으면 어디서 온 카드인지 알 수 없습니다 */}
             <p className="text-subtle text-[0.9375rem]">{photocardSource(card.performanceTitle)}</p>
           </div>

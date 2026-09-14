@@ -17,8 +17,8 @@ public record PerformanceAreaResponse(
                 + "이 값이 STANDING 이면 그 구역은 어떤 공연에서도 좌석제로 팔 수 없다", example = "SEATED")
         AreaType areaType,
 
-        @Schema(description = "이 공연에서 파는 방식. areaType 과 다를 수 있다 — 좌석제 구역을 "
-                + "스탠딩으로 파는 경우다. 좌석 생성·좌석맵은 이 값을 본다", example = "SEATED")
+        @Schema(description = "이 공연에서 파는 방식. 새 설정은 공연장 구역 형태와 같아야 한다. "
+                + "판매 이력이 있는 기존 설정은 변경할 수 없다", example = "SEATED")
         AreaType saleType,
 
         @Schema(description = "좌석 등급", example = "VIP")

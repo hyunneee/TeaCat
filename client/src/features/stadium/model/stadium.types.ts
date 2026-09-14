@@ -7,6 +7,7 @@ export type StadiumLayoutEditorTool =
   | 'draw-area'
   | 'resize-area'
   | 'split-area'
+  | 'renumber-row'
   | 'pick-seats'
   | 'add-seat-range'
   | 'remove-seat-range'

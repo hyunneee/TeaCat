@@ -80,6 +80,7 @@ interface StadiumEditorState {
     seatClientId: string,
     values: Partial<Pick<DraftManualSeat, 'rowLabel' | 'seatNumber'>>,
   ) => void;
+  renumberManualRow: (areaId: string, rowLabel: string, startNumber: number) => void;
   removeManualSeat: (areaId: string, seatClientId: string) => void;
   removeManualSeats: (areaId: string, seatClientIds: string[]) => void;
   assignManualSeats: (areaId: string, seatClientIds: string[]) => void;
@@ -509,6 +510,31 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
             }
           : area,
       ),
+    })),
+
+  renumberManualRow: (areaId, rowLabel, startNumber) =>
+    set((state) => ({
+      areas: state.areas.map((area) => {
+        if (area.clientId !== areaId) return area;
+        const firstNumber = Math.max(1, Math.trunc(startNumber));
+        const ordered = area.manualSeats
+          .filter((seat) => seat.rowLabel === rowLabel)
+          .sort((left, right) =>
+            area.labelingRule.seatOrder === 'RIGHT_TO_LEFT'
+              ? right.seatX - left.seatX
+              : left.seatX - right.seatX,
+          );
+        const nextNumberById = new Map(
+          ordered.map((seat, index) => [seat.clientId, firstNumber + index]),
+        );
+        return {
+          ...area,
+          manualSeats: area.manualSeats.map((seat) => ({
+            ...seat,
+            seatNumber: nextNumberById.get(seat.clientId) ?? seat.seatNumber,
+          })),
+        };
+      }),
     })),
 
   removeManualSeat: (areaId, seatClientId) =>

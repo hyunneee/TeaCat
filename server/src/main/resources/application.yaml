@@ -103,6 +103,11 @@ booking:
   hold:
     # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
     duration: ${BOOKING_HOLD_DURATION:10m}
+  seat-generation:
+    # 티켓 오픈 시각이 지난 회차의 누락 좌석을 멱등하게 생성한다.
+    enabled: ${BOOKING_SEAT_GENERATION_ENABLED:true}
+    interval: ${BOOKING_SEAT_GENERATION_INTERVAL:PT10S}
+    initial-delay: ${BOOKING_SEAT_GENERATION_INITIAL_DELAY:PT3S}
   # 예매 정책 (API-205). 공연별이 아니라 서비스 전체 기준이다.
   policy:
     # 기획 초안은 1인 4매였으나 배포 기준은 1매다. 늘리려면 이 값만 바꾼다
@@ -111,7 +116,10 @@ booking:
     companion-required: false
     # 입장 게이트에서 얼굴로 본인을 확인한다
     face-verification-required: true
-    # 취소 마감은 설정이 아니다. 공연 시작 시각까지로 고정이며 회차 조회가 실제 시각을 내려준다
+    # 예매 취소 마감 = 공연 시작 - 이 값.
+    #   🔴 카드팩 개봉 시각도 같은 값을 읽는다. 둘이 어긋나면 그 차이만큼
+    #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
+    cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
 
 payment:
   toss:
@@ -163,11 +171,17 @@ nft:
       lead-time: ${NFT_PHOTOCARD_ISSUE_LEAD_TIME:1h}
       # 한 주기에 처리할 최대 회차 수. 나머지는 다음 주기에 다시 잡힌다.
       batch-size: 20
-      scheduler-enabled: true
+      # 2026-09-11: 껐다. 티켓 1장 = 카드 1장으로 정했고, 카드는 이제 카드팩(공연 시작 10분 전 개봉)에서
+      #   나온다. 이게 켜져 있으면 T-1h 에 공연 도안 카드가 한 장 더 꽂혀 두 장이 된다.
+      #   코드는 그대로 두었다 — 어드민 수동 발급
+      #   (POST /admin/performances/{id}/schedules/{scheduleId}/photocards/issue)은 계속 동작한다.
+      #   ⚠️ 다시 켜도 껐던 기간의 회차는 발급되지 않는다 (findScheduleIdsDueForIssue 가 performance_date > now).
+      scheduler-enabled: ${NFT_PHOTOCARD_ISSUE_SCHEDULER_ENABLED:false}
     draw:
-      # 이벤트 팩 지급 코드. 비우면 이벤트 없음(POST /photocards/packs/claim 이 granted:false).
-      #   바꾸면 새 이벤트가 된다 — 같은 계정이 또 받는다. 그게 의도다.
-      event-code: ${NFT_PHOTOCARD_DRAW_EVENT_CODE:OPEN_EVENT}
+      # 2026-09-11: 이벤트 판정이 nft_photocard_pack_events 표로 옮겨갔다.
+      #   어드민 화면에서 열고 닫는다 (GET/POST/PATCH /admin/photocard-pack-events).
+      #   기존 값 OPEN_EVENT 는 마이그레이션 V20260911_0920 이 한 행으로 옮겼다.
+      # event-code: ${NFT_PHOTOCARD_DRAW_EVENT_CODE:OPEN_EVENT}
       # 체인 전송을 못 한 뽑기 카드(PENDING, 티켓 없음)를 다시 보내는 주기. ISO-8601(PT…) 표기.
       #   뽑기 응답 직후 한 번 보내고, 그게 실패한 카드만 여기서 잡힌다.
       sweep-interval: ${NFT_PHOTOCARD_DRAW_SWEEP_INTERVAL:PT60S}

@@ -20,6 +20,7 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
+const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -78,9 +79,21 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminPackEventsPage = page(
+  () => import('@/pages/AdminPackEventsPage'),
+  'AdminPackEventsPage',
+);
 const AdminPocaDesignsPage = page(
   () => import('@/pages/AdminPocaDesignsPage'),
   'AdminPocaDesignsPage',
+);
+const AdminPocaTemplatesPage = page(
+  () => import('@/pages/AdminPocaTemplatesPage'),
+  'AdminPocaTemplatesPage',
+);
+const AdminPerformanceDrawPoolPage = page(
+  () => import('@/pages/AdminPerformanceDrawPoolPage'),
+  'AdminPerformanceDrawPoolPage',
 );
 const AdminAnalyticsPage = page(() => import('@/pages/AdminAnalyticsPage'), 'AdminAnalyticsPage');
 const AdminConcertsPage = page(() => import('@/pages/AdminConcertsPage'), 'AdminConcertsPage');
@@ -249,8 +262,20 @@ const routes: RouteObject[] = [
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
                   {
+                    path: ROUTES.ADMIN_POCA_TEMPLATES,
+                    element: withBoundary(<AdminPocaTemplatesPage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_PACK_EVENTS,
+                    element: withBoundary(<AdminPackEventsPage />),
+                  },
+                  {
                     path: ROUTES.ADMIN_POCA_DESIGNS,
                     element: withBoundary(<AdminPocaDesignsPage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_CONCERT_DRAW_POOL(':concertId'),
+                    element: withBoundary(<AdminPerformanceDrawPoolPage />),
                   },
                   { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
@@ -315,6 +340,8 @@ const routes: RouteObject[] = [
         children: [
           { path: ROUTES.FACE_REGISTER, element: withMask(withBoundary(<FaceRegisterPage />)) },
           { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
+          /* 본인 확인 — 등록 화면과 같은 이유로 마스킹합니다 (얼굴·판정 결과가 뜹니다) */
+          { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },

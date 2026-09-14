@@ -6,14 +6,10 @@ import com.teacat.server.performance.dto.request.ScheduleUpdateRequest;
 import com.teacat.server.performance.dto.response.SeatGenerateResponse;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
-import com.teacat.server.booking.entity.PerformanceSeat;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
 import com.teacat.server.performance.exception.PerformanceErrorCode;
 import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
-import com.teacat.server.stadium.entity.Area;
-import com.teacat.server.stadium.entity.Seat;
-import com.teacat.server.stadium.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +27,6 @@ public class AdminScheduleService {
     private final PerformanceDetailRepository performanceDetailRepository;
     private final PerformanceAreaRepository performanceAreaRepository;
     private final PerformanceSeatRepository performanceSeatRepository;
-    private final SeatRepository seatRepository;
 
     /** 회차 수정 (API-266) */
     @Transactional
@@ -79,17 +74,13 @@ public class AdminScheduleService {
      * 회차 좌석 생성 (API-269).
      *
      * 공연 구역 설정(API-268)에서 판매하기로 한 구역의 좌석만 만든다.
-     * 스탠딩 구역은 좌석이 없어 제외되며, 그 구역은 max_cnt 로 수량만 관리한다.
+     * 지정석은 배치의 실제 좌석을, 스탠딩은 max_cnt 개의 가상 좌석을 만든다.
      *
      * 이 API 를 돌리지 않으면 좌석 조회(API-302)가 읽을 데이터가 없다.
      */
     @Transactional
     public SeatGenerateResponse generateSeats(Long scheduleId, AuthUser actor) {
         PerformanceDetail detail = getManageableDetail(scheduleId, actor);
-
-        if (performanceSeatRepository.existsByIdPerformanceDetailId(scheduleId)) {
-            throw new BusinessException(PerformanceErrorCode.SEATS_ALREADY_GENERATED);
-        }
 
         List<PerformanceArea> configuredAreas =
                 performanceAreaRepository.findAllByPerformanceId(detail.getPerformance().getId());
@@ -98,32 +89,14 @@ public class AdminScheduleService {
             throw new BusinessException(PerformanceErrorCode.AREA_NOT_CONFIGURED);
         }
 
-        // 공연장 구역의 형태가 아니라 **이 공연에서 파는 방식**을 본다.
-        // 좌석제 구역을 스탠딩으로 팔기로 했으면 좌석을 만들지 않는다 (수량은 max_cnt 로 관리)
-        List<Long> seatedAreaIds = configuredAreas.stream()
-                .filter(PerformanceArea::isSoldAsSeated)
-                .map(pa -> pa.getArea().getId())
-                .toList();
-
-        if (seatedAreaIds.isEmpty()) {
-            // 전 구역이 스탠딩이면 만들 좌석이 없다. 잘못된 상태는 아니다
-            return SeatGenerateResponse.of(scheduleId, 0, 0);
+        int createdSeatCount = performanceSeatRepository.insertMissingForSchedule(scheduleId);
+        if (createdSeatCount == 0 && performanceSeatRepository.existsByIdPerformanceDetailId(scheduleId)) {
+            throw new BusinessException(PerformanceErrorCode.SEATS_ALREADY_GENERATED);
         }
-
-        List<Seat> seats = seatRepository.findByAreaIdIn(seatedAreaIds);
-
-        if (seats.isEmpty()) {
+        if (createdSeatCount == 0) {
             throw new BusinessException(PerformanceErrorCode.NO_SEATS_TO_GENERATE);
         }
-
-        // 좌석 행 엔티티는 예매 도메인(booking)의 것을 쓴다. 한 테이블에 엔티티는 하나다
-        List<PerformanceSeat> performanceSeats = seats.stream()
-                .map(seat -> PerformanceSeat.available(detail.getId(), seat.getId()))
-                .toList();
-
-        performanceSeatRepository.saveAll(performanceSeats);
-
-        return SeatGenerateResponse.of(scheduleId, performanceSeats.size(), seatedAreaIds.size());
+        return SeatGenerateResponse.of(scheduleId, createdSeatCount, configuredAreas.size());
     }
 
     /**

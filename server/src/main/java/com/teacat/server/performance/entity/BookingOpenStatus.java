@@ -44,6 +44,26 @@ public enum BookingOpenStatus {
     }
 
     /**
+     * 좌석이 다 팔렸으면 <b>매진</b>으로 바꿔 준다.
+     *
+     * <p>🔴 {@link #resolve} 만으로는 매진을 알 수 없다. 거기서 보는
+     * {@code performance_details.status} 의 {@code SOLD_OUT} 은 <b>운영자가 손으로 바꾸는
+     * 값</b>이고 자동 전이가 없어서, 좌석이 실제로 다 팔려도 계속 OPEN 이었다. 그래서
+     * 공연 목록과 회차 목록이 매진된 회차를 "예매 가능" 으로 보여주고 있었다 (QA).
+     *
+     * <p>열려 있는 상태에서만 바꾼다 — 오픈 전(BEFORE)이나 마감(CLOSED)을 매진으로
+     * 덮어쓰면 "아직 안 열렸는데 매진" 같은 말이 된다.
+     *
+     * <p>좌석을 아직 만들지 않은 회차는 매진이 아니라 <b>준비 중</b>이다. 그 구분은 좌석을
+     * 세는 쪽({@code ScheduleSeatAvailability})이 이미 하고, 여기는 그 답만 받는다.
+     *
+     * @param seatsExhausted 팔 좌석이 있었는데 지금 남은 것이 없는가
+     */
+    public BookingOpenStatus soldOutIf(boolean seatsExhausted) {
+        return this == OPEN && seatsExhausted ? SOLDOUT : this;
+    }
+
+    /**
      * 공연 한 건의 <b>대표</b> 예매 상태 — 목록 카드의 칩에 쓴다.
      *
      * <p>회차들 중 "사용자가 지금 할 수 있는 것" 을 고른다. 하나라도 열려 있으면 그 공연은

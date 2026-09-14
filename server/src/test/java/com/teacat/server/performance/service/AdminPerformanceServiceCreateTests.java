@@ -60,6 +60,8 @@ class AdminPerformanceServiceCreateTests {
     @Mock private PerformanceAreaRepository performanceAreaRepository;
     @Mock private AreaRepository areaRepository;
     @Mock private TicketRepository ticketRepository;
+    /* 회차 목록의 매진 판정에만 쓴다 — 이 테스트들은 등록·이미지 한도만 보므로 호출되지 않는다 */
+    @Mock(strictness = Mock.Strictness.LENIENT) private ScheduleSeatAvailability seatAvailability;
     @Mock private StadiumRepository stadiumRepository;
     @Mock private StadiumLayoutRepository stadiumLayoutRepository;
     @Mock private FileStorageService fileStorageService;
@@ -70,7 +72,8 @@ class AdminPerformanceServiceCreateTests {
     void setUp() {
         service = new AdminPerformanceService(
                 performanceGeneralRepository, performanceDetailRepository, performanceAreaRepository,
-                areaRepository, ticketRepository, stadiumRepository, stadiumLayoutRepository, fileStorageService,
+                areaRepository, ticketRepository, seatAvailability, stadiumRepository, stadiumLayoutRepository,
+                fileStorageService,
                 new PerformanceImageProperties(DataSize.ofMegabytes(5), DataSize.ofMegabytes(20)));
     }
 

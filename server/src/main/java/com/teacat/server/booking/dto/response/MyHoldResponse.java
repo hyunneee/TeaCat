@@ -51,14 +51,21 @@ public record MyHoldResponse(
         Integer price
 ) {
 
-    public static MyHoldResponse from(MyHold hold) {
+    /**
+     * @param posterUrl 발급된 조회용 임시 URL. 포스터가 없으면 null
+     *
+     * 🔴 **키를 그대로 넣지 마세요.** 예전에 {@code hold.getPosterImg()}(스토리지 키)를
+     *    그대로 넘겨서 화면의 포스터가 깨졌습니다. 키 → URL 변환은 서비스가 합니다
+     *    ({@code BookingService.posterUrl}) — 다른 응답들도 모두 같은 규칙입니다.
+     */
+    public static MyHoldResponse of(MyHold hold, String posterUrl) {
         return new MyHoldResponse(
                 hold.getPerformanceDetailId(),
                 hold.getSeatId(),
                 hold.getHeldUntil(),
                 hold.getRemainingSeconds(),
                 hold.getPerformanceTitle(),
-                hold.getPosterImg(),
+                posterUrl,
                 hold.getPerformanceNum(),
                 hold.getPerformanceDate(),
                 hold.getStadiumName(),

@@ -14,7 +14,7 @@ public record SeatGenerateResponse(
         @Schema(description = "생성한 좌석 수", example = "1200")
         int createdSeatCount,
 
-        @Schema(description = "좌석을 만든 구역 수. 스탠딩 구역은 좌석이 없어 제외된다", example = "4")
+        @Schema(description = "좌석 재고를 만든 구역 수. 스탠딩 가상 좌석 구역도 포함한다", example = "4")
         int seatedAreaCount
 ) {
 

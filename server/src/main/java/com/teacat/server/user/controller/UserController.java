@@ -3,12 +3,18 @@ package com.teacat.server.user.controller;
 import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.user.dto.request.FaceRegisterRequest;
+import com.teacat.server.user.dto.request.FaceVerifyRequest;
 import com.teacat.server.user.dto.request.NicknameChangeRequest;
 import com.teacat.server.user.dto.request.PasswordChangeRequest;
+import com.teacat.server.user.dto.response.FaceVerifyResponse;
 import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -72,6 +78,40 @@ public class UserController {
             @Valid @RequestBody FaceRegisterRequest request) {
         userService.registerFace(authUser.id(), request);
         return ResponseEntity.ok(BaseResponse.success("얼굴 정보가 등록되었습니다."));
+    }
+
+    @Operation(
+            summary = "얼굴 본인 확인",
+            description = """
+                    지금 촬영한 얼굴이 등록해 둔 얼굴과 같은 사람인지 대조합니다.
+
+                    - **대조는 서버가 합니다.** 저장된 임베딩은 내려가지 않습니다.
+                    - `similarity`(코사인 유사도)를 함께 주는 것은 임계값을 맞춰보기 위한
+                      **검증 단계**이기 때문입니다. 운영에서는 빼는 것을 검토하세요.
+                    - **확인만 하고 아무것도 바꾸지 않습니다** — 입장 처리는 아직 없습니다.
+                    - 등록 때와 모델이 다르면 `USER_013` 으로 거절합니다. 좌표계가 달라
+                      비교 자체가 성립하지 않습니다.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "대조 완료 (같은 사람이 아니어도 200)"),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "`USER_008` : 등록된 얼굴이 없음",
+                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "`USER_013` : 등록 때와 모델이 다름",
+                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+            )
+    })
+    @PostMapping("/face/verify")
+    public ResponseEntity<BaseResponse<FaceVerifyResponse>> verifyFace(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody FaceVerifyRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(
+                userService.verifyFace(authUser.id(), request)));
     }
 
     @Operation(summary = "얼굴 정보 삭제", description = "저장된 얼굴 특징값을 삭제합니다.")

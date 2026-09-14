@@ -117,7 +117,12 @@ export function AdminConcertCreatePage() {
                 ? `포토카드 올리는 중 ${create.designProgress.done + 1}/${create.designProgress.total}`
                 : '등록하기'
             }
-            layouts={{ options: layouts.usable, loading: layouts.isPending }}
+            layouts={{
+              options: layouts.usable,
+              loading: layouts.isPending,
+              refreshing: layouts.isFetching,
+              onRefresh: () => void layouts.refetch(),
+            }}
             areaPricing={{
               rows: areaPricing.rows,
               // 구역 에러는 줄 단위라, 제출을 눌렀거나 값을 건드린 뒤에만 보여줍니다

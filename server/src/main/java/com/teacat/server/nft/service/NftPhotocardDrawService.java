@@ -33,8 +33,9 @@ public class NftPhotocardDrawService {
     private final NftPhotocardMinter minter;
 
     public NftPhotocardDrawStatusResponse status(Long userId) {
-        long remaining = writer.countAvailable(userId);
-        return new NftPhotocardDrawStatusResponse(remaining > 0, remaining);
+        NftPhotocardDrawWriter.PackCounts counts = writer.counts(userId);
+        return new NftPhotocardDrawStatusResponse(
+                counts.openable() > 0, counts.openable(), counts.scheduled(), counts.nextOpenAt());
     }
 
     public NftPhotocardDrawResponse draw(Long userId, String idempotencyKeyHeader) {
@@ -69,6 +70,6 @@ public class NftPhotocardDrawService {
             // 존재 확인과 INSERT 사이에 같은 요청이 먼저 들어갔다. 이미 받은 것이다
             granted = false;
         }
-        return new NftPhotocardPackClaimResponse(granted, writer.countAvailable(userId));
+        return new NftPhotocardPackClaimResponse(granted, writer.counts(userId).openable());
     }
 }

@@ -26,6 +26,7 @@ export interface Section {
   id: string;
   /** 서버 areaCode — 'Front', 'A' 처럼 짧은 표기 */
   name: string;
+  type: 'SEATED' | 'STANDING';
   grade: string | null;
   price: number | null;
   totalSeats: number;
@@ -48,6 +49,7 @@ export interface Seat {
   id: string;
   /** 이 좌석이 속한 구역(areaId) */
   sectionId: string;
+  type: 'SEATED' | 'STANDING';
   /** 화면 표기용 — 'A구역 12열 5번' */
   row: string;
   number: number;

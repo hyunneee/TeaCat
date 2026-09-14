@@ -10,6 +10,8 @@ export { Stepper, type StepperProps } from './Stepper';
 export { SectionTitle, type SectionTitleProps } from './SectionTitle';
 export { AnimatedNumber, type AnimatedNumberProps } from './AnimatedNumber';
 export { PosterImage, type PosterImageProps } from './PosterImage';
+export { MarqueeText, type MarqueeTextProps } from './MarqueeText';
+export { Rail, RAIL_ANCHOR, type RailProps } from './Rail';
 export { Modal, type ModalProps } from './Modal';
 export { Lightbox, type LightboxProps } from './Lightbox';
 export { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';

@@ -1,3 +1,4 @@
+import { pocaName } from './nft.model';
 import type { PocaDrawResult, PocaGrade } from './nft.types';
 
 /**
@@ -115,12 +116,39 @@ export function isSpecial(grade: PocaGrade): boolean {
   return grade === 'SPECIAL';
 }
 
+/* ── 호칭 ───────────────────────────────────────────────────── */
+
+/** 카드 주인공이 누구인가. 호칭과 연출을 함께 정합니다 */
+export type PocaRole = '코치' | '교육생' | '개발자';
+
+export const POCA_ROLES: PocaRole[] = ['코치', '교육생', '개발자'];
+
+/** 소속 뒤에 역할을 적어 넣을 때 쓰는 구분자 */
+const ROLE_MARK = ' · ';
+
 /**
- * 코치인가 — **소속이 '서울 N반' 인 사람만** 코치입니다.
- * 15기·개발자는 등급(후광 연출)과 상관없이 교육생입니다.
+ * 소속에 역할을 적어 넣습니다 — `("서울 5반", "코치") → "서울 5반 · 코치"`.
+ * 어드민이 카드 그림을 등록할 때 씁니다.
  */
-export function isCoach(group: string): boolean {
-  return group.startsWith('서울');
+export function withPocaRole(group: string, role: PocaRole): string {
+  return `${group.trim()}${ROLE_MARK}${role}`;
+}
+
+/**
+ * 이 카드 주인공이 누구인지.
+ *
+ * 🔴 **적혀 있으면 그대로 읽고 추측하지 않습니다.** 예전에는 소속이 '서울' 로 시작하는지
+ * 보고 코치를 골랐는데, 교육생도 '서울 5반' 소속이라 **사실대로 적으면 코치가 되는**
+ * 규칙이었습니다. 지금은 어드민이 역할을 직접 고릅니다.
+ *
+ * 표시가 없는 예전 카드만 옛 규칙으로 읽습니다 — 이미 뿌린 카드의 호칭이 오늘 바뀌면 안 됩니다.
+ */
+export function pocaRole(group: string, grade?: PocaGrade): PocaRole {
+  const tail = group.split(ROLE_MARK).pop()?.trim();
+  if (tail === '코치' || tail === '교육생' || tail === '개발자') return tail;
+
+  if (group.startsWith('서울')) return '코치';
+  return grade && !isSpecial(grade) ? '개발자' : '교육생';
 }
 
 /** 결과 문구를 네 토막으로 — 크기·색·움직임이 저마다 다릅니다 */
@@ -140,12 +168,24 @@ export interface DrawLine {
  * 호칭이 바뀌거나 등급이 늘면 여기만 고칩니다 — 화면은 이 값을 그리기만 합니다.
  */
 export function drawLine(result: PocaDrawResult): DrawLine {
-  const { designName: name } = result;
+  return drawLineOf(result.designName, result.group, result.grade);
+}
+
+/** 뽑기 결과가 아직 없어도(어드민 미리보기) 같은 문구를 만들 수 있게 */
+export function drawLineOf(fullName: string, group: string, grade: PocaGrade): DrawLine {
+  const designName = pocaName(fullName);
+
   /* 코치·교육생이 같이 쓰는 뒷말 */
   const picked = { prefix: '', josa: '을', tail: '뽑았어요!' };
-  if (isCoach(result.group)) return { ...picked, lead: `${name} 코치님` };
-  if (isSpecial(result.grade)) return { ...picked, lead: `${name} 교육생` };
-  return { prefix: '으악...', lead: `${name} 개발자`, josa: '', tail: '카드네요...' };
+
+  switch (pocaRole(group, grade)) {
+    case '코치':
+      return { ...picked, lead: `${designName} 코치님` };
+    case '교육생':
+      return { ...picked, lead: `${designName} 교육생` };
+    default:
+      return { prefix: '으악...', lead: `${designName} 개발자`, josa: '', tail: '카드네요...' };
+  }
 }
 
 /**
@@ -154,15 +194,21 @@ export function drawLine(result: PocaDrawResult): DrawLine {
  * 소속을 모르면(서버가 아직 안 줍니다) **이름만** 돌려줍니다 — 호칭을 추측하면
  * 코치를 교육생이라 부르는 일이 생깁니다.
  */
-export function pocaTitle(designName: string, group?: string, grade?: PocaGrade): string {
+export function pocaTitle(fullName: string, group?: string, grade?: PocaGrade): string {
+  const designName = pocaName(fullName);
   if (!group) return designName;
-  if (isCoach(group)) return `${designName} 코치님`;
-  if (grade && !isSpecial(grade)) return `${designName} 개발자`;
-  return `${designName} 교육생`;
+
+  const role = pocaRole(group, grade);
+  return role === '코치' ? `${designName} 코치님` : `${designName} ${role}`;
 }
 
 /** 같은 문구를 한 줄로 (읽어 주는 기기용 · 목록 표시용) */
 export function drawMessage(result: PocaDrawResult): string {
-  const { prefix, lead, josa, tail } = drawLine(result);
+  return drawMessageOf(result.designName, result.group, result.grade);
+}
+
+/** 어드민 미리보기용 — 등록하기 전에 무슨 말이 나올지 그대로 보여줍니다 */
+export function drawMessageOf(designName: string, group: string, grade: PocaGrade): string {
+  const { prefix, lead, josa, tail } = drawLineOf(designName, group, grade);
   return `${prefix ? `${prefix} ` : ''}${lead}${josa} ${tail}`;
 }

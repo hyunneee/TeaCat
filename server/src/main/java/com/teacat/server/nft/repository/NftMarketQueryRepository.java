@@ -200,6 +200,32 @@ public class NftMarketQueryRepository {
         ));
     }
 
+    /**
+     * 그 공연의 <b>전 회차 좌석 합계</b> (구역 정원 합 × 회차 수).
+     *
+     * <p>도안 수량은 공연 단위로 붙는데 관객은 회차마다 있다. 그래서 "회차 수만큼 곱하는 것" 을
+     * 잊으면 뒤 회차 관객이 못 뽑는다 — 어드민이 그걸 사람 기억에 맡기지 않도록 서버가 계산해 준다.
+     *
+     * <p>지정석은 공연장 구역의 좌석 수({@code areas.max_seat})가 정원이고, 스탠딩은 공연별로
+     * 정한 최대 인원({@code performance_areas.max_cnt})이 정원이다. 구역이 없거나 회차가 없으면 0 이다.
+     */
+    public long sumSeatCapacityAcrossSchedules(Long performanceId) {
+        String sql = """
+                SELECT COALESCE((SELECT sum(CASE
+                                                WHEN pa.sale_type = 'SEATED' THEN a.max_seat
+                                                ELSE pa.max_cnt
+                                            END)
+                                   FROM performance_areas pa
+                                   JOIN areas a ON a.id = pa.area_id
+                                  WHERE pa.performance_general_id = :performanceId), 0)
+                     * (SELECT count(*) FROM performance_details pd
+                         WHERE pd.performance_general_id = :performanceId)
+                """;
+        Long capacity = jdbcTemplate.queryForObject(sql,
+                new MapSqlParameterSource().addValue("performanceId", performanceId), Long.class);
+        return capacity == null ? 0L : capacity;
+    }
+
     public boolean lockPerformance(Long performanceId) {
         String sql = "SELECT id FROM performance_general WHERE id = :performanceId FOR UPDATE";
         return !jdbcTemplate.queryForList(sql,
@@ -285,10 +311,15 @@ public class NftMarketQueryRepository {
     }
 
     /**
-     * 아직 체인에 안 보낸 카드. 발행 재시도가 쓴다.
+     * 아직 체인에 안 보낸 카드. 발행 재시도(티켓 발급 경로)가 쓴다.
      *
      * <p>{@code PENDING} 만 고른다 — {@code MINTING} 은 트랜잭션이 이미 나가 확정을 기다리는
      * 중이라 다시 보내면 안 된다.
+     *
+     * <p>🔴 {@code p.ticket_id IS NOT NULL} 로 좁힌다. 뽑기 풀 도안이 공연에 묶일 수 있게 되면서
+     * {@code d.performance_general_id} 만으로는 그 공연 팩에서 뽑힌 카드(티켓 NULL)까지 걸려,
+     * {@code POST /admin/performances/{id}/photocards/mint} 와 뽑기 스위퍼({@link #findPendingDrawMints})가
+     * 같은 카드를 동시에 보내는 중복 트랜잭션이 생겼었다(C3).
      */
     public List<PendingMintRow> findPendingMints(Long performanceId, int limit) {
         String sql = """
@@ -299,6 +330,7 @@ public class NftMarketQueryRepository {
                 WHERE d.performance_general_id = :performanceId
                   AND p.status = 'PENDING'
                   AND p.wallet_id IS NOT NULL
+                  AND p.ticket_id IS NOT NULL
                 ORDER BY p.id
                 LIMIT :limit
                 """;
@@ -316,8 +348,12 @@ public class NftMarketQueryRepository {
     /**
      * 체인에 아직 안 보낸 <b>뽑기</b> 카드. 티켓이 없는 PENDING 카드다.
      *
-     * <p>{@link #findPendingMints} 는 {@code d.performance_general_id} 로 걸러서 공연이 NULL 인
-     * 뽑기 카드를 영원히 못 찾는다. 그래서 따로 둔다. 인덱스 {@code idx_nft_photocards_pending_draw}.
+     * <p>{@link #findPendingMints} 는 이제 {@code p.ticket_id IS NOT NULL} 로 좁혀 뽑기 카드를
+     * 아예 보지 않으므로 기능적으로는 이 조회 하나로 합쳐도 결과가 같다. 그래도 따로 두는 이유는
+     * 스코프다 — {@link #findPendingMints}·{@link #findPendingMintsForSchedule} 은 어드민이 공연·
+     * 회차 하나를 지정해 부르는 "재시도" 경로이고, 이건 <b>공연을 모르는 채로 전체를 훑는</b> 스위퍼
+     * 전용이라 인덱스도 공연 조건 없이 {@code idx_nft_photocards_pending_draw} 하나로 충분하다.
+     * 하나로 합치면 스위퍼가 매번 전체 테이블에서 티켓 유무를 걸러야 해 그 인덱스를 못 탄다.
      */
     public List<PendingMintRow> findPendingDrawMints(int limit) {
         String sql = """

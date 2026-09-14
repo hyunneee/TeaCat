@@ -68,8 +68,15 @@ public enum NftErrorCode implements ErrorCode {
             "체인에 보낼 포토카드가 없습니다."),
 
     // ── 뽑기 (카드팩) ─────────────────────────────────────────────────────
-    /** 프론트가 이 message 를 그대로 화면에 띄운다 */
-    PACK_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_040", "가진 카드팩이 없어요."),
+    /**
+     * 프론트가 이 message 를 그대로 화면에 띄운다.
+     *
+     * <p>팩이 <b>아예 없을 때</b>와 <b>있지만 아직 안 열렸을 때</b>를 함께 쓴다 —
+     * 개봉 시각은 회차에서 계산하므로 잠긴 팩도 여기로 온다. 그래서 문구가 "없다" 가 아니라
+     * "지금 열 수 있는 것이 없다" 여야 참이 된다. 프론트는 {@code GET /photocards/draw} 의
+     * {@code scheduled}·{@code nextOpenAt} 으로 누르기 전에 막을 수 있다.
+     */
+    PACK_NOT_AVAILABLE(HttpStatus.CONFLICT, "NFT_040", "지금 열 수 있는 카드팩이 없어요."),
     /** 등록된 뽑기 풀 도안이 없거나 전부 소진됐다 */
     DRAW_POOL_EMPTY(HttpStatus.CONFLICT, "NFT_041",
             "지금은 뽑을 수 있는 카드가 없어요. 잠시 후 다시 시도해 주세요."),
@@ -77,7 +84,29 @@ public enum NftErrorCode implements ErrorCode {
     DESIGN_POOL_CONFLICT(HttpStatus.BAD_REQUEST, "NFT_042",
             "도안은 공연 소속이거나 뽑기 풀 중 하나여야 합니다."),
     DESIGN_POOL_ATTRIBUTES_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_043",
-            "뽑기 풀 도안은 소속과 등급이 필요합니다.");
+            "뽑기 풀 도안은 소속과 등급이 필요합니다."),
+
+    // ── 카드팩 이벤트 ────────────────────────────────────────────────────
+    /** code 는 계정당 1회의 기준이라 유일해야 한다 */
+    PACK_EVENT_CODE_DUPLICATED(HttpStatus.CONFLICT, "NFT_044", "이미 등록된 이벤트 코드입니다."),
+    PACK_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_045", "존재하지 않는 카드팩 이벤트입니다."),
+
+    // ── 템플릿 · 공연별 뽑기 풀 ────────────────────────────────────────────
+    TEMPLATE_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_046", "존재하지 않는 포토카드 템플릿입니다."),
+    /**
+     * 같은 템플릿을 같은 공연(또는 이벤트 풀)에 두 번 넣지 않는다.
+     *
+     * <p>🔴 코드 문자열(NFT_047)은 프론트가 분기에 쓰므로 바꾸지 않는다. 이벤트 풀 경로와
+     * "요청 안 중복"에도 같은 코드를 쓰므로 메시지는 "공연"을 특정하지 않는다(Q2).
+     */
+    TEMPLATE_ALREADY_IN_POOL(HttpStatus.CONFLICT, "NFT_047",
+            "이미 넣은 카드입니다."),
+    /** 공연이 없는 도안을 풀에서 내리면 공연도 없고 풀도 아닌 행이 된다 (CHECK 위반) */
+    DESIGN_EVENT_POOL_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_048",
+            "이벤트 풀 카드는 뽑기 풀에서 뺄 수 없습니다."),
+    /** 도안 이름은 "{템플릿 이름} · {공연 제목}" 이고 nft_photocard_designs.name 이 varchar(100) 이다 */
+    DESIGN_NAME_TOO_LONG(HttpStatus.BAD_REQUEST, "NFT_049",
+            "카드 이름과 공연 제목을 합치면 100자를 넘습니다. 둘 중 하나를 줄여 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

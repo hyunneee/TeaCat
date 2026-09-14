@@ -78,6 +78,7 @@ public class AdminPerformanceService {
     private final PerformanceAreaRepository performanceAreaRepository;
     private final AreaRepository areaRepository;
     private final TicketRepository ticketRepository;
+    private final ScheduleSeatAvailability seatAvailability;
     private final StadiumRepository stadiumRepository;
     private final StadiumLayoutRepository stadiumLayoutRepository;
     private final FileStorageService fileStorageService;
@@ -360,9 +361,15 @@ public class AdminPerformanceService {
         PerformanceGeneral performance = getManageablePerformance(concertId, actor);
         LocalDateTime now = LocalDateTime.now();
 
-        List<ScheduleSummaryResponse> schedules = performanceDetailRepository
-                .findByPerformanceIdOrderByPerformanceNumAsc(concertId).stream()
-                .map(detail -> ScheduleSummaryResponse.of(detail, now))
+        List<PerformanceDetail> details =
+                performanceDetailRepository.findByPerformanceIdOrderByPerformanceNumAsc(concertId);
+
+        // 관리 화면도 같은 기준으로 매진을 봐야 한다 — 다르면 운영자와 관람객이 다른 상태를 본다
+        Set<Long> soldOut = seatAvailability.findSoldOut(
+                details.stream().map(PerformanceDetail::getId).toList());
+
+        List<ScheduleSummaryResponse> schedules = details.stream()
+                .map(detail -> ScheduleSummaryResponse.of(detail, now, soldOut.contains(detail.getId())))
                 .toList();
 
         // 판매량은 티켓에서 센다. 수정 화면이 이 값으로 "이미 판 구역" 을 잠그므로 정확해야 한다
@@ -477,18 +484,23 @@ public class AdminPerformanceService {
                 throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_BELOW_SOLD);
             }
 
-            AreaType saleType = resolveSaleType(setting, stadiumAreas.get(setting.areaId()), current);
-
             // 판 뒤에 방식을 바꾸면 이미 나간 티켓의 근거가 어긋난다.
             // 좌석제로 팔린 티켓은 좌석을 가리키는데 스탠딩으로 바꾸면 그 좌석이 사라진다
-            if (current != null && sold > 0 && current.getSaleType() != saleType) {
+            if (current != null && sold > 0 && setting.saleType() != null
+                    && current.getSaleType() != setting.saleType()) {
                 throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_LOCKED);
             }
+
+            AreaType saleType = resolveSaleType(setting, stadiumAreas.get(setting.areaId()), current);
 
             // 스탠딩은 max_cnt 가 인원을 제한하는 **유일한** 값이다.
             // 좌석제는 좌석 행 수가 곧 상한이라 비어 있어도 되지만, 스탠딩에서 비우면 무제한이 된다
             if (saleType == AreaType.STANDING && (setting.maxCnt() == null || setting.maxCnt() < 1)) {
                 throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+            }
+            if (saleType == AreaType.STANDING
+                    && setting.maxCnt() > stadiumAreas.get(setting.areaId()).getMaxSeat()) {
+                throw new BusinessException(PerformanceErrorCode.AREA_MAX_CNT_EXCEEDED);
             }
         }
 
@@ -561,24 +573,15 @@ public class AdminPerformanceService {
      * 생략을 "공연장 형태로 되돌리기" 로 해석하면, 방식을 신경 쓰지 않는 옛 클라이언트가
      * 바꿔 둔 방식을 저장할 때마다 되돌려 버린다.
      *
-     * 기준은 <b>의자가 설치돼 있는지</b> 하나다.
-     * <pre>
-     *   areas.type = SEATED    의자가 깔린 구역   → 좌석제로만 판다
-     *   areas.type = STANDING  의자가 없는 구역   → 스탠딩·좌석제 둘 다 된다
-     * </pre>
-     *
-     * 의자가 깔린 구역을 스탠딩으로 파는 것은 막는다 — 의자가 그 자리에 그대로 있어서
-     * 사람을 세울 수 없다. 의자를 치운 구성은 무대 형식(배치)을 따로 만들어 표현한다.
-     *
-     * 의자가 없는 구역을 좌석제로 파는 것은 막지 않는다. 좌석을 그려 넣으면 그대로 팔 수 있고,
-     * 아직 좌석이 없으면 회차 좌석 생성(API-269)이 만들 좌석이 없다고 알려 준다.
+     * 공연장 배치 유형과 판매 유형은 일치해야 한다. 스탠딩의 seats 행은 좌석 배치가 아니라
+     * 입장권마다 안정적인 seatId를 주기 위한 가상 재고이므로 좌석제로 전환할 근거가 아니다.
      */
     private AreaType resolveSaleType(PerformanceAreaSaveRequest.AreaSetting setting, Area area,
                                      PerformanceArea current) {
         if (setting.saleType() == null) {
             return current != null ? current.getSaleType() : area.getType();
         }
-        if (setting.saleType() == AreaType.STANDING && area.isSeated()) {
+        if (setting.saleType() != area.getType()) {
             throw new BusinessException(PerformanceErrorCode.AREA_SALE_TYPE_NOT_ALLOWED);
         }
         return setting.saleType();

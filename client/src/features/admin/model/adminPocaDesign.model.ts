@@ -1,0 +1,57 @@
+import type { PocaRole } from '@/features/nft';
+import type { AdminPocaDesign, PocaDesignGrade } from './adminPocaDesign.types';
+
+/**
+ * 도안 이름의 최대 길이 — 서버 `nft_photocard_designs.name` 이 varchar(100) 입니다.
+ * 🔴 서버는 **자르지 않고 거절**합니다(NFT_049). 이름은 온체인 메타데이터에 박혀
+ * 되돌릴 수 없어서, 조용히 잘린 이름이 영구히 남는 것보다 낫다는 판단입니다.
+ */
+export const DESIGN_NAME_MAX = 100;
+
+/** 공연 도안 이름을 잇는 구분자. 서버와 같은 값이어야 길이 계산이 맞습니다 */
+const JOINER = ' · ';
+
+/**
+ * 풀에 넣었을 때 생길 도안 이름의 길이.
+ *
+ * 공연 풀이면 `"{템플릿 이름} · {공연 제목}"`, 이벤트 풀이면 템플릿 이름 그대로입니다.
+ * 화면이 미리 재서 막아야 확인 모달까지 갔다가 튕기지 않습니다.
+ */
+export function designNameLength(templateName: string, performanceTitle?: string): number {
+  if (!performanceTitle) return templateName.length;
+  return templateName.length + JOINER.length + performanceTitle.length;
+}
+
+/**
+ * 지금 뽑힐 수 있는 도안인가.
+ *
+ * 🔴 온체인 등록이 끝나야(`REGISTERED`) 뽑힙니다. 서버의 `poolRemaining` 은 등록 상태를
+ * 보지 않고 잔여를 다 더하므로, 미등록 도안이 섞이면 "충분함" 이 낙관적으로 나옵니다.
+ */
+export function isDrawable(design: AdminPocaDesign): boolean {
+  return design.drawPool && design.chainStatus === 'REGISTERED' && design.remaining > 0;
+}
+
+/** 아직 뽑히지 못하는 도안 — 화면이 따로 표시해 줘야 합니다 */
+export function notYetDrawable(designs: AdminPocaDesign[]): AdminPocaDesign[] {
+  return designs.filter((d) => d.chainStatus !== 'REGISTERED');
+}
+
+/**
+ * 좌석 수를 고른 카드 종수로 나눠 **한 종당 몇 장**을 찍을지 정합니다.
+ *
+ * 🔴 내림이 아니라 **올림**입니다 — 100석을 3종으로 나누면 33장씩(99장)이라
+ * 마지막 한 사람이 카드를 못 받습니다. 남는 것은 괜찮지만 모자란 것은 사고입니다.
+ */
+/**
+ * 역할이 정해지면 연출 색도 정해집니다 — 개발자만 보라, 코치·교육생은 금색.
+ * 등록하는 사람이 "이 사람이 누구인지" 말고 "무슨 색인지" 까지 알 이유가 없습니다.
+ */
+export function gradeForRole(role: PocaRole): PocaDesignGrade {
+  return role === '개발자' ? 'COMMON' : 'SPECIAL';
+}
+
+export function splitSupply(total: number, count: number): number {
+  if (total <= 0 || count <= 0) return 0;
+  return Math.ceil(total / count);
+}

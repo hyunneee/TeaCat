@@ -19,6 +19,12 @@ export const ROUTES = {
   FACE_REGISTER: '/face',
   /** 등록 성공 화면. 상단 알림 한 줄로는 "된 건가?" 가 남습니다. */
   FACE_DONE: '/face/done',
+  /**
+   * 본인 확인 (검증용) — 카메라 속 얼굴이 등록해 둔 얼굴과 같은 사람인지 대조합니다.
+   * 티켓 상세에서 들어오고, `state.from` 으로 돌아갈 곳을 받습니다.
+   * ⚠️ 아직 입장 처리가 아닙니다. 확인만 하고 티켓 상태는 바꾸지 않습니다.
+   */
+  FACE_VERIFY: '/face/verify',
 
   /* ── 검색 (공연 + 포토카드 한 화면) ── */
   SEARCH: '/search',
@@ -103,8 +109,14 @@ export const ROUTES = {
   ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
   ADMIN_INQUIRIES: '/admin/inquiries',
   ADMIN_BANNERS: '/admin/banners',
-  /** 뽑기 도안 — 여기 등록한 것만 카드팩에서 나옵니다 */
+  /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
+  ADMIN_POCA_TEMPLATES: '/admin/poca-templates',
+  /** 처음 주는 카드팩을 여닫는 기간 */
+  ADMIN_PACK_EVENTS: '/admin/pack-events',
+  /** 이벤트 카드팩에서 나올 카드 (공연과 무관) */
   ADMIN_POCA_DESIGNS: '/admin/poca-designs',
+  /** 그 공연 카드팩에서 나올 카드 */
+  ADMIN_CONCERT_DRAW_POOL: (concertId: string) => `/admin/concerts/${concertId}/draw-pool`,
   ADMIN_ANALYTICS: '/admin/analytics',
   ADMIN_CONCERTS: '/admin/concerts',
   /** 정적 경로라 `:concertId` 보다 먼저 매칭됩니다 (CONCERT_CREATE 와 같은 이유) */

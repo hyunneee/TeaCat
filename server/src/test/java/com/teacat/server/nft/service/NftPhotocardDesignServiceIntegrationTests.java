@@ -22,7 +22,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -232,33 +231,17 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     /* ── 뽑기 풀 도안: 공연 없이 소속·등급을 갖는다 ─────────────────────────── */
 
     @Test
-    void 뽑기_풀_도안은_공연_없이_만들어지고_소속_등급이_남는다() {
-        givenChainAccepts("PENDING");
+    void 뽑기_풀_도안_등록_경로는_템플릿_방식으로_대체되어_거절한다() {
+        // 2026-09-11: drawPool=true 로 직접 등록하던 옛 경로다. 템플릿 등록(POST
+        // /admin/photocard-templates) → 풀에 넣기(POST /admin/performances/{id}/draw-designs 또는
+        // POST /admin/photocard-designs/event-pool) 로 옮겨갔고, 이 경로는 이제 핀을 시작하기도
+        // 전에 NFT_042 로 거절한다. "소속·등급이 남는다" 는 옛 단언은
+        // NftPhotocardPoolIntegrationTests#이벤트_풀에_넣은_도안은_공연이_없다 로 옮겼다.
+        assertThatThrownBy(() -> designService.create(drawPoolRequest()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_CONFLICT);
 
-        NftPhotocardDesignResponse response = designService.create(drawPoolRequest());
-
-        assertThat(response.performanceId()).isNull();
-        assertThat(response.drawPool()).isTrue();
-        assertThat(response.group()).isEqualTo("서울 5반");
-        assertThat(response.grade()).isEqualTo(NftPhotocardGrade.SPECIAL);
-        assertThat(response.chainStatus()).isEqualTo(NftDesignChainStatus.REGISTERING);
-
-        assertThat(designService.getDrawPool()).extracting(NftPhotocardDesignResponse::designId)
-                .containsExactly(response.designId());
-    }
-
-    @Test
-    void 뽑기_풀_메타데이터에는_소속과_등급_속성이_들어간다() {
-        givenChainAccepts("PENDING");
-
-        designService.create(drawPoolRequest());
-
-        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
-        verify(ipfsPinService).pinJson(any(), payload.capture());
-        PhotocardNftMetadata metadata = (PhotocardNftMetadata) payload.getValue();
-        assertThat(metadata.attributes())
-                .extracting(PhotocardNftMetadata.Attribute::traitType, PhotocardNftMetadata.Attribute::value)
-                .containsExactly(tuple("소속", "서울 5반"), tuple("등급", "SPECIAL"));
+        verifyNoInteractions(ipfsPinService);
     }
 
     @Test
@@ -289,7 +272,9 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     }
 
     @Test
-    void 뽑기_풀인데_소속이나_등급이_없으면_거절한다() {
+    void 뽑기_풀인데_소속이나_등급이_없어도_이제는_같은_이유로_거절한다() {
+        // 2026-09-11: 소속·등급 필수 검사(NFT_043)는 drawPool 분기와 함께 주석 처리됐다.
+        // drawPool=true 는 소속·등급 유무와 관계없이 NFT_042(DESIGN_POOL_CONFLICT) 로 막힌다.
         NftPhotocardDesignCreateRequest noGrade = new NftPhotocardDesignCreateRequest(
                 null, "김예린", null, 100, image(), true, "서울 5반", null);
         NftPhotocardDesignCreateRequest noGroup = new NftPhotocardDesignCreateRequest(
@@ -297,10 +282,10 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
 
         assertThatThrownBy(() -> designService.create(noGrade))
                 .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_CONFLICT);
         assertThatThrownBy(() -> designService.create(noGroup))
                 .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_ATTRIBUTES_REQUIRED);
+                .extracting("errorCode").isEqualTo(NftErrorCode.DESIGN_POOL_CONFLICT);
         verifyNoInteractions(ipfsPinService);
     }
 

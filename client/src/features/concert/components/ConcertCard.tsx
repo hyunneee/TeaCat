@@ -1,6 +1,6 @@
 import { CalendarDays, MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Badge, LiveDot, PosterImage } from '@/shared/components/ui';
+import { Badge, LiveDot, MarqueeText, PosterImage } from '@/shared/components/ui';
 import { formatDateTime } from '@/shared/lib';
 import { CONCERT_BOOKING_LABEL, isConcertOpen, posterSeedOf } from '../model/concert.model';
 import type { ConcertSummary } from '../model/concert.types';
@@ -38,7 +38,9 @@ export function ConcertCard({ concert, onClick }: Props) {
       type="button"
       onClick={onClick}
       whileTap={{ scale: 0.985 }}
-      className="surface shadow-list hover:bg-surface-2 relative flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
+      /* `group` 은 제목의 흐르기(MarqueeText)가 **카드 어디에 마우스를 올려도** 시작되게
+         하기 위한 것입니다. 글자에 정확히 올려야 하면 아무도 못 씁니다 */
+      className="surface shadow-list hover:bg-surface-2 group relative flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors duration-200"
     >
       {/* 상태 칩 — 카드 우상단 고정. 비공개는 등록자용 목록에서만 오고, 열림 여부보다 먼저 알려야 합니다.
           🔴 문구의 근거는 **서버가 회차를 합쳐 계산한 `bookingStatus`** 입니다.
@@ -65,8 +67,13 @@ export function ConcertCard({ concert, onClick }: Props) {
       />
 
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-0.5">
-        {/* pr-20 = 우상단 칩이 앉는 자리. 제목이 칩 밑으로 들어가지 않게 비워 둡니다. */}
-        <h3 className="min-w-0 truncate pr-20 text-[0.9375rem] font-bold">{concert.title}</h3>
+        {/* 긴 공연명은 말줄임 대신 **마우스를 올리면 끝까지 흐릅니다** (MarqueeText).
+            공연명의 뒤쪽이 "…2026 : 서울" 처럼 구분점인 경우가 많아, 자르면
+            어느 공연인지 알 수 없는 채로 카드를 눌러봐야 합니다.
+            pr-20 은 우상단 칩이 앉는 자리입니다 — 안 비우면 제목이 칩 밑으로 들어갑니다. */}
+        <h3 className="min-w-0 pr-20 text-[0.9375rem] font-bold">
+          <MarqueeText>{concert.title}</MarqueeText>
+        </h3>
 
         <div className="text-subtle space-y-0.5 text-[0.8125rem]">
           <p className="flex items-center gap-1 truncate">

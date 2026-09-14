@@ -15,7 +15,9 @@ export function BottomBar({ children, className }: { children: ReactNode; classN
   return (
     <div
       className={cn(
-        'surface border-line fixed inset-x-0 bottom-0 z-20 mx-auto app-width border-t',
+        // PlainLayout 과 같은 폭 규칙을 사용합니다. 1024px 이상에서 본문만
+        // max-w-3xl 로 넓어질 때 하단 바가 480px(app-width)에 남지 않게 합니다.
+        'surface border-line fixed inset-x-0 bottom-0 z-20 mx-auto app-shell border-t lg:max-w-3xl',
         // pb-safe 는 padding-bottom 을 덮어쓰므로 여백과 노치를 한 번에 계산합니다.
         'px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))]',
         className,

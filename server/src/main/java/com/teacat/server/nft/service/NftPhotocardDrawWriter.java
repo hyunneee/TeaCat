@@ -1,16 +1,21 @@
 package com.teacat.server.nft.service;
 
+/* 2026-09-11: 이벤트 판정이 표(nft_photocard_pack_events)로 옮겨가 더는 쓰지 않는다.
 import com.teacat.server.common.config.NftPhotocardDrawProperties;
+*/
+import com.teacat.server.common.config.BookingPolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.entity.NftPhotocard;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardGrade;
 import com.teacat.server.nft.entity.NftPhotocardPack;
+import com.teacat.server.nft.entity.NftPhotocardPackEvent;
 import com.teacat.server.nft.entity.NftPhotocardPackSource;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
 import com.teacat.server.nft.repository.NftMarketQueryRepository.UserWalletRow;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
+import com.teacat.server.nft.repository.NftPhotocardPackEventRepository;
 import com.teacat.server.nft.repository.NftPhotocardPackRepository;
 import com.teacat.server.nft.repository.NftPhotocardRepository;
 import com.teacat.server.user.entity.User;
@@ -46,7 +51,11 @@ public class NftPhotocardDrawWriter {
     private final UserRepository userRepository;
     private final NftMarketQueryRepository queryRepository;
     private final BlockchainProperties blockchainProperties;
+    private final NftPhotocardPackEventRepository packEventRepository;
+    private final BookingPolicyProperties bookingPolicy;
+    /* 2026-09-11: 이벤트 판정이 표(nft_photocard_pack_events)로 옮겨가 더는 쓰지 않는다.
     private final NftPhotocardDrawProperties properties;
+    */
 
     /**
      * 뽑기 결과. 체인 전송에 필요한 값({@code designId}, {@code walletAddress})까지 들고 나간다.
@@ -65,7 +74,8 @@ public class NftPhotocardDrawWriter {
             return replay(done.get());
         }
 
-        NftPhotocardPack pack = packRepository.lockOneAvailable(userId)
+        NftPhotocardPack pack = packRepository
+                .lockOneAvailable(userId, bookingPolicy.cancelDeadlineLead().toSeconds())
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PACK_NOT_AVAILABLE));
 
         // 지갑은 도안을 잠그기 전에 본다 — 없으면 도안 잠금을 잡을 이유가 없다
@@ -74,7 +84,11 @@ public class NftPhotocardDrawWriter {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(NftErrorCode.RECIPIENT_WALLET_NOT_FOUND));
 
-        NftPhotocardDesign design = designRepository.lockRandomDrawCandidate()
+        // 팩이 회차를 들고 있으면 그 공연의 도안에서, 이벤트 팩(회차 없음)이면 이벤트 풀에서 고른다.
+        // 공연에 카드를 안 넣었으면 이벤트 풀로 떨어지지 않고 실패한다 — 그건 이벤트 팩의 재고다
+        NftPhotocardDesign design = (pack.getPerformanceDetailId() == null
+                ? designRepository.lockRandomDrawCandidate()
+                : designRepository.lockRandomDrawCandidateForSchedule(pack.getPerformanceDetailId()))
                 .orElseThrow(() -> new BusinessException(NftErrorCode.DRAW_POOL_EMPTY));
         User owner = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_OWNER_NOT_FOUND));
@@ -103,20 +117,45 @@ public class NftPhotocardDrawWriter {
      */
     @Transactional
     public boolean claimEventPack(Long userId) {
+        /* 2026-09-11: 설정값(nft.photocard.draw.event-code) 판정을 표 조회로 바꿨다.
+           설정은 바꿀 때마다 서버 재시작이 필요해 어드민 화면에서 다룰 수 없었다.
         if (!properties.hasEvent()) {
             return false;
         }
         String code = properties.eventCode();
+        */
+        Optional<NftPhotocardPackEvent> event = packEventRepository.findOngoing();
+        if (event.isEmpty()) {
+            return false;   // 진행 중인 이벤트가 없다. 에러가 아니다
+        }
+        String code = event.get().getCode();
+
         if (packRepository.existsByUserIdAndSourceAndSourceRef(userId, NftPhotocardPackSource.EVENT, code)) {
             return false;
         }
-        packRepository.save(NftPhotocardPack.grant(userId, NftPhotocardPackSource.EVENT, code));
+        packRepository.save(NftPhotocardPack.grantEvent(userId, code));
         return true;
     }
 
+    /** 팩 개수 한 묶음. 상태 응답이 이걸 그대로 편다 */
+    public record PackCounts(long openable, long scheduled, LocalDateTime nextOpenAt) {
+    }
+
+    /* 2026-09-11: counts() 로 대체했다. 개봉 시각이 생겨 "안 쓴 팩" 만으로는 화면을 못 그린다.
     @Transactional(readOnly = true)
     public long countAvailable(Long userId) {
         return packRepository.countByUserIdAndConsumedAtIsNull(userId);
+    }
+    */
+
+    @Transactional(readOnly = true)
+    public PackCounts counts(Long userId) {
+        // 시각 판정은 전부 DB now() 로 한다 — 개봉 판정과 같은 시계를 써야 한다
+        long leadSeconds = bookingPolicy.cancelDeadlineLead().toSeconds();
+        return new PackCounts(
+                packRepository.countOpenable(userId, leadSeconds),
+                packRepository.countScheduled(userId, leadSeconds),
+                packRepository.findNextOpenAt(userId, leadSeconds));
     }
 
     private DrawOutcome replay(NftPhotocardPack pack) {

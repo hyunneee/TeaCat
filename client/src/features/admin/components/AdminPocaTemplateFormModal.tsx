@@ -1,49 +1,42 @@
 import { useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { Button, Input, Modal, Segmented } from '@/shared/components/ui';
-import type { AdminPocaDesignCreateRequest, PocaDesignGrade } from '../model/adminPocaDesign.types';
+import { drawMessageOf, POCA_ROLES, withPocaRole, type PocaRole } from '@/features/nft';
+import { DESIGN_NAME_MAX, gradeForRole } from '../model/adminPocaDesign.model';
+import type { AdminPocaTemplateCreateRequest } from '../model/adminPocaDesign.types';
 
-/** 서버 제한과 같은 값 (`@Max(100_000)`) */
-const SUPPLY_MAX = 100_000;
-
-const GRADES: { value: PocaDesignGrade; label: string }[] = [
-  { value: 'SPECIAL', label: '금색 (코치·교육생)' },
-  { value: 'COMMON', label: '보라 (개발자)' },
-];
+const ROLES = POCA_ROLES.map((role) => ({ value: role, label: role }));
 
 interface Props {
   open: boolean;
   onClose: () => void;
   isPending: boolean;
-  onSubmit: (body: AdminPocaDesignCreateRequest) => void;
+  onSubmit: (body: AdminPocaTemplateCreateRequest) => void;
 }
 
 /**
- * 뽑기 풀 도안 등록.
+ * 카드 그림 등록.
  *
- * 🔴 **한정 수량은 첫 장이 발급되는 순간 온체인에서 동결됩니다.** 그 뒤로는 아무도 못 바꿉니다 —
- * 그래서 폼에서 한 번 더 말해 줍니다.
+ * 🔴 **수량을 받지 않습니다.** 수량은 이 그림을 공연이나 이벤트 풀에 넣을 때 정합니다 —
+ * 같은 그림이라도 공연마다 다른 온체인 카드가 되기 때문입니다.
  *
  * 그림은 서버가 IPFS 에 올립니다. 프론트는 파일만 넘기고 CID 도 키도 모릅니다.
  */
-export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }: Props) {
+export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
-  const [grade, setGrade] = useState<PocaDesignGrade>('SPECIAL');
-  const [totalSupply, setTotalSupply] = useState('100');
+  const [role, setRole] = useState<PocaRole>('코치');
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const supply = Number(totalSupply);
   const canSubmit =
     name.trim().length > 0 &&
+    name.trim().length <= DESIGN_NAME_MAX &&
     group.trim().length > 0 &&
-    image !== null &&
-    supply > 0 &&
-    supply <= SUPPLY_MAX;
+    image !== null;
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
@@ -55,14 +48,13 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
     setSubmitted(true);
     if (!canSubmit || !image) return;
 
+    /* 🔴 역할을 소속에 적어 넣습니다. 예전처럼 소속이 '서울' 로 시작하는지 보고 추측하면,
+       교육생이 사실대로 '서울 5반' 이라 적는 순간 코치님이 되어 버립니다 */
     onSubmit({
       name: name.trim(),
-      group: group.trim(),
-      grade,
-      totalSupply: supply,
+      group: withPocaRole(group, role),
+      grade: gradeForRole(role),
       image,
-      /* 뽑기 풀 도안이라 공연은 비웁니다 — 서버가 둘 다 있으면 거절합니다 */
-      drawPool: true,
     });
   };
 
@@ -70,7 +62,7 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
     <Modal
       open={open}
       onClose={onClose}
-      title="뽑기 도안 등록"
+      title="카드 그림 등록"
       footer={
         <div className="flex gap-2">
           <Button variant="soft" fullWidth onClick={onClose}>
@@ -83,7 +75,6 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
       }
     >
       <div className="space-y-4">
-        {/* 그림 — 서버가 IPFS 에 핀합니다 */}
         <div>
           <button
             type="button"
@@ -118,7 +109,7 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="김예린"
-          hint="지갑과 카드 화면에 그대로 뜹니다"
+          hint={`공연 풀에 넣으면 "이름 · 공연 제목" 이 되고, 합쳐서 ${DESIGN_NAME_MAX}자를 넘을 수 없습니다`}
         />
 
         <Input
@@ -128,23 +119,24 @@ export function AdminPocaDesignFormModal({ open, onClose, isPending, onSubmit }:
           value={group}
           onChange={(e) => setGroup(e.target.value)}
           placeholder="서울 5반"
-          hint="'서울' 로 시작하면 화면에서 '코치님', 아니면 '교육생' 으로 부릅니다"
+          hint="어드민 목록에서 구분하려고 씁니다. 호칭은 아래 역할이 정합니다"
         />
 
         <div className="space-y-1.5">
-          <p className="text-ink-muted text-sm font-medium">연출 등급</p>
-          <Segmented options={GRADES} value={grade} onChange={setGrade} />
+          <p className="text-ink-muted text-sm font-medium">역할</p>
+          <Segmented options={ROLES} value={role} onChange={setRole} />
+          <p className="text-ink-subtle text-xs">코치·교육생은 금색, 개발자는 보라로 나옵니다.</p>
         </div>
 
-        <Input
-          label="한정 수량"
-          showRequirement
-          required
-          value={totalSupply}
-          onChange={(e) => setTotalSupply(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          inputMode="numeric"
-          hint="🔴 첫 장이 발급되면 온체인에서 동결돼 바꿀 수 없습니다. 소진되면 뽑기 풀에서 빠집니다"
-        />
+        {/* 등록하기 전에 무슨 말이 나올지 그대로 보여줍니다 — 호칭이 틀린 채로 뿌리면 되돌릴 수 없습니다 */}
+        {name.trim() && (
+          <p className="surface-2 text-ink-muted rounded-xl p-3 text-sm">
+            뽑으면 이렇게 나옵니다 —{' '}
+            <b className="text-ink">
+              {drawMessageOf(name.trim(), withPocaRole(group, role), gradeForRole(role))}
+            </b>
+          </p>
+        )}
       </div>
     </Modal>
   );

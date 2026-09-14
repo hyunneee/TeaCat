@@ -15,6 +15,7 @@ export { PocaArt } from './components/PocaArt';
 export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
 export { PocaPack } from './components/PocaPack';
+export { PocaPackArt } from './components/PocaPackArt';
 export { PocaPackTile } from './components/PocaPackTile';
 export { PocaDust } from './components/PocaDust';
 export { PocaReveal } from './components/PocaReveal';
@@ -32,12 +33,22 @@ export {
   pocaSeed,
   formatOrigin,
   photocardSource,
+  pocaName,
   mintStatusLabel,
   groupPhotocards,
   type PhotocardGroup,
   type NftSort,
 } from './model/nft.model';
-export { drawLine, drawMessage, isCoach, isSpecial, pocaTitle } from './model/pocaDraw.model';
+export {
+  drawLine,
+  drawMessage,
+  drawMessageOf,
+  isSpecial,
+  POCA_ROLES,
+  pocaRole,
+  pocaTitle,
+  withPocaRole,
+} from './model/pocaDraw.model';
 export type {
   MarketPhotocard,
   MyPhotocard,
@@ -54,3 +65,4 @@ export type {
   PocaDrawResult,
   PocaGrade,
 } from './model/nft.types';
+export type { DrawLine, PocaRole } from './model/pocaDraw.model';

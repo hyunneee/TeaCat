@@ -62,26 +62,19 @@ export function BentoTile({
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {Icon && <Icon size={16} className="shrink-0 text-ink-subtle" aria-hidden />}
-          <h2 className="truncate text-sm font-semibold text-ink">{title}</h2>
+          {Icon && <Icon size={16} className="text-ink-subtle shrink-0" aria-hidden />}
+          <h2 className="text-ink truncate text-sm font-semibold">{title}</h2>
         </div>
-        {to ? (
-          <ArrowRight size={16} className="shrink-0 text-ink-subtle" aria-hidden />
-        ) : (
-          action
-        )}
+        {to ? <ArrowRight size={16} className="text-ink-subtle shrink-0" aria-hidden /> : action}
       </div>
 
-      {description && <p className="mt-1 text-xs leading-relaxed text-ink-muted">{description}</p>}
+      {description && <p className="text-ink-muted mt-1 text-xs leading-relaxed">{description}</p>}
       {children && <div className="mt-4">{children}</div>}
     </>
   );
 
   const card = (
-    <Card
-      padded
-      className={cn('h-full', to && 'transition-shadow hover:shadow-pop', className)}
-    >
+    <Card padded className={cn('h-full', to && 'hover:shadow-pop transition-shadow', className)}>
       {body}
     </Card>
   );
@@ -120,20 +113,20 @@ export function StatTile({ label, value, unit, icon: Icon, span = 3, caption }: 
     <div className={SPAN[span]}>
       <Card padded className="h-full">
         <div className="flex items-center gap-2">
-          {Icon && <Icon size={15} className="shrink-0 text-ink-subtle" aria-hidden />}
-          <p className="truncate text-xs font-medium text-ink-muted">{label}</p>
+          {Icon && <Icon size={15} className="text-ink-subtle shrink-0" aria-hidden />}
+          <p className="text-ink-muted truncate text-xs font-medium">{label}</p>
         </div>
 
-        <p className="mt-2 flex items-baseline gap-1 text-2xl font-bold tabular-nums text-ink">
+        <p className="text-ink mt-2 flex items-baseline gap-1 text-2xl font-bold tabular-nums">
           {value === undefined ? (
             <span className="text-ink-subtle">—</span>
           ) : (
             <AnimatedNumber value={value} format="plain" />
           )}
-          {unit && <span className="text-sm font-medium text-ink-muted">{unit}</span>}
+          {unit && <span className="text-ink-muted text-sm font-medium">{unit}</span>}
         </p>
 
-        {caption && <p className="mt-1 text-xs text-ink-subtle">{caption}</p>}
+        {caption && <p className="text-ink-subtle mt-1 text-xs">{caption}</p>}
       </Card>
     </div>
   );

@@ -7,8 +7,10 @@ import com.teacat.server.booking.entity.PerformanceSeatId;
 import com.teacat.server.booking.entity.SeatBookingStatus;
 import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
+import com.teacat.server.booking.repository.PerformanceSeatRepository.StandingSeatAllocation;
 import com.teacat.server.booking.repository.PerformanceSeatRepository.TicketingWindow;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.performance.entity.BookingOpenStatus;
 import com.teacat.server.performance.entity.TicketingStatus;
 import com.teacat.server.user.repository.UserRepository;
@@ -31,13 +33,16 @@ public class BookingService {
 
     private final PerformanceSeatRepository performanceSeatRepository;
     private final UserRepository userRepository;
+    private final FileStorageService fileStorageService;
     private final Duration holdDuration;
 
     public BookingService(PerformanceSeatRepository performanceSeatRepository,
             UserRepository userRepository,
+            FileStorageService fileStorageService,
             @Value("${booking.hold.duration}") Duration holdDuration) {
         this.performanceSeatRepository = performanceSeatRepository;
         this.userRepository = userRepository;
+        this.fileStorageService = fileStorageService;
         this.holdDuration = holdDuration;
     }
 
@@ -51,9 +56,18 @@ public class BookingService {
     public List<MyHoldResponse> getMyHolds(Long userId) {
         performanceSeatRepository.releaseAllExpiredHolds(userId);
 
+        /* 🔴 포스터는 **키를 URL 로 바꿔** 내려준다. 예전에는 DB 의 poster_img(스토리지 키)를
+              그대로 넘겨서, 화면이 `<img src="performance/2026/09/uuid.webp">` 로 그리고
+              현재 경로 기준 상대 주소가 되어 이미지가 깨졌다. 다른 응답들
+              (공연 목록·내 티켓)은 모두 presignedUrl 을 거친다. */
         return performanceSeatRepository.findMyHolds(userId).stream()
-                .map(MyHoldResponse::from)
+                .map(hold -> MyHoldResponse.of(hold, posterUrl(hold.getPosterImg())))
                 .toList();
+    }
+
+    /** 포스터가 없는 공연도 있다. 그때는 URL 을 만들지 않는다 (내 티켓 조회와 같은 규칙) */
+    private String posterUrl(String posterImgKey) {
+        return posterImgKey == null ? null : fileStorageService.presignedUrl(posterImgKey);
     }
 
     /** 좌석 선점 */
@@ -109,6 +123,51 @@ public class BookingService {
 
         return new SeatHoldResponse(performanceDetailId, seatId, SeatBookingStatus.HELD, heldUntil,
                 holdDuration.toSeconds());
+    }
+
+    /**
+     * 스탠딩 구역에서 판매 가능한 가상 좌석 하나를 서버가 자동 배정해 선점한다.
+     *
+     * <p>후보 {@code seatId} 를 클라이언트가 고르지 않는다. 저장소의 단일 SQL이 후보 행 잠금과
+     * 상태 변경을 함께 수행하므로 여러 사용자가 동시에 요청해도 같은 입장권을 받을 수 없다.
+     */
+    @Transactional
+    public SeatHoldResponse holdStandingSeat(Long performanceDetailId, Long areaId, Long userId) {
+        requireFaceRegistered(userId);
+
+        TicketingWindow ticketingWindow = performanceSeatRepository
+                .findTicketingWindow(performanceDetailId)
+                .orElseThrow(() -> new BusinessException(
+                        BookingErrorCode.PERFORMANCE_DETAIL_NOT_FOUND));
+        validateTicketingOpen(ticketingWindow);
+
+        if (!performanceSeatRepository.existsSellableStandingArea(performanceDetailId, areaId)) {
+            throw new BusinessException(BookingErrorCode.STANDING_AREA_NOT_AVAILABLE);
+        }
+
+        performanceSeatRepository.releaseExpiredHold(performanceDetailId, userId);
+        LocalDateTime heldUntil = LocalDateTime.now().plus(holdDuration);
+
+        StandingSeatAllocation allocation;
+        try {
+            allocation = performanceSeatRepository
+                    .holdAvailableStandingSeat(performanceDetailId, areaId, userId, heldUntil)
+                    .orElseThrow(() -> new BusinessException(
+                            BookingErrorCode.STANDING_AREA_SOLD_OUT));
+        } catch (DataIntegrityViolationException e) {
+            // 일반 좌석 선점 API와 동시에 요청된 경우에도 회차당 1인 1매 제약을 최종 방어선으로 둔다.
+            if (isHeldByLimitViolation(e)) {
+                throw new BusinessException(BookingErrorCode.SEAT_HOLD_LIMIT_EXCEEDED);
+            }
+            throw e;
+        }
+
+        return new SeatHoldResponse(
+                performanceDetailId,
+                allocation.getSeatId(),
+                SeatBookingStatus.HELD,
+                allocation.getHeldUntil(),
+                allocation.getRemainingSeconds());
     }
 
     /**

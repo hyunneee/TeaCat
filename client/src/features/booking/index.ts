@@ -10,7 +10,7 @@ export { useSectionSeats } from './hooks/useSectionSeats';
 export { useBookingPolicy } from './hooks/useBookingPolicy';
 export { useSeatSelection } from './hooks/useSeatSelection';
 export { useSeatHold } from './hooks/useSeatHold';
-export { useMyHolds, useActiveHold } from './hooks/useMyHolds';
+export { useMyHolds, useActiveHolds, type ActiveHold } from './hooks/useMyHolds';
 export { useResumeHold } from './hooks/useResumeHold';
 export { useRecipients } from './hooks/useRecipients';
 

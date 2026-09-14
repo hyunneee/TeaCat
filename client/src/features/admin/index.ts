@@ -46,6 +46,9 @@ export { AdminUserToolbar, AdminPagination } from './components/AdminUserToolbar
 export { AdminUserCreateModal } from './components/AdminUserCreateModal';
 export { AdminUserEditModal } from './components/AdminUserEditModal';
 export { AdminPasswordResetModal } from './components/AdminPasswordResetModal';
+/* 테스트용 캣머니 조정. 모달이 잔액 조회·조정을 직접 들고 있어 훅을 따로 내보내지
+   않습니다 — 이 기능을 쓰는 화면은 회원 관리 하나뿐입니다 */
+export { AdminCatMoneyModal } from './components/AdminCatMoneyModal';
 
 // View — 문의 관리
 export { AdminInquiryTable } from './components/AdminInquiryTable';
@@ -53,7 +56,9 @@ export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
-export { AdminPocaDesignFormModal } from './components/AdminPocaDesignFormModal';
+export { AdminPocaTemplateFormModal } from './components/AdminPocaTemplateFormModal';
+export { AdminPocaPoolPicker } from './components/AdminPocaPoolPicker';
+export { AdminPocaDesignTable } from './components/AdminPocaDesignTable';
 
 // View — 운영 통계
 // 🔴 recharts 는 어드민 전용입니다 (CLAUDE.md 1장). 차트 컴포넌트를 사용자 화면에서
@@ -63,19 +68,41 @@ export { TrendLineChart } from './components/TrendLineChart';
 
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
+export { adminCatMoneyApi, adminCatMoneyKeys } from './api/adminCatMoneyApi';
+export type {
+  AdminCatMoneyBalance,
+  AdminCatMoneyAdjustResult,
+  AdminCatMoneyDirection,
+  AdminCatMoneyReason,
+} from './model/adminCatMoney.types';
 export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
 export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
 export { adminPocaDesignApi, adminPocaDesignKeys } from './api/adminPocaDesignApi';
 export {
-  useAdminDrawPoolDesigns,
-  useCreatePocaDesign,
+  useAdminPocaTemplates,
+  useCreatePocaTemplate,
+  useSetTemplateHidden,
+  usePerformanceDrawPool,
+  useAddPerformanceDesigns,
+  useAdminEventPoolDesigns,
+  useAddEventPoolDesigns,
+  useSetDesignDrawPool,
   useRetryDesignRegistration,
 } from './hooks/useAdminPocaDesigns';
+export {
+  DESIGN_NAME_MAX,
+  designNameLength,
+  isDrawable,
+  notYetDrawable,
+} from './model/adminPocaDesign.model';
 export type {
+  AdminPerformanceDrawPool,
   AdminPocaDesign,
-  AdminPocaDesignCreateRequest,
+  AdminPocaTemplate,
+  AdminPocaTemplateCreateRequest,
   PocaDesignChainStatus,
   PocaDesignGrade,
+  PocaPoolItem,
 } from './model/adminPocaDesign.types';
 export { adminAnalyticsApi, adminAnalyticsKeys } from './api/adminAnalyticsApi';
 export {
@@ -94,6 +121,22 @@ export type {
   BannerUploadUrl,
 } from './model/adminBanner.types';
 export type { AdminInquiryQuery } from './model/adminInquiry.types';
+
+export { AdminPackEventFormModal } from './components/AdminPackEventFormModal';
+export {
+  useAdminPackEvents,
+  useCreatePackEvent,
+  useSetPackEventActive,
+} from './hooks/useAdminPackEvents';
+export {
+  EVENT_CODE_MAX,
+  EVENT_NAME_MAX,
+  normalizeEventCode,
+  ongoingEvent,
+  packEventState,
+  type PackEventState,
+} from './model/adminPackEvent.model';
+export type { AdminPackEvent, AdminPackEventCreateRequest } from './model/adminPackEvent.types';
 export {
   USER_ROLES,
   ROLE_LABEL,

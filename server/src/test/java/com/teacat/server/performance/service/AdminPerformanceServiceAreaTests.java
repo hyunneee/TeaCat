@@ -94,11 +94,13 @@ class AdminPerformanceServiceAreaTests {
         // 형태는 판매 방식을 정할 때만 읽는다. 앞선 검사에서 먼저 걸러지는 테스트도 있어 lenient
         lenient().when(area.getType()).thenReturn(AreaType.SEATED);
         lenient().when(area.isSeated()).thenReturn(true);
+        lenient().when(area.getMaxSeat()).thenReturn(1_000);
 
         standingArea = mock(Area.class);
         given(standingArea.getId()).willReturn(STANDING_AREA_ID);
         lenient().when(standingArea.getType()).thenReturn(AreaType.STANDING);
         lenient().when(standingArea.isSeated()).thenReturn(false);
+        lenient().when(standingArea.getMaxSeat()).thenReturn(1_000);
 
         // 구역 목록은 공연장이 아니라 그 공연이 쓰는 배치도 기준이다
         performance = PerformanceGeneral.create(
@@ -170,18 +172,15 @@ class AdminPerformanceServiceAreaTests {
     }
 
     @Test
-    void 의자가_없는_구역은_좌석제로도_팔_수_있다() {
+    void 스탠딩_가상좌석은_좌석제로_팔_수_없다() {
         givenSold(0);
-        givenSaveReturnsInput();
 
-        // 좌석을 그려 넣으면 그대로 팔 수 있다. 아직 좌석이 없으면
-        // 회차 좌석 생성(API-269)이 만들 좌석이 없다고 알려 준다 — 여기서 막지 않는다
-        List<PerformanceAreaResponse> saved =
-                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, null, AreaType.SEATED), OWNER);
-
-        assertThat(saved).singleElement()
-                .extracting(PerformanceAreaResponse::saleType)
-                .isEqualTo(AreaType.SEATED);
+        // 스탠딩의 seats 행은 위치가 없는 입장 재고다. 지정석으로 해석하면 안 된다.
+        assertThatThrownBy(() ->
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, null, AreaType.SEATED), OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.AREA_SALE_TYPE_NOT_ALLOWED);
     }
 
     @Test
@@ -261,6 +260,17 @@ class AdminPerformanceServiceAreaTests {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_REQUIRED);
+    }
+
+    @Test
+    void 스탠딩_인원_상한은_공연장_수용인원을_넘을_수_없다() {
+        givenSold(0);
+
+        assertThatThrownBy(() ->
+                service.saveAreas(CONCERT_ID, request(STANDING_AREA_ID, 1_001), OWNER))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(PerformanceErrorCode.AREA_MAX_CNT_EXCEEDED);
     }
 
     @Test

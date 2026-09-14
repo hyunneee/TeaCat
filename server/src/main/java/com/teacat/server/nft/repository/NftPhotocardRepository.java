@@ -18,7 +18,14 @@ public interface NftPhotocardRepository extends JpaRepository<NftPhotocard, Long
     @Query("select p from NftPhotocard p where p.id = :photocardId")
     Optional<NftPhotocard> findByIdForUpdate(@Param("photocardId") Long photocardId);
 
+    /* 2026-09-11: existsByDesignPerformanceIdAndTicketIdIsNotNull 로 대체했다. 뽑기 풀 도안이 그
+       공연에 묶일 수 있게 되면서, 뽑힌 카드(ticket_id NULL)도 이 조회에 잡혀 그 공연 팩을 한 번만
+       열어도 수동 일괄 발급이 영구히 막혔다(C4). 호출부가 하나뿐이라 지우지 않고 주석으로 남긴다.
     boolean existsByDesignPerformanceId(Long performanceId);
+    */
+
+    /** 그 공연에 <b>티켓으로</b> 발급된 포토카드가 있는가. 뽑힌 카드(ticket_id NULL)는 세지 않는다 */
+    boolean existsByDesignPerformanceIdAndTicketIdIsNotNull(Long performanceId);
 
     /**
      * 상태별 카드 수. 발행 파이프라인이 막혔는지 보는 지표의 원천이다

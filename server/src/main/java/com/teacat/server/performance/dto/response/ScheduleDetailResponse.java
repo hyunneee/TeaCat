@@ -6,6 +6,7 @@ import com.teacat.server.performance.entity.PerformanceGeneral;
 import com.teacat.server.performance.entity.TicketingStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -34,7 +35,7 @@ public record ScheduleDetailResponse(
         @Schema(description = "지금 예매할 수 있는지", example = "true")
         boolean bookable,
 
-        @Schema(description = "취소 가능 마감 시각. 공연이 시작되면 취소할 수 없다")
+        @Schema(description = "취소 가능 마감 시각. 공연 시작에서 booking.policy.cancel-deadline-lead 만큼 앞선 시각이다")
         LocalDateTime cancelDeadlineAt,
 
         @Schema(description = "공연 ID", example = "1")
@@ -50,9 +51,14 @@ public record ScheduleDetailResponse(
         LocalDateTime ticketingStartAt
 ) {
 
-    public static ScheduleDetailResponse of(PerformanceDetail detail, LocalDateTime now) {
+    /**
+     * @param soldOut 좌석이 다 팔렸는가 ({@code ScheduleSeatAvailability} 가 판정).
+     *                회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다
+     */
+    public static ScheduleDetailResponse of(PerformanceDetail detail, LocalDateTime now,
+                                            Duration cancelDeadlineLead, boolean soldOut) {
         PerformanceGeneral performance = detail.getPerformance();
-        BookingOpenStatus bookingStatus = detail.bookingStatus(now);
+        BookingOpenStatus bookingStatus = detail.bookingStatus(now).soldOutIf(soldOut);
 
         return new ScheduleDetailResponse(
                 detail.getId(),
@@ -61,8 +67,8 @@ public record ScheduleDetailResponse(
                 detail.getStatus(),
                 bookingStatus,
                 bookingStatus == BookingOpenStatus.OPEN,
-                // 취소 마감은 공연 시작 시각이다
-                detail.getPerformanceDate(),
+                // 취소 마감은 공연 시작 − booking.policy.cancel-deadline-lead
+                detail.getPerformanceDate().minus(cancelDeadlineLead),
                 performance.getId(),
                 performance.getTitle(),
                 performance.getStadium().getName(),

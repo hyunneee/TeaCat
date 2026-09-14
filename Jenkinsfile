@@ -197,13 +197,16 @@ pipeline {
                     #    (프로젝트 ID 는 공개 값이라 여기 적어도 된다. 데이터 내보내기 API
                     #     토큰은 전혀 다른 물건이고 절대 여기 두면 안 된다)
                     case "$DEPLOY_ENV" in
-                        # 🔴 운영용 프로젝트는 아직 없다. 운영을 열 때 Clarity 에서 프로젝트를
-                        #    하나 더 만들어 여기 채운다. dev 것을 그대로 쓰면 히트맵이 섞인다.
-                        #    그때 개인정보처리방침·쿠키 동의도 함께 정리해야 한다
-                        #    (client/CLAUDE.md 8장 — 지금은 미해결).
-                        prod) CLARITY_ID="" ;;
-                        # dev.teacat.site → Clarity 프로젝트 'teacat'
-                        *)    CLARITY_ID="yfz2y32jxa" ;;
+                        # teacat.site → Clarity 프로젝트 'teacat' (프로젝트 설정의 웹사이트
+                        # URL 도 이 주소다). **실사용자가 어디서 막히는지 보려고 여기를 켠다** —
+                        # dev 만 보면 표본이 팀원뿐이라 히트맵·퍼널이 통계적으로 무의미했다.
+                        prod) CLARITY_ID="yfz2y32jxa" ;;
+
+                        # 🔴 dev 는 **일부러 끈다.** 프로젝트가 하나뿐이라 양쪽을 같은 ID 로
+                        #    보내면 dev 세션이 운영 히트맵·퍼널에 섞인다 (Clarity 에는 Sentry 의
+                        #    environment 같은 태그가 없어서 나중에 갈라낼 수도 없다).
+                        #    dev 도 보려면 Clarity 에서 프로젝트를 하나 더 만들어 여기 채운다.
+                        *)    CLARITY_ID="" ;;
                     esac
 
                     # 소스맵 업로드 토큰 (Sentry). 없으면 조용히 건너뛴다 —
@@ -503,7 +506,7 @@ pipeline {
         success {
             script {
                 recordDeployment()
-                notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공 — 빌드: ${env.BUILT_SUMMARY ?: '?'}")
+                notifyMM('#41BE89', "✅ ${env.DEPLOY_ENV} 배포 성공 — 빌드: ${env.BUILT_SUMMARY ?: '?'}", '배포자')
             }
         }
         failure {
@@ -515,7 +518,7 @@ pipeline {
                     docker logs --tail 50 "$DEPLOY_ENV-$s" 2>&1 || true
                 done
             '''
-            script { notifyMM('#D24B4E', "❌ ${env.DEPLOY_ENV ?: '?'} 배포 실패") }
+            script { notifyMM('#D24B4E', "❌ ${env.DEPLOY_ENV ?: '?'} 배포 실패", '범인') }
         }
     }
 }
@@ -558,13 +561,61 @@ def recordDeployment() {
     }
 }
 
-def notifyMM(String color, String title) {
+/**
+ * 이 배포를 만든 사람 — 실패 알림의 "범인".
+ *
+ * 출처가 여럿이라 순서대로 본다. 환경에 따라 하나만 채워지기 때문이다.
+ *   1) GitLab 웹후크로 돌았으면 **푸시한 사람** (GitLab 플러그인이 넣어준다)
+ *   2) 없으면 **마지막 커밋의 작성자** (git)
+ *
+ * MR 을 머지해서 돌았다면 2번이 "머지한 사람" 이 된다 — 배포를 일으킨 사람이므로
+ * 그게 맞다. 코드를 쓴 사람이 궁금하면 커밋 해시로 따라가면 된다.
+ *
+ * 🔴 따옴표·역슬래시를 지운다. 이 값은 JSON 문자열 안에, 그 JSON 은 다시 셸의
+ *    단일 인용 안에 들어가서, 하나만 새도 알림이 통째로 안 나간다.
+ */
+def culprit() {
+    def name = env.gitlabUserName ?: env.GITLAB_USER_NAME
+
+    if (!name) {
+        try {
+            name = sh(returnStdout: true, script: 'git log -1 --pretty=%an').trim()
+        } catch (e) {
+            // 체크아웃 전에 실패하면 저장소가 없다. 알림은 그래도 보내야 한다
+            echo "범인을 알아내지 못했습니다: ${e.message}"
+        }
+    }
+
+    /* 🔴 정규식을 쓰지 않는다. 슬래시 문자열(`/.../`)은 `\\` 를 백슬래시 하나로 줄여서
+          `['"\]` 라는 깨진 문자 클래스가 되고, 런타임에 PatternSyntaxException 이 난다.
+          그러면 **알림 자체가 안 나간다** — 실패를 알리는 코드가 실패하는 셈이다.
+          문법 검사로는 안 잡히고 이름에 특수문자가 있을 때만 터지는 것도 아니라,
+          매번 터진다. 그냥 하나씩 지운다. */
+    return (name ?: '알 수 없음')
+        .replace('"', '')
+        .replace("'", '')
+        .replace('\\', '')
+        .take(40)
+}
+
+/**
+ * @param whoLabel 이름 앞에 붙일 말. 실패는 "범인", 성공은 "배포자" —
+ *                 성공 알림에 "범인" 이라고 쓰면 읽는 사람이 멈칫한다
+ */
+def notifyMM(String color, String title, String whoLabel) {
+    def who = culprit()
+    def commit = env.TAG ?: '?'
+
     withCredentials([string(credentialsId: 'mm-webhook', variable: 'HOOK')]) {
         // \\n 이어야 JSON 규격에 맞는다. \n 으로 쓰면 Groovy 가 진짜 줄바꿈을 넣어
         // JSON 문자열 안에 raw LF 가 들어간다.
         // (Mattermost 는 그것도 받아준다 — 빌드 #25 에서 ok 응답을 확인했다.
         //  고장난 적은 없고, 규격을 지키는 쪽으로만 맞춘 것이다)
-        def payload = """{"attachments":[{"color":"${color}","title":"${title}","text":"**${env.JOB_NAME}** #${env.BUILD_NUMBER}\\n[빌드 로그 보기](${env.BUILD_URL}console)"}]}"""
+        def text = "**${env.JOB_NAME}** #${env.BUILD_NUMBER}" +
+            "\\n${whoLabel} — **${who}** (`${commit}`)" +
+            "\\n[빌드 로그 보기](${env.BUILD_URL}console)"
+
+        def payload = """{"attachments":[{"color":"${color}","title":"${title}","text":"${text}"}]}"""
         sh """curl -s -X POST -H 'Content-Type: application/json' -d '${payload}' "\$HOOK" """
     }
 }

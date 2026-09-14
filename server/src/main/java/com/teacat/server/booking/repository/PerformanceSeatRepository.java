@@ -8,10 +8,79 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat, PerformanceSeatId> {
+
+    /**
+     * 한 회차에 아직 없는 판매 좌석을 추가한다.
+     *
+     * <p>스탠딩 구역에도 좌표 없는 가상 좌석이 저장된다. 공연별 최대 인원(max_cnt)까지만
+     * 회차 좌석으로 옮기고, 지정석은 등록된 좌석을 모두 옮긴다. PK 충돌은 무시하므로
+     * 관리자 재시도와 자동 스케줄러가 동시에 실행돼도 중복 생성되지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            WITH inventory AS (
+                SELECT pd.id AS performance_detail_id,
+                       s.id AS seat_id,
+                       pa.sale_type,
+                       pa.max_cnt,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY pd.id, pa.area_id
+                           ORDER BY s.seat_number, s.id
+                       ) AS inventory_number
+                  FROM performance_details pd
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                  JOIN seats s ON s.area_id = pa.area_id
+                 WHERE pd.id = :scheduleId
+            )
+            INSERT INTO performance_seats
+                (performance_detail_id, seat_id, status, updated_at)
+            SELECT performance_detail_id, seat_id, 'AVAILABLE'::seat_booking_status, now()
+              FROM inventory
+             WHERE sale_type = 'SEATED'::area_type
+                OR inventory_number <= max_cnt
+            ON CONFLICT (performance_detail_id, seat_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertMissingForSchedule(@Param("scheduleId") Long scheduleId);
+
+    /**
+     * 예매 오픈 시각이 지난, 아직 공연 전인 모든 회차의 누락 좌석을 채운다.
+     * DB now()를 사용해 앱/DB 컨테이너의 타임존 차이로 오픈 시점이 어긋나지 않게 한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            WITH inventory AS (
+                SELECT pd.id AS performance_detail_id,
+                       s.id AS seat_id,
+                       pa.sale_type,
+                       pa.max_cnt,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY pd.id, pa.area_id
+                           ORDER BY s.seat_number, s.id
+                       ) AS inventory_number
+                  FROM performance_details pd
+                  JOIN performance_general pg ON pg.id = pd.performance_general_id
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                  JOIN seats s ON s.area_id = pa.area_id
+                 WHERE pg.ticketing_start_at <= now()
+                   AND pd.performance_date > now()
+                   AND pd.status IN ('SCHEDULED'::ticketing_status, 'OPEN'::ticketing_status)
+                   AND pg.status IN ('UPCOMING'::performance_status, 'ONGOING'::performance_status)
+            )
+            INSERT INTO performance_seats
+                (performance_detail_id, seat_id, status, updated_at)
+            SELECT performance_detail_id, seat_id, 'AVAILABLE'::seat_booking_status, now()
+              FROM inventory
+             WHERE (sale_type = 'SEATED'::area_type OR inventory_number <= max_cnt)
+            ON CONFLICT (performance_detail_id, seat_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertMissingForOpenedSchedules();
 
     @Query(value = """
             SELECT COUNT(*) FROM performance_seats ps
@@ -74,6 +143,43 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              WHERE ps.performance_detail_id = :performanceDetailId
             """, nativeQuery = true)
     List<SeatStatusView> findEffectiveStatuses(@Param("performanceDetailId") Long performanceDetailId);
+
+    /**
+     * 회차별 좌석 수 — 준비된 좌석과 그중 지금 고를 수 있는 좌석.
+     *
+     * <p><b>매진을 알아내기 위한 쿼리다.</b> {@code performance_details.status} 의 SOLD_OUT 은
+     * 운영자가 손으로 바꾸는 값이라, 좌석이 실제로 다 팔려도 자동으로 바뀌지 않는다. 그래서
+     * 공연 목록과 회차 목록이 매진된 회차를 계속 "예매 가능" 으로 보여주고 있었다.
+     *
+     * <p>🔴 만료 판정을 SQL 안에서 한다 — {@link #findEffectiveStatuses} 와 같은 이유다.
+     * 자바 시계로 비교하면 좌석맵·선점 API 와 답이 달라진다.
+     *
+     * <p>좌석 행이 아예 없는 회차는 결과에 <b>나오지 않는다</b>(GROUP BY). 그건 매진이 아니라
+     * 좌석을 아직 만들지 않은 것이므로, 부르는 쪽이 "없으면 매진 아님" 으로 다뤄야 한다.
+     */
+    @Query(value = """
+            SELECT ps.performance_detail_id AS "scheduleId",
+                   COUNT(*)                 AS "totalCount",
+                   COUNT(*) FILTER (
+                       WHERE ps.status = 'AVAILABLE'
+                          OR (ps.status = 'HELD' AND ps.held_until < now())
+                   )                        AS "availableCount"
+              FROM performance_seats ps
+             WHERE ps.performance_detail_id IN (:scheduleIds)
+             GROUP BY ps.performance_detail_id
+            """, nativeQuery = true)
+    List<SeatCountView> findSeatCounts(@Param("scheduleIds") Collection<Long> scheduleIds);
+
+    /** {@link #findSeatCounts} 결과 한 줄 */
+    interface SeatCountView {
+        Long getScheduleId();
+
+        /** 이 회차에 만들어진 좌석 수 */
+        long getTotalCount();
+
+        /** 그중 지금 고를 수 있는 좌석 수 (만료된 HELD 포함) */
+        long getAvailableCount();
+    }
 
     /** {@link #findEffectiveStatuses} 결과 한 줄 */
     interface SeatStatusView {
@@ -141,6 +247,113 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              @Param("seatId") Long seatId,
              @Param("userId") Long userId,
              @Param("heldUntil") LocalDateTime heldUntil);
+
+    /**
+     * 회차에 설정된 판매 구역이 실제 스탠딩 구역인지 확인한다.
+     *
+     * <p>단순히 {@code seats.area_id} 만 확인하면 좌석 구역의 좌석도 자동 배정할 수 있으므로,
+     * 공연별 판매 설정인 {@code performance_areas.sale_type} 까지 함께 검증한다.
+     */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1
+                  FROM performance_details pd
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                 WHERE pd.id = :performanceDetailId
+                   AND pa.area_id = :areaId
+                   AND pa.sale_type = 'STANDING'::area_type
+                   AND pa.price IS NOT NULL
+            )
+            """, nativeQuery = true)
+    boolean existsSellableStandingArea(@Param("performanceDetailId") Long performanceDetailId,
+                                       @Param("areaId") Long areaId);
+
+    /**
+     * 스탠딩 가상 좌석 하나를 서버가 골라 원자적으로 선점한다.
+     *
+     * <p>{@code locked_user} 로 같은 사용자의 중복 요청을 직렬화한다. 첫 요청이 끝난 뒤 두 번째 요청은
+     * {@code existing} 에서 이미 잡은 좌석을 반환하므로, 더블 클릭이나 네트워크 재시도로 홀드가
+     * 두 개 생기지 않고 만료 시각도 연장되지 않는다.
+     *
+     * <p>서로 다른 사용자는 {@code FOR UPDATE SKIP LOCKED} 로 같은 후보를 기다리지 않고 각자 다른
+     * 가상 좌석을 고른다. 후보 선택과 UPDATE 는 한 SQL 문 안에서 실행되므로 클라이언트가 보았던
+     * 오래된 {@code seatId} 때문에 충돌하는 창이 없다.
+     */
+    @Query(value = """
+            WITH locked_user AS MATERIALIZED (
+                SELECT u.id
+                  FROM users u
+                 WHERE u.id = :userId
+                   FOR UPDATE
+            ),
+            existing AS MATERIALIZED (
+                SELECT ps.seat_id, ps.held_until
+                  FROM performance_seats ps
+                  JOIN seats s ON s.id = ps.seat_id
+                  CROSS JOIN locked_user
+                 WHERE ps.performance_detail_id = :performanceDetailId
+                   AND s.area_id = :areaId
+                   AND ps.status = 'HELD'::seat_booking_status
+                   AND ps.held_by = :userId
+                   AND ps.held_until >= now()
+                 LIMIT 1
+            ),
+            candidate AS MATERIALIZED (
+                SELECT ps.performance_detail_id, ps.seat_id
+                  FROM performance_seats ps
+                  JOIN seats s ON s.id = ps.seat_id
+                  JOIN performance_details pd ON pd.id = ps.performance_detail_id
+                  JOIN performance_areas pa
+                    ON pa.performance_general_id = pd.performance_general_id
+                   AND pa.area_id = s.area_id
+                  CROSS JOIN locked_user
+                 WHERE ps.performance_detail_id = :performanceDetailId
+                   AND s.area_id = :areaId
+                   AND pa.sale_type = 'STANDING'::area_type
+                   AND pa.price IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM existing)
+                   AND (ps.status = 'AVAILABLE'::seat_booking_status
+                        OR (ps.status = 'HELD'::seat_booking_status AND ps.held_until < now()))
+                 ORDER BY s.seat_number, s.id
+                   FOR UPDATE OF ps SKIP LOCKED
+                 LIMIT 1
+            ),
+            allocated AS (
+                UPDATE performance_seats ps
+                   SET status = 'HELD'::seat_booking_status,
+                       held_by = :userId,
+                       held_until = :heldUntil,
+                       updated_at = now()
+                  FROM candidate c
+                 WHERE ps.performance_detail_id = c.performance_detail_id
+                   AND ps.seat_id = c.seat_id
+                RETURNING ps.seat_id, ps.held_until
+            )
+            SELECT result.seat_id AS "seatId",
+                   result.held_until AS "heldUntil",
+                   GREATEST(EXTRACT(EPOCH FROM (result.held_until - now()))::bigint, 0)
+                       AS "remainingSeconds"
+              FROM (
+                    SELECT seat_id, held_until FROM existing
+                    UNION ALL
+                    SELECT seat_id, held_until FROM allocated
+              ) result
+             LIMIT 1
+            """, nativeQuery = true)
+    Optional<StandingSeatAllocation> holdAvailableStandingSeat(
+            @Param("performanceDetailId") Long performanceDetailId,
+            @Param("areaId") Long areaId,
+            @Param("userId") Long userId,
+            @Param("heldUntil") LocalDateTime heldUntil);
+
+    interface StandingSeatAllocation {
+        Long getSeatId();
+
+        LocalDateTime getHeldUntil();
+
+        long getRemainingSeconds();
+    }
 
     /**
      * 내가 선점한 좌석을 해제한다.

@@ -7,6 +7,7 @@ import { toast } from '@/shared/stores';
 import { ROUTES } from '@/shared/constants';
 import { bookingApi, bookingKeys } from '../api/bookingApi';
 import { useBookingStore } from '../store/bookingStore';
+import type { MyHold } from '../model/booking.types';
 
 /**
  * 좌석 선점(락)과 만료 타이머.
@@ -49,6 +50,10 @@ const BOOKING_ERROR = {
   ALREADY_HOLDING: 'ERR_BOOKING_006',
   /** 본인이 이미 선점한 좌석 — 연장 불가 */
   SAME_SEAT: 'ERR_BOOKING_010',
+  /** 판매 가능한 스탠딩 구역이 아님 */
+  STANDING_AREA_NOT_AVAILABLE: 'ERR_BOOKING_012',
+  /** 스탠딩 구역 재고 없음 */
+  STANDING_SOLD_OUT: 'ERR_BOOKING_013',
 } as const;
 
 export function useSeatHold(scheduleId: string) {
@@ -66,6 +71,27 @@ export function useSeatHold(scheduleId: string) {
 
   const invalidateSeats = () =>
     queryClient.invalidateQueries({ queryKey: bookingKeys.seatMap(scheduleId) });
+
+  /**
+   * 방금 놓은 좌석을 `/me/holds` 캐시에서 **즉시** 빼냅니다.
+   *
+   * 🔴 이게 없으면 놓은 자리가 되살아납니다. 해제하면 스토어를 비우는데,
+   *    그 순간 `useResumeHold` 가 **아직 갱신되지 않은 캐시**를 보고 "서버에 선점이
+   *    남아 있다" 고 판단해 방금 놓은 좌석을 스토어에 다시 넣었습니다.
+   *    화면에는 안내가 되살아나고, 다시 놓기를 누르면 서버에는 이미 없어서
+   *    "놓을 자리가 없다" 는 오류가 났습니다. (QA 에서 잡힌 증상)
+   *
+   * invalidate 만으로는 부족합니다 — 재조회가 끝나기 전에 그 틈이 생깁니다.
+   * 무효화보다 **먼저** 캐시에서 빼야 합니다.
+   *
+   * 다른 회차의 선점은 그대로 둡니다. 한 사람이 여러 회차를 잡아둘 수 있고,
+   * 전부 비우면 홈의 "결제를 마치지 않은 자리" 가 통째로 사라집니다.
+   */
+  const dropFromMyHolds = (...seatIds: string[]) => {
+    queryClient.setQueryData<MyHold[]>(bookingKeys.myHolds(), (prev) =>
+      prev?.filter((h) => !(h.scheduleId === scheduleId && seatIds.includes(h.seatId))),
+    );
+  };
 
   // 만료되면 선점이 풀린 것으로 보고 좌석 선택 화면으로 되돌립니다.
   useEffect(() => {
@@ -97,6 +123,7 @@ export function useSeatHold(scheduleId: string) {
     await Promise.all(
       mine.map((h) => bookingApi.releaseHold(scheduleId, h.seatId).catch(() => undefined)),
     );
+    dropFromMyHolds(...mine.map((h) => h.seatId));
     return true;
   };
 
@@ -113,6 +140,8 @@ export function useSeatHold(scheduleId: string) {
          남은 시간만 초기화되고 그 사이 남에게 뺏길 수 있습니다 */
       if (previous && previous.seatId !== seatId) {
         await bookingApi.releaseHold(scheduleId, previous.seatId).catch(() => undefined);
+        // 스토어를 비우기 전에 캐시에서도 빼야 합니다 (dropFromMyHolds 주석)
+        dropFromMyHolds(previous.seatId);
         setHold(null);
         gaveUpPrevious.current = true;
       }
@@ -181,11 +210,57 @@ export function useSeatHold(scheduleId: string) {
     },
   });
 
+  const standingHoldMutation = useMutation({
+    mutationFn: async (areaId: string) => {
+      gaveUpPrevious.current = false;
+
+      try {
+        return await bookingApi.holdStanding(scheduleId, areaId);
+      } catch (error) {
+        // 다른 구역/좌석에 남은 활성 선점이 있으면 기존 좌석 변경 흐름처럼 해제 후 한 번만 재시도한다.
+        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING) throw error;
+
+        const released = await releaseServerHolds();
+        if (!released) throw error;
+
+        setHold(null);
+        gaveUpPrevious.current = true;
+        return await bookingApi.holdStanding(scheduleId, areaId);
+      }
+    },
+    onSuccess: (result) => {
+      setHold(result);
+      clearSelection();
+      void invalidateSeats();
+      void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+      navigate(ROUTES.BOOKING_REVIEW(scheduleId));
+    },
+    onError: (error) => {
+      const lostPrevious = gaveUpPrevious.current ? ' 이전에 잡아둔 자리는 풀렸어요.' : '';
+
+      if (!ApiError.isApiError(error)) {
+        toast.error(`스탠딩 입장권 선점에 실패했어요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.STANDING_SOLD_OUT) {
+        toast.error(`방금 스탠딩 입장권이 매진되었어요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.STANDING_AREA_NOT_AVAILABLE) {
+        toast.error(`현재 판매 중인 스탠딩 구역이 아니에요.${lostPrevious}`);
+      } else if (error.code === BOOKING_ERROR.NOT_OPEN) {
+        toast.error('아직 예매 가능한 시간이 아니에요.');
+      } else {
+        toast.error(`${error.message}${lostPrevious}`);
+      }
+
+      void invalidateSeats();
+    },
+  });
+
   const releaseMutation = useMutation({
     mutationFn: (seatId: string) => bookingApi.releaseHold(scheduleId, seatId),
     /* 실패해도 스토어를 비웁니다(onSettled). 해제가 실패하는 경우는 대개
        이미 만료됐거나 남이 가져간 뒤라서, 붙들고 있어 봐야 사용자만 헷갈립니다 */
-    onSettled: () => {
+    onSettled: (_data, _error, seatId) => {
+      // 🔴 순서가 중요합니다 — 캐시에서 빼기 → 스토어 비우기 → 무효화
+      dropFromMyHolds(seatId);
       setHold(null);
       clearSelection();
       void invalidateSeats();
@@ -208,7 +283,11 @@ export function useSeatHold(scheduleId: string) {
       if (!seatId) return;
       holdMutation.mutate(seatId);
     },
-    isHolding: holdMutation.isPending,
+    /** 스탠딩처럼 화면에서 좌석을 직접 고르지 않는 흐름이 특정 재고를 바로 선점할 때 사용합니다. */
+    holdSeat: (seatId: string) => holdMutation.mutate(seatId),
+    /** 스탠딩 구역의 가상 좌석 선택은 서버에 맡기고, 성공하면 확인 단계로 이동합니다. */
+    holdStanding: (areaId: string) => standingHoldMutation.mutate(areaId),
+    isHolding: holdMutation.isPending || standingHoldMutation.isPending,
     releaseHold: () => {
       if (hold) releaseMutation.mutate(hold.seatId);
     },
