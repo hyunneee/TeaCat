@@ -62,7 +62,7 @@ export function AdminPasswordResetModal({
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-ink">
+        <p className="bg-surface-2 text-ink rounded-lg px-3 py-2 text-xs leading-relaxed">
           이 회원은 <strong>모든 기기에서 로그아웃</strong>됩니다. 새 비밀번호를 회원에게 직접
           전달하고, 로그인한 뒤 본인이 바꾸도록 안내해 주세요.
         </p>

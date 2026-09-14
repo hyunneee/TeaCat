@@ -34,7 +34,7 @@ export function AdminUserToolbar({
   }, [draft, keyword, onSearch]);
 
   return (
-    <div className="flex items-center gap-2 border-b border-line p-4">
+    <div className="border-line flex items-center gap-2 border-b p-4">
       <Input
         className="max-w-xs"
         leftIcon={<Search size={16} />}
@@ -80,7 +80,7 @@ export function AdminPagination({
 }: AdminPaginationProps) {
   if (totalPages <= 1) {
     return (
-      <p className="border-t border-line px-4 py-3 text-xs text-ink-muted">
+      <p className="border-line text-ink-muted border-t px-4 py-3 text-xs">
         전체 {totalElements}
         {unit}
       </p>
@@ -88,8 +88,8 @@ export function AdminPagination({
   }
 
   return (
-    <div className="flex items-center justify-between border-t border-line px-4 py-3">
-      <p className="text-xs text-ink-muted">
+    <div className="border-line flex items-center justify-between border-t px-4 py-3">
+      <p className="text-ink-muted text-xs">
         전체 {totalElements}
         {unit}
       </p>
@@ -105,7 +105,7 @@ export function AdminPagination({
           이전
         </Button>
 
-        <span className="text-xs tabular-nums text-ink-muted">
+        <span className="text-ink-muted text-xs tabular-nums">
           {page + 1} / {totalPages}
         </span>
 

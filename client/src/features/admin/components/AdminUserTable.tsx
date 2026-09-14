@@ -59,12 +59,12 @@ export function AdminUserTable({
     <div className="overflow-x-auto">
       <table className="w-full min-w-3xl border-collapse text-sm">
         <thead>
-          <tr className="border-b border-line text-left">
+          <tr className="border-line border-b text-left">
             {HEADERS.map((header, i) => (
               <th
                 key={header || `action-${i}`}
                 scope="col"
-                className="px-4 py-2.5 text-xs font-medium text-ink-muted"
+                className="text-ink-muted px-4 py-2.5 text-xs font-medium"
               >
                 {header}
               </th>
@@ -77,18 +77,21 @@ export function AdminUserTable({
             const isSelf = user.userId === currentUserId;
 
             return (
-              <tr key={user.userId} className="border-b border-line/60 last:border-0 hover:bg-surface-2">
+              <tr
+                key={user.userId}
+                className="border-line/60 hover:bg-surface-2 border-b last:border-0"
+              >
                 <td className="px-4 py-3">
-                  <p className="font-medium text-ink">
+                  <p className="text-ink font-medium">
                     {user.nickname}
-                    {isSelf && <span className="ml-1.5 text-xs text-ink-subtle">(나)</span>}
+                    {isSelf && <span className="text-ink-subtle ml-1.5 text-xs">(나)</span>}
                   </p>
-                  <p className="text-xs text-ink-muted">{user.email}</p>
+                  <p className="text-ink-muted text-xs">{user.email}</p>
                 </td>
 
                 <td className="px-4 py-3">
                   <p className="text-ink">{user.name}</p>
-                  <p className="text-xs tabular-nums text-ink-muted">{user.phone}</p>
+                  <p className="text-ink-muted text-xs tabular-nums">{user.phone}</p>
                 </td>
 
                 <td className="px-4 py-3">
@@ -101,11 +104,11 @@ export function AdminUserTable({
                   {user.faceRegistered ? (
                     <Badge tone="neutral">등록</Badge>
                   ) : (
-                    <span className="text-xs text-ink-subtle">미등록</span>
+                    <span className="text-ink-subtle text-xs">미등록</span>
                   )}
                 </td>
 
-                <td className="px-4 py-3 text-xs tabular-nums text-ink-muted">
+                <td className="text-ink-muted px-4 py-3 text-xs tabular-nums">
                   {formatDate(user.createdAt)}
                 </td>
 
@@ -113,7 +116,7 @@ export function AdminUserTable({
                   {isSelf ? (
                     /* 본인 계정은 서버가 거절합니다 (USER_011). 누를 수 있게 두면
                        눌렀을 때 실패하는 버튼이 됩니다. */
-                    <span className="text-xs text-ink-subtle">마이페이지에서 변경</span>
+                    <span className="text-ink-subtle text-xs">마이페이지에서 변경</span>
                   ) : (
                     <div className="flex items-center justify-end gap-1">
                       <Button

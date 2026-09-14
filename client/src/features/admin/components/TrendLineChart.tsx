@@ -107,7 +107,7 @@ export function TrendLineChart<T extends { date: string }>({
 
     return (
       <div className="border-line bg-surface-1 shadow-pop rounded-xl border px-3 py-2">
-        <p className="text-xs font-semibold text-ink">{longDate(label)}</p>
+        <p className="text-ink text-xs font-semibold">{longDate(label)}</p>
 
         <ul className="mt-1.5 flex flex-col gap-0.5">
           {payload.map((entry) => (
