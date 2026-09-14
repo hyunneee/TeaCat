@@ -18,7 +18,7 @@ import { TopNav } from './TopNav';
  */
 export function AppLayout() {
   return (
-    <div className="app-frame app-shell mx-auto flex min-h-dvh w-full flex-col">
+    <div className="app-frame app-shell with-topnav mx-auto flex min-h-dvh w-full flex-col">
       <TopNav />
 
       {/* `overflow-x-clip` — 홈의 초록 배경판처럼 본문 폭을 뚫고 화면 끝까지 가는

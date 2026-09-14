@@ -66,7 +66,11 @@ export function Header({
     <header
       className={cn(
         'pt-safe z-30',
-        sticky && 'sticky top-0',
+        /* 🔴 `top-0` 이 아닙니다 — 데스크톱에는 위에 상단 내비가 있어서,
+           0 에 붙이면 스크롤할 때 머리말이 내비 위로 올라탑니다.
+           `--top-inset` 은 AppLayout(`with-topnav`)이 내려 주고, 폰과
+           내비가 없는 화면에서는 0 이라 예전과 같습니다. */
+        sticky && 'sticky top-[var(--top-inset,0px)]',
         transparent ? 'bg-transparent' : 'surface',
         titleOnly && 'lg:hidden',
         className,
