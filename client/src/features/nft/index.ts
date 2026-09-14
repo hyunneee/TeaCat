@@ -32,6 +32,7 @@ export {
   pocaSeed,
   formatOrigin,
   photocardSource,
+  pocaName,
   mintStatusLabel,
   groupPhotocards,
   type PhotocardGroup,

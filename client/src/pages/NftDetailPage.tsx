@@ -19,6 +19,7 @@ import {
   isSpecial,
   mintStatusLabel,
   photocardSource,
+  pocaName,
   pocaSeed,
   useListPhotocard,
   usePhotocardDetail,
@@ -158,7 +159,7 @@ export function NftDetailPage() {
           {/* 이름은 **판매 폼을 펼쳐도 남깁니다** — 무엇을 파는지가 안 보이는 채로
               가격을 적게 하면 안 됩니다. */}
           <div className="space-y-1">
-            <h1 className="text-2xl leading-snug font-extrabold">{card.designName}</h1>
+            <h1 className="text-2xl leading-snug font-extrabold">{pocaName(card.designName)}</h1>
             {/* 어느 공연에서 얻은 카드인지 — 이름만 있으면 어디서 온 카드인지 알 수 없습니다 */}
             <p className="text-subtle text-[0.9375rem]">{photocardSource(card.performanceTitle)}</p>
           </div>

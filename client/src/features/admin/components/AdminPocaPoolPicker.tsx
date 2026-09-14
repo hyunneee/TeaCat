@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { CheckCheck, X } from 'lucide-react';
 import { Button, Input } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { cn } from '@/shared/lib';
@@ -93,6 +94,19 @@ export function AdminPocaPoolPicker({
     .map(([id, supply]) => ({ templateId: Number(id), totalSupply: Number(supply) }))
     .filter((item) => item.totalSupply > 0);
 
+  /* 이미 넣은 카드는 다시 못 넣습니다(409) — 전체 선택도 그것만 빼고 고릅니다 */
+  const selectable = templates.filter((t) => !addedTemplateIds.includes(t.templateId));
+  const allPicked = selectable.length > 0 && selectable.every((t) => t.templateId in picked);
+
+  const toggleAll = () => {
+    touched.current.clear();
+    if (allPicked) {
+      setPicked({});
+      return;
+    }
+    setPicked(autofill(Object.fromEntries(selectable.map((t) => [t.templateId, '']))));
+  };
+
   const total = items.reduce((sum, item) => sum + item.totalSupply, 0);
   const allFilled = Object.keys(picked).length === items.length;
 
@@ -123,13 +137,31 @@ export function AdminPocaPoolPicker({
 
   return (
     <div className="space-y-4">
-      {/* 왜 숫자가 저절로 들어갔는지 적어 둡니다 — 모르면 고쳐도 되는 값인지 알 수 없습니다 */}
-      {suggestTotal ? (
+      <div className="flex items-start justify-between gap-4">
+        {/* 왜 숫자가 저절로 들어갔는지 적어 둡니다 — 모르면 고쳐도 되는 값인지 알 수 없습니다 */}
         <p className="text-ink-muted text-sm">
-          고른 카드 수로 <b className="text-ink">{suggestTotal.toLocaleString()}장</b>을 나눠
-          자동으로 채웁니다. 숫자는 직접 고쳐도 되고, 고친 칸은 그대로 둡니다.
+          {suggestTotal ? (
+            <>
+              고른 카드 수로 <b className="text-ink">{suggestTotal.toLocaleString()}장</b>을 나눠
+              자동으로 채웁니다. 숫자는 직접 고쳐도 되고, 고친 칸은 그대로 둡니다.
+            </>
+          ) : (
+            '넣을 카드를 고르고 수량을 적으세요.'
+          )}
         </p>
-      ) : null}
+
+        {/* 🔴 되돌릴 수 없는 동작이 아닙니다 — 고르기만 할 뿐 넣는 건 아래 버튼입니다 */}
+        <Button
+          variant="soft"
+          size="sm"
+          className="shrink-0"
+          disabled={selectable.length === 0}
+          leftIcon={allPicked ? <X size={14} /> : <CheckCheck size={14} />}
+          onClick={toggleAll}
+        >
+          {allPicked ? '전체 해제' : `전체 선택 (${selectable.length})`}
+        </Button>
+      </div>
 
       <ul className="grid grid-cols-2 gap-2 xl:grid-cols-3">
         {templates.map((template) => {
@@ -196,7 +228,7 @@ export function AdminPocaPoolPicker({
               장
             </>
           ) : (
-            '넣을 카드를 고르고 수량을 적으세요'
+            '고른 카드 없음'
           )}
         </p>
 

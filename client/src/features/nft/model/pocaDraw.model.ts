@@ -1,3 +1,4 @@
+import { pocaName } from './nft.model';
 import type { PocaDrawResult, PocaGrade } from './nft.types';
 
 /**
@@ -171,7 +172,9 @@ export function drawLine(result: PocaDrawResult): DrawLine {
 }
 
 /** 뽑기 결과가 아직 없어도(어드민 미리보기) 같은 문구를 만들 수 있게 */
-export function drawLineOf(designName: string, group: string, grade: PocaGrade): DrawLine {
+export function drawLineOf(fullName: string, group: string, grade: PocaGrade): DrawLine {
+  const designName = pocaName(fullName);
+
   /* 코치·교육생이 같이 쓰는 뒷말 */
   const picked = { prefix: '', josa: '을', tail: '뽑았어요!' };
 
@@ -191,7 +194,8 @@ export function drawLineOf(designName: string, group: string, grade: PocaGrade):
  * 소속을 모르면(서버가 아직 안 줍니다) **이름만** 돌려줍니다 — 호칭을 추측하면
  * 코치를 교육생이라 부르는 일이 생깁니다.
  */
-export function pocaTitle(designName: string, group?: string, grade?: PocaGrade): string {
+export function pocaTitle(fullName: string, group?: string, grade?: PocaGrade): string {
+  const designName = pocaName(fullName);
   if (!group) return designName;
 
   const role = pocaRole(group, grade);

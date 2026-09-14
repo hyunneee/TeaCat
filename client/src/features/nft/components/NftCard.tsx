@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { cn } from '@/shared/lib';
 import { Badge } from '@/shared/components/ui';
 import { PocaArt } from './PocaArt';
-import { pocaSeed } from '../model/nft.model';
+import { pocaName, pocaSeed } from '../model/nft.model';
 
 interface Props {
   photocardId: number;
@@ -103,7 +103,9 @@ export function NftCard({
 
         {/* 아래 칸 — 이름 · 어느 공연에서 얻었는지 · 가격 */}
         <div className="border-line/70 border-t px-3 py-2.5">
-          <p className="line-clamp-2 text-[0.9375rem] leading-snug font-semibold">{designName}</p>
+          <p className="line-clamp-2 text-[0.9375rem] leading-snug font-semibold">
+            {pocaName(designName)}
+          </p>
           <p className="text-subtle mt-1 truncate text-[0.8125rem]">{performanceTitle}</p>
 
           {price !== null && price !== undefined ? (

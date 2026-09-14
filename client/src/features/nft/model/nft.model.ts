@@ -92,6 +92,19 @@ export function pocaSeed(photocardId: number): string {
  * 뽑기로 얻은 카드는 공연이 없어서 서버가 `performanceTitle` 을 null 로 줍니다.
  * 빈 줄로 두면 카드마다 높이가 달라지고 "왜 여긴 비었지" 가 남습니다.
  */
+/**
+ * 서버가 도안 이름에 공연 제목을 붙여 둡니다 — `"김예린 · 아기숭이 콘서트"`.
+ * 온체인 메타데이터에 박히는 이름이라 **거기서는 그래야 합니다**(같은 사람이라도 공연마다
+ * 다른 카드라서 구분이 필요합니다). 화면에서는 앞의 이름만 씁니다 —
+ * 목록·상세 모두 공연 이름을 바로 아랫줄에 따로 적고 있어서 두 번 나옵니다.
+ */
+const NAME_JOINER = ' · ';
+
+export function pocaName(designName: string): string {
+  const first = designName.split(NAME_JOINER)[0]?.trim();
+  return first || designName;
+}
+
 export function photocardSource(performanceTitle: string | null): string {
   return performanceTitle ?? '이벤트 카드팩';
 }
