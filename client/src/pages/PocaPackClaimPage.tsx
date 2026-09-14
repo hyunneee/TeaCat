@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { Button, IconButton } from '@/shared/components/ui';
 import { Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { PocaPackTile, useClaimEventPack } from '@/features/nft';
+import { PocaPackArt, useClaimEventPack } from '@/features/nft';
 
 /**
  * 이벤트 카드팩 **수령** 화면. 배너 링크(`linkPath: /nft/packs`)가 여기로 옵니다.
@@ -38,13 +38,9 @@ export function PocaPackClaimPage() {
           <Loading label="카드팩을 확인하는 중" />
         ) : (
           <>
-            <div className="w-40">
-              {/* 받은 팩을 그대로 보여 줍니다 — 목록에서 보게 될 그 칸입니다 */}
-              <PocaPackTile
-                count={data?.remaining}
-                onClick={() => navigate(ROUTES.MY_NFTS, { replace: true })}
-              />
-            </div>
+            {/* 🔴 칸도 이름표도 없이 봉지만 둡니다 — 검은 화면에 흰 네모를 두르면
+                봉지보다 그 네모가 먼저 보입니다 */}
+            <PocaPackArt className="w-52" />
 
             <div className="space-y-2 text-center">
               <p className="text-xl font-extrabold">
