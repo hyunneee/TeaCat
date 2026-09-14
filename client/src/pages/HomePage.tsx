@@ -304,9 +304,19 @@ export function HomePage() {
               <CatMascot size={52} />
               <div className="min-w-0">
                 <p className="font-bold">로그인하고 예매를 시작하세요</p>
-                <p className="text-muted mt-0.5 text-xs">
-                  얼굴 등록까지 마치면 입장 준비 완료예요.
-                </p>
+                {/* 🔴 [1차 배포] 얼굴 등록을 닫아 두어 아래 한 줄로 바꿨습니다.
+
+                    ⚠️ 얼굴을 여닫는 **스위치는 여기가 아닙니다** — `shared/constants/features.ts`
+                       의 `FEATURE.face` 입니다. 이 화면의 "얼굴 등록을 완료해 주세요" 카드도
+                       그 값을 보고 자동으로 사라지는데, 이 문장은 조건문을 세우면 오히려 읽기
+                       나빠서 주석으로 뒀습니다. **그래서 자동으로 안 돌아옵니다.**
+                       되살릴 때: `FEATURE.face = true` + 이 주석을 풀고 지금 줄을 지우세요.
+                       (같은 성격의 자리가 `BookingReviewPage` 에 하나 더 있습니다) */}
+                {/*
+                    <p className="text-muted mt-0.5 text-xs">
+                      얼굴 등록까지 마치면 입장 준비 완료예요.
+                    </p> */}
+                <p className="text-muted mt-0.5 text-xs">회원가입은 1분이면 끝나요.</p>
               </div>
             </div>
             <div className="flex gap-2">
