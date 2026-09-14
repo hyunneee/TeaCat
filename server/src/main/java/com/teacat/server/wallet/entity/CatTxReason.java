@@ -14,11 +14,20 @@ public enum CatTxReason {
     REWARD(CatTxDirection.MINT),
     /** 예매 취소 환급 */
     REFUND(CatTxDirection.MINT),
+    /**
+     * 관리자가 테스트용으로 넣어준 돈.
+     *
+     * <p>🔴 <b>대사(reconciliation) 대상이 아니다.</b> 실제 원화가 들어온 적이 없으므로
+     * {@link #DEPOSIT} 과 함께 세면 원화 장부와 반드시 어긋난다. 매출·충전 집계에서 빼야 한다.
+     */
+    ADMIN_GRANT(CatTxDirection.MINT),
 
     /** 티켓 결제 */
     PAYMENT(CatTxDirection.BURN),
     /** 원화 출금 */
-    WITHDRAWAL(CatTxDirection.BURN);
+    WITHDRAWAL(CatTxDirection.BURN),
+    /** 관리자가 테스트용으로 뺀 돈. 원화를 돌려주지 않으므로 {@link #ADMIN_GRANT} 와 같이 대사에서 뺀다 */
+    ADMIN_BURN(CatTxDirection.BURN);
 
     private final CatTxDirection direction;
 
