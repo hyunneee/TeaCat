@@ -5,6 +5,7 @@ export { concertApi, concertKeys } from './api/concertApi';
 export { isBookable, canWaitlist, scheduleStatusLabel, scheduleTone } from './model/schedule.model';
 export {
   isConcertOnRail,
+  compareForRail,
   isConcertOpen,
   CONCERT_BOOKING_LABEL,
   bookingNotOpenMessage,
