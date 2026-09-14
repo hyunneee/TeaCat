@@ -1,10 +1,20 @@
 import { motion } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
+import { cn } from '@/shared/lib';
+import { packOpenAtLabel } from '../model/nft.model';
 import packUrl from '@/assets/poca/pack.webp';
 
 interface Props {
   /** 가진 카드팩 수. 여러 개면 몇 개인지 보여줍니다 */
   count?: number;
+  /**
+   * 아직 못 여는 팩이면 열리는 시각.
+   *
+   * 🔴 이때는 **누를 수 없습니다.** 눌러도 아무 일이 없는 칸을 두면 연타로 이어집니다 —
+   * 대신 언제 열리는지를 칸에 적습니다.
+   */
+  openAt?: string | null;
   onClick: () => void;
 }
 
@@ -19,9 +29,17 @@ interface Props {
  *
  * 서버를 모릅니다 — props 로 받은 것만 씁니다. (CLAUDE.md 4-3)
  */
-export function PocaPackTile({ count, onClick }: Props) {
+export function PocaPackTile({ count, openAt, onClick }: Props) {
+  const locked = !!openAt;
+
   return (
-    <motion.button type="button" onClick={onClick} whileTap={{ scale: 0.97 }} className="w-full">
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={locked}
+      whileTap={locked ? undefined : { scale: 0.97 }}
+      className="w-full"
+    >
       <div className="surface-2 shadow-list overflow-hidden rounded-2xl">
         <div className="flex items-center justify-center px-6 py-5">
           {/* 카드 한 장과 같은 2:3 자리에 봉지를 담습니다 — 격자의 높이가 어긋나면
@@ -31,7 +49,11 @@ export function PocaPackTile({ count, onClick }: Props) {
               src={packUrl}
               alt=""
               draggable={false}
-              className="motion-safe:animate-poca-float absolute inset-0 size-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.28)]"
+              className={cn(
+                'motion-safe:animate-poca-float absolute inset-0 size-full object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.28)]',
+                /* 아직 못 여는 팩은 옅게 — 열 수 있는 팩과 한 격자에 섞여도 구분됩니다 */
+                locked && 'opacity-45',
+              )}
             />
             {/* 포카의 묶음 표시와 **같은 자리**(그림 오른쪽 아래)에 둡니다 —
                 같은 뜻(몇 개인지)이 자리마다 다르면 매번 다시 읽어야 합니다. */}
@@ -44,8 +66,13 @@ export function PocaPackTile({ count, onClick }: Props) {
         </div>
 
         <div className="border-line/70 border-t px-3 py-2.5 text-left">
-          <p className="text-[0.9375rem] leading-snug font-semibold">카드팩</p>
-          <p className="text-subtle mt-1 truncate text-[0.8125rem]">눌러서 열어보기</p>
+          <p className="flex items-center gap-1 text-[0.9375rem] leading-snug font-semibold">
+            {locked && <Lock size={13} className="shrink-0" />}
+            카드팩
+          </p>
+          <p className="text-subtle mt-1 truncate text-[0.8125rem]">
+            {openAt ? `${packOpenAtLabel(openAt)}부터` : '눌러서 열어보기'}
+          </p>
         </div>
       </div>
     </motion.button>

@@ -116,6 +116,29 @@ export function isSpecial(grade: PocaGrade): boolean {
   return grade === 'SPECIAL';
 }
 
+/* ── 뽑은 카드 크기 ─────────────────────────────────────────── */
+
+/**
+ * 뽑은 카드의 높이. **CSS 길이 문자열**입니다 — 화면 폭과 높이 양쪽에 걸어야
+ * 작은 화면에서 카드가 넘치지 않습니다.
+ *
+ * 🔴 숫자를 화면 코드에 다시 적지 마세요. 문구·버튼 위치가 이 값에서 계산되므로,
+ * 한쪽만 바꾸면 글씨가 카드 위에 겹칩니다.
+ */
+export const REVEAL_CARD_H = 'min(660px, 129vw, 62vh)';
+
+/** 포카는 2:3 입니다 */
+export const REVEAL_CARD_W = `calc(${REVEAL_CARD_H} * 2 / 3)`;
+
+/** 카드 뒤 후광. 카드와 같은 비율로 커집니다 (예전 220 카드에 600 후광) */
+export const REVEAL_HALO = `calc(${REVEAL_CARD_H} * 1.818)`;
+
+/** 결과 문구는 카드 윗변보다 이만큼 위에 */
+export const REVEAL_TEXT_GAP = 117;
+
+/** 버튼은 카드 아랫변보다 이만큼 아래에 */
+export const REVEAL_BUTTON_GAP = 103;
+
 /* ── 호칭 ───────────────────────────────────────────────────── */
 
 /** 카드 주인공이 누구인가. 호칭과 연출을 함께 정합니다 */
