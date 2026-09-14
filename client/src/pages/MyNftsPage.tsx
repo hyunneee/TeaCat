@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/shared/components/layout';
-import { Loading } from '@/shared/components/common';
+import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useInfiniteScroll } from '@/shared/hooks';
-import { useModal } from '@/app/providers';
 import {
   NftCard,
   PocaPackTile,
@@ -15,7 +14,6 @@ import {
 
 export function MyNftsPage() {
   const navigate = useNavigate();
-  const { open } = useModal();
   const {
     data: cards,
     isPending,
@@ -28,21 +26,23 @@ export function MyNftsPage() {
      눌러도 실패하는 칸이 됩니다. 응답 전에는 보여주지 않습니다(깜빡임 방지). */
   const { data: draw } = useDrawAvailability();
 
+  /* 카드도 카드팩도 없을 때만 빈 화면을 말합니다 — 팩이 있으면 할 일이 있는 화면이라
+     "없어요" 가 틀린 말이 됩니다 */
+  const nothing =
+    (cards ?? []).length === 0 &&
+    draw !== undefined &&
+    draw.remaining === 0 &&
+    draw.scheduled === 0;
+
   const sentinel = useInfiniteScroll({
     hasNext: !!hasNextPage,
     isFetching: isFetchingNextPage,
     onLoadMore: fetchNextPage,
   });
 
-  /* 뜯으면 되돌릴 수 없으니 한 번 물어봅니다 — 목록을 넘기다 잘못 누를 수 있는 자리입니다.
-     🔴 횟수·조건은 여기서 말하지 않습니다. 이벤트마다 다르고 정하는 쪽은 서버입니다 —
-     화면이 "한 번만" 이라고 단정하면 서버 규칙이 바뀔 때 거짓말이 됩니다. */
-  const askToOpen = () =>
-    open('common/confirm', {
-      title: '카드팩을 열어보시겠어요?',
-      confirmText: '열기',
-      onConfirm: () => navigate(ROUTES.NFT_DRAW),
-    });
+  /* 🔴 여기서 뜯지 않습니다 — 뽑기 화면으로 갈 뿐이고, 봉지를 끝까지 밀어야 실제로 뜯깁니다.
+     되돌릴 수 없는 동작 앞에 확인을 한 번 더 두는 자리가 이미 그 화면에 있는 셈입니다. */
+  const goToDraw = () => navigate(ROUTES.NFT_DRAW);
 
   return (
     <>
@@ -51,13 +51,32 @@ export function MyNftsPage() {
       <div className="p-4">
         {isPending ? (
           <Loading label="포토카드를 불러오는 중" />
+        ) : nothing ? (
+          <EmptyState
+            title="아직 보유한 포토카드가 없어요."
+            description="공연을 관람하거나 이벤트 카드팩을 열면 여기에 쌓입니다."
+          />
         ) : (
           <>
             <ul className="grid grid-cols-2 gap-3">
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
-              {draw?.available && (
+              {/* 🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다.
+                  한 칸으로 합치면 "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보여서
+                  산 팩이 사라진 것처럼 읽힙니다. 서버는 잠긴 팩이 있어도 열 수 있는 팩을
+                  정상적으로 꺼내 줍니다 — 하나가 잠겼다고 나머지가 막히지 않습니다. */}
+              {draw && draw.remaining > 0 && (
                 <li>
-                  <PocaPackTile count={draw.remaining} onClick={askToOpen} />
+                  <PocaPackTile count={draw.remaining} onClick={goToDraw} />
+                </li>
+              )}
+
+              {draw && draw.scheduled > 0 && (
+                <li>
+                  <PocaPackTile
+                    count={draw.scheduled}
+                    openAt={draw.nextOpenAt}
+                    onClick={goToDraw}
+                  />
                 </li>
               )}
 

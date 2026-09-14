@@ -5,12 +5,9 @@ import haloDarkUrl from '@/assets/poca/halo-dark.webp';
 import { PocaArt } from './PocaArt';
 import { PocaFace } from './PocaFace';
 import { PocaMotes } from './PocaMotes';
-import { isSpecial } from '../model/pocaDraw.model';
+import { isSpecial, REVEAL_CARD_H, REVEAL_CARD_W, REVEAL_HALO } from '../model/pocaDraw.model';
 import { pocaSeed } from '../model/nft.model';
 import type { PocaDrawResult } from '../model/nft.types';
-
-const CARD_W = 220;
-const CARD_H = 330;
 
 interface Props {
   /** 봉지가 갈라지기 시작했는가 — 카드가 올라옵니다 */
@@ -50,7 +47,7 @@ export function PocaReveal({ opening, revealed, card, className }: Props) {
         opening && 'motion-safe:animate-poca-raise motion-reduce:z-9',
         className,
       )}
-      style={{ width: CARD_W, height: CARD_H }}
+      style={{ width: REVEAL_CARD_W, height: REVEAL_CARD_H }}
     >
       <div className={cn('size-full', opening && 'motion-safe:animate-poca-lift')}>
         {/* 후광 — 카드와 함께 떠오르되, 부유(bob)에는 따라가지 않습니다.
@@ -58,9 +55,10 @@ export function PocaReveal({ opening, revealed, card, className }: Props) {
         <div
           aria-hidden
           className={cn(
-            'absolute top-1/2 left-1/2 -z-10 size-[600px] -translate-x-1/2 -translate-y-1/2 opacity-0',
+            'absolute top-1/2 left-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 opacity-0',
             opening && 'motion-safe:animate-poca-halo',
           )}
+          style={{ width: REVEAL_HALO, height: REVEAL_HALO }}
         >
           <div
             className={cn(

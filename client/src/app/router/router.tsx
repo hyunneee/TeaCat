@@ -1,7 +1,7 @@
 import { createElement, lazy, type ComponentType, type ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { wrapCreateBrowserRouter } from '@sentry/react';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
@@ -57,6 +57,10 @@ const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
 const NicknameChangePage = page(() => import('@/pages/NicknameChangePage'), 'NicknameChangePage');
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
+const PrivacyPolicyPage = page(
+  () => import('@/pages/PrivacyPolicyPage'),
+  'PrivacyPolicyPage',
+);
 
 const OauthCallbackPage = page(() => import('@/pages/OauthCallbackPage'), 'OauthCallbackPage');
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
@@ -338,10 +342,21 @@ const routes: RouteObject[] = [
       {
         element: <RequireAuth />,
         children: [
-          { path: ROUTES.FACE_REGISTER, element: withMask(withBoundary(<FaceRegisterPage />)) },
-          { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
-          /* 본인 확인 — 등록 화면과 같은 이유로 마스킹합니다 (얼굴·판정 결과가 뜹니다) */
-          { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
+          /* ── 얼굴 (등록·완료·본인확인) ──────────────────────
+             🔴 1차 배포에서는 **길을 아예 내지 않습니다** (`FEATURE.face`).
+                화면·훅·모델 파일은 그대로 두고 여기서만 빼므로, 되살릴 때는
+                `shared/constants/features.ts` 의 값 하나만 바꾸면 됩니다.
+                마스킹은 얼굴·판정 결과가 뜨는 화면이라 계속 필요합니다. */
+          ...(FEATURE.face
+            ? [
+                {
+                  path: ROUTES.FACE_REGISTER,
+                  element: withMask(withBoundary(<FaceRegisterPage />)),
+                },
+                { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
+                { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
+              ]
+            : []),
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
@@ -448,6 +463,11 @@ const routes: RouteObject[] = [
       },
 
       ...devRoutes,
+
+      /* 개인정보처리방침 — 가드 밖입니다. 쿠키 동의 배너에서 링크로 걸리는데
+         동의는 비로그인 첫 방문자에게도 물어야 하기 때문입니다.
+         `withMask` 는 붙이지 않습니다 — 남의 개인정보가 아니라 고지문입니다. */
+      { path: ROUTES.PRIVACY, element: withBoundary(<PrivacyPolicyPage />) },
 
       { path: ROUTES.NOT_FOUND, element: withBoundary(<NotFoundPage />) },
     ],

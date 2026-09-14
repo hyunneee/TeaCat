@@ -19,14 +19,38 @@
  * 확인하는 법: 대시보드에서 지표 하나를 열어 `source` 가 `route` 인지 보세요.
  * `url` 이면 이 순서가 깨진 것입니다.
  */
-import { initClarity, initSentry } from '@/shared/lib';
+import { initClarity, initGa, initSentry, readAnalyticsConsent } from '@/shared/lib';
 
 initSentry();
 
-/* 행동 분석 (Clarity). Sentry 와 달리 **순서 제약이 없습니다** — 라우터를 감싸지 않고
-   DOM 만 봅니다. 계측 초기화를 한 곳에 모아 두려고 여기 있을 뿐입니다.
-   `async` 스크립트를 꽂는 것뿐이라 첫 페인트를 막지 않습니다.
+/**
+ * 분석 도구(GA4 · Clarity)는 **동의를 받은 뒤에만** 켭니다.
+ *
+ * 둘 다 쿠키를 심고 수집한 것을 국외로 이전해서, 개인정보보호법상 별도 동의가
+ * 필요합니다. 동의 전에는 스크립트조차 받지 않습니다 — "받아 두고 전송만 참기" 는
+ * 이미 쿠키가 심긴 뒤라 동의를 받은 것이 아닙니다.
+ *
+ * 🔴 Sentry 는 위에서 **무조건** 켭니다. 서비스 운영에 필요한 오류 기록이고,
+ *    이걸 끄면 배포본에서 터진 사고를 볼 방법이 없어집니다(운영 빌드는 console 을
+ *    지웁니다). 판단 근거는 `shared/lib/consent.ts` 주석에 적어 두었습니다.
+ *
+ * 🔴 아직 안 물어본 사람(`null`)과 거부한 사람(`false`) 모두 켜지 않습니다.
+ *    배너에서 허용을 누르면 `startAnalytics()` 가 그 자리에서 켭니다 —
+ *    새로고침을 기다리지 않습니다(그러면 첫 세션이 통째로 빕니다).
+ */
+export function startAnalytics(): void {
+  /* 행동 분석 (Clarity). Sentry 와 달리 **순서 제약이 없습니다** — 라우터를 감싸지 않고
+     DOM 만 봅니다. `async` 스크립트를 꽂는 것뿐이라 첫 페인트를 막지 않습니다.
 
-   🔴 이게 기록하는 DOM 은 `index.html` 의 `data-clarity-mask` 로 **전부 가려집니다.**
-      그 속성을 지우면 화면 내용이 그대로 올라갑니다. shared/lib/clarity.ts 를 읽으세요. */
-initClarity();
+     🔴 개인정보가 뜨는 화면은 `router.tsx` 의 `withMask` 로 가려야 합니다.
+        빠뜨리면 리플레이에 그대로 남습니다. shared/lib/clarity.ts 를 읽으세요. */
+  initClarity();
+
+  /* 이용 분석 (GA4). 페이지뷰는 여기서 보내지 않습니다 — SPA 라 라우트 구독이
+     대신 보냅니다 (`app/router/analytics.ts` 의 trackRouteViews). */
+  initGa();
+}
+
+/* 이미 허용한 사람은 이 시점에 바로 켭니다. 처음 온 사람·거부한 사람은 켜지 않고,
+   배너(`CookieConsent`)가 허용을 받으면 그때 `startAnalytics()` 를 부릅니다. */
+if (readAnalyticsConsent() === true) startAnalytics();

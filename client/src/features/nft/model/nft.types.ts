@@ -166,8 +166,17 @@ export type PocaGrade = 'SPECIAL' | 'COMMON';
 
 /** `GET /photocards/draw` 응답 — 남은 카드팩 */
 export interface PocaDrawStatus {
+  /** 지금 뽑을 수 있는가 (`remaining > 0`) */
   available: boolean;
+  /** 지금 열 수 있는 카드팩 수 */
   remaining: number;
+  /**
+   * 아직 못 여는 카드팩 수. **결제 직후부터 여기에 잡힙니다** —
+   * 팩은 산 순간 생기고, 여는 것만 공연 직전으로 미뤄집니다.
+   */
+  scheduled: number;
+  /** 가장 빨리 열리는 시각. 잠긴 팩이 없으면 null */
+  nextOpenAt: string | null;
 }
 
 /** `POST /photocards/packs/claim` 응답 — 이벤트 팩 받기 */

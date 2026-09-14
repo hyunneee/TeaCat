@@ -94,70 +94,75 @@ const isExpired = (hold: HoldSession) =>
  * sessionStorage 면 리디렉션·새로고침을 견디고, 탭을 닫으면 정리됩니다.
  * (localStorage 를 쓰면 며칠 전 예매 흔적이 남아 더 헷갈립니다)
  */
-export const useBookingStore = create<BookingState>()(persist((set, get) => ({
-  ...initial,
+export const useBookingStore = create<BookingState>()(
+  persist(
+    (set, get) => ({
+      ...initial,
 
-  /**
-   * 예매 플로우의 진짜 시작점 — 봇 확인을 통과한 순간.
-   *
-   * 같은 회차를 다시 예매하는 경우에도 이전 판(선점·수령인·멱등키)을 버려야 합니다.
-   * 남겨두면 이전 선점이 만료되는 순간 만료 처리가 발동해서
-   * **방금 고른 좌석이 풀립니다.** (서버의 이전 선점은 TTL 로 알아서 해제됩니다)
-   */
-  beginFlow: (scheduleId) => set({ ...initial, scheduleId }),
+      /**
+       * 예매 플로우의 진짜 시작점 — 봇 확인을 통과한 순간.
+       *
+       * 같은 회차를 다시 예매하는 경우에도 이전 판(선점·수령인·멱등키)을 버려야 합니다.
+       * 남겨두면 이전 선점이 만료되는 순간 만료 처리가 발동해서
+       * **방금 고른 좌석이 풀립니다.** (서버의 이전 선점은 TTL 로 알아서 해제됩니다)
+       */
+      beginFlow: (scheduleId) => set({ ...initial, scheduleId }),
 
-  startSession: (scheduleId) => {
-    const current = get();
+      startSession: (scheduleId) => {
+        const current = get();
 
-    // sessionStorage 에 유지되므로, 결제를 끝내지 않고 나갔던 판이 남아 있을 수 있습니다.
-    // 만료된 선점을 그대로 두면 새 예매를 시작한 직후 만료 처리가 발동해
-    // 방금 고른 좌석이 풀려버립니다.
-    const expired = current.hold ? isExpired(current.hold) : false;
+        // sessionStorage 에 유지되므로, 결제를 끝내지 않고 나갔던 판이 남아 있을 수 있습니다.
+        // 만료된 선점을 그대로 두면 새 예매를 시작한 직후 만료 처리가 발동해
+        // 방금 고른 좌석이 풀려버립니다.
+        const expired = current.hold ? isExpired(current.hold) : false;
 
-    // 다른 회차로 넘어왔거나, 남아있던 선점이 이미 만료됐으면 새 판으로 시작합니다.
-    if (current.scheduleId !== scheduleId || expired) set({ ...initial, scheduleId });
-  },
+        // 다른 회차로 넘어왔거나, 남아있던 선점이 이미 만료됐으면 새 판으로 시작합니다.
+        if (current.scheduleId !== scheduleId || expired) set({ ...initial, scheduleId });
+      },
 
-  selectSection: (sectionId) => {
-    // 구역을 바꾸면 그 전 구역에서 고른 좌석은 의미가 없습니다.
-    if (get().sectionId !== sectionId) set({ sectionId, selectedSeatIds: [] });
-  },
+      selectSection: (sectionId) => {
+        // 구역을 바꾸면 그 전 구역에서 고른 좌석은 의미가 없습니다.
+        if (get().sectionId !== sectionId) set({ sectionId, selectedSeatIds: [] });
+      },
 
-  toggleSeat: (seatId) =>
-    set((s) => ({
-      selectedSeatIds: s.selectedSeatIds.includes(seatId)
-        ? s.selectedSeatIds.filter((id) => id !== seatId)
-        : [...s.selectedSeatIds, seatId],
-    })),
+      toggleSeat: (seatId) =>
+        set((s) => ({
+          selectedSeatIds: s.selectedSeatIds.includes(seatId)
+            ? s.selectedSeatIds.filter((id) => id !== seatId)
+            : [...s.selectedSeatIds, seatId],
+        })),
 
-  clearSelection: () => set({ selectedSeatIds: [] }),
+      clearSelection: () => set({ selectedSeatIds: [] }),
 
-  setHold: (hold) => set({ hold: hold === null ? null : toSession(hold) }),
+      setHold: (hold) => set({ hold: hold === null ? null : toSession(hold) }),
 
-  setRecipient: (seatId, loginId) =>
-    set((s) => {
-      const rest = s.recipients.filter((r) => r.seatId !== seatId);
-      return { recipients: [...rest, { seatId, loginId }] };
+      setRecipient: (seatId, loginId) =>
+        set((s) => {
+          const rest = s.recipients.filter((r) => r.seatId !== seatId);
+          return { recipients: [...rest, { seatId, loginId }] };
+        }),
+
+      ensureIdempotencyKey: () => {
+        const existing = get().idempotencyKey;
+        if (existing) return existing;
+        const key = crypto.randomUUID();
+        set({ idempotencyKey: key });
+        return key;
+      },
+
+      reset: () => set(initial),
     }),
-
-  ensureIdempotencyKey: () => {
-    const existing = get().idempotencyKey;
-    if (existing) return existing;
-    const key = crypto.randomUUID();
-    set({ idempotencyKey: key });
-    return key;
-  },
-
-  reset: () => set(initial),
-}), {
-  name: 'tikat.booking',
-  storage: createJSONStorage(() => sessionStorage),
-  partialize: (s) => ({
-    scheduleId: s.scheduleId,
-    sectionId: s.sectionId,
-    selectedSeatIds: s.selectedSeatIds,
-    hold: s.hold,
-    recipients: s.recipients,
-    idempotencyKey: s.idempotencyKey,
-  }),
-}));
+    {
+      name: 'tikat.booking',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (s) => ({
+        scheduleId: s.scheduleId,
+        sectionId: s.sectionId,
+        selectedSeatIds: s.selectedSeatIds,
+        hold: s.hold,
+        recipients: s.recipients,
+        idempotencyKey: s.idempotencyKey,
+      }),
+    },
+  ),
+);

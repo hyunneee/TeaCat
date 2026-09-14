@@ -50,7 +50,10 @@ export function TicketDetailPage() {
   const needsFace = isUsable(ticket) && !can.useTicket(user);
   /* 대조할 상대(등록된 얼굴)가 있고, 아직 쓸 수 있는 티켓일 때만 확인할 거리가 있습니다.
      지난 티켓·취소된 티켓에서는 확인해봐야 할 일이 없습니다 */
-  const canVerify = isUsable(ticket) && can.useTicket(user);
+  /* 🔴 `useTicket` 이 아니라 `verifyFace` 입니다. 얼굴을 닫아 둔 배포에서
+     `useTicket` 은 **늘 true** 라(예매를 막지 않으려고), 그대로 쓰면 본인 확인
+     버튼이 남아 없는 화면으로 보냅니다. */
+  const canVerify = isUsable(ticket) && can.verifyFace(user);
   const nftLabel = nftStatusLabel(ticket.nftStatus);
   const orderId = ticket.orderId;
 

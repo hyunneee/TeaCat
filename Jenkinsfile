@@ -209,6 +209,25 @@ pipeline {
                         *)    CLARITY_ID="" ;;
                     esac
 
+                    # 이용 분석 (GA4). Clarity 와 판단이 **반대**다 — 지금 있는 속성이
+                    # 운영(teacat.site) 것 하나뿐이라 prod 만 켠다.
+                    #
+                    # 🔴 dev 를 켜려면 GA 에서 **속성을 하나 더 만들어** 아래 dev 칸에 채워라.
+                    #    운영 것을 그대로 쓰면 개발 중 클릭이 세션 수·이탈률·퍼널에 섞인다
+                    #    (GA4 에도 Sentry 의 environment 같은 태그가 없다).
+                    #
+                    # 🔴 GA 콘솔에서 **향상된 측정 > 페이지 조회수 > "브라우저 기록 이벤트
+                    #    기반 페이지 변경" 이 꺼져 있어야 한다.** 우리가 라우트마다 직접
+                    #    보내므로(shared/lib/ga.ts) 켜 두면 화면 이동이 두 번씩 집계된다.
+                    #    코드로는 못 끈다 — 사람이 대시보드에서 꺼야 한다.
+                    #
+                    # (측정 ID 는 스크립트 주소에 실리는 공개 값이라 여기 적어도 된다.
+                    #  Data API 서비스 계정 키는 전혀 다른 물건이고 절대 여기 두면 안 된다)
+                    case "$DEPLOY_ENV" in
+                        prod) GA_ID="G-5BPSG2K5K9" ;;
+                        *)    GA_ID="" ;;
+                    esac
+
                     # 소스맵 업로드 토큰 (Sentry). 없으면 조용히 건너뛴다 —
                     # 예전처럼 난독화된 스택이 올라올 뿐, 배포가 실패하지는 않는다.
                     #
@@ -255,6 +274,7 @@ pipeline {
                         --build-arg VITE_SENTRY_ENVIRONMENT=$DEPLOY_ENV \
                         --build-arg VITE_SENTRY_RELEASE=teacat-client@$TAG \
                         --build-arg VITE_CLARITY_PROJECT_ID=$CLARITY_ID \
+                        --build-arg VITE_GA_MEASUREMENT_ID=$GA_ID \
                         --build-arg SENTRY_AUTH_TOKEN ./client
                 '''
             }

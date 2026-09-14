@@ -16,6 +16,7 @@ export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
 export { PocaPack } from './components/PocaPack';
 export { PocaPackArt } from './components/PocaPackArt';
+export { PocaPackGotModal } from './components/PocaPackGotModal';
 export { PocaPackTile } from './components/PocaPackTile';
 export { PocaDust } from './components/PocaDust';
 export { PocaReveal } from './components/PocaReveal';
@@ -44,6 +45,10 @@ export {
   drawMessage,
   drawMessageOf,
   isSpecial,
+  REVEAL_BUTTON_GAP,
+  REVEAL_CARD_H,
+  REVEAL_CARD_W,
+  REVEAL_TEXT_GAP,
   POCA_ROLES,
   pocaRole,
   pocaTitle,

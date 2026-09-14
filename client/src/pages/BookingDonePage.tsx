@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { House, ScanFace, Ticket } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Confetti } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useAuth, can } from '@/features/auth';
 import { useBookingStore } from '@/features/booking';
+import { PocaPackGotModal } from '@/features/nft';
 
 export function BookingDonePage() {
   const navigate = useNavigate();
@@ -20,11 +21,30 @@ export function BookingDonePage() {
 
   const needsFace = !can.useTicket(user);
 
+  /**
+   * 티켓을 사면 서버가 **표 한 장당 카드팩 하나**를 줍니다(`TicketOrderRecorder`).
+   * 알려 주지 않으면 받은 줄 모르고, 공연 당일에도 안 열어 봅니다.
+   *
+   * 🔴 폭죽이 터지는 동안은 띄우지 않습니다 — 완료를 알아보기도 전에 모달이 덮으면
+   * "예매가 된 건가?" 가 남습니다.
+   */
+  const [gotPack, setGotPack] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setGotPack(true), 1100);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
       {/* 예매가 끝나는 지점 — 여기 한 곳에서만 터뜨립니다. 다 떨어지면 스스로 정리합니다. */}
       <Confetti />
 
+      <PocaPackGotModal
+        open={gotPack}
+        onClose={() => setGotPack(false)}
+        onGo={() => navigate(ROUTES.MY_NFTS)}
+      />
 
       <motion.div
         initial={{ scale: 0.7, opacity: 0 }}

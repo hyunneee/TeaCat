@@ -39,10 +39,7 @@ function smallestGap(seats: Seat[]): number {
     return min;
   };
 
-  const gap = Math.min(
-    gapOf(seats.map((s) => s.x)),
-    gapOf(seats.map((s) => s.y)),
-  );
+  const gap = Math.min(gapOf(seats.map((s) => s.x)), gapOf(seats.map((s) => s.y)));
 
   return Number.isFinite(gap) && gap > 0 ? gap : FALLBACK;
 }
@@ -162,7 +159,9 @@ function SeatMapImpl({ seats, selectedSeatIds, onSelect, fitToSeats = true }: Se
               className={cn(
                 'transition-[fill,opacity,transform] duration-150',
                 selected ? 'fill-seat-selected scale-115' : SEAT_FILL[seat.status],
-                selectable ? 'cursor-pointer hover:scale-110 hover:opacity-80' : 'cursor-not-allowed',
+                selectable
+                  ? 'cursor-pointer hover:scale-110 hover:opacity-80'
+                  : 'cursor-not-allowed',
                 seat.status === 'SOLD' && 'opacity-55',
                 seat.status === 'BLOCKED' && 'opacity-35',
               )}
