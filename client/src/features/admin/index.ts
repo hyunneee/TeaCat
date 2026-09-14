@@ -46,6 +46,9 @@ export { AdminUserToolbar, AdminPagination } from './components/AdminUserToolbar
 export { AdminUserCreateModal } from './components/AdminUserCreateModal';
 export { AdminUserEditModal } from './components/AdminUserEditModal';
 export { AdminPasswordResetModal } from './components/AdminPasswordResetModal';
+/* 테스트용 캣머니 조정. 모달이 잔액 조회·조정을 직접 들고 있어 훅을 따로 내보내지
+   않습니다 — 이 기능을 쓰는 화면은 회원 관리 하나뿐입니다 */
+export { AdminCatMoneyModal } from './components/AdminCatMoneyModal';
 
 // View — 문의 관리
 export { AdminInquiryTable } from './components/AdminInquiryTable';
@@ -65,6 +68,13 @@ export { TrendLineChart } from './components/TrendLineChart';
 
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
+export { adminCatMoneyApi, adminCatMoneyKeys } from './api/adminCatMoneyApi';
+export type {
+  AdminCatMoneyBalance,
+  AdminCatMoneyAdjustResult,
+  AdminCatMoneyDirection,
+  AdminCatMoneyReason,
+} from './model/adminCatMoney.types';
 export { adminInquiryApi, adminInquiryKeys } from './api/adminInquiryApi';
 export { adminBannerApi, adminBannerKeys } from './api/adminBannerApi';
 export { adminPocaDesignApi, adminPocaDesignKeys } from './api/adminPocaDesignApi';
