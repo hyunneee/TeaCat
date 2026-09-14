@@ -20,7 +20,7 @@ import { Header } from '@/shared/components/layout';
 import { AnimatedNumber, Badge, Button, Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
 import { toast } from '@/shared/stores';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { can, useAuth, useLogout } from '@/features/auth';
 import { useTokenBalance } from '@/features/token';
 
@@ -98,17 +98,21 @@ export function MyPage() {
             <p className="truncate text-lg font-extrabold">{user?.name}</p>
             <p className="text-subtle mt-0.5 truncate text-[0.8125rem]">@{user?.nickname}</p>
 
-            <div className="mt-2.5 flex justify-center">
-              {user?.faceRegistered ? (
-                <Badge tone="success" size="md" icon={<ScanFace size={12} />}>
-                  얼굴 등록 완료
-                </Badge>
-              ) : (
-                <Badge tone="warning" size="md" icon={<ScanFace size={12} />}>
-                  얼굴 미등록
-                </Badge>
-              )}
-            </div>
+            {/* 얼굴을 닫아 둔 배포에서는 배지 자체를 걷습니다 — 등록할 방법이 없는데
+                "미등록" 이라고 띄우면 할 일이 남은 것처럼 보입니다 */}
+            {FEATURE.face && (
+              <div className="mt-2.5 flex justify-center">
+                {user?.faceRegistered ? (
+                  <Badge tone="success" size="md" icon={<ScanFace size={12} />}>
+                    얼굴 등록 완료
+                  </Badge>
+                ) : (
+                  <Badge tone="warning" size="md" icon={<ScanFace size={12} />}>
+                    얼굴 미등록
+                  </Badge>
+                )}
+              </div>
+            )}
 
             <button
               type="button"
@@ -138,7 +142,7 @@ export function MyPage() {
       </div>
 
       <div className="space-y-6 p-4 lg:mx-auto lg:max-w-3xl lg:px-0">
-        {!user?.faceRegistered && (
+        {!can.useTicket(user) && (
           <Card
             tone="warning"
             interactive
@@ -217,12 +221,16 @@ export function MyPage() {
         <section>
           <SectionTitle>계정</SectionTitle>
           <Card padded={false} className="divide-line divide-y overflow-hidden">
-            <ListRow
-              icon={<ScanFace size={18} />}
-              title="얼굴 등록 관리"
-              description={user?.faceRegistered ? '등록됨 · 예매 시 자동 매칭' : '미등록 · 예매 불가'}
-              onClick={() => navigate(ROUTES.FACE_REGISTER)}
-            />
+            {FEATURE.face && (
+              <ListRow
+                icon={<ScanFace size={18} />}
+                title="얼굴 등록 관리"
+                description={
+                  user?.faceRegistered ? '등록됨 · 예매 시 자동 매칭' : '미등록 · 예매 불가'
+                }
+                onClick={() => navigate(ROUTES.FACE_REGISTER)}
+              />
+            )}
             <ListRow
               icon={<Settings size={18} />}
               title="설정"

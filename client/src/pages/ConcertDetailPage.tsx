@@ -10,10 +10,10 @@ import {
   Skeleton,
 } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
-import { useAuth } from '@/features/auth';
+import { can, useAuth } from '@/features/auth';
 import { ScheduleList, posterSeedOf, useConcertDetail, useStartBooking } from '@/features/concert';
 
 export function ConcertDetailPage() {
@@ -30,8 +30,13 @@ export function ConcertDetailPage() {
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
-  /** 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다. */
-  const needsFace = isLoggedIn && !user?.faceRegistered;
+  /**
+   * 로그인은 했는데 얼굴이 없는 상태 — 회차 목록을 덮어 예매를 막습니다.
+   *
+   * 판단은 `can.useTicket` 하나에 맡깁니다. 얼굴을 닫아 둔 배포에서는 늘 true 라
+   * 회차를 덮던 안내와 예매 전 모달이 **함께** 사라집니다.
+   */
+  const needsFace = isLoggedIn && !can.useTicket(user);
 
   /* 등록을 마치면 **이 공연으로 되돌아오게** 현재 위치를 함께 넘깁니다.
      안 넘기면 useFaceRegistration 의 기본값(마이페이지)으로 가버립니다. */
@@ -219,7 +224,9 @@ export function ConcertDetailPage() {
             <ul className="text-muted list-disc space-y-0.5 pl-4 leading-relaxed">
               <li>예매 후 다른 사람에게 양도할 수 없습니다.</li>
               <li>결제 시점에 티켓을 받을 사람의 아이디를 지정합니다.</li>
-              <li>입장 시 등록된 얼굴로 본인 확인을 합니다.</li>
+              {/* 얼굴을 닫아 둔 배포에서는 이 줄을 뺍니다 — 하지 않는 확인을
+                  하겠다고 적어 두면 안내가 사실과 달라집니다 */}
+              {FEATURE.face && <li>입장 시 등록된 얼굴로 본인 확인을 합니다.</li>}
               <li>취소표는 즉시 판매되지 않고 추첨으로 배정됩니다.</li>
             </ul>
           </div>

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { House, LogIn } from 'lucide-react';
 import { Button, CatMascot } from '@/shared/components/ui';
 import { Confetti } from '@/shared/components/common';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 
 /**
  * 회원가입 완료.
@@ -31,8 +31,11 @@ export function SignupDonePage() {
 
       <div className="space-y-1.5 text-center">
         <h1 className="text-xl font-bold">가입이 완료되었습니다</h1>
+        {/* 얼굴을 닫아 둔 배포에서는 할 수 없는 일을 안내하지 않습니다 */}
         <p className="text-subtle text-sm">
-          로그인한 뒤 마이페이지에서 얼굴을 등록하면 예매할 수 있어요.
+          {FEATURE.face
+            ? '로그인한 뒤 마이페이지에서 얼굴을 등록하면 예매할 수 있어요.'
+            : '로그인하면 바로 예매할 수 있어요.'}
         </p>
       </div>
 
