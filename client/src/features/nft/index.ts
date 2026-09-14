@@ -37,7 +37,16 @@ export {
   type PhotocardGroup,
   type NftSort,
 } from './model/nft.model';
-export { drawLine, drawMessage, isCoach, isSpecial, pocaTitle } from './model/pocaDraw.model';
+export {
+  drawLine,
+  drawMessage,
+  drawMessageOf,
+  isSpecial,
+  POCA_ROLES,
+  pocaRole,
+  pocaTitle,
+  withPocaRole,
+} from './model/pocaDraw.model';
 export type {
   MarketPhotocard,
   MyPhotocard,
@@ -54,3 +63,4 @@ export type {
   PocaDrawResult,
   PocaGrade,
 } from './model/nft.types';
+export type { DrawLine, PocaRole } from './model/pocaDraw.model';
