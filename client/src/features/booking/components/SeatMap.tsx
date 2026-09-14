@@ -48,6 +48,8 @@ function smallestGap(seats: Seat[]): number {
 const PADDING_RATIO = 1.2;
 /** 좌석 위쪽에 무대 표시를 넣을 띠 (좌석 크기 배수) */
 const STAGE_BAND_RATIO = 2.4;
+/** 무대 밑줄이 뷰박스 너비에서 차지하는 비율 (양옆으로 18% 씩 남깁니다) */
+const STAGE_LINE_RATIO = 0.64;
 
 interface ViewBox {
   minX: number;
@@ -97,6 +99,11 @@ function SeatMapImpl({ seats, selectedSeatIds, onSelect, fitToSeats = true }: Se
   const seatSize = seatSizeOf(seats);
   const view = fitToSeats ? viewBoxOf(seats, seatSize) : FULL_VENUE;
 
+  /* 무대 표시는 뷰박스의 가로 중앙에 놓습니다. 퍼센트가 아니라 사용자 좌표로 계산하는
+     이유는 아래 무대 표시 주석에 있습니다 */
+  const stageCenterX = view.minX + view.width / 2;
+  const stageLineWidth = view.width * STAGE_LINE_RATIO;
+
   return (
     /* 🔴 여기에 h-full(height:100%) 을 쓰면 안 됩니다.
           부모가 flex 아이템(flex-1)이면 퍼센트 높이가 해결되지 않아 auto 로
@@ -112,9 +119,14 @@ function SeatMapImpl({ seats, selectedSeatIds, onSelect, fitToSeats = true }: Se
         role="group"
         aria-label="좌석 배치도"
       >
-        {/* 무대 방향 표시 — 뷰박스 상단 기준이라 어느 구역을 봐도 보입니다 */}
+        {/* 무대 방향 표시 — 뷰박스 상단 기준이라 어느 구역을 봐도 보입니다.
+            🔴 x 를 퍼센트로 주면 안 됩니다. SVG 퍼센트는 뷰박스 **너비에만** 비례하고
+               `min-x` 를 더하지 않습니다. 뷰박스는 고른 구역에 맞춰 잘라내므로 minX 가
+               0 이 아니고(지금 데이터에서 89.6), 그만큼 무대 표시가 왼쪽으로 쏠렸습니다
+               — 너비의 14% 라 "살짝 비뚤어진" 것으로 보입니다.
+               y 는 처음부터 `view.minY` 를 더해 쓰고 있었는데 x 만 빠져 있었습니다. */}
         <text
-          x="50%"
+          x={stageCenterX}
           y={view.minY + seatSize * 1.3}
           textAnchor="middle"
           style={{ fontSize: seatSize * 0.9 }}
@@ -123,9 +135,9 @@ function SeatMapImpl({ seats, selectedSeatIds, onSelect, fitToSeats = true }: Se
           STAGE
         </text>
         <rect
-          x="18%"
+          x={stageCenterX - stageLineWidth / 2}
           y={view.minY + seatSize * 1.9}
-          width="64%"
+          width={stageLineWidth}
           height={Math.max(seatSize * 0.1, 1.5)}
           rx="1"
           className="fill-[var(--color-line-strong)]"
