@@ -40,7 +40,10 @@ export function PocaPackClaimPage() {
           <>
             {/* 🔴 칸도 이름표도 없이 봉지만 둡니다 — 검은 화면에 흰 네모를 두르면
                 봉지보다 그 네모가 먼저 보입니다 */}
-            <PocaPackArt className="w-52" />
+            <PocaPackArt
+              className="w-52"
+              onClick={() => navigate(ROUTES.MY_NFTS, { replace: true })}
+            />
 
             <div className="space-y-2 text-center">
               <p className="text-xl font-extrabold">

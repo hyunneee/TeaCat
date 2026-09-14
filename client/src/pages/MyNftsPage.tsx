@@ -3,7 +3,6 @@ import { Header } from '@/shared/components/layout';
 import { Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useInfiniteScroll } from '@/shared/hooks';
-import { useModal } from '@/app/providers';
 import {
   NftCard,
   PocaPackTile,
@@ -15,7 +14,6 @@ import {
 
 export function MyNftsPage() {
   const navigate = useNavigate();
-  const { open } = useModal();
   const {
     data: cards,
     isPending,
@@ -34,15 +32,9 @@ export function MyNftsPage() {
     onLoadMore: fetchNextPage,
   });
 
-  /* 뜯으면 되돌릴 수 없으니 한 번 물어봅니다 — 목록을 넘기다 잘못 누를 수 있는 자리입니다.
-     🔴 횟수·조건은 여기서 말하지 않습니다. 이벤트마다 다르고 정하는 쪽은 서버입니다 —
-     화면이 "한 번만" 이라고 단정하면 서버 규칙이 바뀔 때 거짓말이 됩니다. */
-  const askToOpen = () =>
-    open('common/confirm', {
-      title: '카드팩을 열어보시겠어요?',
-      confirmText: '열기',
-      onConfirm: () => navigate(ROUTES.NFT_DRAW),
-    });
+  /* 🔴 여기서 뜯지 않습니다 — 뽑기 화면으로 갈 뿐이고, 봉지를 끝까지 밀어야 실제로 뜯깁니다.
+     되돌릴 수 없는 동작 앞에 확인을 한 번 더 두는 자리가 이미 그 화면에 있는 셈입니다. */
+  const goToDraw = () => navigate(ROUTES.NFT_DRAW);
 
   return (
     <>
@@ -55,11 +47,21 @@ export function MyNftsPage() {
           <>
             <ul className="grid grid-cols-2 gap-3">
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
-              {draw?.available && (
+              {/* 🔴 열 수 있는 팩이 없어도 **산 팩이 있으면** 보여 줍니다 —
+                  결제한 팩이 공연 직전까지 화면에서 사라지면 "안 준 것" 으로 읽힙니다 */}
+              {draw?.available ? (
                 <li>
-                  <PocaPackTile count={draw.remaining} onClick={askToOpen} />
+                  <PocaPackTile count={draw.remaining} onClick={goToDraw} />
                 </li>
-              )}
+              ) : draw && draw.scheduled > 0 ? (
+                <li>
+                  <PocaPackTile
+                    count={draw.scheduled}
+                    openAt={draw.nextOpenAt}
+                    onClick={goToDraw}
+                  />
+                </li>
+              ) : null}
 
               {/* 같은 도안은 한 칸으로 — 몇 장인지는 카드가 ×n 으로 알려 줍니다 */}
               {groupPhotocards(cards ?? []).map(({ card, count }) => (

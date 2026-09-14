@@ -1,3 +1,4 @@
+import { parseServerTime } from '@/shared/lib';
 import type {
   MyPhotocard,
   PhotocardDetail,
@@ -103,6 +104,22 @@ const NAME_JOINER = ' · ';
 export function pocaName(designName: string): string {
   const first = designName.split(NAME_JOINER)[0]?.trim();
   return first || designName;
+}
+
+/**
+ * 잠긴 카드팩이 열리는 시각 — '9월 20일 19:50'.
+ *
+ * 🔴 "공연 시작 10분 전" 이라고 적지 않습니다. 그 10분은 서버 설정이라 바뀔 수 있고,
+ * 화면이 규칙을 단정하면 그때 거짓말이 됩니다. **시각만** 말합니다.
+ */
+export function packOpenAtLabel(nextOpenAt: string): string {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(parseServerTime(nextOpenAt)));
 }
 
 export function photocardSource(performanceTitle: string | null): string {
