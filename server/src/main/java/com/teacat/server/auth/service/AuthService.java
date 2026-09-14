@@ -10,6 +10,7 @@ import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.user.dto.response.MyInfoResponse;
+import com.teacat.server.user.entity.Face;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
@@ -53,6 +54,11 @@ public class AuthService {
                 request.nickname(),
                 request.phone()
         ));
+
+        /* 얼굴 자리를 미리 채운다 — 등록을 안 해도 예매까지 갈 수 있어야 한다.
+           사람 얼굴에서 뽑은 값이 아니고, 본인 확인은 모델 버전이 달라 거절된다
+           (Face.DEFAULT_MODEL_VERSION 주석). 나중에 진짜로 등록하면 덮어쓴다. */
+        user.registerFace(Face.defaultFace());
 
         // 실패하면 예외가 올라가 회원 생성까지 롤백된다
         walletService.provision(user);
