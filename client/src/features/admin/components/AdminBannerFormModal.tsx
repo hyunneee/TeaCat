@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageUp } from 'lucide-react';
 import { Button, Input, Modal, Segmented, Select, Textarea } from '@/shared/components/ui';
 import { useConcerts } from '@/features/concert';
-import type { AdminBanner, AdminBannerType, AdminBannerWriteRequest } from '../model/adminBanner.types';
+import type {
+  AdminBanner,
+  AdminBannerType,
+  AdminBannerWriteRequest,
+} from '../model/adminBanner.types';
 
 /**
  * 배너 등록·수정.
@@ -147,7 +151,7 @@ export function AdminBannerFormModal({
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-ink">연결할 공연</p>
+            <p className="text-ink text-sm font-medium">연결할 공연</p>
             <Select
               label="연결할 공연"
               value={performanceId}

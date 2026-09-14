@@ -111,6 +111,8 @@ export const ROUTES = {
   ADMIN_BANNERS: '/admin/banners',
   /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
   ADMIN_POCA_TEMPLATES: '/admin/poca-templates',
+  /** 처음 주는 카드팩을 여닫는 기간 */
+  ADMIN_PACK_EVENTS: '/admin/pack-events',
   /** 이벤트 카드팩에서 나올 카드 (공연과 무관) */
   ADMIN_POCA_DESIGNS: '/admin/poca-designs',
   /** 그 공연 카드팩에서 나올 카드 */

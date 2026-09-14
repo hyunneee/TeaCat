@@ -79,6 +79,10 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
+const AdminPackEventsPage = page(
+  () => import('@/pages/AdminPackEventsPage'),
+  'AdminPackEventsPage',
+);
 const AdminPocaDesignsPage = page(
   () => import('@/pages/AdminPocaDesignsPage'),
   'AdminPocaDesignsPage',
@@ -260,6 +264,10 @@ const routes: RouteObject[] = [
                   {
                     path: ROUTES.ADMIN_POCA_TEMPLATES,
                     element: withBoundary(<AdminPocaTemplatesPage />),
+                  },
+                  {
+                    path: ROUTES.ADMIN_PACK_EVENTS,
+                    element: withBoundary(<AdminPackEventsPage />),
                   },
                   {
                     path: ROUTES.ADMIN_POCA_DESIGNS,

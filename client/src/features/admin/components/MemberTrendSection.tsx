@@ -94,9 +94,7 @@ export function MemberTrendSection({
         {trend && (
           <TrendLineChart
             data={toActivePoints(trend)}
-            series={[
-              { key: 'activeUsers', label: '접속자', color: 'var(--color-accent-700)' },
-            ]}
+            series={[{ key: 'activeUsers', label: '접속자', color: 'var(--color-accent-700)' }]}
             markers={markers}
             unit="명"
           />

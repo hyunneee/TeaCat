@@ -80,13 +80,15 @@ export function validateCreate(form: AdminUserCreateRequest): CreateErrors {
   else if (!EMAIL_PATTERN.test(form.email.trim())) errors.email = '이메일 형식이 올바르지 않아요.';
 
   if (!form.password) errors.password = '비밀번호를 입력해 주세요.';
-  else if (!PASSWORD_PATTERN.test(form.password)) errors.password = `${PASSWORD_RULE_TEXT}로 만들어 주세요.`;
+  else if (!PASSWORD_PATTERN.test(form.password))
+    errors.password = `${PASSWORD_RULE_TEXT}로 만들어 주세요.`;
 
   if (!form.name.trim()) errors.name = '이름을 입력해 주세요.';
   else if (form.name.trim().length < 2) errors.name = '2자 이상 입력해 주세요.';
 
   if (!form.nickname) errors.nickname = '닉네임을 입력해 주세요.';
-  else if (!NICKNAME_PATTERN.test(form.nickname)) errors.nickname = '한글·영문·숫자 2~20자로 입력해 주세요.';
+  else if (!NICKNAME_PATTERN.test(form.nickname))
+    errors.nickname = '한글·영문·숫자 2~20자로 입력해 주세요.';
 
   if (!form.phone) errors.phone = '휴대폰 번호를 입력해 주세요.';
   else if (!PHONE_PATTERN.test(form.phone)) errors.phone = '010-0000-0000 형식으로 입력해 주세요.';

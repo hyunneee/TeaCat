@@ -23,8 +23,7 @@ export const adminBannerApi = {
   remove: (bannerId: number) => http.delete<void>(`/admin/banners/${bannerId}`),
 
   /** 지금 있는 배너 **전부**를 원하는 순서대로 보냅니다. 일부만 보내면 서버가 거절합니다 */
-  reorder: (bannerIds: number[]) =>
-    http.put<AdminBanner[]>('/admin/banners/order', { bannerIds }),
+  reorder: (bannerIds: number[]) => http.put<AdminBanner[]>('/admin/banners/order', { bannerIds }),
 
   /** 1단계 — 올릴 자리를 받습니다 */
   issueUploadUrl: (contentType: string) =>

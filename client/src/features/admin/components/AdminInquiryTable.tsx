@@ -47,12 +47,12 @@ export function AdminInquiryTable({
     <div className="overflow-x-auto">
       <table className="w-full min-w-3xl border-collapse text-sm">
         <thead>
-          <tr className="border-b border-line text-left">
+          <tr className="border-line border-b text-left">
             {HEADERS.map((header, i) => (
               <th
                 key={header || `action-${i}`}
                 scope="col"
-                className="px-4 py-2.5 text-xs font-medium text-ink-muted"
+                className="text-ink-muted px-4 py-2.5 text-xs font-medium"
               >
                 {header}
               </th>
@@ -66,8 +66,8 @@ export function AdminInquiryTable({
               key={inquiry.inquiryId}
               className={
                 inquiry.inquiryId === selectedId
-                  ? 'border-b border-line/60 bg-surface-2 last:border-0'
-                  : 'border-b border-line/60 last:border-0 hover:bg-surface-2'
+                  ? 'border-line/60 bg-surface-2 border-b last:border-0'
+                  : 'border-line/60 hover:bg-surface-2 border-b last:border-0'
               }
             >
               <td className="px-4 py-3">
@@ -79,12 +79,12 @@ export function AdminInquiryTable({
               </td>
 
               <td className="max-w-md px-4 py-3">
-                <p className="truncate font-medium text-ink">{inquiry.title}</p>
+                <p className="text-ink truncate font-medium">{inquiry.title}</p>
               </td>
 
-              <td className="px-4 py-3 text-ink">{inquiry.writerNickname}</td>
+              <td className="text-ink px-4 py-3">{inquiry.writerNickname}</td>
 
-              <td className="px-4 py-3 text-xs tabular-nums text-ink-muted">
+              <td className="text-ink-muted px-4 py-3 text-xs tabular-nums">
                 {formatDate(inquiry.createdAt)}
               </td>
 

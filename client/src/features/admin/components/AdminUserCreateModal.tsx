@@ -89,7 +89,7 @@ export function AdminUserCreateModal({
           value={form.role}
           onChange={(role) => set('role', role as UserRole)}
         />
-        <p className="-mt-1 text-xs leading-relaxed text-ink-muted">
+        <p className="text-ink-muted -mt-1 text-xs leading-relaxed">
           {ROLE_DESCRIPTION[form.role]}
           {!rolesWithWallet.includes(form.role) && ' 지갑과 캣머니는 발급되지 않습니다.'}
         </p>

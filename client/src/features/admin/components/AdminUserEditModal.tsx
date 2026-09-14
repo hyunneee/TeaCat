@@ -105,14 +105,14 @@ export function AdminUserEditModal({
           value={form.role ?? 'USER'}
           onChange={(role) => set('role', role as UserRole)}
         />
-        <p className="-mt-1 text-xs leading-relaxed text-ink-muted">
+        <p className="text-ink-muted -mt-1 text-xs leading-relaxed">
           {ROLE_DESCRIPTION[form.role ?? 'USER']}
         </p>
 
         {roleChanged && (
           /* 역할을 바꾸면 서버가 그 회원 세션을 끊습니다. 모르고 바꾸면
              "왜 갑자기 로그아웃됐냐" 는 문의가 옵니다. */
-          <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-ink">
+          <p className="bg-surface-2 text-ink rounded-lg px-3 py-2 text-xs leading-relaxed">
             역할을 바꾸면 이 회원은 <strong>모든 기기에서 로그아웃</strong>됩니다. 권한이 토큰에
             담겨 있어 다시 로그인해야 새 권한이 적용돼요.
           </p>
@@ -146,7 +146,13 @@ export function AdminUserEditModal({
           maxLength={13}
         />
 
-        <Input label="이메일" value={user?.email ?? ''} readOnly disabled hint="변경할 수 없습니다." />
+        <Input
+          label="이메일"
+          value={user?.email ?? ''}
+          readOnly
+          disabled
+          hint="변경할 수 없습니다."
+        />
       </div>
     </Modal>
   );
