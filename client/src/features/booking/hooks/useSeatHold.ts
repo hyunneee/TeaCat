@@ -151,7 +151,8 @@ export function useSeatHold(scheduleId: string) {
         return await bookingApi.hold(scheduleId, seatId);
       } catch (error) {
         // 스토어가 모르는 선점이 서버에 남아 있는 경우. 무엇을 쥐고 있는지 물어 놓고 한 번만 재시도합니다
-        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING) throw error;
+        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING)
+          throw error;
 
         const released = await releaseServerHolds();
         if (!released) throw error;
@@ -168,9 +169,7 @@ export function useSeatHold(scheduleId: string) {
     onError: (error) => {
       /* 쥐고 있던 자리를 놓은 뒤에 실패했다면 그 사실을 반드시 말해야 합니다.
          안 그러면 "왜 아까 그 자리도 없어졌지" 가 됩니다 */
-      const lostPrevious = gaveUpPrevious.current
-        ? ' 이전에 잡아둔 자리도 풀렸어요.'
-        : '';
+      const lostPrevious = gaveUpPrevious.current ? ' 이전에 잡아둔 자리도 풀렸어요.' : '';
 
       /* 🔴 이 서비스에서 **가장 중요한 지표**입니다. 좌석 선점 실패는 요청이 실패한 것이라
          클릭 지도에 남지 않고(그래서 Clarity 로는 횟수를 셀 수 없고), 서버 로그에는
@@ -230,7 +229,8 @@ export function useSeatHold(scheduleId: string) {
         return await bookingApi.holdStanding(scheduleId, areaId);
       } catch (error) {
         // 다른 구역/좌석에 남은 활성 선점이 있으면 기존 좌석 변경 흐름처럼 해제 후 한 번만 재시도한다.
-        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING) throw error;
+        if (!ApiError.isApiError(error) || error.code !== BOOKING_ERROR.ALREADY_HOLDING)
+          throw error;
 
         const released = await releaseServerHolds();
         if (!released) throw error;

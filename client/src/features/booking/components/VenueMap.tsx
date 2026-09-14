@@ -64,7 +64,9 @@ export function VenueMap({ sections, selectedId, onSelect, layout, className }: 
      둘 중 무엇이든 구역·요소 좌표를 그대로 얹을 수 있어야 합니다 */
   const left = layout ? 0 : Math.min(...sections.map((s) => s.bounds.x));
   const top = layout ? 0 : Math.min(...sections.map((s) => s.bounds.y));
-  const right = layout ? layout.width : Math.max(...sections.map((s) => s.bounds.x + s.bounds.width));
+  const right = layout
+    ? layout.width
+    : Math.max(...sections.map((s) => s.bounds.x + s.bounds.width));
   const bottom = layout
     ? layout.height
     : Math.max(...sections.map((s) => s.bounds.y + s.bounds.height));
@@ -89,7 +91,13 @@ export function VenueMap({ sections, selectedId, onSelect, layout, className }: 
       <svg viewBox={viewBox} className="h-auto w-full" role="group" aria-label="공연장 구역 도면">
         <defs>
           {/* 기둥 빗금 — 색을 늘리지 않고 "여기는 자리가 아니다" 를 보이게 합니다 */}
-          <pattern id="venue-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <pattern
+            id="venue-hatch"
+            width="6"
+            height="6"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
             <rect width="6" height="6" className="fill-brand-400" />
             <line x1="0" y1="0" x2="0" y2="6" className="stroke-brand-600" strokeWidth="3" />
           </pattern>
@@ -138,7 +146,9 @@ export function VenueMap({ sections, selectedId, onSelect, layout, className }: 
               aria-disabled={!bookable}
               aria-pressed={selected}
               aria-label={`${section.name} ${priceLabel(section.price)} ${
-                bookable ? `잔여 ${section.availableSeats}석` : SECTION_AVAILABILITY_LABEL[availability]
+                bookable
+                  ? `잔여 ${section.availableSeats}석`
+                  : SECTION_AVAILABILITY_LABEL[availability]
               }`}
               onClick={() => bookable && onSelect(section)}
               onKeyDown={(event) => {
@@ -201,7 +211,8 @@ function VenueElement({ element, unit }: { element: LayoutElement; unit: number 
   /* 좁은 요소에 글자를 넣으면 밖으로 삐져나와 도면을 어지럽힙니다.
      들어갈 자리가 있을 때만 적습니다 */
   const fontSize = unit * 2.4;
-  const fits = !!text && element.width > fontSize * text.length * 0.7 && element.height > fontSize * 1.4;
+  const fits =
+    !!text && element.width > fontSize * text.length * 0.7 && element.height > fontSize * 1.4;
 
   return (
     <g className="pointer-events-none" aria-hidden>

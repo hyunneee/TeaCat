@@ -2,7 +2,12 @@ import { Hourglass, ScanFace, Ticket } from 'lucide-react';
 import { Badge, Button } from '@/shared/components/ui';
 import { Stagger } from '@/shared/components/common';
 import { cn, formatDateTime } from '@/shared/lib';
-import { canWaitlist, isBookable, scheduleStatusLabel, scheduleTone } from '../model/schedule.model';
+import {
+  canWaitlist,
+  isBookable,
+  scheduleStatusLabel,
+  scheduleTone,
+} from '../model/schedule.model';
 import type { ScheduleSummary } from '../model/concert.types';
 
 interface Props {

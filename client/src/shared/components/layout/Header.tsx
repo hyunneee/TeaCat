@@ -10,6 +10,13 @@ export interface HeaderProps {
   left?: ReactNode;
   /** 뒤로가기 버튼 */
   showBack?: boolean;
+  /**
+   * 뒤로가기를 눌렀을 때 할 일. 안 주면 브라우저 기록을 한 칸 되돌립니다.
+   *
+   * 🔴 예매처럼 **어디서 들어왔는지에 따라 엉뚱한 곳으로 튀는** 흐름에서 씁니다 —
+   * 홈의 "결제를 마치지 않은 자리" 로 들어오면 `navigate(-1)` 은 홈으로 나갑니다.
+   */
+  onBack?: () => void;
   /** X 버튼 (플로우 이탈용). onClose 를 주면 표시됩니다. */
   onClose?: () => void;
   right?: ReactNode;
@@ -35,6 +42,7 @@ export function Header({
   title,
   left,
   showBack = false,
+  onBack,
   onClose,
   right,
   transparent = false,
@@ -56,9 +64,18 @@ export function Header({
 
   return (
     <header
+      /* 🔴 바로 아래 붙는 `.under-header`(검색·토글 줄)가 **이 머리말이 데스크톱에서
+         사라지는지** 를 알아야 합니다. CSS 는 형제의 `lg:hidden` 을 읽을 수 없어
+         표식을 남깁니다 — `header[data-title-only] ~ .under-header` (styles/index.css).
+         이 속성을 지우면 그 화면들에서 목록 첫 줄이 내비와 검색 줄 사이로 비쳐 보입니다. */
+      data-title-only={titleOnly || undefined}
       className={cn(
         'pt-safe z-30',
-        sticky && 'sticky top-0',
+        /* 🔴 `top-0` 이 아닙니다 — 데스크톱에는 위에 상단 내비가 있어서,
+           0 에 붙이면 스크롤할 때 머리말이 내비 위로 올라탑니다.
+           `--top-inset` 은 AppLayout(`with-topnav`)이 내려 주고, 폰과
+           내비가 없는 화면에서는 0 이라 예전과 같습니다. */
+        sticky && 'sticky top-[var(--top-inset,0px)]',
         transparent ? 'bg-transparent' : 'surface',
         titleOnly && 'lg:hidden',
         className,
@@ -66,7 +83,7 @@ export function Header({
     >
       <div className="relative flex h-(--spacing-header) items-center gap-1 px-2">
         {showBack && (
-          <IconButton label="뒤로 가기" onClick={() => navigate(-1)}>
+          <IconButton label="뒤로 가기" onClick={onBack ?? (() => navigate(-1))}>
             <ChevronLeft size={22} />
           </IconButton>
         )}

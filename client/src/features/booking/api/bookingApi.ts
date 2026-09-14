@@ -99,19 +99,21 @@ const toSection = (area: ApiSeatArea): Section => ({
   bounds: { x: area.areaX, y: area.areaY, width: area.width, height: area.height },
 });
 
-const toSeat = (area: ApiSeatArea) => (seat: ApiSeat): Seat => ({
-  id: String(seat.seatId),
-  sectionId: String(area.areaId),
-  type: area.type,
-  row: seat.rowLabel,
-  number: seat.seatNumber,
-  // 좌석 가격은 구역에서 내려옵니다 (좌석별 가격 개념이 서버에 없습니다)
-  price: area.price,
-  status: seat.status,
-  // 스탠딩 가상 좌석은 위치가 없다. 좌석맵에는 그리지 않으므로 모델 기본값만 둔다.
-  x: seat.seatX ?? 0,
-  y: seat.seatY ?? 0,
-});
+const toSeat =
+  (area: ApiSeatArea) =>
+  (seat: ApiSeat): Seat => ({
+    id: String(seat.seatId),
+    sectionId: String(area.areaId),
+    type: area.type,
+    row: seat.rowLabel,
+    number: seat.seatNumber,
+    // 좌석 가격은 구역에서 내려옵니다 (좌석별 가격 개념이 서버에 없습니다)
+    price: area.price,
+    status: seat.status,
+    // 스탠딩 가상 좌석은 위치가 없다. 좌석맵에는 그리지 않으므로 모델 기본값만 둔다.
+    x: seat.seatX ?? 0,
+    y: seat.seatY ?? 0,
+  });
 
 function toSeatMap(api: ApiSeatMap): SeatMapData {
   return {

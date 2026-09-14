@@ -81,7 +81,8 @@ interface ApiPerformanceLayout {
   elements: ApiLayoutElement[] | null;
 }
 
-const num = (value: unknown): number => (typeof value === 'number' && !Number.isNaN(value) ? value : 0);
+const num = (value: unknown): number =>
+  typeof value === 'number' && !Number.isNaN(value) ? value : 0;
 
 const toLayoutElement = (element: ApiLayoutElement): LayoutElement => ({
   type: typeof element.type === 'string' ? element.type : 'ETC',

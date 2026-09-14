@@ -839,7 +839,26 @@
    * `position: sticky` 는 별도로 지정하세요 (이 클래스는 top 만 정합니다).
    */
   .under-header {
-    top: calc(env(safe-area-inset-top) + var(--spacing-header));
+    top: calc(env(safe-area-inset-top) + var(--spacing-header) + var(--top-inset, 0px));
+  }
+
+  /**
+   * 🔴 데스크톱에서 **머리말이 사라지는 화면**은 그만큼 위로 올라와야 합니다.
+   *
+   * 제목만 있는 머리말은 `lg` 이상에서 감춰집니다(Header 의 `titleOnly` → `lg:hidden`).
+   * 상단 내비가 이미 "지금 어디" 를 말하고 있어서인데, 그때도 위 식은 `--spacing-header`
+   * (52px)를 계속 더하고 있었습니다. 그래서 이 줄이 내비보다 52px 아래에 붙고,
+   * **그 사이로 목록의 첫 줄이 비쳐 보였습니다** — 위아래가 잘린 카드 한 줄이
+   * 내비와 검색 줄 사이에 끼어 보이는 증상입니다.
+   *
+   * 머리말이 남아 있는 화면(`showBack` 이 있는 검색·내 경매)은 위 식이 맞으므로
+   * 건드리지 않습니다. 그래서 전부를 바꾸지 않고 **표식이 있는 것만** 고릅니다.
+   * 표식은 Header 가 붙입니다(`data-title-only`) — 둘은 같은 화면의 형제입니다.
+   */
+  @media (width >= 64rem) {
+    header[data-title-only] ~ .under-header {
+      top: var(--top-inset, 0px);
+    }
   }
 
   /**
@@ -892,6 +911,25 @@
    *    **넓은 화면에서도 한 기둥으로 남아야 하는** 것들이 쓰는 유틸리티입니다.
    *    둘을 합치면 데스크톱에서 모달이 화면 끝까지 늘어납니다.
    */
+  /**
+   * 데스크톱 상단 내비(TopNav)가 얹힌 껍데기 — AppLayout 만 붙입니다.
+   *
+   * 🔴 안쪽의 sticky 머리말이 `top: 0` 에 붙으면 **상단 내비 위로 올라탑니다.**
+   * 둘 다 z-30 이라 나중에 그려지는 머리말이 이깁니다. 그래서 내비 높이를 여기서
+   * 내려 주고, 머리말은 그만큼 비켜서 붙습니다.
+   *
+   * 폰에는 상단 내비가 없으므로(hidden lg:block) 0 입니다.
+   */
+  .with-topnav {
+    --top-inset: 0px;
+  }
+  @media (width >= 64rem) {
+    .with-topnav {
+      /* TopNav = 1줄 4rem + 2줄 2.75rem + 아래 테두리 1px */
+      --top-inset: calc(6.75rem + 1px);
+    }
+  }
+
   .app-shell {
     width: 100%;
   }

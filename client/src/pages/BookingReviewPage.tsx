@@ -5,6 +5,7 @@ import { BottomBar, Header } from '@/shared/components/layout';
 import { Badge, Button, Card, Stepper } from '@/shared/components/ui';
 import { BOOKING_STEPS, ROUTES } from '@/shared/constants';
 import { formatPrice } from '@/shared/lib';
+import { useModal } from '@/app/providers';
 import {
   HoldTimer,
   priceLabel,
@@ -27,7 +28,27 @@ export function BookingReviewPage() {
   const { scheduleId = '' } = useParams();
 
   const hold = useBookingStore((s) => s.hold);
-  const { remainSeconds } = useSeatHold(scheduleId);
+  const { remainSeconds, releaseHold } = useSeatHold(scheduleId);
+  const { open } = useModal();
+
+  /**
+   * 좌석 선택으로 돌아갑니다 — **잡아둔 자리를 놓고** 갑니다.
+   *
+   * 🔴 놓지 않고 보내면 1인 1매라 그 회차에서 다른 자리를 잡을 수 없고, 좌석맵에서
+   * 자기가 잡은 자리가 남이 선점한 것처럼 보입니다. 되돌릴 수 없으니 먼저 묻습니다 (4-7).
+   */
+  const askToGoBack = () =>
+    open('common/confirm', {
+      title: '좌석 선택으로 돌아갈까요?',
+      message:
+        '지금 잡아둔 자리가 취소되고 다른 사람이 살 수 있게 됩니다. 같은 자리를 다시 잡지 못할 수 있어요.',
+      confirmText: '돌아가기',
+      danger: true,
+      onConfirm: () => {
+        releaseHold();
+        navigate(ROUTES.BOOKING_SEATS(scheduleId), { replace: true });
+      },
+    });
   const { data: seatMap } = useSeatMap(scheduleId);
   /* 스토어가 비어 있어도 서버에 선점이 남아 있을 수 있습니다 (탭을 닫았다 온 경우).
      확인이 끝나기 전에 내보내면 잡아둔 자리를 두고 구역 선택으로 튕깁니다 */
@@ -52,7 +73,14 @@ export function BookingReviewPage() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <Header title="예매 확인" showBack right={<HoldTimer remainSeconds={remainSeconds} />} />
+      <Header
+        title="예매 확인"
+        showBack
+        /* 🔴 `navigate(-1)` 은 들어온 길을 따라갑니다 — 홈의 "결제를 마치지 않은 자리"
+           카드로 들어오면 홈으로 나가 버립니다. 이 화면의 뒤는 언제나 좌석 선택입니다 */
+        onBack={askToGoBack}
+        right={<HoldTimer remainSeconds={remainSeconds} />}
+      />
       <Stepper steps={BOOKING_STEPS} current={3} />
 
       <div className="flex-1 space-y-4 p-4 pt-1">
