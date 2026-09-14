@@ -47,13 +47,17 @@ export function MyNftsPage() {
           <>
             <ul className="grid grid-cols-2 gap-3">
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
-              {/* 🔴 열 수 있는 팩이 없어도 **산 팩이 있으면** 보여 줍니다 —
-                  결제한 팩이 공연 직전까지 화면에서 사라지면 "안 준 것" 으로 읽힙니다 */}
-              {draw?.available ? (
+              {/* 🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다.
+                  한 칸으로 합치면 "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보여서
+                  산 팩이 사라진 것처럼 읽힙니다. 서버는 잠긴 팩이 있어도 열 수 있는 팩을
+                  정상적으로 꺼내 줍니다 — 하나가 잠겼다고 나머지가 막히지 않습니다. */}
+              {draw && draw.remaining > 0 && (
                 <li>
                   <PocaPackTile count={draw.remaining} onClick={goToDraw} />
                 </li>
-              ) : draw && draw.scheduled > 0 ? (
+              )}
+
+              {draw && draw.scheduled > 0 && (
                 <li>
                   <PocaPackTile
                     count={draw.scheduled}
@@ -61,7 +65,7 @@ export function MyNftsPage() {
                     onClick={goToDraw}
                   />
                 </li>
-              ) : null}
+              )}
 
               {/* 같은 도안은 한 칸으로 — 몇 장인지는 카드가 ×n 으로 알려 줍니다 */}
               {groupPhotocards(cards ?? []).map(({ card, count }) => (
