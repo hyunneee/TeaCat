@@ -297,9 +297,12 @@ export function HomePage() {
               <CatMascot size={52} />
               <div className="min-w-0">
                 <p className="font-bold">로그인하고 예매를 시작하세요</p>
-                <p className="text-muted mt-0.5 text-xs">
-                  얼굴 등록까지 마치면 입장 준비 완료예요.
-                </p>
+                {/* 🔴 [1차 배포] 얼굴 등록을 닫아 두어 아래 한 줄로 바꿨습니다.
+                    2차 배포 때 이 주석을 풀고 지금 줄을 지우세요.
+                    <p className="text-muted mt-0.5 text-xs">
+                      얼굴 등록까지 마치면 입장 준비 완료예요.
+                    </p> */}
+                <p className="text-muted mt-0.5 text-xs">회원가입은 1분이면 끝나요.</p>
               </div>
             </div>
             <div className="flex gap-2">

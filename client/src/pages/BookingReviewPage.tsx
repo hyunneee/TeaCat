@@ -37,7 +37,11 @@ export function BookingReviewPage() {
   const recipients = useRecipients(seatIds);
 
   if (!hold) {
-    return isResuming ? <PageLoader /> : <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />;
+    return isResuming ? (
+      <PageLoader />
+    ) : (
+      <Navigate to={ROUTES.BOOKING_SECTION(scheduleId)} replace />
+    );
   }
 
   const seats = seatMap?.seats.filter((s) => seatIds.includes(s.id)) ?? [];
@@ -48,19 +52,23 @@ export function BookingReviewPage() {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <Header
-        title="예매 확인"
-        showBack
-        right={<HoldTimer remainSeconds={remainSeconds} />}
-      />
+      <Header title="예매 확인" showBack right={<HoldTimer remainSeconds={remainSeconds} />} />
       <Stepper steps={BOOKING_STEPS} current={3} />
 
       <div className="flex-1 space-y-4 p-4 pt-1">
         <Card flat className="flex gap-3">
           <Info size={19} className="text-ink-muted shrink-0" />
+          {/* 🔴 [1차 배포] 얼굴 등록을 닫아 두어 마지막 문장을 뺐습니다.
+              예매를 **확정하기 직전**에 읽는 안내라, 하지 않는 확인을 하겠다고 적어 두면
+              결제 후에 "얼굴은 언제 찍지?" 를 찾아다니게 됩니다.
+              2차 배포 때 이 주석을 풀고 아래 문단을 지우세요.
+              <p className="text-muted text-xs leading-relaxed">
+                티켓은 <b className="text-ink">예매한 본인에게만</b> 발급되며, 발급 후에는 양도할 수
+                없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
+              </p> */}
           <p className="text-muted text-xs leading-relaxed">
             티켓은 <b className="text-ink">예매한 본인에게만</b> 발급되며, 발급 후에는 양도할 수
-            없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
+            없습니다.
           </p>
         </Card>
 
