@@ -26,12 +26,8 @@ import {
 import { Loading, Stagger } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { cn, formatDateTime } from '@/shared/lib';
-<<<<<<< HEAD
 import { useModal } from '@/app/providers';
-import { useAuth } from '@/features/auth';
-=======
 import { can, useAuth } from '@/features/auth';
->>>>>>> origin/dev
 import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHolds, useReleaseMyHold } from '@/features/booking';
 import {
