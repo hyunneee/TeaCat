@@ -86,9 +86,24 @@ export function BookingReviewPage() {
       <div className="flex-1 space-y-4 p-4 pt-1">
         <Card flat className="flex gap-3">
           <Info size={19} className="text-ink-muted shrink-0" />
+          {/* 🔴 [1차 배포] 얼굴 등록을 닫아 두어 마지막 문장을 뺐습니다.
+              예매를 **확정하기 직전**에 읽는 안내라, 하지 않는 확인을 하겠다고 적어 두면
+              결제 후에 "얼굴은 언제 찍지?" 를 찾아다니게 됩니다.
+
+              ⚠️ 얼굴을 여닫는 **스위치는 여기가 아닙니다** — `shared/constants/features.ts`
+                 의 `FEATURE.face` 입니다. 라우트·가드·버튼은 전부 그 값을 보고 자동으로
+                 따라오는데, 이렇게 문장 하나만 빼는 자리는 조건문을 세우면 오히려 읽기
+                 나빠서 주석으로 뒀습니다. **그래서 이 줄은 자동으로 안 돌아옵니다.**
+                 되살릴 때: `FEATURE.face = true` 로 바꾸고 + 이 주석을 풀고 아래 문단을 지우세요.
+                 (같은 성격의 자리가 `HomePage` 에 하나 더 있습니다 — `[1차 배포]` 로 검색) */}
+          {/*
+              <p className="text-muted text-xs leading-relaxed">
+                티켓은 <b className="text-ink">예매한 본인에게만</b> 발급되며, 발급 후에는 양도할 수
+                없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
+              </p> */}
           <p className="text-muted text-xs leading-relaxed">
             티켓은 <b className="text-ink">예매한 본인에게만</b> 발급되며, 발급 후에는 양도할 수
-            없습니다. 입장 시 등록된 얼굴로 본인 확인을 합니다.
+            없습니다.
           </p>
         </Card>
 
