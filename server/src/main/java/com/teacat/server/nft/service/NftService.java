@@ -96,7 +96,21 @@ public class NftService {
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
     }
 
-    public NftPhotocardDetailResponse getPhotocard(Long photocardId) {
+    /**
+     * 포토카드 상세.
+     *
+     * <p>🔴 <b>아무 카드나 보여주지 않는다.</b> 예전에는 ID 만 알면 누구나 열렸다 —
+     * 응답에 소유자 닉네임·공연명·<b>좌석(구역·열·번호)</b> 이 들어 있고 ID 가 순번이라,
+     * 1000001 부터 훑으면 "누가 어느 공연 어느 자리에 앉았는지" 를 통째로 긁을 수 있었다.
+     * 암표를 막자고 만든 서비스에서 가장 내주면 안 되는 조합이다.
+     *
+     * <p>지금은 <b>마켓에 올라온 카드</b>(판매 중·경매 중)와 <b>본인 카드</b>만 열린다.
+     * 나머지는 {@code PHOTOCARD_NOT_FOUND} 로 막는다 — 403 으로 답하면 "그 번호의 카드는
+     * 있다" 를 알려주는 셈이라 열거를 도와준다.
+     *
+     * @param viewerId 로그인하지 않았으면 null (이 경로는 {@code permitAll} 이다)
+     */
+    public NftPhotocardDetailResponse getPhotocard(Long photocardId, Long viewerId) {
         NftMarketQueryRepository.DetailRow row = queryRepository.findPhotocardDetail(photocardId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
@@ -108,10 +122,23 @@ public class NftService {
                         summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
                         summary.bidCount(), summary.endsAt()))
                 .orElse(null);
-        // 뽑기 카드는 티켓·좌석이 없다
+
+        boolean isOwner = viewerId != null && viewerId.equals(row.ownerId());
+        boolean onMarket = listing != null || auction != null;
+        if (!isOwner && !onMarket) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND);
+        }
+
+        /* 뽑기 카드는 티켓·좌석이 없다.
+           🔴 남에게는 **등급·구역까지만** 준다. 열·번호까지 주면 "이 사람이 정확히 어느 자리에
+              앉았다" 가 공개된다 — 카드가 마켓에 올라와 있다고 해서 소유자의 자리를 공개해도
+              된다는 뜻은 아니다. 출처를 증명할 만큼은 남기고 개인을 특정할 만큼은 지운다.
+              본인에게는 전부 준다 (자기 자리는 이미 안다). */
         NftPhotocardDetailResponse.Origin origin = row.hasTicket()
                 ? new NftPhotocardDetailResponse.Origin(
-                        row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber())
+                        row.seatGrade(), row.areaCode(),
+                        isOwner ? row.rowLabel() : null,
+                        isOwner ? row.seatNumber() : null)
                 : null;
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
@@ -251,9 +278,16 @@ public class NftService {
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
     }
 
+    /**
+     * 카드 한 장의 체결 이력.
+     *
+     * <p>🔴 <b>상세와 같은 자물쇠를 씁니다.</b> 여기 담긴 것은 판매자·구매자 닉네임과 체결가라,
+     * 상세만 막고 이쪽을 열어두면 같은 ID 로 같은 사람들을 그대로 긁을 수 있습니다.
+     * 존재 확인을 겸해 {@link #getPhotocard} 를 부르므로, 볼 수 없는 카드면 여기서 404 로 끊깁니다.
+     */
     public NftCursorPageResponse<NftPhotocardTradeHistoryResponse> getPhotocardTrades(
-            Long photocardId, String cursor, Integer requestedSize) {
-        getPhotocard(photocardId);
+            Long photocardId, Long viewerId, String cursor, Integer requestedSize) {
+        getPhotocard(photocardId, viewerId);
         int size = validateSize(requestedSize);
         TimeCursor timeCursor = decodeTimeCursor(cursor, CARD_TRADE_SCOPE);
         List<NftMarketQueryRepository.CardTradeRow> rows = queryRepository.findPhotocardTrades(

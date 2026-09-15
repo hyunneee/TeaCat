@@ -9,6 +9,19 @@ import { useAuth, can } from '@/features/auth';
 import { useBookingStore } from '@/features/booking';
 import { PocaPackGotModal } from '@/features/nft';
 
+/**
+ * 예매 완료.
+ *
+ * 🔴 <b>여기서 나가는 길은 전부 `replace` 입니다.</b> 새 버튼을 추가할 때도 지키세요.
+ *
+ * 한 곳이라도 `push` 면 그 화면에서 뒤로가기를 눌렀을 때 이 페이지로 **되돌아옵니다.**
+ * 그러면 폭죽이 다시 터지고 "예매가 완료되었습니다" 와 카드팩 모달이 또 뜹니다 —
+ * 예매가 한 번 더 된 것처럼 보여서 실제로 혼란스럽다는 제보를 받았습니다
+ * (카드팩 모달의 "보러 가기" 가 `push` 였습니다).
+ *
+ * 결제 승인도 이 화면으로 `replace` 로 들어옵니다(`useConfirmPayment`). 그래서 나갈 때까지
+ * `replace` 로 맞추면 완료 화면은 **히스토리에 아예 남지 않습니다.**
+ */
 export function BookingDonePage() {
   const navigate = useNavigate();
   const { orderId = '' } = useParams();
@@ -43,7 +56,7 @@ export function BookingDonePage() {
       <PocaPackGotModal
         open={gotPack}
         onClose={() => setGotPack(false)}
-        onGo={() => navigate(ROUTES.MY_NFTS)}
+        onGo={() => navigate(ROUTES.MY_NFTS, { replace: true })}
       />
 
       <motion.div
@@ -88,7 +101,12 @@ export function BookingDonePage() {
         {needsFace && (
           /* 흰 화면에 흰 버튼(secondary)을 두면 눌러야 할 게 있는 줄 모릅니다.
              회색 면으로 세우되, 주 행동(내 티켓 보기)보다는 약하게. */
-          <Button size="lg" variant="soft" fullWidth onClick={() => navigate(ROUTES.FACE_REGISTER)}>
+          <Button
+            size="lg"
+            variant="soft"
+            fullWidth
+            onClick={() => navigate(ROUTES.FACE_REGISTER, { replace: true })}
+          >
             얼굴 등록하러 가기
           </Button>
         )}

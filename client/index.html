@@ -10,14 +10,10 @@
     <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="티캣 — 얼굴 인증 기반 암표 방지 티켓 예매 서비스" />
 
-    <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
-    <!-- 본문 글꼴 — Pretendard (한글 자간·숫자 폭이 UI 에 맞습니다)
-         dynamic-subset 은 화면에 실제로 쓰인 글자만 내려받습니다.
-         네트워크가 느리거나 막히면 아래 --font-system 으로 조용히 폴백됩니다. -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link
       rel="stylesheet"
@@ -27,19 +23,7 @@
     <title>티캣</title>
   </head>
   <body>
-    <!-- ⚠️ 예전에 여기 `data-clarity-mask="true"` 가 붙어 있었습니다 (기본 차단).
-         화면을 **선택적으로** 가리는 방식으로 바꾸면서 걷어냈습니다 —
-         마스킹 목록은 이제 `app/router/router.tsx` 의 `withMask` 한 곳에 있습니다.
-         왜 바꿨는지와 무엇을 잃었는지는 CLAUDE.md 7장 "행동 분석" 을 읽으세요.
-
-         🔴 되돌리고 싶으면(= 전부 다시 가리기) 두 `div` 에 속성을 다시 붙이면 됩니다.
-            단 그 순간 `withMask` 는 의미가 없어집니다 — HTML 속성이 대시보드 설정도,
-            하위 노드도 전부 덮습니다. -->
     <div id="root"></div>
-    <!-- 전역 모달/토스트가 붙는 포탈 루트.
-         🔴 여기는 `#root` 의 자식이 **아니라서** `withMask` 가 닿지 않습니다.
-            민감 화면에서 띄우는 모달 내용은 리플레이에 그대로 남습니다.
-            (CLAUDE.md 7장 "행동 분석" 의 남은 구멍) -->
     <div id="modal-root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
