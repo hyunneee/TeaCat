@@ -57,12 +57,21 @@ public class NftController {
 
     @Operation(
             summary = "NFT 포토카드 상세 조회",
-            description = "포토카드의 도안·공연·발행 시각·원발행 좌석·현재 소유자·민팅 상태와 활성 판매 정보를 조회합니다. 판매 중이 아니면 판매 정보는 null입니다."
+            description = "포토카드의 도안·공연·발행 시각·원발행 좌석·현재 소유자·민팅 상태와 활성 판매 정보를 조회합니다. "
+                    + "판매 중이 아니면 판매 정보는 null입니다.\n\n"
+                    + "🔴 **볼 수 있는 카드가 정해져 있습니다** — 마켓에 올라온 카드(판매 중·경매 중)와 "
+                    + "본인이 소유한 카드뿐입니다. 그 밖의 카드는 `NFT_001`(404)입니다. "
+                    + "ID 가 순번이라, 열지 않아도 되는 카드를 열어두면 소유자·공연·좌석을 순서대로 긁을 수 있습니다.\n\n"
+                    + "좌석(`origin`)의 **열·번호는 소유자 본인에게만** 내려갑니다. 남이 볼 때는 등급·구역까지입니다."
     )
     @GetMapping("/photocards/{photocardId}")
     public ResponseEntity<BaseResponse<NftPhotocardDetailResponse>> getPhotocard(
+            /* 이 경로는 permitAll 이라 **비로그인이면 null 입니다.** 토큰이 있으면 필터가
+               채워주므로, 본인 카드인지 판정에 그대로 쓸 수 있습니다. */
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId) {
-        return ResponseEntity.ok(BaseResponse.success(nftService.getPhotocard(photocardId)));
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getPhotocard(photocardId, authUser == null ? null : authUser.id())));
     }
 
     @Operation(
@@ -160,14 +169,19 @@ public class NftController {
 
     @Operation(
             summary = "NFT 포토카드 거래 내역 조회",
-            description = "특정 포토카드에서 체결된 판매자·구매자·체결가 이력을 최신순 커서 기반으로 조회합니다."
+            description = "특정 포토카드에서 체결된 판매자·구매자·체결가 이력을 최신순 커서 기반으로 조회합니다.\n\n"
+                    + "🔴 상세 조회와 **같은 범위**입니다 — 마켓에 올라온 카드와 본인 카드만 볼 수 있고, "
+                    + "그 밖은 `NFT_001`(404)입니다. 여기에 판매자·구매자 닉네임이 담겨 있어서, "
+                    + "상세만 막고 이쪽을 열어두면 같은 정보가 그대로 빠져나갑니다."
     )
     @GetMapping("/photocards/{photocardId}/trades")
     public ResponseEntity<BaseResponse<NftCursorPageResponse<NftPhotocardTradeHistoryResponse>>> getPhotocardTrades(
+            /* 상세와 같은 이유로 비로그인이면 null 입니다 */
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") Integer size) {
-        return ResponseEntity.ok(BaseResponse.success(
-                nftService.getPhotocardTrades(photocardId, cursor, size)));
+        return ResponseEntity.ok(BaseResponse.success(nftService.getPhotocardTrades(
+                photocardId, authUser == null ? null : authUser.id(), cursor, size)));
     }
 }

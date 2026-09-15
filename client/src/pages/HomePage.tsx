@@ -32,6 +32,7 @@ import { BannerCarousel, useBanners, type Banner } from '@/features/banner';
 import { ResumeBookingCard, useActiveHolds, useReleaseMyHold } from '@/features/booking';
 import {
   CONCERT_BOOKING_LABEL,
+  compareForRail,
   isConcertOnRail,
   isConcertOpen,
   posterSeedOf,
@@ -77,7 +78,7 @@ const RAIL_CARD_WIDTH = 'lg:w-[calc((100%-4rem)/5)]';
  * 홈.
  *
  * ── 화면 순서 ─────────────────────────────────────────────
- *   헤더(서비스명 · 검색) → 캐러셀 → 바로가기 5칸 → 진행 중인 티켓팅(가로 레일)
+ *   헤더(서비스명 · 검색) → 캐러셀 → 바로가기 5칸 → 티켓팅 일정(가로 레일)
  *
  * ── 검정/하양 경계 구조 ────────────────────────────────────
  * 상단바와 배너 위쪽 90% 는 짙은 회검정, 배너 아래 10% 부터는 흰 배경입니다.
@@ -119,31 +120,16 @@ export function HomePage() {
     });
 
   /**
-   * 레일에 실을 공연 — **열린 것이 없으면 곧 열릴 것**을 보여줍니다.
+   * 레일에 실을 공연 — **예매중·매진·오픈 예정을 한 줄에** 싣습니다.
    *
-   * 예매중인 공연만 걸러 놓으면 티켓팅 사이는 홈의 이 자리가 통째로 빕니다.
-   * 실제로 그런 날이 훨씬 많습니다(오픈은 몇 분이고 그 사이는 몇 주). 빈 자리를
-   * 본 사람은 "여기 공연이 없구나" 로 읽고 나갑니다 — 등록된 공연이 있는데도요.
+   * 예전에는 열린 공연이 하나라도 있으면 예정을 통째로 감췄습니다. 그래서 "다음에 뭐가
+   * 열리지" 를 홈에서 알 수 없었는데, 티켓팅은 몇 분이고 그 사이는 몇 주라 예정이야말로
+   * 사람들이 홈에 보러 오는 정보였습니다.
    *
-   * 두 목록을 섞지는 않습니다. 섞으면 "예매중" 칩을 일일이 확인해야 지금 살 수
-   * 있는 게 뭔지 알 수 있습니다. 열린 게 하나라도 있으면 그것만, 없을 때만
-   * 예정을 보여주고 **제목도 함께 바꿉니다.**
+   * 섞여도 헷갈리지 않는 것은 카드마다 상태 칩이 붙고(예매중·매진·오픈 예정),
+   * **살 수 있는 것이 앞에 오도록** 정렬하기 때문입니다 (`compareForRail`).
    */
-  const all = concerts ?? [];
-  /* 매진도 남깁니다. 다만 **뒤로 밀지는 않습니다** — 서버가 준 최신 등록순 그대로입니다.
-     🔴 예전에는 살 수 있는 것을 앞에 두려고 매진을 뒤로 보냈는데, 그러면 방금 올린 공연이
-     매진되는 순간 레일 맨 끝으로 가서 새 공연이 홈에서 사라진 것처럼 보였습니다.
-     이 자리는 "무엇이 새로 올라왔나" 를 보여주는 곳이고, 살 수 있는지는 카드의 칩이 말합니다. */
-  const openConcerts = all.filter(isConcertOnRail);
-  const liveRail = openConcerts.length > 0;
-  const rail = (
-    liveRail
-      ? openConcerts
-      : /* 오픈이 임박한 순서로. 서버 목록 순서는 오픈 시각 기준이 아닙니다 */
-        all
-          .filter((c) => c.bookingStatus === 'BEFORE')
-          .sort((a, b) => a.ticketingStartAt.localeCompare(b.ticketingStartAt))
-  ).slice(0, RAIL_LIMIT);
+  const rail = (concerts ?? []).filter(isConcertOnRail).sort(compareForRail).slice(0, RAIL_LIMIT);
 
   /**
    * 얼굴 등록으로 보낼 때는 **지금 위치를 함께 넘깁니다.**
@@ -334,7 +320,7 @@ export function HomePage() {
           </Card>
         )}
 
-        {/* 진행 중인 티켓팅 — 세로로 쌓지 않고 옆으로 밉니다.
+        {/* 티켓팅 일정 — 세로로 쌓지 않고 옆으로 밉니다.
             세로로 쌓으면 두 장만 보여도 화면이 다 차서 아래 내용이 밀려납니다. */}
         <section>
           <SectionTitle
@@ -348,7 +334,8 @@ export function HomePage() {
               </button>
             }
           >
-            {liveRail ? '진행 중인 티켓팅' : '곧 열리는 티켓팅'}
+            {/* 예매중·매진·오픈 예정이 함께 있으므로 어느 한쪽을 가리키는 말을 쓰지 않습니다 */}
+            티켓팅 일정
           </SectionTitle>
 
           {isPending ? (
@@ -365,7 +352,7 @@ export function HomePage() {
                카드 폭을 레일에서 거꾸로 계산합니다 (아래 `RAIL_COLUMNS`).
                자동 흐름은 여기서 끕니다 — 매 프레임 조금씩 미는 방식이라
                멈춰 있는 대부분의 순간에 카드가 반쯤 잘려 있습니다. 넘기는 건 화살표가 합니다. */
-            <Rail label="진행 중인 티켓팅" className="-mx-4 lg:mx-0">
+            <Rail label="티켓팅 일정" className="-mx-4 lg:mx-0">
               {/* 🔴 `lg:w-full` 이 핵심입니다. 폰에서는 `w-max`(내용만큼)라 카드가 넘쳐
                   흐르지만, 데스크톱에서는 트랙을 **레일 폭에 묶어** 둡니다. 그래야 아래
                   카드의 `100%` 가 레일 폭을 가리켜서 "다섯 장이 딱 맞는 폭"이 나옵니다.
@@ -411,11 +398,13 @@ export function HomePage() {
                       </div>
 
                       <p className="mt-2 truncate text-[0.875rem] font-bold">{concert.title}</p>
-                      {/* 예정 카드에서 가장 궁금한 건 장소가 아니라 **언제 열리나** 입니다 */}
+                      {/* 예정 카드에서 가장 궁금한 건 장소가 아니라 **언제 열리나** 입니다.
+                          🔴 **공연마다** 정합니다 — 레일 전체로 정하면 한 줄에 섞여 있는 지금
+                          예정 카드에도 공연장이 뜨거나, 예매중 카드에 오픈 시각이 뜹니다 */}
                       <p className="text-ink-muted truncate text-[0.8125rem]">
-                        {liveRail
-                          ? concert.stadiumName
-                          : `${formatDateTime(concert.ticketingStartAt)} 오픈`}
+                        {concert.bookingStatus === 'BEFORE'
+                          ? `${formatDateTime(concert.ticketingStartAt)} 오픈`
+                          : concert.stadiumName}
                       </p>
                     </motion.button>
                   </li>

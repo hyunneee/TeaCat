@@ -64,6 +64,11 @@ export function Header({
 
   return (
     <header
+      /* 🔴 바로 아래 붙는 `.under-header`(검색·토글 줄)가 **이 머리말이 데스크톱에서
+         사라지는지** 를 알아야 합니다. CSS 는 형제의 `lg:hidden` 을 읽을 수 없어
+         표식을 남깁니다 — `header[data-title-only] ~ .under-header` (styles/index.css).
+         이 속성을 지우면 그 화면들에서 목록 첫 줄이 내비와 검색 줄 사이로 비쳐 보입니다. */
+      data-title-only={titleOnly || undefined}
       className={cn(
         'pt-safe z-30',
         /* 🔴 `top-0` 이 아닙니다 — 데스크톱에는 위에 상단 내비가 있어서,

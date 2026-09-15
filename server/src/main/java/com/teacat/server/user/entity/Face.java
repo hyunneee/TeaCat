@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.Arrays;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -46,6 +47,25 @@ public class Face {
      */
     public static final double SAME_PERSON_THRESHOLD = 0.65;
 
+    /**
+     * 가입할 때 넣어 두는 <b>기본 얼굴</b>의 모델 버전.
+     *
+     * <p>1차 배포에서는 얼굴을 직접 등록하지 않아도 예매까지 갈 수 있어야 한다. 그래서
+     * 가입 시점에 자리만 채워 둔다({@link #defaultFace()}). {@code faceRegistered} 가
+     * true 가 되어 예매 가드가 열린다.
+     *
+     * <p>🔴 <b>진짜 모델 버전을 쓰지 않는 것이 핵심이다.</b> 같은 모델로 적어 두면
+     * 본인 확인이 이 값과 실제 얼굴을 <b>대조하려 든다</b>. 그러면
+     * <ul>
+     *   <li>진짜 사용자는 자기 얼굴로도 늘 거절당하고(저장된 건 남의 값이니까),</li>
+     *   <li>이 기본값을 만들어 낼 수 있는 사람은 <b>아무 계정으로나 통과</b>한다.
+     *       모든 계정이 같은 값을 갖고 있으니 그 자체가 만능 열쇠가 된다.</li>
+     * </ul>
+     * 모델 버전을 다르게 두면 {@link #isSameModel}가 false 라 대조 전에 거절된다
+     * ({@code FACE_MODEL_MISMATCH}). "확인할 수 없음"으로 끝나지, 잘못 통과시키지 않는다.
+     */
+    public static final String DEFAULT_MODEL_VERSION = "bootstrap-default";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -66,6 +86,32 @@ public class Face {
 
     public static Face of(float[] embedding, String modelVersion) {
         return new Face(embedding, modelVersion);
+    }
+
+    /**
+     * 가입할 때 채워 두는 기본 얼굴 (자리 표시).
+     *
+     * <p>🔴 <b>실제 사람의 얼굴에서 뽑은 값이 아니다.</b> 기본 "이미지"를 한 장 정해
+     * 그 임베딩을 넣는 방법도 있지만, 그러면 실존 인물의 생체 특징값이 모든 계정에
+     * 복사되고 그 사진이 곧 만능 열쇠가 된다. 그래서 사람과 무관한 균일 벡터를 쓴다.
+     *
+     * <p>모든 성분이 같은 단위 벡터다. 길이가 0 이면 {@link #cosineSimilarityTo} 가
+     * 항상 0 을 돌려줘 "닮음을 판단할 수 없음"과 구분되지 않으므로 0 벡터는 쓰지 않는다.
+     */
+    public static Face defaultFace() {
+        float[] embedding = new float[EMBEDDING_DIMENSION];
+        Arrays.fill(embedding, (float) (1.0 / Math.sqrt(EMBEDDING_DIMENSION)));
+        return new Face(embedding, DEFAULT_MODEL_VERSION);
+    }
+
+    /**
+     * 가입할 때 채워 둔 자리 표시인가 (사용자가 직접 등록한 것이 아님).
+     *
+     * <p>이 값이면 재등록을 막지 않는다 — 막으면 실제 얼굴을 넣으려는 사람이
+     * "이미 등록됨"으로 거절당해 먼저 삭제부터 해야 한다.
+     */
+    public boolean isDefault() {
+        return DEFAULT_MODEL_VERSION.equals(modelVersion);
     }
 
     /**

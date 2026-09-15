@@ -19,14 +19,60 @@ export function isConcertOpen(concert: ConcertSummary): boolean {
 }
 
 /**
- * 홈 레일에 남길 공연인가 — **매진도 남깁니다.**
+ * 홈 레일에 남길 공연인가 — **끝난 것만 뺍니다.**
  *
  * 🔴 매진됐다고 홈에서 지우면, 표를 산 사람이 자기가 가는 공연을 홈에서 찾지 못합니다.
  * "살 수 있는가" 와 "볼 만한가" 는 다른 질문입니다. 취소표가 나올 수도 있고,
  * 상세에 들어가면 회차별로 무엇이 남았는지 보입니다.
+ *
+ * 🔴 <b>오픈 예정(BEFORE)도 함께 남깁니다.</b> 예전에는 열린 공연이 하나라도 있으면 예정을
+ * 통째로 감췄는데, 그래서 "다음에 뭐가 열리지" 를 홈에서 알 수 없었습니다. 티켓팅은 몇 분이고
+ * 그 사이는 몇 주라, 예정이야말로 사람들이 보러 오는 정보입니다.
+ * 섞여도 헷갈리지 않는 것은 카드마다 상태 칩(예매중·매진·오픈 예정)이 붙기 때문입니다.
+ *
+ * 상태를 명시적으로 나열합니다 — `!== 'CLOSED'` 로 쓰면 서버가 값을 안 준 공연(구버전 응답)이
+ * 조용히 섞여 들어와 칩이 빈 채로 그려집니다.
  */
 export function isConcertOnRail(concert: ConcertSummary): boolean {
-  return concert.bookingStatus === 'OPEN' || concert.bookingStatus === 'SOLDOUT';
+  return (
+    concert.bookingStatus === 'OPEN' ||
+    concert.bookingStatus === 'SOLDOUT' ||
+    concert.bookingStatus === 'BEFORE'
+  );
+}
+
+/**
+ * 홈 레일 정렬 순서. **티켓팅이 진행 중인 것이 앞, 곧 열릴 것이 뒤**입니다.
+ *
+ * 🔴 **매진을 예매중 뒤로 보내지 않습니다 — 같은 칸입니다.** 떨어뜨려 놓았더니 방금 올린
+ * 공연이 매진되는 순간 레일 맨 끝으로 가서, 새 공연이 홈에서 사라진 것처럼 보였습니다.
+ * 이 둘 사이 순서는 서버가 준 최신 등록순 그대로 둡니다(같은 값이면 정렬이 자리를
+ * 바꾸지 않습니다). 살 수 있는지는 카드의 상태 칩이 말합니다.
+ */
+const RAIL_ORDER: Record<BookingOpenStatus, number> = {
+  OPEN: 0,
+  SOLDOUT: 0,
+  BEFORE: 1,
+  CLOSED: 2,
+};
+
+/**
+ * 홈 레일 정렬 — **티켓팅이 진행 중인 것이 먼저**입니다.
+ *
+ * 예정을 함께 싣게 되면서 순서가 중요해졌습니다. 서버 목록 순서를 그대로 쓰면 오픈 예정이
+ * 맨 앞에 올 수 있고, 그러면 지금 살 수 있는 공연이 레일 밖으로 밀려 안 보입니다.
+ *
+ * 진행 중인 것끼리(예매중·매진)는 **최신 등록순** 그대로입니다 — 위 `RAIL_ORDER` 주석 참고.
+ * 오픈 예정끼리는 **임박한 순서**입니다 — 다음 티켓팅이 언제인지가 그 칸의 용건입니다.
+ */
+export function compareForRail(a: ConcertSummary, b: ConcertSummary): number {
+  const byStatus = RAIL_ORDER[a.bookingStatus] - RAIL_ORDER[b.bookingStatus];
+  if (byStatus !== 0) return byStatus;
+
+  if (a.bookingStatus === 'BEFORE') {
+    return a.ticketingStartAt.localeCompare(b.ticketingStartAt);
+  }
+  return 0;
 }
 
 /** 목록 카드 칩 문구. 회차 목록의 문구(`scheduleStatusLabel`)와 달리 공연 한 건을 요약합니다 */

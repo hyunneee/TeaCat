@@ -97,7 +97,9 @@ public class UserService {
     public void registerFace(Long userId, FaceRegisterRequest request) {
         User user = getUser(userId);
 
-        if (user.hasFace()) {
+        /* 가입할 때 채워 둔 자리 표시는 그냥 덮어쓴다. 막으면 실제 얼굴을 넣으려는
+           사람이 "이미 등록됨"으로 거절당해 삭제부터 해야 한다 (Face.isDefault) */
+        if (user.hasFace() && !user.getFace().isDefault()) {
             throw new BusinessException(UserErrorCode.FACE_ALREADY_REGISTERED);
         }
         if (request.embedding().length != Face.EMBEDDING_DIMENSION) {

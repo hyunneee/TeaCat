@@ -1,7 +1,7 @@
-import { Coins, KeyRound, Pencil, ScanFace, UserMinus } from 'lucide-react';
+import { ChevronRight, KeyRound, Pencil } from 'lucide-react';
 import { Badge, Button, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
-import { ROLE_LABEL, rolesWithWallet } from '../model/adminUser.model';
+import { ROLE_LABEL } from '../model/adminUser.model';
 import type { AdminUser } from '../model/adminUser.types';
 
 /**
@@ -15,12 +15,10 @@ export interface AdminUserTableProps {
   isLoading: boolean;
   /** 지금 로그인한 관리자 본인 — 자기 행은 동작 버튼을 숨깁니다 */
   currentUserId: number | undefined;
+  /** 행을 누르면 회원 상세로 — 예매·포카와 위험한 동작은 전부 거기에 있습니다 */
+  onOpen: (user: AdminUser) => void;
   onEdit: (user: AdminUser) => void;
   onResetPassword: (user: AdminUser) => void;
-  onDeleteFace: (user: AdminUser) => void;
-  onWithdraw: (user: AdminUser) => void;
-  /** 캣머니 조정(테스트용) — 지갑이 있는 역할에만 보입니다 */
-  onAdjustCatMoney: (user: AdminUser) => void;
 }
 
 const HEADERS = ['회원', '연락처', '역할', '얼굴', '가입일', ''] as const;
@@ -32,11 +30,9 @@ export function AdminUserTable({
   users,
   isLoading,
   currentUserId,
+  onOpen,
   onEdit,
   onResetPassword,
-  onDeleteFace,
-  onWithdraw,
-  onAdjustCatMoney,
 }: AdminUserTableProps) {
   if (isLoading) {
     return (
@@ -80,9 +76,13 @@ export function AdminUserTable({
             const isSelf = user.userId === currentUserId;
 
             return (
+              /* 행 전체가 상세로 가는 길입니다. 안쪽 버튼은 클릭이 행까지 올라가지 않게
+                 따로 막습니다(아래 stopPropagation) — 안 막으면 "수정" 을 눌렀는데
+                 모달이 뜨면서 화면까지 바뀝니다 */
               <tr
                 key={user.userId}
-                className="border-line/60 hover:bg-surface-2 border-b last:border-0"
+                onClick={() => onOpen(user)}
+                className="border-line/60 hover:bg-surface-2 cursor-pointer border-b last:border-0"
               >
                 <td className="px-4 py-3">
                   <p className="text-ink font-medium">
@@ -115,7 +115,14 @@ export function AdminUserTable({
                   {formatDate(user.createdAt)}
                 </td>
 
-                <td className="px-4 py-3">
+                {/* 🔴 여기 남은 것은 **자주 쓰는 둘**뿐입니다. 얼굴 삭제·탈퇴·캣머니 조정은
+                    회원 상세로 옮겼습니다 — 행이 촘촘해 옆 사람 줄을 누르기 쉬웠고,
+                    되돌릴 수 없는 동작을 그런 자리에 둘 이유가 없습니다. */}
+                <td
+                  className="px-4 py-3"
+                  /* 버튼 칸에서 난 클릭은 행까지 올리지 않습니다 */
+                  onClick={(event) => event.stopPropagation()}
+                >
                   {isSelf ? (
                     /* 본인 계정은 서버가 거절합니다 (USER_011). 누를 수 있게 두면
                        눌렀을 때 실패하는 버튼이 됩니다. */
@@ -131,19 +138,6 @@ export function AdminUserTable({
                         수정
                       </Button>
 
-                      {/* 지갑이 없는 역할(운영진)은 서버가 거절합니다 — 캣머니를 쓸 일도
-                          없어서 지갑을 발급하지 않습니다 (AdminUserService.create) */}
-                      {rolesWithWallet.includes(user.role) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={<Coins size={14} />}
-                          onClick={() => onAdjustCatMoney(user)}
-                        >
-                          캣머니
-                        </Button>
-                      )}
-
                       {/* SSAFY 전용 계정은 비밀번호가 없어 서버가 거절합니다 */}
                       {!user.socialOnly && (
                         <Button
@@ -156,26 +150,7 @@ export function AdminUserTable({
                         </Button>
                       )}
 
-                      {user.faceRegistered && (
-                        <Button
-                          variant="danger-ghost"
-                          size="sm"
-                          leftIcon={<ScanFace size={14} />}
-                          onClick={() => onDeleteFace(user)}
-                        >
-                          얼굴 삭제
-                        </Button>
-                      )}
-
-                      {/* 되돌릴 수 없는 동작은 붉게 (DESIGN.md 1장 / CLAUDE.md 4-7) */}
-                      <Button
-                        variant="danger-ghost"
-                        size="sm"
-                        leftIcon={<UserMinus size={14} />}
-                        onClick={() => onWithdraw(user)}
-                      >
-                        탈퇴
-                      </Button>
+                      <ChevronRight size={16} className="text-ink-subtle ml-1" aria-hidden />
                     </div>
                   )}
                 </td>
