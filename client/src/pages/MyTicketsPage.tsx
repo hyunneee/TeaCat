@@ -54,7 +54,7 @@ export function MyTicketsPage() {
           목록 화면들의 검색창이 모두 머리말 바로 아래 같은 높이에 있어야
           탭을 옮겨 다녀도 눈이 헤매지 않습니다. 그래서 DOM 순서는 그대로 두고
           가로로 펼 때만 자리를 바꿉니다(`lg:order-*`). */}
-      <div className="space-y-4 p-4 lg:flex lg:items-start lg:gap-3 lg:space-y-0 lg:px-0">
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:flex lg:items-center lg:gap-3 lg:px-0 lg:pt-3">
         <div className="lg:order-2 lg:ml-auto lg:w-full lg:max-w-xs">
           {/* 검색·공연 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고) */}
           <Input
@@ -72,11 +72,11 @@ export function MyTicketsPage() {
           options={TABS}
           value={tab}
           onChange={setTab}
-          className="lg:order-1 lg:w-72 lg:shrink-0"
+          className="mt-2 lg:order-1 lg:mt-0 lg:w-72 lg:shrink-0"
         />
       </div>
 
-      <div className="p-4 pt-0 lg:px-0 lg:pt-1">
+      <div className="p-4 pt-3 lg:px-0">
         {isPending ? (
           <Loading label="티켓을 불러오는 중" />
         ) : filtered.length === 0 ? (

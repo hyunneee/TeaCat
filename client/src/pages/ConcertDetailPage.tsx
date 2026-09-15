@@ -2,13 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CalendarDays, MapPin, ShieldAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import {
-  Card,
-  Lightbox,
-  PosterImage,
-  SectionTitle,
-  Skeleton,
-} from '@/shared/components/ui';
+import { Card, Lightbox, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
@@ -66,7 +60,7 @@ export function ConcertDetailPage() {
   if (!isConcertId) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <EmptyState
           mood="sad"
           title="페이지를 찾을 수 없어요"
@@ -79,7 +73,7 @@ export function ConcertDetailPage() {
   if (isPending) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <div className="space-y-4 p-4">
           <Skeleton className="aspect-[3/4] w-40" />
           <Skeleton className="h-6 w-2/3" />
@@ -92,7 +86,7 @@ export function ConcertDetailPage() {
   if (isError || !concert) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <EmptyState icon={ShieldAlert} title="공연 정보를 불러오지 못했어요" />
       </>
     );
@@ -105,7 +99,7 @@ export function ConcertDetailPage() {
       {/* 🔴 수정 버튼을 두지 않습니다. 공연 관리는 어드민 콘솔(`/admin`)로 옮기기로 했습니다 —
           여기는 관람객이 보는 화면입니다. 수정 화면(`/concerts/:id/edit`)과 라우트 가드는
           그대로 살아 있으니, 어드민에 "공연 관리" 메뉴가 생기면 거기서 이어 붙이면 됩니다. */}
-      <Header title={concert.title} showBack />
+      <Header title={concert.title} showBack className="lg:hidden" />
 
       <Lightbox
         open={posterZoomed}
@@ -150,7 +144,7 @@ export function ConcertDetailPage() {
               <MapPin size={13} className="mt-0.5 shrink-0" />
               <span className="min-w-0">
                 <span className="block break-keep">{concert.stadium.name}</span>
-                <span className="text-subtle block break-keep text-xs">
+                <span className="text-subtle block text-xs break-keep">
                   {concert.stadium.address}
                 </span>
               </span>
