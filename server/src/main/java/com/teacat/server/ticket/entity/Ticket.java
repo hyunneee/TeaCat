@@ -19,6 +19,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Array;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -60,14 +61,31 @@ public class Ticket {
     private Seat seat;
 
     /**
-     * 입장 시 본인 확인에 쓸 얼굴.
+     * 입장 시 본인 확인에 쓸 얼굴 — 예매 시점의 <b>복사본</b>이다.
      *
-     * 예매 시점에 등록돼 있던 얼굴을 고정해 둔다. 나중에 회원이 얼굴을 바꿔도 이 티켓이 어떤
-     * 얼굴로 발권됐는지는 남아야 한다. NOT NULL 이라 얼굴 없이는 발권되지 않는다.
+     * <p>🔴 <b>faces 행을 가리키지 않는다.</b> 예전에는 외래키였는데, 그러면 회원이 얼굴을
+     * 지우려 할 때 "티켓이 아직 쓰고 있다" 며 DB 가 막았다 — 예매를 한 번이라도 한 회원은
+     * 얼굴 삭제도 탈퇴도 못 했다. 원래 의도가 "예매 당시 얼굴을 남긴다" 였으므로, 가리키는
+     * 대신 <b>베껴 둔다.</b> 원본을 지워도 이 값은 그대로다.
+     *
+     * <p>⚠️ 그 대가로 같은 생체정보가 <b>예매 건수만큼 복사된다.</b> 그래서 파기 범위를 따질 때
+     * faces 만 보면 안 된다 — <b>여기까지 두 곳</b>이다 (server/CLAUDE.md 6장).
+     *
+     * <p><b>탈퇴하면 이 값도 지운다</b>({@code TicketRepository.eraseFaceOf}). 얼굴 삭제와는
+     * 다르게 다룬다 — 얼굴 삭제는 "프로필에서 얼굴을 뺀다" 라 발권 기록은 남고, 탈퇴는
+     * "나를 지운다" 라 복사본까지 파기해야 고지한 대로가 된다. 그래서 <b>null 이 될 수 있고</b>
+     * ({@code V20260915_1010}) 발권 후에도 <b>바뀔 수 있다</b>(= {@code updatable} 을 막지 않는다).
+     *
+     * <p>모델 버전을 함께 베끼는 이유는 대조 때문이다 — 모델이 다르면 좌표계가 달라 비교
+     * 자체가 성립하지 않는다. 임베딩만 남기면 "이걸 무엇과 견줄 수 있는지" 를 알 수 없다.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "face_id", nullable = false, updatable = false)
-    private Face face;
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    @Array(length = Face.EMBEDDING_DIMENSION)
+    @Column(name = "face_embedding")
+    private float[] faceEmbedding;
+
+    @Column(name = "face_model_version", length = 50)
+    private String faceModelVersion;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -83,7 +101,11 @@ public class Ticket {
         this.performanceDetail = performanceDetail;
         this.area = area;
         this.seat = seat;
-        this.face = face;
+        /* 🔴 `face` 를 그대로 들고 있지 않고 **값만 베낀다.** 참조로 남기면 회원이 얼굴을
+           지울 때 이 티켓이 원본을 붙잡아 삭제를 막는다 (위 필드 주석).
+           배열은 복사한다 — 같은 배열을 공유하면 원본이 바뀔 때 발권 기록도 따라 바뀐다. */
+        this.faceEmbedding = face.getEmbedding().clone();
+        this.faceModelVersion = face.getModelVersion();
         this.status = TicketStatus.CONFIRMED;
     }
 
