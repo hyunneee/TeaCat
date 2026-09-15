@@ -38,6 +38,10 @@ scrape_configs:
     #    (server/src/main/resources/application.yaml 의 management.server.port)
     metrics_path: /actuator/prometheus
     static_configs:
+      # 🔴 운영은 블루-그린이라 컨테이너 이름이 prod-server-blue|green 으로 바뀐다.
+      #    여기를 색 이름으로 고치지 마라 — 전환할 때마다 타겟이 DOWN 이 된다.
+      #    prod-server 는 두 색이 함께 다는 **네트워크 별칭**이고, 한 번에 한 색만
+      #    살아 있어 그대로 풀린다 (docker/docker-compose.prod.yml).
       - targets: ['prod-server:8081']
         labels: { service: server, env: prod }
       - targets: ['dev-server:8081']
