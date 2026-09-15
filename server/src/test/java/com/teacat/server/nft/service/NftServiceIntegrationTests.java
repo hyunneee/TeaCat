@@ -1207,8 +1207,8 @@ class NftServiceIntegrationTests {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, areaId, seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, scheduleId, areaId, seatId, faceId);
     }
 
@@ -1309,20 +1309,20 @@ class NftServiceIntegrationTests {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, fixture.areaId(), seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, faceId);
     }
 
     private Long insertStandingTicket(Long userId, Fixture fixture) {
         Long faceId = insertFace();
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, NULL, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, NULL, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), faceId);
     }
 
-    /** tickets.face_id 가 NOT NULL 이라 (V20260904_1430) 티켓마다 얼굴 행이 하나 필요하다 */
+    /** 티켓에 베껴 넣을 얼굴을 하나 만든다 (tickets 는 이제 faces 를 가리키지 않고 값을 복사한다) */
     private Long insertFace() {
         String zeros = "[" + "0,".repeat(127) + "0]";
         return jdbcTemplate.queryForObject("""

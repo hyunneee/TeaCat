@@ -11,6 +11,7 @@ import com.teacat.server.user.dto.response.AdminUserStatsResponse;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.entity.UserRole;
 import com.teacat.server.user.exception.UserErrorCode;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.user.repository.UserRepository;
 import com.teacat.server.wallet.service.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,8 @@ public class AdminUserService {
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
     private final WalletService walletService;
+    /** 탈퇴할 때 티켓에 베껴 둔 얼굴까지 지우려면 필요합니다 (User.withdraw 주석) */
+    private final TicketRepository ticketRepository;
 
     /* ── 조회 ────────────────────────────────────────────────── */
 
@@ -218,6 +221,9 @@ public class AdminUserService {
         requireAnotherAdminIfDemoting(user, null);
 
         user.withdraw(LocalDateTime.now());
+        /* 🔴 본인 탈퇴(UserService.withdraw)와 **같이** 티켓의 얼굴 복사본도 지운다.
+           탈퇴 경로가 둘이라 한쪽만 지우면 관리자가 내린 탈퇴만 생체정보가 남는다. */
+        ticketRepository.eraseFaceOf(userId);
         authService.revokeAllSessions(userId);
 
         log.info("관리자가 회원을 탈퇴 처리했습니다. userId={}", userId);

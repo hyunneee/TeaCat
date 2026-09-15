@@ -176,7 +176,14 @@ public class User {
         return this.face != null;
     }
 
-    /** 회원 탈퇴 (API-106). 생체정보는 지연 없이 파기하고, 나머지 개인정보는 파기 절차 대상으로 남긴다. */
+    /**
+     * 회원 탈퇴 (API-106). 생체정보는 지연 없이 파기하고, 나머지 개인정보는 파기 절차 대상으로 남긴다.
+     *
+     * <p>🔴 <b>여기서 지우는 것은 `faces` 행 하나뿐이다.</b> 티켓이 예매 당시 얼굴을 <b>베껴</b>
+     * 갖고 있으므로({@code tickets.face_embedding}), 그 복사본은 부르는 쪽이 함께 지워야 한다 —
+     * {@code TicketRepository.eraseFaceOf(userId)}. 엔티티는 리포지토리를 모르니 여기서 할 수 없다.
+     * 탈퇴 경로는 두 곳이다({@code UserService}·{@code AdminUserService}) — 한쪽만 고치지 마세요.
+     */
     public void withdraw(LocalDateTime withdrawnAt) {
         this.deletedAt = withdrawnAt;
         removeFace();
