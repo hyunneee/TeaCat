@@ -82,6 +82,10 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminUserDetailPage = page(
+  () => import('@/pages/AdminUserDetailPage'),
+  'AdminUserDetailPage',
+);
 const AdminBannersPage = page(() => import('@/pages/AdminBannersPage'), 'AdminBannersPage');
 const AdminPackEventsPage = page(
   () => import('@/pages/AdminPackEventsPage'),
@@ -263,6 +267,11 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  {
+                    /* 개인정보 마스킹은 위 AdminLayout 의 withMask 가 이미 덮습니다 */
+                    path: ROUTES.ADMIN_USER_DETAIL(':userId'),
+                    element: withBoundary(<AdminUserDetailPage />),
+                  },
                   { path: ROUTES.ADMIN_INQUIRIES, element: withBoundary(<AdminInquiriesPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
                   {

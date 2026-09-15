@@ -10,6 +10,15 @@
 // Controller
 export { useAdminUsers, useAdminUserStats } from './hooks/useAdminUsers';
 export { useAdminUserManagement } from './hooks/useAdminUserManagement';
+/* 회원 상세 — 목록과 달리 "그 회원 한 명" 을 다룹니다 */
+export { useAdminUserDetail, USER_DETAIL_TABS } from './hooks/useAdminUserDetail';
+export type { UserDetailTab } from './hooks/useAdminUserDetail';
+export {
+  useAdminUserTickets,
+  useAdminUserPhotocards,
+  useAdminUserPurchases,
+  useAdminUserSales,
+} from './hooks/useAdminUserRecords';
 export {
   useAdminInquiries,
   useAdminInquiry,
@@ -50,6 +59,13 @@ export { AdminPasswordResetModal } from './components/AdminPasswordResetModal';
    않습니다 — 이 기능을 쓰는 화면은 회원 관리 하나뿐입니다 */
 export { AdminCatMoneyModal } from './components/AdminCatMoneyModal';
 
+// View — 회원 상세 (예매·포카 탭)
+export { AdminUserProfileCard } from './components/AdminUserProfileCard';
+export { AdminRecordTable } from './components/AdminRecordTable';
+export { AdminUserTicketTable } from './components/AdminUserTicketTable';
+export { AdminUserPhotocardTable } from './components/AdminUserPhotocardTable';
+export { AdminUserTradeTables } from './components/AdminUserTradeTables';
+
 // View — 문의 관리
 export { AdminInquiryTable } from './components/AdminInquiryTable';
 export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
@@ -68,6 +84,7 @@ export { TrendLineChart } from './components/TrendLineChart';
 
 // Model
 export { adminUserApi, adminKeys } from './api/adminUserApi';
+export { adminUserRecordsApi, adminUserRecordKeys } from './api/adminUserRecordsApi';
 export { adminCatMoneyApi, adminCatMoneyKeys } from './api/adminCatMoneyApi';
 export type {
   AdminCatMoneyBalance,

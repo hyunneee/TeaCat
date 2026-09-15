@@ -1,6 +1,5 @@
-import { Card, ConfirmModal } from '@/shared/components/ui';
+import { Card } from '@/shared/components/ui';
 import {
-  AdminCatMoneyModal,
   AdminPagination,
   AdminPasswordResetModal,
   AdminUserCreateModal,
@@ -42,11 +41,9 @@ export function AdminUsersPage() {
           users={page?.users ?? []}
           isLoading={m.list.isPending}
           currentUserId={m.me?.userId}
+          onOpen={m.openDetail}
           onEdit={m.openEdit}
           onResetPassword={m.openResetPassword}
-          onDeleteFace={m.openDeleteFace}
-          onWithdraw={m.openWithdraw}
-          onAdjustCatMoney={m.openCatMoney}
         />
 
         <AdminPagination
@@ -78,24 +75,8 @@ export function AdminUsersPage() {
         isPending={m.resetPassword.isPending}
       />
 
-      {/* 테스트용 캣머니 조정 — 지갑이 있는 역할(USER)에만 버튼이 보입니다 */}
-      <AdminCatMoneyModal user={m.adjustingCatMoney} onClose={m.closeCatMoney} />
-
-      {/* 되돌릴 수 없는 동작은 확인 모달 + danger (CLAUDE.md 4-7) */}
-      {m.confirming && (
-        <ConfirmModal
-          danger
-          title={m.confirming.kind === 'face' ? '얼굴 정보를 삭제할까요?' : '회원을 탈퇴 처리할까요?'}
-          message={
-            m.confirming.kind === 'face'
-              ? `${m.confirming.user.nickname}님의 얼굴 정보를 지웁니다. 재등록은 본인만 할 수 있고, 등록 전까지 티켓을 사용할 수 없어요.`
-              : `${m.confirming.user.nickname}님(${m.confirming.user.email})을 탈퇴 처리합니다. 얼굴 정보가 즉시 파기되고 모든 기기에서 로그아웃됩니다. 되돌릴 수 없어요.`
-          }
-          confirmText={m.confirming.kind === 'face' ? '삭제' : '탈퇴 처리'}
-          onConfirm={m.confirm}
-          onClose={m.closeConfirm}
-        />
-      )}
+      {/* 🔴 캣머니 조정·얼굴 삭제·탈퇴 확인 모달은 여기 없습니다 —
+          회원 상세(AdminUserDetailPage)로 옮겼습니다 */}
     </div>
   );
 }
