@@ -106,6 +106,8 @@ export const ROUTES = {
         `features/admin` 의 ADMIN_MENU 에 한 줄만 추가하면 됩니다. */
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** 회원 상세 — 예매·포카를 탭으로 봅니다. 되돌릴 수 없는 동작도 여기에 모읍니다 */
+  ADMIN_USER_DETAIL: (userId: string) => `/admin/users/${userId}`,
   MONITORING: '/admin/monitoring',
   ADMIN_STADIUM: '/admin/stadium',
   ADMIN_STADIUMS: '/admin/stadiums',
