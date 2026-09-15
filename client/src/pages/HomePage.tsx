@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
@@ -5,10 +6,10 @@ import {
   Hourglass,
   MessageSquare,
   Images,
+  Receipt,
   ScanFace,
   Search,
   Ticket,
-  UserRound,
 } from 'lucide-react';
 import {
   Badge,
@@ -20,6 +21,7 @@ import {
   PosterImage,
   RAIL_ANCHOR,
   Rail,
+  Segmented,
   SectionTitle,
   Skeleton,
 } from '@/shared/components/ui';
@@ -38,6 +40,8 @@ import {
   posterSeedOf,
   useConcerts,
 } from '@/features/concert';
+import { AuctionCard, useAuctions } from '@/features/auction';
+import { NftCard, useNftMarket } from '@/features/nft';
 
 /**
  * 바로가기 — **5칸 한 줄.**
@@ -49,12 +53,17 @@ import {
 const SHORTCUTS = [
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
   { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
-  /* 캣머니 자리였습니다. 잔액은 MY 상단에 이미 큰 숫자로 있어서 같은 목적지가 두 번
-     나오는 셈이었고, 대신 막혔을 때 말할 곳이 홈에 없었습니다 */
-  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
   { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
-  { to: ROUTES.MY, label: '마이', icon: UserRound },
+  { to: ROUTES.MY_NFT_TRADES, label: '거래내역', icon: Receipt },
+  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
 ] as const;
+
+const MARKET_MODES = [
+  { value: 'SHOP', label: '판매 중' },
+  { value: 'AUCTION', label: '경매 중' },
+] as const;
+
+type MarketMode = (typeof MARKET_MODES)[number]['value'];
 
 /** 가로 레일에 몇 장까지 실을지. 너무 많으면 끝까지 미는 사람이 없습니다. */
 const RAIL_LIMIT = 8;
@@ -99,9 +108,13 @@ const RAIL_CARD_WIDTH = 'lg:w-[calc((100%-4rem)/5)]';
 export function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [marketMode, setMarketMode] = useState<MarketMode>('SHOP');
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
+  /* 홈에서는 거래 중인 일부만 보여줍니다. 전체 목록은 포카 탭에 있습니다. */
+  const { data: marketPocas, isPending: marketPending } = useNftMarket();
+  const { data: marketAuctions, isPending: auctionPending } = useAuctions();
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const activeHolds = useActiveHolds();
@@ -414,10 +427,91 @@ export function HomePage() {
           )}
         </section>
 
-        {/* 🔴 "새로 올라온 포토카드" 레일은 1차 배포에서 뺐습니다.
-            마켓(구매·판매)이 닫혀 있어(`/nft` → ComingSoonPage) 살 수 없는 물건을
-            홈에서 권하는 꼴이 됩니다. 2차 배포 때 이 자리에 되돌립니다 —
-            `useNftMarket()` 조회와 `pocaRail` 자동 스크롤도 함께 지웠습니다. */}
+        {/* 포카 거래 — 고정가 판매와 경매를 한 레일에서 바꿔 봅니다.
+            현재 거래 도메인에는 구매 희망 주문이 없어, 실제로 존재하는 두 거래 방식을 보여줍니다. */}
+        <section>
+          <SectionTitle
+            action={
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    marketMode === 'AUCTION'
+                      ? `${ROUTES.NFT_MARKET}?mode=auction`
+                      : ROUTES.NFT_MARKET,
+                  )
+                }
+                className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
+              >
+                더보기 <ChevronRight size={13} />
+              </button>
+            }
+          >
+            포카 마켓
+          </SectionTitle>
+
+          <Segmented
+            options={MARKET_MODES}
+            value={marketMode}
+            onChange={setMarketMode}
+            className="mb-3 w-48"
+          />
+
+          {marketMode === 'SHOP' ? (
+            marketPending ? (
+              <Loading label="판매 중인 포카를 불러오는 중" className="min-h-0 py-8" />
+            ) : !marketPocas || marketPocas.length === 0 ? (
+              <p className="text-subtle py-8 text-center text-sm">판매 중인 포카가 없어요.</p>
+            ) : (
+              <Rail label="판매 중인 포카" className="-mx-4 lg:mx-0">
+                <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                  {marketPocas.slice(0, RAIL_LIMIT).map((card) => (
+                    <li
+                      key={card.photocardId}
+                      className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                    >
+                      <NftCard
+                        photocardId={card.photocardId}
+                        designName={card.designName}
+                        imageUrl={card.imageUrl}
+                        performanceTitle={card.performanceTitle}
+                        price={card.price}
+                        onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Rail>
+            )
+          ) : auctionPending ? (
+            <Loading label="진행 중인 경매를 불러오는 중" className="min-h-0 py-8" />
+          ) : !marketAuctions || marketAuctions.length === 0 ? (
+            <p className="text-subtle py-8 text-center text-sm">진행 중인 경매가 없어요.</p>
+          ) : (
+            <Rail label="진행 중인 경매" className="-mx-4 lg:mx-0">
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                {marketAuctions.slice(0, RAIL_LIMIT).map((auction) => (
+                  <li
+                    key={auction.auctionId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
+                    <AuctionCard
+                      photocardId={auction.photocardId}
+                      designName={auction.designName}
+                      imageUrl={auction.imageUrl}
+                      performanceTitle={auction.performanceTitle}
+                      currentPrice={auction.currentPrice}
+                      bidCount={auction.bidCount}
+                      endsAt={auction.endsAt}
+                      buyNowPrice={auction.buyNowPrice}
+                      onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </Rail>
+          )}
+        </section>
       </div>
     </div>
   );
