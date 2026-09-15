@@ -46,9 +46,9 @@ export function MyNftsPage() {
 
   return (
     <>
-      <Header title="내 포토카드" showBack />
+      <Header title="내 포토카드" />
 
-      <div className="p-4">
+      <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
         {isPending ? (
           <Loading label="포토카드를 불러오는 중" />
         ) : nothing ? (
@@ -58,7 +58,7 @@ export function MyNftsPage() {
           />
         ) : (
           <>
-            <ul className="grid grid-cols-2 gap-3">
+            <ul className="grid grid-cols-2 gap-3 lg:gap-4">
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
               {/* 🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다.
                   한 칸으로 합치면 "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보여서

@@ -9,13 +9,7 @@ import { TABS, useActiveIndex } from './navTabs';
 /** 본문과 같은 폭으로 맞춥니다 — 로고가 본문 왼쪽 끝과 한 줄로 서야 기둥이 하나로 보입니다 */
 const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
 
-/**
- * 탭 줄에서는 **MY 를 뺍니다.** 바로 윗줄 오른쪽에 이미 MY 가 있어서,
- * 그대로 두면 한 머리말 안에 같은 목적지가 두 번 나옵니다.
- * (폰의 하단 탭은 윗줄이 없으므로 다섯 개 그대로입니다 — `navTabs` 의 TABS)
- *
- * 지금 상태는 윗줄 MY 링크가 대신 표시합니다.
- */
+/** 데스크톱에서는 오른쪽 위 계정 링크와 겹치는 MY만 둘째 줄에서 뺍니다. */
 const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
 
 /**
@@ -37,7 +31,6 @@ const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
 export function TopNav() {
   const navigate = useNavigate();
   const activeIndex = useActiveIndex();
-  /* 탭 목록이 폰과 달라(MY 제외) 인덱스로는 짝이 안 맞습니다. 경로로 비교합니다 */
   const activeTo = activeIndex >= 0 ? TABS[activeIndex]!.to : null;
   const [keyword, setKeyword] = useState('');
 
