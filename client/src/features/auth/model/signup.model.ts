@@ -42,7 +42,9 @@ export interface SignupFieldSpec {
 }
 
 /** 서버와 같은 규칙입니다 (SignupRequest) */
-const NICKNAME_PATTERN = /^[가-힣a-zA-Z0-9]{2,20}$/;
+/* ㄱ-ㅣ 는 호환 자모(자음 ㄱ~ㅎ + 모음 ㅏ~ㅣ) 전체입니다 — "ㅎㅁ" 처럼 자음만 쓴 닉네임을
+   막지 않으려고 넣었습니다. 서버의 @Pattern 과 **같은 식이어야** 합니다 (5곳). */
+const NICKNAME_PATTERN = /^[ㄱ-ㅣ가-힣a-zA-Z0-9]{2,20}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^01[0-9]-\d{3,4}-\d{4}$/;
 const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$/;

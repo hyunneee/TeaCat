@@ -31,7 +31,7 @@ public record SignupRequest(
         @Schema(description = "닉네임 (한글/영문/숫자 2~20자)", example = "티캣냥이")
         @NotBlank(message = "닉네임을 입력해 주세요.")
         @Pattern(
-                regexp = "^[가-힣a-zA-Z0-9]{2,20}$",
+                regexp = "^[ㄱ-ㅣ가-힣a-zA-Z0-9]{2,20}$",
                 message = "닉네임은 한글·영문·숫자 2~20자여야 합니다."
         )
         String nickname,
