@@ -11,6 +11,7 @@ import com.teacat.server.user.dto.response.MyInfoResponse;
 import com.teacat.server.user.entity.Face;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
+import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +28,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
+    /** 탈퇴할 때 티켓에 베껴 둔 얼굴까지 지우려면 필요합니다 (User.withdraw 주석) */
+    private final TicketRepository ticketRepository;
 
     /** 내 정보 조회 (API-108) */
     public MyInfoResponse getMyInfo(Long userId) {
@@ -89,6 +92,9 @@ public class UserService {
     @Transactional
     public void withdraw(Long userId) {
         getUser(userId).withdraw(LocalDateTime.now());
+        /* 🔴 티켓에 베껴 둔 얼굴까지 지운다. faces 행만 지우면 파기가 반쪽이다 —
+           예매 건수만큼 복사본이 남는다 (User.withdraw 주석 · CLAUDE.md 6장). */
+        ticketRepository.eraseFaceOf(userId);
         authService.revokeAllSessions(userId);
     }
 

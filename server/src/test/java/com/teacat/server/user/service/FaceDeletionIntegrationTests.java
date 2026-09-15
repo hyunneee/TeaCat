@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 class FaceDeletionIntegrationTests extends PostgresIntegrationTest {
 
     @Autowired private UserService userService;
+    @Autowired private AdminUserService adminUserService;
 
     @Test
     void 예매한_회원도_얼굴을_지울_수_있고_티켓은_그대로다() {
@@ -46,8 +47,12 @@ class FaceDeletionIntegrationTests extends PostgresIntegrationTest {
         assertThat(ticketEmbeddingExists(ticketId)).isTrue();
     }
 
+    /**
+     * 🔴 <b>탈퇴는 티켓의 복사본까지 지운다.</b> faces 행만 지우면 파기가 반쪽이다 —
+     * 예매 건수만큼 임베딩이 남고, 그건 "탈퇴 시 즉시 파기" 라는 고지와 다르다.
+     */
     @Test
-    void 예매한_회원도_탈퇴할_수_있다() {
+    void 탈퇴하면_티켓에_베껴_둔_얼굴까지_지운다() {
         Long userId = insertUser("withdraw@test.com", "탈퇴회원");
         Long faceId = insertFace();
         jdbcTemplate.update("UPDATE users SET face_id = ? WHERE id = ?", faceId, userId);
@@ -55,15 +60,42 @@ class FaceDeletionIntegrationTests extends PostgresIntegrationTest {
 
         assertThatCode(() -> userService.withdraw(userId)).doesNotThrowAnyException();
 
-        // 탈퇴는 소프트 삭제지만 생체정보(faces)는 즉시 파기한다
         assertThat(faceRows(faceId)).isZero();
+        assertThat(ticketEmbeddingExists(ticketId)).isFalse();
+        assertThat(ticketModelVersion(ticketId)).isNull();
+
+        // 탈퇴 자체는 소프트 삭제다 — 발권 이력(티켓 행)은 남는다
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT deleted_at IS NOT NULL FROM users WHERE id = ?", Boolean.class, userId))
                 .isTrue();
+        assertThat(ticketRows(ticketId)).isEqualTo(1);
+    }
 
-        /* ⚠️ 티켓의 복사본은 **남는다** (사용자 결정, server/CLAUDE.md 6장).
-           파기 범위를 따질 때 faces 만 보면 안 된다는 뜻이라, 사실로 고정해 둔다 */
-        assertThat(ticketEmbeddingExists(ticketId)).isTrue();
+    /**
+     * 🔴 탈퇴 경로가 <b>둘</b>이라 따로 지킨다. 한쪽만 고치면 관리자가 내린 탈퇴에서만
+     * 생체정보가 남고, 그건 눈에 띄지 않는다.
+     */
+    @Test
+    void 관리자가_탈퇴시켜도_티켓의_얼굴까지_지운다() {
+        Long adminId = insertUser("admin-withdraw@test.com", "관리자", "ADMIN");
+        Long userId = insertUser("victim@test.com", "대상회원");
+        Long faceId = insertFace();
+        jdbcTemplate.update("UPDATE users SET face_id = ? WHERE id = ?", faceId, userId);
+        Long ticketId = insertTicket(userId, insertPerformanceFixture());
+
+        assertThatCode(() -> adminUserService.withdraw(adminId, userId)).doesNotThrowAnyException();
+
+        assertThat(faceRows(faceId)).isZero();
+        assertThat(ticketEmbeddingExists(ticketId)).isFalse();
+    }
+
+    /** 예매가 없는 회원도 그냥 탈퇴된다 (지울 티켓이 0건이어도 정상) */
+    @Test
+    void 예매가_없는_회원도_탈퇴된다() {
+        Long userId = insertUser("no-ticket@test.com", "무예매");
+        jdbcTemplate.update("UPDATE users SET face_id = ? WHERE id = ?", insertFace(), userId);
+
+        assertThatCode(() -> userService.withdraw(userId)).doesNotThrowAnyException();
     }
 
     private int faceRows(Long faceId) {
@@ -79,5 +111,15 @@ class FaceDeletionIntegrationTests extends PostgresIntegrationTest {
     private boolean ticketEmbeddingExists(Long ticketId) {
         return jdbcTemplate.queryForObject(
                 "SELECT face_embedding IS NOT NULL FROM tickets WHERE id = ?", Boolean.class, ticketId);
+    }
+
+    private String ticketModelVersion(Long ticketId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT face_model_version FROM tickets WHERE id = ?", String.class, ticketId);
+    }
+
+    private int ticketRows(Long ticketId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*)::int FROM tickets WHERE id = ?", Integer.class, ticketId);
     }
 }

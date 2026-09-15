@@ -68,18 +68,23 @@ public class Ticket {
      * 얼굴 삭제도 탈퇴도 못 했다. 원래 의도가 "예매 당시 얼굴을 남긴다" 였으므로, 가리키는
      * 대신 <b>베껴 둔다.</b> 원본을 지워도 이 값은 그대로다.
      *
-     * <p>⚠️ 그 대가로 같은 생체정보가 <b>예매 건수만큼 복사된다.</b> 얼굴을 지우거나 탈퇴해도
-     * 여기 남으므로, 파기 범위를 따질 때 faces 만 보면 안 된다 (server/CLAUDE.md 6장).
+     * <p>⚠️ 그 대가로 같은 생체정보가 <b>예매 건수만큼 복사된다.</b> 그래서 파기 범위를 따질 때
+     * faces 만 보면 안 된다 — <b>여기까지 두 곳</b>이다 (server/CLAUDE.md 6장).
+     *
+     * <p><b>탈퇴하면 이 값도 지운다</b>({@code TicketRepository.eraseFaceOf}). 얼굴 삭제와는
+     * 다르게 다룬다 — 얼굴 삭제는 "프로필에서 얼굴을 뺀다" 라 발권 기록은 남고, 탈퇴는
+     * "나를 지운다" 라 복사본까지 파기해야 고지한 대로가 된다. 그래서 <b>null 이 될 수 있고</b>
+     * ({@code V20260915_1010}) 발권 후에도 <b>바뀔 수 있다</b>(= {@code updatable} 을 막지 않는다).
      *
      * <p>모델 버전을 함께 베끼는 이유는 대조 때문이다 — 모델이 다르면 좌표계가 달라 비교
      * 자체가 성립하지 않는다. 임베딩만 남기면 "이걸 무엇과 견줄 수 있는지" 를 알 수 없다.
      */
     @JdbcTypeCode(SqlTypes.VECTOR)
     @Array(length = Face.EMBEDDING_DIMENSION)
-    @Column(name = "face_embedding", nullable = false, updatable = false)
+    @Column(name = "face_embedding")
     private float[] faceEmbedding;
 
-    @Column(name = "face_model_version", nullable = false, updatable = false, length = 50)
+    @Column(name = "face_model_version", length = 50)
     private String faceModelVersion;
 
     @Enumerated(EnumType.STRING)
