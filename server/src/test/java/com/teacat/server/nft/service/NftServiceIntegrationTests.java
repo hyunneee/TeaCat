@@ -195,7 +195,7 @@ class NftServiceIntegrationTests {
                 sellerId, photocardId, new NftListingCreateRequest(3_000L, "스크래치 없는 카드입니다."));
 
         assertThat(listing.listingId()).isNotNull();
-        var detail = nftService.getPhotocard(photocardId);
+        var detail = nftService.getPhotocard(photocardId, sellerId);
         assertThat(detail.listing()).isNotNull();
         assertThat(detail.listing().sellerDescription()).isEqualTo("스크래치 없는 카드입니다.");
         assertThat(detail.issuedAt()).isNotNull();
@@ -206,7 +206,7 @@ class NftServiceIntegrationTests {
 
         nftService.cancelListing(sellerId, photocardId);
 
-        assertThat(nftService.getPhotocard(photocardId).listing()).isNull();
+        assertThat(nftService.getPhotocard(photocardId, sellerId).listing()).isNull();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status::text FROM nft_photocard_listings WHERE id = ?",
                 String.class, listing.listingId())).isEqualTo("CANCELLED");
@@ -246,7 +246,7 @@ class NftServiceIntegrationTests {
 
         assertThat(nftService.getPurchaseHistory(buyerId, null, 20).items()).hasSize(1);
         assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
-        assertThat(nftService.getPhotocardTrades(photocardId, null, 20).items()).hasSize(1);
+        assertThat(nftService.getPhotocardTrades(photocardId, buyerId, null, 20).items()).hasSize(1);
         assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
                 .extracting(item -> item.photocardId())
                 .containsExactly(photocardId);
@@ -307,11 +307,69 @@ class NftServiceIntegrationTests {
 
     @Test
     void 존재하지_않는_포토카드의_상세_판매_취소_거래내역은_거부한다() {
-        assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND, () -> nftService.getPhotocard(999_999L));
+        assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND, () -> nftService.getPhotocard(999_999L, 1L));
         assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND,
                 () -> nftService.cancelListing(1L, 999_999L));
         assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND,
-                () -> nftService.getPhotocardTrades(999_999L, null, 20));
+                () -> nftService.getPhotocardTrades(999_999L, 1L, null, 20));
+    }
+
+    /**
+     * 🔴 <b>ID 만 알면 남의 카드가 열리던 문제.</b>
+     *
+     * <p>응답에 소유자 닉네임·공연명·좌석이 들어 있고 ID 가 순번이라, 열어두면 1000001 부터
+     * 훑어서 "누가 어느 공연 어느 자리에 앉았는지" 를 통째로 긁을 수 있었다.
+     */
+    @Test
+    void 마켓에_없는_카드는_소유자만_볼_수_있다() {
+        Long ownerId = insertUser("owner@test.com", "소유자");
+        Long strangerId = insertUser("stranger@test.com", "타인");
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "비공개 카드", 1),
+                insertTicket(ownerId, fixture), ownerId);
+
+        // 소유자는 본다 — 자기 좌석이므로 열·번호까지
+        var mine = nftService.getPhotocard(photocardId, ownerId);
+        assertThat(mine.origin().rowLabel()).isEqualTo("3");
+        assertThat(mine.origin().seatNumber()).isEqualTo(1);
+
+        /* 남과 비로그인은 **존재 여부조차** 모른다. 403 으로 답하면 "그 번호는 있다" 를
+           알려주는 셈이라 열거를 도와준다 */
+        assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND,
+                () -> nftService.getPhotocard(photocardId, strangerId));
+        assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND,
+                () -> nftService.getPhotocard(photocardId, null));
+        // 거래 내역도 같은 자물쇠를 쓴다 (판매자·구매자 닉네임이 담긴다)
+        assertNftError(NftErrorCode.PHOTOCARD_NOT_FOUND,
+                () -> nftService.getPhotocardTrades(photocardId, strangerId, null, 20));
+    }
+
+    @Test
+    void 판매_중인_카드는_남도_보지만_좌석_열_번호는_가린다() {
+        Long sellerId = insertUser("seller@test.com", "판매자");
+        Long strangerId = insertUser("stranger@test.com", "타인");
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "판매 카드", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        nftService.registerListing(sellerId, photocardId,
+                new NftListingCreateRequest(3_000L, "설명"));
+
+        var seen = nftService.getPhotocard(photocardId, strangerId);
+
+        /* 마켓에 올라왔으니 카드 자체는 보여준다 — 구매자가 출처를 확인해야 한다.
+           다만 **어느 자리였는지**까지 알려주면 판매 등록이 곧 좌석 공개가 된다.
+           등급·구역까지만 남기고 열·번호는 지운다. */
+        assertThat(seen.origin().seatGrade()).isEqualTo("VIP");
+        assertThat(seen.origin().areaCode()).isEqualTo("A");
+        assertThat(seen.origin().rowLabel()).isNull();
+        assertThat(seen.origin().seatNumber()).isNull();
+
+        // 주인에게는 그대로 다 보인다
+        var owner = nftService.getPhotocard(photocardId, sellerId);
+        assertThat(owner.origin().rowLabel()).isEqualTo("3");
+        assertThat(owner.origin().seatNumber()).isEqualTo(1);
     }
 
     @Test
@@ -701,7 +759,7 @@ class NftServiceIntegrationTests {
         Long cardId = insertPhotocard(
                 insertDesign(fixture.performanceId(), "스탠딩 카드", 1), ticketId, ownerId);
 
-        var detail = nftService.getPhotocard(cardId);
+        var detail = nftService.getPhotocard(cardId, ownerId);
 
         assertThat(detail.origin().seatGrade()).isEqualTo("STANDING");
         assertThat(detail.origin().areaCode()).isEqualTo("S");

@@ -319,7 +319,7 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         // 구매/판매 내역 API 가 경매 거래를 그대로 보여준다
         assertThat(nftService.getPurchaseHistory(buyer, null, 20).items()).hasSize(1);
         assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
-        assertThat(nftService.getPhotocardTrades(photocardId, null, 20).items()).hasSize(1);
+        assertThat(nftService.getPhotocardTrades(photocardId, buyer, null, 20).items()).hasSize(1);
     }
 
     @Test
@@ -742,9 +742,12 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
         auctionService.cancelAuction(sellerId, auctionId);
 
+        /* 🔴 경매를 내리면 그 카드는 **마켓에 없는 카드**가 된다 — 비로그인에게는 상세 자체가
+           닫힌다. 예전에는 여기서 200 이 나왔고(카드는 보이고 auction 만 null), 그래서
+           ID 만 알면 남의 카드를 계속 들여다볼 수 있었다.
+           존재 여부도 알리지 않으려고 403 이 아니라 404 다. */
         mockMvc.perform(get("/photocards/" + photocardId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.auction").doesNotExist());
+                .andExpect(status().isNotFound());
     }
 
     private String holdStatus(String refType, Long refId) {

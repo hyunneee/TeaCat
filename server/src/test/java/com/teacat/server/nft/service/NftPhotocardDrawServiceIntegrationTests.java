@@ -417,7 +417,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(item.grade()).isEqualTo(NftPhotocardGrade.SPECIAL);
         assertThat(item.averagePrice()).isNull();
 
-        NftPhotocardDetailResponse detail = nftService.getPhotocard(photocardId);
+        NftPhotocardDetailResponse detail = nftService.getPhotocard(photocardId, userId);
         assertThat(detail.performanceTitle()).isNull();
         assertThat(detail.origin()).isNull();
         assertThat(detail.group()).isEqualTo("서울 5반");
@@ -449,7 +449,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
                     """, listingId, otherCard, ownerId, buyerId, price);
         }
 
-        NftPhotocardDetailResponse detail = nftService.getPhotocard(photocardId);
+        NftPhotocardDetailResponse detail = nftService.getPhotocard(photocardId, ownerId);
         assertThat(detail.performanceTitle()).isEqualTo("테스트 공연");
         assertThat(detail.origin()).isNotNull();
         assertThat(detail.origin().seatGrade()).isEqualTo("VIP");
