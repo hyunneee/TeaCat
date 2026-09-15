@@ -3,7 +3,7 @@ import { cn } from '@/shared/lib';
 import packUrl from '@/assets/poca/pack.webp';
 import {
   PACK,
-  canStartCut,
+  canGrabCut,
   cutPointAt,
   isCutThrough,
   shouldAddPoint,
@@ -77,8 +77,9 @@ export function PocaPack({ opened, locked = false, onCutStart, onCutThrough, cla
     /* 절취선 근처에서 시작할 때만 — 봉지 아무 데나 눌러도 잘리면 안 됩니다 */
     const lineY = box.top + (PACK.cutY / PACK.height) * box.height;
     if (Math.abs(e.clientY - lineY) > 44) return;
-    /* 왼쪽 끝에서만 시작합니다 — 오른쪽을 탭하는 것만으로 열리면 안 됩니다 */
-    if (!canStartCut(toPackX(e.clientX, box.left, box.width))) return;
+    /* 처음이면 왼쪽 끝에서만, 자르던 중이면 뗀 자리에서 이어서 (`canGrabCut`).
+       오른쪽을 탭하는 것만으로 열리는 길은 양쪽 다 막혀 있습니다. */
+    if (!canGrabCut(points, toPackX(e.clientX, box.left, box.width))) return;
 
     dragging.current = true;
     e.currentTarget.setPointerCapture(e.pointerId);

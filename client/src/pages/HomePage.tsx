@@ -130,10 +130,11 @@ export function HomePage() {
    * 예정을 보여주고 **제목도 함께 바꿉니다.**
    */
   const all = concerts ?? [];
-  /* 매진도 남깁니다 — 살 수 있는 것을 앞에 두고, 매진은 그 뒤에 */
-  const openConcerts = all
-    .filter(isConcertOnRail)
-    .sort((a, b) => Number(isConcertOpen(b)) - Number(isConcertOpen(a)));
+  /* 매진도 남깁니다. 다만 **뒤로 밀지는 않습니다** — 서버가 준 최신 등록순 그대로입니다.
+     🔴 예전에는 살 수 있는 것을 앞에 두려고 매진을 뒤로 보냈는데, 그러면 방금 올린 공연이
+     매진되는 순간 레일 맨 끝으로 가서 새 공연이 홈에서 사라진 것처럼 보였습니다.
+     이 자리는 "무엇이 새로 올라왔나" 를 보여주는 곳이고, 살 수 있는지는 카드의 칩이 말합니다. */
+  const openConcerts = all.filter(isConcertOnRail);
   const liveRail = openConcerts.length > 0;
   const rail = (
     liveRail
