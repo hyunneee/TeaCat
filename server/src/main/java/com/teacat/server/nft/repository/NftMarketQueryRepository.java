@@ -69,7 +69,9 @@ public class NftMarketQueryRepository {
     public Optional<DetailRow> findPhotocardDetail(Long photocardId) {
         String sql = """
                 SELECT p.id AS photocard_id, d.name AS design_name, d.image_url,
-                       pg.title AS performance_title, owner.nickname AS owner_nickname,
+                       pg.title AS performance_title,
+                       -- 조회자가 소유자인지 판정해야 한다. 닉네임으로 비교하면 동명이인에서 깨진다
+                       p.owner_id, owner.nickname AS owner_nickname,
                        p.created_at AS issued_at, t.id AS ticket_id, pa.grade AS seat_grade, a.area_code,
                        s.row_label, s.seat_number, p.status, l.id AS listing_id,
                        l.price, l.description AS seller_description, l.listed_at,
@@ -98,6 +100,7 @@ public class NftMarketQueryRepository {
                         rs.getString("design_name"),
                         rs.getString("image_url"),
                         rs.getString("performance_title"),
+                        rs.getLong("owner_id"),
                         rs.getString("owner_nickname"),
                         rs.getObject("issued_at", LocalDateTime.class),
                         rs.getObject("ticket_id") != null,
@@ -556,7 +559,8 @@ public class NftMarketQueryRepository {
     }
 
     public record DetailRow(Long photocardId, String designName, String imageUrl,
-                            String performanceTitle, String ownerNickname, LocalDateTime issuedAt,
+                            String performanceTitle, Long ownerId, String ownerNickname,
+                            LocalDateTime issuedAt,
                             boolean hasTicket,
                             String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
                             NftMintStatus status, Long listingId, Long price, String sellerDescription,
