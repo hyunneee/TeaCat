@@ -29,6 +29,19 @@ export interface MarketPhotocard {
   sellerNickname: string;
 }
 
+/**
+ * 카드 그림 한 장 (템플릿).
+ *
+ * 🔴 **카드(소유물)가 아니라 그림입니다.** 누가 무엇을 가졌는지와 무관하게,
+ * 서버에 등록된 도안 전체가 내려옵니다. 마켓(`MarketPhotocard`)은 **판매 중인 카드**라
+ * 아무도 안 올리면 0장이지만, 이쪽은 관리자가 올린 그림이라 항상 있습니다.
+ */
+export interface PhotocardArt {
+  templateId: number;
+  name: string;
+  imageUrl: string | null;
+}
+
 /** 내 포카 목록 항목 */
 /**
  * 뽑기 풀 도안에만 붙는 값들. **공연 좌석에서 발행된 카드에는 없습니다**(서버가 생략).

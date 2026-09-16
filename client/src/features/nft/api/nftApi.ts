@@ -4,6 +4,7 @@ import type { NftSort } from '../model/nft.model';
 import type {
   MarketPhotocard,
   MyPhotocard,
+  PhotocardArt,
   PhotocardDetail,
   PhotocardListing,
   PhotocardTradeHistory,
@@ -30,6 +31,12 @@ export const nftApi = {
     http.get<CursorPage<MarketPhotocard>>('/nft-market/photocards', { params }),
 
   detail: (photocardId: number) => http.get<PhotocardDetail>(`/photocards/${photocardId}`),
+
+  /**
+   * 등록된 카드 그림 전체 (감춘 것 제외, 최신순).
+   * 커서가 없는 **단순 배열**입니다 — 도안 수가 많지 않습니다.
+   */
+  arts: () => http.get<PhotocardArt[]>('/photocard-templates'),
 
   /**
    * 포카 뽑기. **어떤 카드가 나오는지는 서버가 정합니다** — 응답을 그대로 연출합니다.
@@ -82,6 +89,7 @@ export const nftKeys = {
   market: (keyword?: string, sort?: NftSort, performanceId?: number) =>
     [...nftKeys.all, 'market', keyword ?? '', sort ?? '', performanceId ?? 0] as const,
   detail: (photocardId: number) => [...nftKeys.all, 'detail', photocardId] as const,
+  arts: () => [...nftKeys.all, 'arts'] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
   drawAvailability: () => [...nftKeys.all, 'draw-availability'] as const,
   purchases: () => [...nftKeys.all, 'purchases'] as const,

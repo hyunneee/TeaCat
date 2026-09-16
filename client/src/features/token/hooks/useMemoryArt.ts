@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { pickDeckArt, type ArtCandidate, type DeckArt } from '../model/memoryGame.model';
+import { useEffect, useRef, useState } from 'react';
+import { pickDeckArt, shuffle, type ArtCandidate, type DeckArt } from '../model/memoryGame.model';
 
 /**
  * 그림을 다 받기까지 기다려 주는 시간.
@@ -26,12 +26,28 @@ export interface MemoryArt {
  * 짝을 눈이 아니라 로딩 순서로 찾게 됩니다. 그래서 8종을 **전부 디코드한 뒤에만**
  * 내주고, 그 전에는 빈 배열을 돌려 시드 SVG 로 깔립니다.
  *
+ * 후보가 8종보다 많으면 **섞어서 8종을 뽑습니다** — 서버에 20장이 있으면 들어올 때마다
+ * 다른 그림으로 놀 수 있습니다. 다만 한 번 고른 8종은 그 화면에 있는 동안 고정입니다.
+ * 판을 다시 깔 때마다 새로 고르면 그때마다 그림을 새로 받아야 합니다.
+ *
  * ⚠️ 후보는 화면(페이지)이 넘깁니다. `features/token` 이 `features/nft` 를 직접 부르면
  * `features/nft` → `features/token`(tokenKeys) 와 **순환 참조**가 됩니다.
  */
 export function useMemoryArt(candidates: ArtCandidate[], pending = false): MemoryArt {
-  const picked = pickDeckArt(candidates);
   /* 후보 배열은 렌더마다 새로 만들어지므로 **내용**으로 비교합니다 */
+  const poolKey = candidates.map((c) => c.imageUrl ?? '').join('|');
+  const poolRef = useRef(candidates);
+  poolRef.current = candidates;
+
+  /* 고른 8종. 어느 후보 묶음에서 골랐는지(key)를 같이 들고 있어야
+     "아직 고르는 중" 과 "골랐는데 8종이 안 됐다" 를 구분할 수 있습니다. */
+  const [pick, setPick] = useState<{ key: string; art: DeckArt[] }>({ key: '', art: [] });
+  useEffect(() => {
+    setPick({ key: poolKey, art: pickDeckArt(shuffle(poolRef.current)) });
+  }, [poolKey]);
+
+  const picking = pick.key !== poolKey;
+  const picked = picking ? [] : pick.art;
   const signature = picked.map((a) => a.imageUrl).join('|');
 
   /** 받기를 마친 서명. signature 와 같아야 그 그림을 쓸 수 있습니다 */
@@ -42,6 +58,7 @@ export function useMemoryArt(candidates: ArtCandidate[], pending = false): Memor
     if (!signature) return;
 
     let alive = true;
+    setFailed(false);
     const finish = (ok: boolean) => {
       if (!alive) return;
       setFailed(!ok);
@@ -64,10 +81,13 @@ export function useMemoryArt(candidates: ArtCandidate[], pending = false): Memor
   }, [signature]);
 
   const ready = signature !== '' && loaded === signature && !failed;
+  const preloading = signature !== '' && loaded !== signature;
 
   return {
     art: ready ? picked : [],
-    loading: pending || (signature !== '' && loaded !== signature),
+    /* 🔴 고른 결과가 빈 배열(8종 미달)이면 기다릴 것이 없습니다 — 여기서 picking 만 보고
+       기다리면 그런 계정은 "게임 시작" 이 영영 눌리지 않습니다. */
+    loading: pending || picking || preloading,
   };
 }
 

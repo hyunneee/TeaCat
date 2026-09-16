@@ -1,5 +1,6 @@
 export {
   useNftMarket,
+  usePhotocardArts,
   usePhotocardDetail,
   useClaimEventPack,
   useDrawAvailability,
@@ -56,6 +57,7 @@ export {
 } from './model/pocaDraw.model';
 export type {
   MarketPhotocard,
+  PhotocardArt,
   MyPhotocard,
   PhotocardDetail,
   PhotocardOrigin,

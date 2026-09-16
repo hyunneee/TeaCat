@@ -104,7 +104,7 @@ export function createDeck(art: DeckArt[] = []): MemoryCard[] {
 }
 
 /** 피셔–예이츠. 정렬 비교자에 난수를 넣는 방식은 고르게 섞이지 않습니다 */
-function shuffle<T>(items: T[]): T[] {
+export function shuffle<T>(items: T[]): T[] {
   const out = [...items];
   for (let i = out.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));

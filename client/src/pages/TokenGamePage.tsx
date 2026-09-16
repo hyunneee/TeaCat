@@ -1,7 +1,7 @@
 import { Flag } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button } from '@/shared/components/ui';
-import { useMyPhotocards, useNftMarket } from '@/features/nft';
+import { usePhotocardArts } from '@/features/nft';
 import {
   MemoryBoard,
   MemoryClearModal,
@@ -22,19 +22,20 @@ import {
  * (`features/token` 의 `REWARD_TIERS` 주석). 지급을 붙일 때는 시간을 재는 것도
  * 금액을 정하는 것도 서버여야 합니다.
  *
- * ⚠️ 판에 쓸 그림 후보를 **페이지가 모아서 넘깁니다.** `features/token` 이
+ * ⚠️ 판에 쓸 그림 후보를 **페이지가 받아서 넘깁니다.** `features/token` 이
  * `features/nft` 를 직접 부르면 `features/nft` → `features/token`(tokenKeys) 와
  * 순환 참조가 됩니다. 페이지는 두 feature 를 다 알아도 되는 자리입니다.
  */
 export function TokenGamePage() {
-  /* 내 카드를 먼저 씁니다 — 내가 가진 그림으로 하는 쪽이 훨씬 반갑습니다.
-     8종이 안 되면 마켓에 올라온 카드로 채웁니다(공개 목록이라 봐도 되는 그림입니다). */
-  const { data: mine, isLoading: mineLoading } = useMyPhotocards();
-  const { data: market, isLoading: marketLoading } = useNftMarket();
+  /* 🔴 **등록된 카드 그림 전체**를 씁니다 (소유물이 아니라 도안입니다).
+     내 카드나 마켓 목록을 쓰면 "가진 게 없으면 / 아무도 안 팔면 그림이 없는" 화면이
+     됩니다 — 마켓은 판매 중인 카드만 나오므로 0장인 날이 흔합니다.
+     여기서 8종을 섞어 뽑으므로 들어올 때마다 다른 그림으로 놀 수 있습니다. */
+  const { data: arts, isLoading: artsLoading } = usePhotocardArts();
 
   const { art, loading: artLoading } = useMemoryArt(
-    [...(mine ?? []), ...(market ?? [])],
-    mineLoading || marketLoading,
+    (arts ?? []).map((a) => ({ designName: a.name, imageUrl: a.imageUrl })),
+    artsLoading,
   );
 
   const game = useMemoryGame(art);
