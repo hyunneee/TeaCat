@@ -697,7 +697,7 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 |---|---|---|
 | 로컬 (`npm run dev`) | — | **꺼짐.** `.env.development` 를 일부러 비워 뒀습니다 |
 | dev (dev.teacat.site) | 아직 없음 | 꺼짐. 켜려면 속성을 **새로 만들어** Jenkinsfile 의 `GA_ID` 에 채웁니다 |
-| prod (teacat.site) | `G-5BPSG2K5K9` | **켜짐.** CI 가 build-arg 로 넘깁니다 |
+| prod (teacat.site) | `G-Y46EH6RRQM` | **켜짐.** CI 가 build-arg 로 넘깁니다 |
 
   🔴 Clarity 와 dev/prod 가 **반대**입니다. 헷갈리지 마세요 — Clarity 는 dev 만, GA 는 prod 만 켜져 있습니다.
 
@@ -896,7 +896,7 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
   npm 패키지는 늘지 않았습니다(gtag 스크립트 한 줄, `shared/lib/ga.ts` 가 직접 꽂음).
   `VITE_GA_MEASUREMENT_ID` 하나를 `.env.*` / `vite-env.d.ts` / `shared/config/env.ts` 에
   추가했고 CI 가 `--build-arg` 로 넘깁니다(client/Dockerfile · Jenkinsfile).
-  🔴 **Clarity 와 dev/prod 가 반대입니다** — GA 는 prod(`G-5BPSG2K5K9`)만, Clarity 는 dev 만
+  🔴 **Clarity 와 dev/prod 가 반대입니다** — GA 는 prod(`G-Y46EH6RRQM`)만, Clarity 는 dev 만
      켜져 있습니다. GA 속성이 운영용 하나뿐이라서입니다.
   🔴 **SPA 라 페이지뷰를 직접 보냅니다.** `send_page_view: false` + `app/router/analytics.ts`
      의 라우터 구독입니다. 레이아웃마다 훅을 붙이면 레이아웃 없는 라우트에서 빠집니다.

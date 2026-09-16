@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { House, Music, Sparkles, Ticket, UserRound, type LucideIcon } from 'lucide-react';
+import { House, Images, Music, Sparkles, UserRound, type LucideIcon } from 'lucide-react';
 import { ROUTES } from '@/shared/constants';
 
 /**
@@ -21,8 +21,8 @@ export const TABS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: ROUTES.HOME, label: '홈', icon: House },
   { to: ROUTES.CONCERTS, label: '공연', icon: Music },
   { to: ROUTES.NFT_MARKET, label: '포카', icon: Sparkles },
-  { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
-  { to: ROUTES.MY, label: 'MY', icon: UserRound },
+  { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
+  { to: ROUTES.MY, label: '마이', icon: UserRound },
 ];
 
 /**
@@ -35,19 +35,24 @@ export const ICON_BOX = 'size-10';
 /**
  * 현재 경로에 해당하는 탭 하나를 고릅니다. (없으면 -1)
  *
- * NavLink 의 기본 isActive 는 "접두사 일치"라서 `/my/tickets` 에서
- * `/my` 탭까지 같이 켜집니다. 그렇다고 `/my` 에 end 를 주면
- * `/my/settings` 같은 하위 화면에서 아무 탭도 안 켜집니다.
+ * 기본은 경로 접두사로 찾고, 포카 거래 내역·경매·입찰은 모두 `내 포카` 활동이므로
+ * `/my/nfts` 와 경로 모양이 달라도 같은 탭으로 묶습니다.
  *
- * 그래서 **가장 길게 일치하는 탭 하나만** 활성으로 칩니다.
- *   /my/tickets  → '내 티켓' (`/my` 보다 길다)
- *   /my/settings → 'MY'
+ * `/my/nfts` 는 `/my` 에도 접두사로 걸리지만 더 긴 `내 포카` 탭 하나만 활성화합니다.
+ * 내 티켓·설정·문의 등 나머지 `/my/*` 화면은 `마이` 탭이 받습니다.
  */
 export function useActiveIndex(): number {
   const { pathname } = useLocation();
 
   return TABS.reduce((best, tab, index) => {
-    const matched = tab.to === ROUTES.HOME ? pathname === ROUTES.HOME : pathname.startsWith(tab.to);
+    const matched =
+      tab.to === ROUTES.HOME
+        ? pathname === ROUTES.HOME
+        : tab.to === ROUTES.MY_NFTS
+          ? pathname.startsWith(ROUTES.MY_NFTS) ||
+            pathname.startsWith(ROUTES.MY_AUCTIONS) ||
+            pathname.startsWith(ROUTES.MY_BIDS)
+          : pathname.startsWith(tab.to);
     if (!matched) return best;
     if (best < 0) return index;
     return tab.to.length > TABS[best]!.to.length ? index : best;

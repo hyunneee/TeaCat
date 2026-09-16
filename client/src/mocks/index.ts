@@ -25,7 +25,6 @@ export async function setupMocks() {
     //   -> handlers/booking.ts 는 삭제했습니다. 결제도 실서버로 나갑니다.
     // 내 티켓(/users/me/tickets)·예매 취소도 실서버입니다 -> handlers/ticket.ts 삭제
     import('./handlers/resale'),
-    import('./handlers/auction'),
     import('./handlers/appInfo'),
   ]);
 

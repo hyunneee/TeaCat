@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Coins, Gavel, Images, Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, Segmented, Select } from '@/shared/components/ui';
@@ -65,8 +65,11 @@ const BUY_MODES = [
  */
 export function NftMarketPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [side, setSide] = useState<Side>('BUY');
-  const [mode, setMode] = useState<BuyMode>('SHOP');
+  const [mode, setMode] = useState<BuyMode>(() =>
+    searchParams.get('mode') === 'auction' ? 'AUCTION' : 'SHOP',
+  );
   const [keyword, setKeyword] = useState('');
   const [sort, setSort] = useState<NftSort>(DEFAULT_SORT);
   const [auctionSort, setAuctionSort] = useState<AuctionSort>(DEFAULT_AUCTION_SORT);
@@ -117,23 +120,33 @@ export function NftMarketPage() {
           방향·검색·정렬은 **스크롤을 따라옵니다.** 카드를 한참 내려간 뒤에
           바꾸려고 맨 위까지 되올라가야 하면 아무도 안 바꿉니다.
           면이 불투명해야 카드가 뒤로 지나가는 게 보이지 않습니다. */}
-      <div className="bg-canvas under-header sticky z-10 space-y-3 px-4 pt-4 pb-3">
-        <Segmented options={SIDES} value={side} onChange={setSide} />
+      <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:px-0 lg:pt-3">
+        {/* 공연·내 티켓과 같은 배치입니다. 폰에서는 검색이 먼저, 넓은 화면에서는
+            구매/판매가 왼쪽·검색이 오른쪽에 한 줄로 놓입니다. */}
+        <div className="lg:flex lg:items-center lg:gap-3">
+          <div className="lg:order-2 lg:ml-auto lg:w-full lg:max-w-xs">
+            <Input
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onClear={() => setKeyword('')}
+              placeholder={buying ? '도안명, 공연명으로 검색' : '내 포카 검색'}
+              leftIcon={<Search size={17} />}
+              type="search"
+              tone="contrast"
+            />
+          </div>
 
-        {/* 검색·공연 화면의 검색창과 **같은 props** 입니다 (SearchPage 주석 참고) */}
-        <Input
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onClear={() => setKeyword('')}
-          placeholder={buying ? '도안명, 공연명으로 검색' : '내 포카 검색'}
-          leftIcon={<Search size={17} />}
-          type="search"
-          tone="contrast"
-        />
+          <Segmented
+            options={SIDES}
+            value={side}
+            onChange={setSide}
+            className="mt-2 lg:order-1 lg:mt-0 lg:w-72 lg:shrink-0"
+          />
+        </div>
 
         {/* 상점·경매 / 잔액 / 정렬을 **한 줄**에 둡니다.
             줄이 늘어날수록 카드가 아래로 밀리고, 마켓에서 보고 싶은 건 카드입니다. */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="mt-3 flex items-center justify-between gap-2">
           {buying ? (
             <div className="flex shrink-0 items-center gap-3">
               {BUY_MODES.map((item) => (
@@ -197,7 +210,7 @@ export function NftMarketPage() {
       </div>
 
       {/* ── 스크롤 영역 — 카드만 흐릅니다 ── */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4 lg:px-0">
         {active.isPending ? (
           <Loading label={bidding ? '경매를 불러오는 중' : '포토카드를 불러오는 중'} />
         ) : itemCount === 0 ? (
@@ -223,7 +236,7 @@ export function NftMarketPage() {
             }
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-6 lg:grid-cols-4 lg:gap-x-4">
             {shopping &&
               (market.data ?? []).map((card) => (
                 <li key={card.photocardId}>
