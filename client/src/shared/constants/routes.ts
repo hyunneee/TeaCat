@@ -78,8 +78,11 @@ export const ROUTES = {
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
 
-  /* ── 토큰 벌기 (컨텐츠 미정) ── */
+  /* ── 캣머니 ── */
   TOKEN: '/token',
+  /* 게임은 머리말만 남기고 화면을 꽉 쓰므로 잔액 화면과 **길을 나눕니다** —
+     마이페이지에서 잔액을 보러 눌렀는데 게임이 시작되면 안 됩니다. */
+  TOKEN_GAME: '/token/game',
 
   /* ── 마이페이지 ── */
   MY: '/my',

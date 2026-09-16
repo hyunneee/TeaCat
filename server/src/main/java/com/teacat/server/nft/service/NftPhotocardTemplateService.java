@@ -3,6 +3,7 @@ package com.teacat.server.nft.service;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.ipfs.IpfsPinService;
 import com.teacat.server.nft.dto.request.NftPhotocardTemplateCreateRequest;
+import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTemplateResponse;
 import com.teacat.server.nft.entity.NftPhotocardTemplate;
 import com.teacat.server.nft.exception.NftErrorCode;
@@ -43,6 +44,24 @@ public class NftPhotocardTemplateService {
 
         // 방금 만든 템플릿이라 쓰인 곳이 없다
         return NftPhotocardTemplateResponse.of(saved, 0L);
+    }
+
+    /**
+     * 카드 그림 목록 — <b>일반 사용자용</b>.
+     *
+     * <p>어드민의 {@link #findAll()} 과 두 가지가 다르다.
+     * <ul>
+     *   <li>운영 정보를 빼고 이름·그림 주소만 내려준다 ({@link NftPhotocardArtResponse})</li>
+     *   <li>{@code usedCount} 집계를 하지 않는다 — 안 쓰는 값을 위해 매번 전체를 세지 않는다</li>
+     * </ul>
+     *
+     * <p>감춘 템플릿은 빠진다. 감추기는 "새로 고르지 못하게" 하는 것이라 목록에서도 빠져야 한다.
+     */
+    @Transactional(readOnly = true)
+    public List<NftPhotocardArtResponse> findArt() {
+        return templateRepository.findAllByHiddenFalseOrderByIdDesc().stream()
+                .map(NftPhotocardArtResponse::from)
+                .toList();
     }
 
     @Transactional(readOnly = true)

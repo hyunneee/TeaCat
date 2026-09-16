@@ -47,6 +47,24 @@ export function useNftMarket(
   });
 }
 
+/**
+ * 등록된 카드 그림 전체.
+ *
+ * 누구에게나 같은 목록이고 좀처럼 바뀌지 않아 오래 들고 있습니다.
+ * 🔴 **소유 정보가 아닙니다** — 내 카드 목록은 `useMyPhotocards` 입니다.
+ */
+export function usePhotocardArts() {
+  return useQuery({
+    queryKey: nftKeys.arts(),
+    queryFn: nftApi.arts,
+    staleTime: STALE_TIME.LONG,
+    /* 🔴 재시도하지 않습니다. 이 목록을 쓰는 곳(캣머니 게임)은 **기다리는 화면**이라,
+       실패했을 때 기본값대로 두 번 더 물어보면 그동안 시작 버튼이 돌기만 합니다.
+       그림은 없어도 게임이 되므로(시드 SVG) 한 번 실패하면 바로 그쪽으로 갑니다. */
+    retry: false,
+  });
+}
+
 export function usePhotocardDetail(photocardId: number) {
   return useQuery({
     queryKey: nftKeys.detail(photocardId),

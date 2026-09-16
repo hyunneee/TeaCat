@@ -8,11 +8,13 @@ import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
 import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.service.NftPhotocardTemplateService;
 import com.teacat.server.nft.service.NftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,12 +35,15 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @Tag(name = "NFT 포토카드", description = "NFT 포토카드 조회 · 판매 · 구매 API")
 @RestController
 @RequiredArgsConstructor
 public class NftController {
 
     private final NftService nftService;
+    private final NftPhotocardTemplateService templateService;
 
     @Operation(
             summary = "NFT 포토카드 목록 조회",
@@ -183,5 +188,23 @@ public class NftController {
             @RequestParam(defaultValue = "20") Integer size) {
         return ResponseEntity.ok(BaseResponse.success(nftService.getPhotocardTrades(
                 photocardId, authUser == null ? null : authUser.id(), cursor, size)));
+    }
+
+    @Operation(
+            summary = "카드 그림 목록 조회",
+            description = """
+                    등록된 카드 그림(템플릿)을 최신순으로 내려줍니다. 감춘 그림은 빠집니다.
+
+                    같은 목록의 어드민 API(GET /admin/photocard-templates)와 **내용이 다릅니다** —
+                    여기에는 이름과 그림 주소만 있고, 발행 수·감춤 여부 같은 운영 정보는 빠집니다.
+
+                    🔴 **카드(소유물)가 아니라 그림입니다.** 누가 무엇을 가졌는지와 무관하고,
+                    여기 있는 그림은 이미 마켓·뽑기 화면에 그대로 보이는 것들입니다.
+                    """
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/photocard-templates")
+    public ResponseEntity<BaseResponse<List<NftPhotocardArtResponse>>> getPhotocardArts() {
+        return ResponseEntity.ok(BaseResponse.success(templateService.findArt()));
     }
 }
