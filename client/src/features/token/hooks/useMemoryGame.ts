@@ -3,6 +3,7 @@ import {
   createDeck,
   PAIR_COUNT,
   rewardFor,
+  type DeckArt,
   type MemoryCard,
   type MemoryStatus,
 } from '../model/memoryGame.model';
@@ -52,8 +53,8 @@ export interface MemoryGame {
  * 그래서 훅은 **시작 시각만** 내주고, 실제로 초를 세는 건 그 숫자를 보여주는
  * 컴포넌트 하나(`MemoryHud`)입니다. 다시 그려지는 것은 글자 한 줄뿐입니다.
  */
-export function useMemoryGame(): MemoryGame {
-  const [deck, setDeck] = useState<MemoryCard[]>(() => createDeck());
+export function useMemoryGame(art: DeckArt[] = []): MemoryGame {
+  const [deck, setDeck] = useState<MemoryCard[]>(() => createDeck(art));
   const [round, setRound] = useState(0);
   const [status, setStatus] = useState<MemoryStatus>('idle');
   const [flipped, setFlipped] = useState<number[]>([]);
@@ -66,6 +67,11 @@ export function useMemoryGame(): MemoryGame {
 
   /* 빗나간 두 장을 다시 엎는 타이머. 포기·재시작·언마운트에서 반드시 끊어야
      이미 사라진 판의 카드를 뒤늦게 엎는 일이 없습니다. */
+  /* 새 판을 깔 때의 그림. ref 로 들고 있어야 `start` 가 렌더마다 새로 만들어지지 않습니다
+     (art 는 후보 목록에서 매번 다시 고르므로 참조가 계속 바뀝니다) */
+  const artRef = useRef(art);
+  artRef.current = art;
+
   const missTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearMissTimer = useCallback(() => {
     if (missTimer.current) clearTimeout(missTimer.current);
@@ -75,7 +81,7 @@ export function useMemoryGame(): MemoryGame {
 
   const start = useCallback(() => {
     clearMissTimer();
-    setDeck(createDeck());
+    setDeck(createDeck(artRef.current));
     setRound((n) => n + 1);
     setFlipped([]);
     setMatched([]);

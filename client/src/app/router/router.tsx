@@ -50,6 +50,7 @@ const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
+const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
@@ -362,6 +363,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
+          { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
 
           {
             path: ROUTES.TICKET_DETAIL(':ticketId'),

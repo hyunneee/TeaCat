@@ -38,19 +38,67 @@ export interface MemoryCard {
   id: number;
   /** 짝 번호 — 이 값이 같은 두 장이 한 쌍 */
   pairId: number;
-  /** `PocaArt` 에 넘길 그림 시드 */
+  /** `PocaArt` 에 넘길 그림 시드 (imageUrl 이 없을 때만 쓰입니다) */
   seed: string;
+  /** 실제 포토카드 그림. 없으면 시드 기반 SVG 로 그립니다 */
+  imageUrl: string | null;
+}
+
+/** 한 쌍이 쓸 그림 */
+export interface DeckArt {
+  seed: string;
+  imageUrl: string;
+}
+
+/** `pickDeckArt` 에 넘길 후보 — 내 포카·마켓 목록 항목이 그대로 들어맞습니다 */
+export interface ArtCandidate {
+  designName: string;
+  imageUrl: string | null;
+}
+
+/**
+ * 후보에서 서로 다른 그림 8종을 고릅니다.
+ *
+ * 🔴 **8종을 못 채우면 아예 안 씁니다**(빈 배열 → 전부 시드 SVG). 반만 진짜 그림이면
+ * 두 가지 화풍이 한 판에 섞여 "덜 만든 화면" 으로 보이고, 무엇보다 **진짜 그림 쪽이
+ * 눈에 띄어 짝을 찾기 쉬워집니다** — 카드마다 난이도가 달라지는 셈입니다.
+ *
+ * 같은 도안이 여러 장 있을 수 있으므로 그림 주소로 중복을 거릅니다
+ * (발행 직후 카드는 `imageUrl` 이 null 이라 함께 걸러집니다).
+ */
+export function pickDeckArt(candidates: ArtCandidate[]): DeckArt[] {
+  const seen = new Set<string>();
+  const picked: DeckArt[] = [];
+
+  for (const candidate of candidates) {
+    const { imageUrl } = candidate;
+    if (!imageUrl || seen.has(imageUrl)) continue;
+    seen.add(imageUrl);
+    picked.push({ seed: candidate.designName, imageUrl });
+    if (picked.length === PAIR_COUNT) break;
+  }
+
+  return picked.length === PAIR_COUNT ? picked : [];
 }
 
 export type MemoryStatus = 'idle' | 'playing' | 'cleared' | 'gaveup';
 
-/** 한 판(16장)을 만들어 섞습니다. */
-export function createDeck(): MemoryCard[] {
+/**
+ * 한 판(16장)을 만들어 섞습니다.
+ *
+ * `art` 가 8종이면 실제 포토카드 그림으로, 비어 있으면 시드 SVG 로 깝니다.
+ * 🔴 `art` 는 **미리 받아 둔 그림**이어야 합니다 — 뒤집는 중에 그림이 뒤늦게 뜨면
+ * 뒤집기 게임에서는 느린 정도가 아니라 **정답이 보이는 버그**입니다
+ * (`useMemoryArt` 가 다 받은 뒤에만 내줍니다).
+ */
+export function createDeck(art: DeckArt[] = []): MemoryCard[] {
   const deck: MemoryCard[] = [];
   for (let pairId = 0; pairId < PAIR_COUNT; pairId += 1) {
-    const seed = CARD_SEEDS[pairId] ?? CARD_SEEDS[0];
-    deck.push({ id: pairId * 2, pairId, seed });
-    deck.push({ id: pairId * 2 + 1, pairId, seed });
+    const chosen = art[pairId];
+    const seed = chosen?.seed ?? CARD_SEEDS[pairId] ?? CARD_SEEDS[0];
+    const imageUrl = chosen?.imageUrl ?? null;
+    deck.push({ id: pairId * 2, pairId, seed, imageUrl });
+    deck.push({ id: pairId * 2 + 1, pairId, seed, imageUrl });
   }
   return shuffle(deck);
 }

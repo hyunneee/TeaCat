@@ -101,8 +101,11 @@ export const MemoryCard = memo(function MemoryCard({
           )}
           style={{ transform: 'rotateY(180deg)' }}
         >
+          {/* 그림 주소가 있으면 실제 포토카드, 없으면 시드 기반 SVG 입니다.
+              (`alt` 에 도안 이름을 쓰지 않습니다 — 화면을 읽어 주는 것이 곧 정답이 됩니다) */}
           <PocaArt
             seed={card.seed}
+            imageUrl={card.imageUrl}
             alt="포토카드 그림"
             className="aspect-auto size-full rounded-xl"
           />

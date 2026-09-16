@@ -14,8 +14,17 @@ export { tokenApi, tokenKeys } from './api/tokenApi';
 export type { TokenBalance } from './model/token.types';
 
 export { useMemoryGame, type MemoryGame } from './hooks/useMemoryGame';
+export { useMemoryArt, type MemoryArt } from './hooks/useMemoryArt';
 export { MemoryBoard } from './components/MemoryBoard';
 export { MemoryHud } from './components/MemoryHud';
 export { MemoryIntro } from './components/MemoryIntro';
 export { MemoryClearModal } from './components/MemoryClearModal';
-export { PAIR_COUNT, REWARD_TIERS, rewardFor, type MemoryStatus } from './model/memoryGame.model';
+export {
+  PAIR_COUNT,
+  REWARD_TIERS,
+  pickDeckArt,
+  rewardFor,
+  type ArtCandidate,
+  type DeckArt,
+  type MemoryStatus,
+} from './model/memoryGame.model';
