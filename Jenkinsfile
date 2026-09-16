@@ -260,7 +260,7 @@ pipeline {
                     # (측정 ID 는 스크립트 주소에 실리는 공개 값이라 여기 적어도 된다.
                     #  Data API 서비스 계정 키는 전혀 다른 물건이고 절대 여기 두면 안 된다)
                     case "$DEPLOY_ENV" in
-                        prod) GA_ID="G-5BPSG2K5K9" ;;
+                        prod) GA_ID="G-Y46EH6RRQM" ;;
                         *)    GA_ID="" ;;
                     esac
 
