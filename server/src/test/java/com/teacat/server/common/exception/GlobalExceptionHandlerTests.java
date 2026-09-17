@@ -6,6 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class GlobalExceptionHandlerTests {
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(new SimpleMeterRegistry());
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(registry);
 
     @Test
     void 경로_파라미터_형식이_틀리면_400_이다() {
@@ -49,6 +55,49 @@ class GlobalExceptionHandlerTests {
         assertThat(response.getBody().getMessage())
                 .doesNotContain("script")
                 .doesNotContain("Long");
+    }
+
+    /**
+     * 없는 경로는 404 다. 이게 500 으로 나가면 {@code log.error} → Sentry 이슈가 열리고
+     * {@code teacat.unexpected.error} 카운터가 봇 스캔으로 오염된다 — 1건도 알림 대상인 지표다.
+     *
+     * <p>어떤 예외가 실제로 오는지는 스프링이 정하므로, 그건
+     * {@code NotFoundResponseIntegrationTests} 가 실제 요청으로 확인한다.
+     */
+    @Test
+    void 없는_경로는_404_다() {
+        ResponseEntity<BaseResponse<Void>> response = handler.handleNotFound(
+                new NoResourceFoundException(HttpMethod.GET, "/wp-login.php", "/api/wp-login.php"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isFalse();
+    }
+
+    @Test
+    void 없는_경로는_장애_카운터를_올리지_않는다() {
+        handler.handleNotFound(new NoResourceFoundException(HttpMethod.GET, "/.env", "/api/.env"));
+
+        assertThat(registry.find("teacat.unexpected.error").counter()).isNull();
+    }
+
+    @Test
+    void 틀린_메서드는_405_이고_쓸_수_있는_메서드를_알려준다() {
+        ResponseEntity<BaseResponse<Void>> response = handler.handleMethodNotAllowed(
+                new HttpRequestMethodNotSupportedException("GET", Set.of("POST")));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getHeaders().getAllow()).containsExactly(HttpMethod.POST);
+    }
+
+    /** 스프링이 허용 메서드를 안 알려주는 경우가 있다. Allow 를 빼고 405 만 준다 */
+    @Test
+    void 허용_메서드를_모르면_Allow_없이_405_다() {
+        ResponseEntity<BaseResponse<Void>> response = handler.handleMethodNotAllowed(
+                new HttpRequestMethodNotSupportedException("GET"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getHeaders().getAllow()).isEmpty();
     }
 
     private MethodArgumentTypeMismatchException mismatch(String name, Object value) {
