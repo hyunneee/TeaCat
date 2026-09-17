@@ -19,6 +19,13 @@ export interface PocaDexEntry {
   /** 몇 장 가졌는가. 0 이면 아직 없는 칸 */
   count: number;
   /**
+   * 그중 몇 장이 마켓에 올라가 있는가.
+   *
+   * 🔴 `count` 에서 빼지 **않습니다** — 판매 중인 카드도 팔리기 전까지 내 것입니다.
+   * 이 값은 "내 카드가 지금 어디 있나" 를 점 하나로 알려주기 위한 것뿐입니다.
+   */
+  listedCount: number;
+  /**
    * 대표 카드의 photocardId — 눌렀을 때 열 상세.
    * 안 가진 칸은 null 이라 누를 것이 없습니다.
    */
@@ -50,12 +57,37 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
  * 도감의 자리가 바뀌어서, 외워 둔 위치로 찾아가는 도감의 성질이 사라집니다.
  */
 export function buildPocaDex(pool: DrawPoolCard[], mine: MyPhotocard[]): PocaDexEntry[] {
-  const owned = new Map<number, { count: number; photocardId: number }>();
+  interface Owned {
+    count: number;
+    listedCount: number;
+    photocardId: number;
+    /** 대표로 고른 카드가 판매 중인가 — 아래에서 더 나은 대표로 바꿀 때만 씁니다 */
+    representativeListed: boolean;
+  }
+  const owned = new Map<number, Owned>();
 
   for (const card of mine) {
     const found = owned.get(card.designId);
-    if (found) found.count += 1;
-    else owned.set(card.designId, { count: 1, photocardId: card.photocardId });
+    if (!found) {
+      owned.set(card.designId, {
+        count: 1,
+        listedCount: card.listed ? 1 : 0,
+        photocardId: card.photocardId,
+        representativeListed: card.listed,
+      });
+      continue;
+    }
+
+    found.count += 1;
+    if (card.listed) found.listedCount += 1;
+
+    /* 🔴 대표는 **보관 중인 카드를 먼저** 고릅니다. 세 장 중 한 장만 마켓에 올려 둔 사람이
+       칸을 눌렀을 때 판매 중인 카드의 상세로 떨어지면, 거기서 할 수 있는 일이 "판매 내리기"
+       뿐이라 남은 두 장을 보러 온 사람에게는 막힌 길입니다. */
+    if (found.representativeListed && !card.listed) {
+      found.photocardId = card.photocardId;
+      found.representativeListed = false;
+    }
   }
 
   return pool.map((design) => {
@@ -71,6 +103,7 @@ export function buildPocaDex(pool: DrawPoolCard[], mine: MyPhotocard[]): PocaDex
          틀린 칸에 넣는 것보다 안 보이는 쪽이 고치기 쉽습니다. */
       role: design.group ? pocaRole(design.group, design.grade ?? undefined) : null,
       count: has?.count ?? 0,
+      listedCount: has?.listedCount ?? 0,
       photocardId: has?.photocardId ?? null,
     };
   });
