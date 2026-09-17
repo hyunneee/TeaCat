@@ -135,6 +135,13 @@ export const ROUTES = {
    */
   DEV_FACE: '/dev/face',
 
+  /**
+   * 개발용 임계값 실측 화면.
+   * 사진을 여러 명 × 여러 장 넣어 `gate.threshold.*` 에 넣을 숫자를 정합니다.
+   * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
+   */
+  DEV_FACE_BENCH: '/dev/face-bench',
+
   NOT_FOUND: '*',
 } as const;
 

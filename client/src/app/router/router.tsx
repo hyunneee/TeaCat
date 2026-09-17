@@ -200,6 +200,12 @@ const devRoutes: RouteObject[] = IS_DEV_BUILD
           createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage')),
         ),
       },
+      {
+        path: ROUTES.DEV_FACE_BENCH,
+        element: withBoundary(
+          createElement(page(() => import('@/pages/DevFaceBenchPage'), 'DevFaceBenchPage')),
+        ),
+      },
     ]
   : [];
 
