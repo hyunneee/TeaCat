@@ -172,6 +172,11 @@ services:
       # 🔴 이걸 빼면 기본값(http://localhost:8080/...)이 SSAFY 에 그대로 나가서
       #    로그인을 마친 사용자가 localhost 로 튕긴다. SSAFY 개발자센터에 등록한 주소와 같아야 한다
       SSAFY_REDIRECT_URI: https://dev.teacat.site/api/auth/oauth/ssafy/callback
+
+      # 가상 대기실 정원 (server/QUEUE_DESIGN.md 5장). 부하테스트로 잰 값이라 코드 밖에 둔다.
+      #   2026-09-17 재측정: 이 서버(cpus 1.5 · 좌석맵 1초 캐시)가 좌석 페이지 사용자 5,000명까지 처리했다.
+      #   .env.dev 에 QUEUE_CAPACITY 가 있으면 그 값, 없으면 5000
+      QUEUE_CAPACITY: ${QUEUE_CAPACITY:-5000}
     # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
     #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
     #    운영까지 올리면 JVM 두 개가 각각 12G 를 노리게 된다.
