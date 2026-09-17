@@ -6,6 +6,7 @@ import com.teacat.server.nft.client.PhotocardNftMetadata;
 import com.teacat.server.nft.dto.request.NftPhotocardDesignCreateRequest;
 import com.teacat.server.nft.dto.response.NftDrawPoolCardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDesignResponse;
+import com.teacat.server.nft.entity.NftDesignChainStatus;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
@@ -130,10 +131,18 @@ public class NftPhotocardDesignService {
      * <p>🔴 <b>공연 좌석에서 나오는 도안은 담기지 않는다</b>({@code performanceId IS NULL}).
      * 그건 아직 열리지 않은 공연의 카드까지 도감에 미리 보여주는 셈이 되고, 역할
      * 꼬리표({@code group})도 뽑기 풀 도안에만 붙어 있어 거를 방법이 없다.
+     *
+     * <p>🔴 <b>온체인 등록이 끝난 것만 담는다.</b> 뽑기는 {@code REGISTERED} 인 도안만
+     * 고르므로(뽑기 후보 쿼리), 미등록 도안을 실으면 <b>영영 채워지지 않는 물음표 칸</b>이
+     * 생긴다 — 사용자는 이유도 모르고 계속 뽑는다. 어드민 목록은 반대로 미등록까지
+     * 보여준다(운영자는 등록이 어디까지 갔는지를 봐야 한다).
      */
     @Transactional(readOnly = true)
     public List<NftDrawPoolCardResponse> getDrawPoolCards() {
-        return designRepository.findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc().stream()
+        return designRepository
+                .findAllByDrawPoolTrueAndPerformanceIdIsNullAndChainStatusOrderByIdAsc(
+                        NftDesignChainStatus.REGISTERED)
+                .stream()
                 .map(NftDrawPoolCardResponse::from)
                 .toList();
     }

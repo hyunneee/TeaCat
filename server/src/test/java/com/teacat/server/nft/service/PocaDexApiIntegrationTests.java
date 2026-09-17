@@ -78,6 +78,24 @@ class PocaDexApiIntegrationTests extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.data[0].name").value("김예린"));
     }
 
+    /**
+     * 🔴 <b>온체인 등록이 끝나지 않은 도안은 도감에 들어가지 않는다.</b>
+     *
+     * <p>뽑기는 {@code chain_status = 'REGISTERED'} 인 도안만 고른다(뽑기 후보 쿼리). 미등록
+     * 도안을 도감에 실으면 <b>영영 채워지지 않는 물음표 칸</b>이 생기고, 사용자는 이유도
+     * 모르고 계속 뽑는다. 도감의 조건은 뽑기의 조건과 같아야 한다.
+     */
+    @Test
+    void 온체인_등록_전_도안은_도감에_들어가지_않는다() throws Exception {
+        insertDrawPoolDesign("등록된카드", 100, "서울 5반 · 코치", "SPECIAL");
+        insertPendingDrawPoolDesign("등록중인카드", "서울 5반 · 교육생");
+
+        mockMvc.perform(get("/photocard-designs/draw-pool").header("Authorization", userToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].name").value("등록된카드"));
+    }
+
     @Test
     void 비로그인은_거절한다() throws Exception {
         insertDrawPoolDesign("김예린", 100, "서울 5반 · 코치", "SPECIAL");
@@ -101,6 +119,17 @@ class PocaDexApiIntegrationTests extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].designId").value(designId));
+    }
+
+    /** 아직 체인에 올리지 않은 뽑기 풀 도안 (`insertDrawPoolDesign` 은 REGISTERED 로 넣는다) */
+    private void insertPendingDrawPoolDesign(String name, String groupName) {
+        jdbcTemplate.update("""
+                INSERT INTO nft_photocard_designs
+                    (performance_general_id, name, image_url, total_supply, draw_pool,
+                     chain_status, group_name, grade)
+                VALUES (NULL, ?, '/pending.png', 100, true,
+                        'PENDING', ?, 'COMMON'::nft_photocard_grade)
+                """, name, groupName);
     }
 
     private String userToken() {
