@@ -150,4 +150,19 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".analytics")
                 .build();
     }
+
+    /**
+     * 현장 검표.
+     *
+     * <p>{@code gate.enabled} 가 false 면 컨트롤러 빈이 없어 이 그룹은 <b>비어 있다.</b>
+     * 그룹 자체는 남는다 — 스위치를 켠 환경에서 문서가 곧바로 나오게 하기 위해서다.
+     */
+    @Bean
+    public GroupedOpenApi gateApi() {
+        return GroupedOpenApi.builder()
+                .group("11-gate")
+                .displayName("현장 검표")
+                .packagesToScan(BASE_PACKAGE + ".gate")
+                .build();
+    }
 }
