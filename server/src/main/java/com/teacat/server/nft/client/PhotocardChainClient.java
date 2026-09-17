@@ -98,7 +98,7 @@ public class PhotocardChainClient {
      * @param to           받는 지갑 주소
      */
     public record IssueItem(String photocardKey, String designId, String to,
-                            Long photocardId, Long designDbId) {
+                            String photocardId, String designDbId) {
     }
 
     /**
