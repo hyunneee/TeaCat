@@ -50,22 +50,29 @@ export function MyNftsPage() {
       <Header title="내 포토카드" />
 
       <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
+        {/* 🔴 검색창과 드롭다운을 **같은 높이의 한 벌**로 둡니다. 예전에는 Select 가
+            글자 버튼(약 28px)이라 48px 입력 옆에서 위아래가 안 맞고, 입력이 `flex-1` 도
+            아니어서 오른쪽에 빈 자리가 남았습니다 (QA: "한쪽으로 쏠리고 여백도 있다").
+            입력이 남은 폭을 다 먹고, 드롭다운은 글자가 잘리지 않을 만큼만 차지합니다. */}
         <div className="mb-4 flex items-center gap-2">
-          <Input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onClear={() => setKeyword('')}
-            placeholder="카드 이름, 소속으로 검색"
-            leftIcon={<Search size={17} />}
-            type="search"
-            tone="contrast"
-          />
+          <div className="min-w-0 flex-1">
+            <Input
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onClear={() => setKeyword('')}
+              placeholder="카드 이름, 소속으로 검색"
+              leftIcon={<Search size={17} />}
+              type="search"
+              tone="contrast"
+            />
+          </div>
           <Select
             label="역할"
+            variant="field"
             options={DEX_ROLE_OPTIONS}
             value={role}
             onChange={setRole}
-            className="shrink-0"
+            className="w-28 shrink-0"
           />
         </div>
 
