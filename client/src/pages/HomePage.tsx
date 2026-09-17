@@ -140,7 +140,8 @@ export function HomePage() {
    * 사람들이 홈에 보러 오는 정보였습니다.
    *
    * 섞여도 헷갈리지 않는 것은 카드마다 상태 칩이 붙고(예매중·매진·오픈 예정),
-   * **살 수 있는 것이 앞에 오도록** 정렬하기 때문입니다 (`compareForRail`).
+   * **티켓팅 시각 오름차순**으로 정렬하기 때문입니다 (`compareForRail`) — 이미 열린 공연이
+   * 앞에, 그 뒤에 곧 열릴 공연이 임박한 순으로 붙습니다.
    */
   const rail = (concerts ?? []).filter(isConcertOnRail).sort(compareForRail).slice(0, RAIL_LIMIT);
 
