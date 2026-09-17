@@ -17,9 +17,11 @@ import type { Distribution, EnrollMode } from '@/features/face';
 /**
  * 🛠 **개발용** 임계값 실측 화면. (`/dev/face-bench`)
  *
- * `gate.threshold.{match,review,margin}` 에 넣을 숫자를 정하는 곳입니다. 서버에 들어 있는
- * 0.70 / 0.55 / 0.05 는 **근거 없는 자리 채우기**라, 여기서 재서 바꿔야 게이트를 켤 수
- * 있습니다. (GATE_PLAN.md 8-3)
+ * 게이트 검표(`/admin/check-in`)가 쓰는 **`Face.SAME_PERSON_THRESHOLD`** 를 정하는 곳입니다.
+ * 지금 서버에 박혀 있는 **0.65 는 근거 없는 값**이라, 여기서 실제 사람들로 재서 바꿔야 합니다.
+ *
+ * <p>검표는 QR 로 티켓을 특정한 뒤 **1:1** 로 대조하므로, 아래 **1:1 분포와 오류율**이
+ * 그 값을 정하는 근거입니다. 1:N 시뮬레이션은 QR 없이 얼굴만으로 찾아야 할 때를 위한 참고입니다.
  *
  * <p>사진 3장을 비교하는 `/dev/face` 와 하는 일이 다릅니다 — 저쪽은 "파이프라인이 도는가",
  * 여기는 "몇 점으로 끊을 것인가" 입니다.
@@ -254,6 +256,12 @@ export function DevFaceBenchPage() {
               찍게 하는 쪽보다 훨씬 비쌉니다 — <b>오인 통과 0 을 먼저 맞추고</b>, 거기서
               본인 거절이 몇 %인지 보세요.
             </p>
+
+            {bench.zeroFar && (
+              <pre className="surface-2 overflow-x-auto rounded-xl p-3 text-[0.6875rem] leading-relaxed">
+                {javaSnippet(bench.zeroFar.threshold)}
+              </pre>
+            )}
           </section>
         )}
 
@@ -261,10 +269,11 @@ export function DevFaceBenchPage() {
         {split.templates.length > 0 && (
           <section className="surface shadow-card space-y-4 rounded-2xl p-4">
             <div>
-              <p className="text-sm font-bold">1:N 게이트 시뮬레이션</p>
+              <p className="text-sm font-bold">1:N 시뮬레이션 (참고)</p>
               <p className="text-subtle text-xs leading-relaxed">
-                서버의 판정 규칙(<code>GateVerifyService</code>)을 그대로 돌립니다. 등록해 둔
-                {' '}{split.templates.length}명 중에서 찾습니다.
+                <b>지금 검표는 QR 로 티켓을 특정해 1:1 로 대조합니다</b> — 이 칸은{' '}
+                <b>QR 없이 얼굴만으로 찾아야 할 때</b>를 미리 재보는 자리입니다. 등록해 둔{' '}
+                {split.templates.length}명 중에서 찾습니다.
               </p>
             </div>
 
@@ -344,9 +353,6 @@ export function DevFaceBenchPage() {
               눈으로 확인한다는 뜻이고, 입구에 사람이 이미 서 있습니다.
             </p>
 
-            <pre className="surface-2 overflow-x-auto rounded-xl p-3 text-[0.6875rem] leading-relaxed">
-              {yamlSnippet(thresholds)}
-            </pre>
           </section>
         )}
 
@@ -383,13 +389,16 @@ function percent(ratio: number) {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
-function yamlSnippet({ match, review, margin }: { match: number; review: number; margin: number }) {
-  return `# server/src/main/resources/application.yaml
-gate:
-  threshold:
-    match: \${GATE_THRESHOLD_MATCH:${match.toFixed(2)}}
-    review: \${GATE_THRESHOLD_REVIEW:${review.toFixed(2)}}
-    margin: \${GATE_THRESHOLD_MARGIN:${margin.toFixed(2)}}`;
+/**
+ * 검표가 실제로 쓰는 값. 지금은 `Face.java` 의 상수 하나입니다.
+ *
+ * 🔴 **오인 통과가 0 이 되는 최저 임계값**을 씁니다. 입장 통제에서는 남을 들여보내는 쪽이
+ *    본인을 한 번 더 찍게 하는 쪽보다 훨씬 비싸서, 거기서 출발해 본인 거절이 견딜 만한지
+ *    보는 순서가 맞습니다.
+ */
+function javaSnippet(threshold: number) {
+  return `// server/src/main/java/com/teacat/server/user/entity/Face.java
+public static final double SAME_PERSON_THRESHOLD = ${threshold.toFixed(2)};`;
 }
 
 function DistributionRow({
