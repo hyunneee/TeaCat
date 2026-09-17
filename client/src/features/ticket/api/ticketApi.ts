@@ -84,7 +84,22 @@ export const ticketApi = {
   /** 내 티켓 목록. 최신 예매순이고, 취소된 예매도 함께 옵니다 */
   list: () => http.get<ApiTicket[]>('/users/me/tickets').then((list) => list.map(toTicket)),
 
-  detail: (ticketId: string) => http.get<ApiTicket>(`/users/me/tickets/${ticketId}`).then(toTicket),
+  /**
+   * 특정 회원의 티켓 (어드민 회원 상세).
+   *
+   * 🔴 <b>여기 두는 이유</b> — 서버 응답 형태(`ApiTicket`)를 아는 곳이 이 파일 하나여야 합니다.
+   * 어드민 쪽에서 `http.get<Ticket[]>` 로 바로 부르면 타입만 맞고 **필드 이름이 달라
+   * 화면에서 undefined 가 됩니다.** 실제로 그렇게 냈다가 `formatDateTime(undefined)` 이
+   * `RangeError` 를 던져 회원 상세가 통째로 "문제가 발생했어요" 로 떨어졌습니다
+   * (티켓이 있는 회원만 — 없으면 빈 목록이라 지나갔습니다).
+   *
+   * 응답은 `/users/me/tickets` 와 같은 DTO 라 어댑터도 그대로 씁니다.
+   */
+  ofUser: (userId: number) =>
+    http.get<ApiTicket[]>(`/admin/users/${userId}/tickets`).then((list) => list.map(toTicket)),
+
+  detail: (ticketId: string) =>
+    http.get<ApiTicket>(`/users/me/tickets/${ticketId}`).then(toTicket),
 
   /**
    * 게이트에 보여줄 QR 문자열.
