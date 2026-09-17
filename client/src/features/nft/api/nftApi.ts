@@ -68,6 +68,19 @@ export const nftApi = {
       idempotencyKey,
     }),
 
+  tradeStatus: (tradeId: number) => http.get<PurchaseResult>(`/nft-trades/${tradeId}`),
+
+  /** 블록 확정까지 구매 버튼의 pending 상태를 유지한다. */
+  waitForTrade: async (trade: PurchaseResult): Promise<PurchaseResult> => {
+    let current = trade;
+    const terminal = ['COMPLETED', 'COMPENSATED', 'FAILED', 'MANUAL_REVIEW'];
+    for (let attempt = 0; attempt < 90 && !terminal.includes(current.status); attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+      current = await http.get<PurchaseResult>(`/nft-trades/${trade.tradeId}`);
+    }
+    return current;
+  },
+
   /** 판매 등록. `description` 은 선택입니다(서버 500자 제한) */
   list: (photocardId: number, body: { price: number; description?: string }) =>
     http.post<PhotocardListing>(`/photocards/${photocardId}/listing`, body),

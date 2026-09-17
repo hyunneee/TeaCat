@@ -146,6 +146,7 @@ export type MyAuctionFilter = (typeof MY_AUCTION_FILTERS)[number]['value'];
 /** 경매 상태를 화면에 쓰는 말로. 진행 중은 카운트다운이 대신하므로 뱃지를 달지 않습니다 */
 export const AUCTION_STATUS_LABEL: Record<AuctionStatus, string> = {
   ACTIVE: '진행 중',
+  SETTLING: '정산 중',
   SOLD: '낙찰',
   EXPIRED: '유찰',
   CANCELLED: '취소함',
@@ -155,6 +156,7 @@ export const AUCTION_STATUS_LABEL: Record<AuctionStatus, string> = {
 export const MY_BID_RESULT: Record<MyBidResult, { label: string; tone: 'neutral' | 'success' | 'warning' }> = {
   BIDDING: { label: '입찰 중', tone: 'neutral' },
   OUTBID: { label: '밀림', tone: 'warning' },
+  SETTLING: { label: '정산 중', tone: 'neutral' },
   WON: { label: '낙찰', tone: 'success' },
   LOST: { label: '패찰', tone: 'neutral' },
 };

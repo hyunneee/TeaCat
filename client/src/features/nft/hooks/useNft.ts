@@ -216,9 +216,15 @@ export function usePurchasePhotocard() {
     }: {
       photocardId: number;
       idempotencyKey: string;
-    }) => nftApi.purchase(photocardId, idempotencyKey),
+    }) => nftApi.purchase(photocardId, idempotencyKey).then(nftApi.waitForTrade),
     retry: false,
-    onSuccess: () => {
+    onSuccess: (trade) => {
+      if (trade.status !== 'COMPLETED') {
+        toast.error(trade.status === 'COMPENSATED'
+          ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
+          : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.');
+        return;
+      }
       invalidateTrade();
       toast.success('포토카드를 구매했어요.');
     },
