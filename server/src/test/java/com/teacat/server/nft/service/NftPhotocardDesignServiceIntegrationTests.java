@@ -94,7 +94,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
         willReturn(new PhotocardDesignRegisterResult(
                 status, "PENDING".equals(status) ? TX_HASH : null,
                 "1", "100", "ipfs://" + METADATA_CID))
-                .given(chainClient).registerDesign(any(), anyInt(), eq(METADATA_CID));
+                .given(chainClient).registerDesign(any(), any(), anyInt(), eq(METADATA_CID));
     }
 
     @Test
@@ -144,7 +144,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     @Test
     void 온체인_등록이_실패해도_도안은_남고_재시도로_살아난다() {
         willThrow(new BusinessException(NftErrorCode.DESIGN_REGISTRATION_FAILED))
-                .given(chainClient).registerDesign(any(), anyInt(), any());
+                .given(chainClient).registerDesign(any(), any(), anyInt(), any());
 
         NftPhotocardDesignResponse created = designService.create(request());
 

@@ -114,11 +114,26 @@ export interface PhotocardListing {
 }
 
 /** 구매(P5) 응답 */
+export type TradeSettlementStatus =
+  | 'PENDING'
+  | 'CAT_SUBMITTED'
+  | 'CAT_CONFIRMED'
+  | 'NFT_SUBMITTED'
+  | 'COMPLETED'
+  | 'COMPENSATING'
+  | 'REFUND_SUBMITTED'
+  | 'COMPENSATED'
+  | 'FAILED'
+  | 'MANUAL_REVIEW';
+
 export interface PurchaseResult {
   tradeId: number;
   photocardId: number;
   price: number;
-  tradedAt: string;
+  tradedAt?: string | null;
+  status: TradeSettlementStatus;
+  completedAt?: string | null;
+  failureCode?: string | null;
 }
 
 /** 내 구매 내역 항목 */

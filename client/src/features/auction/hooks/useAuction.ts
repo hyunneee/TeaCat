@@ -5,7 +5,7 @@ import { STALE_TIME } from '@/shared/constants';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
 import { useIsLoggedIn } from '@/features/auth';
-import { nftKeys } from '@/features/nft';
+import { nftApi, nftKeys } from '@/features/nft';
 import { tokenKeys } from '@/features/token';
 import { auctionApi, auctionKeys } from '../api/auctionApi';
 import { DEFAULT_AUCTION_SORT, type AuctionSort } from '../model/auction.model';
@@ -17,7 +17,6 @@ const PAGE_SIZE = 20;
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
   return last.hasNext && last.nextCursor ? last.nextCursor : undefined;
 }
-
 /**
  * 진행 중 경매 목록 — 커서 페이지.
  *
@@ -170,9 +169,16 @@ export function usePlaceBid(auctionId: number) {
  */
 export function useBuyNow(auctionId: number) {
   return useMutation({
-    mutationFn: (idempotencyKey: string) => auctionApi.buyNow(auctionId, idempotencyKey),
+    mutationFn: (idempotencyKey: string) =>
+      auctionApi.buyNow(auctionId, idempotencyKey).then(nftApi.waitForTrade),
     retry: false,
-    onSuccess: () => {
+    onSuccess: (trade) => {
+      if (trade.status !== 'COMPLETED') {
+        toast.error(trade.status === 'COMPENSATED'
+          ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
+          : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.');
+        return;
+      }
       invalidateAuction(auctionId);
       toast.success('즉시구매로 포토카드를 가져왔어요.');
     },

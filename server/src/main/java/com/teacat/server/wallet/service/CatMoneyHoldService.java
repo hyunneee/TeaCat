@@ -67,6 +67,13 @@ public class CatMoneyHoldService {
         return holdRepository.save(CatMoneyHold.create(userId, amount, refType, refId));
     }
 
+    /** 아직 체인에 들어오지 않은 판매대금을 먼저 잠가 보상 전 지출을 막는다. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public CatMoneyHold holdIncoming(Long userId, long amount, CatMoneyHoldRefType refType, Long refId) {
+        lockRepository.lockUser(userId);
+        return holdRepository.save(CatMoneyHold.create(userId, amount, refType, refId));
+    }
+
     /**
      * 묶인 돈을 풀어준다 (입찰이 밀렸을 때, 즉시구매로 경매가 끝났을 때).
      *
@@ -80,11 +87,10 @@ public class CatMoneyHoldService {
     }
 
     /**
-     * 묶인 돈을 실제로 가져간다 (낙찰, 즉시구매).
+     * 온체인 전송이 확정된 홀드를 장부상 사용 완료로 바꾼다.
      *
-     * <b>캣머니가 실제로 움직이는 유일한 지점이다.</b>
-     * TODO(wallet): 체인 transfer API 가 생기면 여기서 구매자 → 판매자 transfer 를 보내고 capture_tx_hash 를 저장한다.
-     *               확정 추적은 WalletSeedGrant 와 같은 방식으로 wallet 이 맡는다.
+     * 실제 구매자 → 판매자 전송과 확정 추적은 NFT 거래 정산 프로세서가 담당한다.
+     * 외부 I/O를 DB 트랜잭션 밖에서 끝낸 뒤 이 메서드를 호출한다.
      *
      * @return 이 호출로 확정됐으면 true. 홀드가 없거나 이미 끝났으면 false (멱등)
      */
@@ -93,5 +99,11 @@ public class CatMoneyHoldService {
         return holdRepository.findByRefTypeAndRefId(refType, refId)
                 .map(CatMoneyHold::capture)
                 .orElse(false);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordCaptureTx(CatMoneyHoldRefType refType, Long refId, String txHash) {
+        holdRepository.findByRefTypeAndRefId(refType, refId)
+                .ifPresent(hold -> hold.recordCaptureTx(txHash));
     }
 }

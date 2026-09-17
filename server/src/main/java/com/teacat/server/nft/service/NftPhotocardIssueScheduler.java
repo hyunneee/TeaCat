@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
  * 다음 주기에 다시 잡힌다. 카드 행만 만들고 체인 전송이 실패한 경우도, PENDING 카드가 남아
  * {@code mintPendingForSchedule} 로 이어 보내진다.
  *
- * <p>재발급·재전송이 모두 멱등이라({@code photocardKey = nft_photocards.id}) 인스턴스가 여러 개여도
+ * <p>재발급·재전송이 모두 멱등이라({@code photocardKey = nft_photocards.issue_key}) 인스턴스가 여러 개여도
  * 락 라이브러리는 필요 없다 — {@code SchedulingConfig} 주석대로 "인스턴스 하나" 전제이고, 겹쳐도
  * 조회+멱등 요청이라 위험하진 않다.
  */

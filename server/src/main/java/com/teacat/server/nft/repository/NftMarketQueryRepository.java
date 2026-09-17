@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -79,7 +80,8 @@ public class NftMarketQueryRepository {
                        (SELECT round(avg(tr.price))::bigint
                           FROM nft_photocard_trades tr
                           JOIN nft_photocards pc ON pc.id = tr.photocard_id
-                         WHERE pc.design_id = d.id) AS average_price
+                         WHERE pc.design_id = d.id
+                           AND tr.chain_status = 'COMPLETED') AS average_price
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
@@ -147,7 +149,8 @@ public class NftMarketQueryRepository {
                        (SELECT round(avg(tr.price))::bigint
                           FROM nft_photocard_trades tr
                           JOIN nft_photocards pc ON pc.id = tr.photocard_id
-                         WHERE pc.design_id = d.id) AS average_price
+                         WHERE pc.design_id = d.id
+                           AND tr.chain_status = 'COMPLETED') AS average_price
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
@@ -188,6 +191,7 @@ public class NftMarketQueryRepository {
                 JOIN users seller ON seller.id = t.seller_id
                 JOIN users buyer ON buyer.id = t.buyer_id
                 WHERE t.photocard_id = :photocardId
+                  AND t.chain_status = 'COMPLETED'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource("photocardId", photocardId);
         appendTimeCursor(sql, params, "t.traded_at", "t.id", cursorAt, cursorId);
@@ -326,7 +330,9 @@ public class NftMarketQueryRepository {
      */
     public List<PendingMintRow> findPendingMints(Long performanceId, int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
@@ -343,7 +349,9 @@ public class NftMarketQueryRepository {
                         .addValue("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -360,8 +368,11 @@ public class NftMarketQueryRepository {
      */
     public List<PendingMintRow> findPendingDrawMints(int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
+                JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
                 WHERE p.status = 'PENDING'
                   AND p.ticket_id IS NULL
@@ -373,7 +384,9 @@ public class NftMarketQueryRepository {
                 new MapSqlParameterSource("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -458,9 +471,12 @@ public class NftMarketQueryRepository {
     /** {@link #findPendingMints} 의 회차 스코프 버전. 이 회차 티켓의 PENDING 카드만 고른다 */
     public List<PendingMintRow> findPendingMintsForSchedule(Long scheduleId, int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
                 JOIN tickets t ON t.id = p.ticket_id
+                JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
                 WHERE t.performance_detail_id = :scheduleId
                   AND p.status = 'PENDING'
@@ -474,7 +490,9 @@ public class NftMarketQueryRepository {
                         .addValue("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -494,6 +512,7 @@ public class NftMarketQueryRepository {
                 JOIN users seller ON seller.id = t.seller_id
                 JOIN users buyer ON buyer.id = t.buyer_id
                 WHERE %s = :userId
+                  AND t.chain_status = 'COMPLETED'
                 """.formatted(counterpartyColumn, userColumn));
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
         appendTimeCursor(sql, params, "t.traded_at", "t.id", cursorAt, cursorId);
@@ -591,7 +610,8 @@ public class NftMarketQueryRepository {
     public record UserWalletRow(Long userId, Long walletId, String address) {
     }
 
-    /** 발행 요청에 실어 보낼 한 장. {@code photocardId} 가 그대로 온체인 멱등 키다 */
-    public record PendingMintRow(Long photocardId, Long designId, String address) {
+    /** 발행 요청에 실어 보낼 한 장. 관계형 ID와 온체인 식별자를 함께 유지한다. */
+    public record PendingMintRow(Long photocardId, String issueKey, Long designId,
+                                 BigDecimal chainTokenId, String address) {
     }
 }

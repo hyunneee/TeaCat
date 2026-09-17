@@ -14,6 +14,7 @@ import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
 import com.teacat.server.nft.service.NftPhotocardTemplateService;
 import com.teacat.server.nft.service.NftService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -108,9 +109,8 @@ public class NftController {
 
     @Operation(
             summary = "NFT 포토카드 구매",
-            description = "활성 판매를 구매하고 판매 상태·포토카드 소유권·거래 이력을 한 트랜잭션에서 변경합니다. "
-                    + "동시 구매는 행 잠금으로 한 건만 체결되며, 필수 UUID Idempotency-Key로 같은 요청의 중복 체결을 방지합니다. "
-                    + "현재 CAT 원장 미연동 상태이므로 잔액 차감·판매자 지급과 구매 후 잔액 반환은 추후 추가됩니다."
+            description = "캣머니를 예약하고 비동기 온체인 정산을 시작합니다. 응답 status가 COMPLETED가 될 때 소유권 이전이 완료됩니다. "
+                    + "필수 UUID Idempotency-Key로 같은 요청의 중복 체결을 방지합니다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @Parameter(
@@ -125,8 +125,17 @@ public class NftController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
-        return ResponseEntity.ok(BaseResponse.success(
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(BaseResponse.success(
                 nftService.purchase(authUser.id(), photocardId, idempotencyKey)));
+    }
+
+    @Operation(summary = "NFT 거래 정산 상태 조회")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/nft-trades/{tradeId}")
+    public ResponseEntity<BaseResponse<NftTradeStatusResponse>> getTradeStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long tradeId) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getTradeStatus(authUser.id(), tradeId)));
     }
 
     @Operation(

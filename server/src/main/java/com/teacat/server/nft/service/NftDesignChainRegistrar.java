@@ -44,7 +44,8 @@ public class NftDesignChainRegistrar {
 
         PhotocardDesignRegisterResult result;
         try {
-            result = chainClient.registerDesign(target.designId(), target.maxSupply(), target.metadataCid());
+            result = chainClient.registerDesign(target.designId(), target.chainTokenId(),
+                    target.maxSupply(), target.metadataCid());
         } catch (RuntimeException e) {
             // 보낸 적이 없으므로 되돌린다. 도안은 남고 등록만 다시 보내면 된다
             writer.applyRegisterNotSent(designId);

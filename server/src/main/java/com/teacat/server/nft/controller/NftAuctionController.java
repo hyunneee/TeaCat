@@ -150,7 +150,7 @@ public class NftAuctionController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long auctionId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
-        return ResponseEntity.ok(BaseResponse.success(
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(BaseResponse.success(
                 auctionService.buyNow(authUser.id(), auctionId, idempotencyKey)));
     }
 

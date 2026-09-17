@@ -18,7 +18,8 @@
     "chain:reset": "npm -w @teacat/contracts run deploy:localhost",
     "deploy:ssafy": "npm -w @teacat/contracts run deploy:ssafy",
     "compile": "npm -w @teacat/contracts run compile",
-    "test": "npm -w @teacat/contracts run test",
+    "test": "npm -w @teacat/contracts run test && npm run test:api",
+    "test:api": "tsx --test api/test/photocardIssueEvidence.test.ts",
     "dev": "npm -w @teacat/api run dev",
     "build": "npm -w @teacat/contracts run build && npm -w @teacat/api run build",
     "typecheck": "npm -w @teacat/contracts run typecheck && npm -w @teacat/api run typecheck"

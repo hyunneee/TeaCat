@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
 /**
  * 공개 오름 입찰 경매.
  *
- * 상태 전이는 ACTIVE → SOLD | EXPIRED | CANCELLED 한 번뿐이다. 시간 판정(마감 여부)은 여기서 하지 않는다 —
+ * 상태 전이는 ACTIVE → SETTLING → SOLD 또는 ACTIVE → EXPIRED | CANCELLED 다. 시간 판정은 여기서 하지 않는다 —
  * 서비스가 DB 시계로 판정한다. 이 클래스는 상태와 불변식만 지킨다.
  */
 @Entity
@@ -114,6 +114,20 @@ public class NftAuction {
         this.winner = winner;
         this.currentPrice = price;
         this.closedAt = now;
+    }
+
+    public void startSettlement(User winner, Long price, LocalDateTime now) {
+        this.status = NftAuctionStatus.SETTLING;
+        this.winner = winner;
+        this.currentPrice = price;
+        this.closedAt = now;
+    }
+
+    public void reopen() {
+        this.status = NftAuctionStatus.ACTIVE;
+        this.winner = null;
+        this.currentPrice = topBid == null ? startPrice : topBid.getAmount();
+        this.closedAt = null;
     }
 
     /** 유찰 */

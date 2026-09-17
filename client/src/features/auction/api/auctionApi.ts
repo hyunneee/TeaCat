@@ -1,4 +1,5 @@
 import { http } from '@/shared/api';
+import type { PurchaseResult } from '@/features/nft';
 import type { CursorPage } from '@/shared/types';
 import type { AuctionSort } from '../model/auction.model';
 import type {
@@ -15,7 +16,6 @@ interface PageParams {
   cursor?: string;
   size?: number;
 }
-
 /**
  * 서버 `NftAuctionController` 경로 그대로. 베이스 `/api` 는 http 가 붙입니다.
  * 응답이 목업인지 실서버인지 이 파일은 모릅니다.
@@ -54,7 +54,7 @@ export const auctionApi = {
 
   /** 즉시구매. `Idempotency-Key`(UUID) 필수 — 부르는 쪽이 만들어 넘깁니다 */
   buyNow: (auctionId: number, idempotencyKey: string) =>
-    http.post<{ tradeId: number; photocardId: number; price: number; tradedAt: string }>(
+    http.post<PurchaseResult>(
       `/auctions/${auctionId}/buy-now`,
       undefined,
       { idempotencyKey },
