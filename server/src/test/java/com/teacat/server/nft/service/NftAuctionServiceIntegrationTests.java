@@ -600,7 +600,7 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(myBidsA.items().get(1).result()).isEqualTo(MyNftBidResponse.Result.SETTLING);
         assertThat(myBidsA.items().get(1).myHighestBid()).isEqualTo(2_500L);
         assertThat(myBidsB.items()).extracting(MyNftBidResponse::result)
-                .containsExactly(MyNftBidResponse.Result.BIDDING, MyNftBidResponse.Result.OUTBID);
+                .containsExactly(MyNftBidResponse.Result.BIDDING, MyNftBidResponse.Result.LOST);
     }
 
     @Test

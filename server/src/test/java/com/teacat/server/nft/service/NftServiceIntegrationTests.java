@@ -892,10 +892,15 @@ class NftServiceIntegrationTests {
 
         List<PhotocardChainClient.IssueItem> items = sent.getValue();
         assertThat(items).hasSize(1);
-        // photocardKey 는 nft_photocards.id 다. 이 값 하나가 한 티켓에 두 장이 나가는 것을 막는다
+        // 체인 식별자는 DB PK와 분리하고, 호환용 DB ID도 함께 전달한다.
         assertThat(items.getFirst().photocardKey()).isEqualTo(
-                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class).toString());
-        assertThat(items.getFirst().designId()).isEqualTo(designId.toString());
+                jdbcTemplate.queryForObject("SELECT issue_key FROM nft_photocards", String.class));
+        assertThat(items.getFirst().designId()).isEqualTo(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(chain_token_id::text, id::text) FROM nft_photocard_designs WHERE id = ?",
+                String.class, designId));
+        assertThat(items.getFirst().photocardId()).isEqualTo(
+                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class));
+        assertThat(items.getFirst().designDbId()).isEqualTo(designId);
         assertThat(items.getFirst().to()).isEqualTo("0x" + String.format("%040x", userId));
     }
 
