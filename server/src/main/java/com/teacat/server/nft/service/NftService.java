@@ -305,8 +305,8 @@ public class NftService {
         List<NftMarketQueryRepository.OwnedRow> pageRows = takePage(rows, size);
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
-                        row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed(),
+                        row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
+                        row.performanceTitle(), row.status(), row.listed(),
                         row.marketType() == null ? null
                                 : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
                         row.marketStatus() == null ? null

@@ -45,6 +45,24 @@ export interface PhotocardArt {
   imageUrl: string | null;
 }
 
+/**
+ * 도감 한 칸의 재료 — **뽑기에서 나올 수 있는 카드 한 종류.**
+ *
+ * 🔴 내가 가진 카드(`MyPhotocard`)가 아니라 **도안**입니다. 도감은 안 가진 칸도 그려야 해서
+ * 가진 것 말고 전체가 필요합니다.
+ *
+ * ⚠️ 공연 좌석에서 나오는 도안은 여기 없습니다 — 아직 열리지 않은 공연의 카드를 미리
+ * 보여주는 셈이 되고, 역할 꼬리표(`group`)도 뽑기 풀 도안에만 붙습니다.
+ */
+export interface DrawPoolCard {
+  designId: number;
+  name: string;
+  imageUrl: string | null;
+  /** 소속. 역할 꼬리표가 붙어 있습니다 — "서울 5반 · 코치" */
+  group: string | null;
+  grade: PocaGrade | null;
+}
+
 /** 내 포카 목록 항목 */
 /**
  * 뽑기 풀 도안에만 붙는 값들. **공연 좌석에서 발행된 카드에는 없습니다**(서버가 생략).
@@ -60,6 +78,11 @@ export interface PocaDesignInfo {
 
 export interface MyPhotocard extends PocaDesignInfo {
   photocardId: number;
+  /**
+   * 어떤 도안인가. 🔴 **도감이 보유 여부를 맞추는 열쇠입니다.**
+   * 이름으로 맞추면 운영자가 도안 이름을 바꾸는 순간 도감의 보유 표시가 통째로 어긋납니다.
+   */
+  designId: number;
   designName: string;
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */

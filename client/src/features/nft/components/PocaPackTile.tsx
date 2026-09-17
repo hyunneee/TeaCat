@@ -55,10 +55,12 @@ export function PocaPackTile({ count, openAt, onClick }: Props) {
                 locked && 'opacity-45',
               )}
             />
-            {/* 포카의 묶음 표시와 **같은 자리**(그림 오른쪽 아래)에 둡니다 —
-                같은 뜻(몇 개인지)이 자리마다 다르면 매번 다시 읽어야 합니다. */}
+            {/* 묶음 표시는 **옆 칸과 같은 자리**(그림 오른쪽 위)에 둡니다 — 같은 뜻(몇 개인지)이
+                자리마다 다르면 격자를 훑을 때마다 다시 읽어야 합니다.
+                🔴 이 칸은 도감(`PocaDexCard`)과 한 격자에 섞입니다. 예전에는 오른쪽 아래였는데,
+                   그건 2열 목록에서 `NftCard` 와 나란히 놓일 때의 자리였습니다. */}
             {count !== undefined && count > 1 && (
-              <Badge tone="brand" size="sm" className="absolute right-1 bottom-1">
+              <Badge tone="brand" size="sm" className="absolute top-1 right-1">
                 ×{count}
               </Badge>
             )}

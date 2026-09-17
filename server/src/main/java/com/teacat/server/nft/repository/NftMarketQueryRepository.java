@@ -181,7 +181,7 @@ public class NftMarketQueryRepository {
                                               Long cursorId,
                                               int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT p.id AS photocard_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title, p.status, p.created_at,
                        CASE WHEN l.id IS NOT NULL OR a.id IS NOT NULL THEN true ELSE false END AS listed,
                        CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
@@ -214,6 +214,7 @@ public class NftMarketQueryRepository {
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new OwnedRow(
                 rs.getLong("photocard_id"),
+                rs.getLong("design_id"),
                 rs.getString("design_name"),
                 rs.getString("image_url"),
                 rs.getString("performance_title"),
@@ -642,7 +643,7 @@ public class NftMarketQueryRepository {
                                String counterpartyNickname, Long price, LocalDateTime tradedAt) {
     }
 
-    public record OwnedRow(Long photocardId, String designName, String imageUrl,
+    public record OwnedRow(Long photocardId, Long designId, String designName, String imageUrl,
                            String performanceTitle, NftMintStatus status, boolean listed,
                            String marketType, String marketStatus,
                            LocalDateTime createdAt,
