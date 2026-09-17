@@ -1,4 +1,10 @@
-export { useConcerts, useConcertDetail, useSchedule, useStartBooking } from './hooks/useConcerts';
+export {
+  useConcerts,
+  useConcertDetail,
+  useRecordConcertView,
+  useSchedule,
+  useStartBooking,
+} from './hooks/useConcerts';
 export { ConcertCard } from './components/ConcertCard';
 export { ScheduleList } from './components/ScheduleList';
 export { concertApi, concertKeys } from './api/concertApi';

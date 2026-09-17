@@ -24,7 +24,14 @@ export const can = {
    * `useTicket` 과 **반대로** 움직입니다 — 닫아 둔 배포에서는 항상 false 입니다.
    * 저쪽은 "막지 마라", 이쪽은 "보여주지 마라" 라서 한 함수로 묶을 수 없습니다.
    */
-  verifyFace: (user: User | null): boolean => FEATURE.face && !!user?.faceRegistered,
+  /**
+   * 게이트 입장 확인 메뉴 (`/admin/check-in`).
+   *
+   * 서버의 `/admin/check-in/**` 은 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
+   * 🔴 얼굴을 닫아 둔 배포(`FEATURE.face === false`)에서는 **보이지 않습니다** —
+   *    대조할 얼굴을 아무도 등록하지 않았으므로 검표를 할 수가 없습니다.
+   */
+  checkIn: (user: User | null): boolean => FEATURE.face && user?.role === 'ADMIN',
 
   /**
    * 공연을 개설할 수 있는가 — 관리자와 공연 주최자.
@@ -65,8 +72,7 @@ export const can = {
    * 일반 회원(USER)과 비로그인은 못 들어옵니다. 운영 역할 셋은 들어오고,
    * 안에서 무엇이 보이는지는 아래 메뉴별 권한이 각각 정합니다.
    */
-  accessAdmin: (user: User | null): boolean =>
-    hasRole(user, 'ADMIN', 'STADIUM', 'PERFORMANCE'),
+  accessAdmin: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM', 'PERFORMANCE'),
 
   /**
    * 회원 관리 메뉴.
@@ -98,8 +104,7 @@ export const can = {
   manageInquiries: (user: User | null): boolean => user?.role === 'ADMIN',
 
   /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
-  manageStadiumLayouts: (user: User | null): boolean =>
-    hasRole(user, 'ADMIN', 'STADIUM'),
+  manageStadiumLayouts: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM'),
 };
 
 export function hasRole(user: User | null, ...roles: UserRole[]): boolean {

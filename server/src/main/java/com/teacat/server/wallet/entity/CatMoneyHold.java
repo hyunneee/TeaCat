@@ -97,6 +97,12 @@ public class CatMoneyHold {
         return true;
     }
 
+    public void recordCaptureTx(String txHash) {
+        if (status == CatMoneyHoldStatus.ACTIVE && txHash != null) {
+            this.captureTxHash = txHash;
+        }
+    }
+
     public boolean isActive() {
         return status == CatMoneyHoldStatus.ACTIVE;
     }

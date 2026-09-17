@@ -9,6 +9,7 @@ import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertListResponse;
 import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
 import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
+import com.teacat.server.performance.dto.response.PerformanceViewResponse;
 import com.teacat.server.performance.entity.BookingOpenStatus;
 import com.teacat.server.performance.entity.PerformanceDetail;
 import com.teacat.server.performance.entity.PerformanceGeneral;
@@ -17,6 +18,7 @@ import com.teacat.server.performance.repository.PerformanceAreaRepository;
 import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.performance.repository.PerformanceDetailRepository;
 import com.teacat.server.performance.repository.PerformanceGeneralRepository;
+import com.teacat.server.performance.repository.PerformanceViewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +51,23 @@ public class PerformanceService {
     private final ScheduleSeatAvailability seatAvailability;
     private final FileStorageService fileStorageService;
     private final BookingPolicyProperties bookingPolicy;
+    private final PerformanceViewRepository performanceViewRepository;
+
+    @Transactional
+    public PerformanceViewResponse recordView(Long concertId, String sessionHeader) {
+        if (!performanceGeneralRepository.existsByIdAndHiddenAtIsNull(concertId)) {
+            throw new BusinessException(PerformanceErrorCode.PERFORMANCE_NOT_FOUND);
+        }
+        final UUID sessionId;
+        try {
+            sessionId = UUID.fromString(sessionHeader);
+        } catch (RuntimeException e) {
+            throw new BusinessException(PerformanceErrorCode.INVALID_VIEW_SESSION);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime bucket = now.withMinute(now.getMinute() < 30 ? 0 : 30).withSecond(0).withNano(0);
+        return new PerformanceViewResponse(performanceViewRepository.record(concertId, sessionId, bucket));
+    }
 
     /**
      * 공연 목록 조회 (API-201).

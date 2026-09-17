@@ -1,6 +1,8 @@
 package com.teacat.server.nft.dto.response;
 
 import com.teacat.server.nft.entity.NftMintStatus;
+import com.teacat.server.nft.entity.NftAuctionStatus;
+import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocardGrade;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -45,11 +47,15 @@ public record NftPhotocardDetailResponse(
         NftPhotocardGrade grade,
 
         @Schema(description = "같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null", example = "1500")
-        Long averagePrice
+        Long averagePrice,
+
+        @Schema(description = "상세 조회 수", example = "42")
+        long viewCount
 ) {
 
     public record Auction(
             @Schema(description = "경매 ID", example = "12") Long auctionId,
+            @Schema(description = "경매 상태", example = "SETTLING") NftAuctionStatus status,
             @Schema(description = "현재가(CAT)", example = "1800") Long currentPrice,
             @Schema(description = "즉시구매가(CAT). 없으면 생략", example = "5000") Long buyNowPrice,
             @Schema(description = "입찰 수", example = "4") int bidCount,
@@ -59,6 +65,7 @@ public record NftPhotocardDetailResponse(
 
     public record Listing(
             @Schema(description = "판매 등록 ID") Long listingId,
+            @Schema(description = "판매 상태", example = "SETTLING") NftListingStatus status,
             @Schema(description = "판매가(CAT)") Long price,
             @Schema(description = "판매자 설명") String sellerDescription,
             @Schema(description = "판매 등록 시각") LocalDateTime listedAt

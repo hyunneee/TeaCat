@@ -121,7 +121,13 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
-      blockchain: { condition: service_healthy }
+      # 🔴 service_healthy 로 두면 안 된다 — blockchain 은 server 가 Flyway 로
+      #    만드는 컬럼(nft_photocards 등)이 없으면 스스로 죽는다(fail-fast).
+      #    그 컬럼은 server 가 떠야 생기는데, server 가 blockchain healthy 를
+      #    기다리면 서로 상대를 기다리며 영원히 안 뜬다 (S15P21A402-190).
+      #    server 는 부팅 시점에 blockchain 을 호출하지 않고 런타임에만 쓰므로
+      #    컨테이너가 시작되기만 하면 충분하다.
+      blockchain: { condition: service_started }
     # .env.dev 에 적은 값이 그대로 들어간다. 스프링이 쓰는 이름으로 적으면
     # compose 를 안 고쳐도 된다 (JWT_SECRET, SSAFY_*, REFRESH_COOKIE_* 등).
     env_file:
