@@ -19,7 +19,6 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
-const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -79,6 +78,7 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminCheckInPage = page(() => import('@/pages/AdminCheckInPage'), 'AdminCheckInPage');
 const AdminUserDetailPage = page(
   () => import('@/pages/AdminUserDetailPage'),
   'AdminUserDetailPage',
@@ -264,6 +264,7 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
                   {
                     /* 개인정보 마스킹은 위 AdminLayout 의 withMask 가 이미 덮습니다 */
                     path: ROUTES.ADMIN_USER_DETAIL(':userId'),
@@ -356,7 +357,6 @@ const routes: RouteObject[] = [
                   element: withMask(withBoundary(<FaceRegisterPage />)),
                 },
                 { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
-                { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
               ]
             : []),
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */

@@ -127,14 +127,30 @@ public class Face {
      * @return 한쪽이라도 길이가 0이면 0 (닮음을 판단할 수 없음)
      */
     public double cosineSimilarityTo(float[] other) {
-        double dot = 0, normThis = 0, normOther = 0;
-        for (int i = 0; i < embedding.length; i++) {
-            dot += (double) embedding[i] * other[i];
-            normThis += (double) embedding[i] * embedding[i];
+        return cosineSimilarity(embedding, other);
+    }
+
+    /**
+     * 임베딩 두 개가 얼마나 닮았는가 (코사인 유사도, -1 ~ 1).
+     *
+     * <p>🔴 <b>계산은 이 한 곳에만 둔다.</b> 티켓도 예매 당시 얼굴을 베껴 갖고 있어서
+     * 같은 비교가 필요한데({@code Ticket.faceSimilarityTo}), 구현을 두 벌로 두면
+     * 한쪽만 고쳐졌을 때 <b>게이트와 마이페이지의 판정이 달라진다</b> — 그건 눈에 띄지 않는다.
+     *
+     * <p>양쪽 다 L2 정규화된 벡터라 내적만으로도 같은 값이 나오지만, 정규화가 깨진 입력이
+     * 들어와도 틀린 점수를 내지 않도록 길이로 나눈다. 128 차원이라 비용은 무시할 수준이다.
+     *
+     * @return 한쪽이라도 길이가 0이면 0 (닮음을 판단할 수 없음)
+     */
+    public static double cosineSimilarity(float[] one, float[] other) {
+        double dot = 0, normOne = 0, normOther = 0;
+        for (int i = 0; i < one.length; i++) {
+            dot += (double) one[i] * other[i];
+            normOne += (double) one[i] * one[i];
             normOther += (double) other[i] * other[i];
         }
 
-        double denominator = Math.sqrt(normThis) * Math.sqrt(normOther);
+        double denominator = Math.sqrt(normOne) * Math.sqrt(normOther);
         return denominator == 0 ? 0 : dot / denominator;
     }
 

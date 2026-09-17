@@ -16,6 +16,7 @@ import { ROUTES } from '@/shared/constants';
 import { formatDateTime, formatPrice } from '@/shared/lib';
 import { can, useAuth } from '@/features/auth';
 import {
+  TicketQr,
   isCancelable,
   isUsable,
   nftStatusLabel,
@@ -24,6 +25,7 @@ import {
   ticketTone,
   useCancelTicket,
   useTicketDetail,
+  useTicketQr,
 } from '@/features/ticket';
 
 export function TicketDetailPage() {
@@ -34,6 +36,9 @@ export function TicketDetailPage() {
 
   const { data: ticket, isPending, isError } = useTicketDetail(ticketId);
   const cancel = useCancelTicket();
+  /* QR 은 **쓸 수 있는 티켓일 때만** 받아옵니다. 취소·지난 티켓에 띄우면 게이트 앞에서
+     "되는 줄 알고" 줄을 섭니다 (서버도 거절하지만 그 전에 알려주는 편이 낫습니다) */
+  const qr = useTicketQr(ticketId, !isPending && !!ticket && isUsable(ticket));
 
   if (isPending) return <PageLoader />;
   if (isError || !ticket) {
@@ -48,12 +53,6 @@ export function TicketDetailPage() {
   /* 입장은 얼굴 인식으로 합니다. 아직 등록 전이면 관람 전에 끝내라고 안내합니다 —
      지난 티켓·취소된 티켓에는 띄우지 않습니다 (할 일이 아니니까) */
   const needsFace = isUsable(ticket) && !can.useTicket(user);
-  /* 대조할 상대(등록된 얼굴)가 있고, 아직 쓸 수 있는 티켓일 때만 확인할 거리가 있습니다.
-     지난 티켓·취소된 티켓에서는 확인해봐야 할 일이 없습니다 */
-  /* 🔴 `useTicket` 이 아니라 `verifyFace` 입니다. 얼굴을 닫아 둔 배포에서
-     `useTicket` 은 **늘 true** 라(예매를 막지 않으려고), 그대로 쓰면 본인 확인
-     버튼이 남아 없는 화면으로 보냅니다. */
-  const canVerify = isUsable(ticket) && can.verifyFace(user);
   const nftLabel = nftStatusLabel(ticket.nftStatus);
   const orderId = ticket.orderId;
 
@@ -106,10 +105,26 @@ export function TicketDetailPage() {
               그래서 상태 줄을 따로 두고, 실패도 "재시도 중" 으로만 씁니다.
               🔴 토큰 번호는 보여주지 않습니다 — 사용자가 할 수 있는 일이 없는 값이라
                  상태 한 줄만 남기는 편이 읽힙니다. (필요하면 포카 상세에서 봅니다) */}
-          {nftLabel && (
-            <p className="text-subtle border-t pt-4 text-xs">NFT 티켓 {nftLabel}</p>
-          )}
+          {nftLabel && <p className="text-subtle border-t pt-4 text-xs">NFT 티켓 {nftLabel}</p>}
         </Card>
+
+        {/* 🔴 입장 QR — 게이트가 이걸 찍고 **얼굴까지 맞아야** 입장 처리됩니다.
+            담기는 값은 티켓 번호가 아니라 서버가 서명한 문자열입니다 (TicketQr 주석).
+            얼굴이 없으면 게이트에서 대조가 성립하지 않으므로 미리 잠가서 알려줍니다. */}
+        {isUsable(ticket) && (
+          <Card className="flex flex-col items-center gap-3 py-6">
+            <TicketQr
+              payload={qr.data ?? null}
+              locked={needsFace}
+              lockMessage="얼굴 등록이 필요해요"
+            />
+            <p className="text-subtle text-center text-xs leading-relaxed">
+              공연장 입구에서 이 QR 을 보여주세요.
+              <br />
+              찍은 뒤 <b>얼굴 확인</b>까지 마쳐야 입장됩니다.
+            </p>
+          </Card>
+        )}
 
         {needsFace && (
           <Button
@@ -119,24 +134,6 @@ export function TicketDetailPage() {
             onClick={() => navigate(ROUTES.FACE_REGISTER)}
           >
             얼굴 등록하러 가기
-          </Button>
-        )}
-
-        {/* 본인 확인 (검증용) — 카메라 속 얼굴이 등록해 둔 얼굴과 같은 사람인지 봅니다.
-            ⚠️ 아직 **입장 처리가 아닙니다.** 확인만 하고 티켓 상태는 바꾸지 않습니다.
-               게이트 검표가 생기면 그때 티켓을 사용 처리하는 API 를 붙입니다.
-            돌아올 곳을 함께 넘겨야 확인을 마치고 이 티켓으로 되돌아옵니다. */}
-        {canVerify && (
-          <Button
-            variant="dark"
-            size="lg"
-            fullWidth
-            leftIcon={<ScanFace size={17} />}
-            onClick={() =>
-              navigate(ROUTES.FACE_VERIFY, { state: { from: ROUTES.TICKET_DETAIL(ticket.id) } })
-            }
-          >
-            본인 확인
           </Button>
         )}
 
