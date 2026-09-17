@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Armchair, BadgeCheck, Coins, Gavel, Hand, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
-import { Badge, Button, Card, Input, Segmented } from '@/shared/components/ui';
+import { Badge, Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import { AuctionCountdown, AuctionCreateForm, useCreateAuction } from '@/features/auction';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
@@ -23,6 +23,7 @@ import {
   pocaSeed,
   useListPhotocard,
   usePhotocardDetail,
+  useRecordPhotocardView,
   usePurchasePhotocard,
   useUnlistPhotocard,
 } from '@/features/nft';
@@ -54,12 +55,14 @@ export function NftDetailPage() {
   const createAuction = useCreateAuction(photocardId);
 
   const { data: card, isPending, isError, error } = usePhotocardDetail(photocardId);
+  useRecordPhotocardView(photocardId, !!card);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();
   const unlist = useUnlistPhotocard();
 
   const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
   const [sellMode, setSellMode] = useState<SellMode>('FIXED');
   const [zoomed, setZoomed] = useState(false);
   /* 판매 폼은 **누른 뒤에** 펼칩니다 — 내 카드를 보러 왔을 뿐인데 폼이 먼저 보이면
@@ -108,7 +111,8 @@ export function NftDetailPage() {
   const balance = token?.available ?? 0;
   const affordable = listing !== null && balance >= listing.price;
   const mintLabel = mintStatusLabel(card.status);
-  const canSubmitListing = Number(price) > 0;
+  const canSubmitListing =
+    card.status === 'MINTED' && Number(price) > 0 && description.length <= 500;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -299,6 +303,15 @@ export function NftDetailPage() {
                     leftIcon={<Coins size={16} />}
                     hint={`보유 캣머니 ${balance.toLocaleString()}개`}
                   />
+                  <Textarea
+                    label="판매 설명"
+                    showRequirement
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+                    placeholder="카드 상태나 거래 관련 설명을 입력해 주세요."
+                    hint={`${description.length}/500자`}
+                    rows={3}
+                  />
                   {/* 값을 정할 기준 — 같은 도안이 지금까지 얼마에 거래됐는지.
                       기준이 없으면 아무 숫자나 적게 되고, 그 값이 다시 다음 사람의 기준이 됩니다. */}
                   {card.averagePrice ? (
@@ -323,6 +336,7 @@ export function NftDetailPage() {
                         {
                           photocardId: card.photocardId,
                           price: Number(price),
+                          description: description.trim() || undefined,
                         },
                         /* 등록되면 폼을 접습니다 — 나중에 판매를 내렸을 때 폼이
                            펼쳐진 채로 되살아나지 않게 */
@@ -370,22 +384,13 @@ export function NftDetailPage() {
                 판매 그만두기
               </Button>
             ) : (
-              /* 🔴 포카 거래는 **2차 배포** 항목입니다. 화면과 폼은 다 만들어 뒀고,
-                 그때 이 onClick 을 `() => setSelling(true)` 로 되돌리기만 하면 됩니다. */
               <Button
                 size="lg"
                 fullWidth
-                onClick={() =>
-                  open('common/confirm', {
-                    title: '아직 준비 중이에요',
-                    message: '포카 거래는 2차 배포 때 만냐옹~',
-                    confirmText: '네~!',
-                    hideCancel: true,
-                    onConfirm: () => {},
-                  })
-                }
+                disabled={card.status !== 'MINTED'}
+                onClick={() => setSelling(true)}
               >
-                판매하기
+                {card.status === 'MINTED' ? '판매하기' : '발행 완료 후 판매할 수 있어요'}
               </Button>
             )
           ) : listing ? (

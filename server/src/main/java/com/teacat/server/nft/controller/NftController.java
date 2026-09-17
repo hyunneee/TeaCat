@@ -11,6 +11,7 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
@@ -78,6 +79,17 @@ public class NftController {
             @PathVariable Long photocardId) {
         return ResponseEntity.ok(BaseResponse.success(
                 nftService.getPhotocard(photocardId, authUser == null ? null : authUser.id())));
+    }
+
+    @Operation(summary = "NFT 포토카드 상세 조회 기록",
+            description = "브라우저 세션과 30분 버킷을 기준으로 중복을 제거해 조회 수를 기록합니다.")
+    @PostMapping("/photocards/{photocardId}/views")
+    public ResponseEntity<BaseResponse<NftPhotocardViewResponse>> recordPhotocardView(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId,
+            @RequestHeader(name = "X-View-Session") String viewSession) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.recordPhotocardView(
+                photocardId, authUser == null ? null : authUser.id(), viewSession)));
     }
 
     @Operation(

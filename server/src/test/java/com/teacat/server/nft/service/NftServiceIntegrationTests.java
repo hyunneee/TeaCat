@@ -15,6 +15,10 @@ import com.teacat.server.wallet.client.CatMoneyBalanceResult;
 import com.teacat.server.wallet.client.CatMoneyClient;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
+import com.teacat.server.performance.service.PerformanceService;
+import com.teacat.server.ranking.service.RankingService;
+import com.teacat.server.search.repository.SearchTrendRepository;
+import com.teacat.server.search.service.SearchService;
 import com.teacat.server.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +35,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -99,6 +104,18 @@ class NftServiceIntegrationTests {
 
     @Autowired
     private com.teacat.server.nft.repository.NftMarketQueryRepository nftMarketQueryRepository;
+
+    @Autowired
+    private PerformanceService performanceService;
+
+    @Autowired
+    private RankingService rankingService;
+
+    @Autowired
+    private SearchTrendRepository searchTrendRepository;
+
+    @Autowired
+    private SearchService searchService;
 
     /*
      * 체인은 붙이지 않는다. server/.env 가 테스트에서도 로드되므로 스텁으로 막지 않으면
@@ -1391,6 +1408,34 @@ class NftServiceIntegrationTests {
     }
 
     @Test
+    void 조회순은_세션별_중복을_제거하고_커서에서도_누락되지_않는다() {
+        Long sellerId = insertUser("view-seller@test.com", "조회 판매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long designId = insertDesign(fixture.performanceId(), "조회 포카", 2);
+        Long firstCardId = insertPhotocard(designId, insertTicket(sellerId, fixture), sellerId);
+        Long secondCardId = insertPhotocard(designId, insertTicket(sellerId, fixture), sellerId);
+        insertListing(firstCardId, sellerId, 100L);
+        insertListing(secondCardId, sellerId, 200L);
+
+        String firstSession = UUID.randomUUID().toString();
+        assertThat(nftService.recordPhotocardView(firstCardId, null, firstSession).counted()).isTrue();
+        assertThat(nftService.recordPhotocardView(firstCardId, null, firstSession).counted()).isFalse();
+        nftService.recordPhotocardView(secondCardId, null, UUID.randomUUID().toString());
+        nftService.recordPhotocardView(secondCardId, null, UUID.randomUUID().toString());
+
+        var firstPage = nftService.getMarketPhotocards(null, null, NftMarketSort.VIEW_DESC, null, 1);
+        var secondPage = nftService.getMarketPhotocards(
+                null, null, NftMarketSort.VIEW_DESC, firstPage.nextCursor(), 1);
+
+        assertThat(firstPage.items()).extracting(NftMarketPhotocardResponse::photocardId)
+                .containsExactly(secondCardId);
+        assertThat(firstPage.items().getFirst().viewCount()).isEqualTo(2L);
+        assertThat(secondPage.items()).extracting(NftMarketPhotocardResponse::photocardId)
+                .containsExactly(firstCardId);
+        assertThat(secondPage.items().getFirst().viewCount()).isEqualTo(1L);
+    }
+
+    @Test
     void 발행이_끝나지_않은_포카는_판매할_수_없다() {
         Long sellerId = insertUser("pending-seller@test.com", "발행 대기 판매자");
         Fixture fixture = insertPerformanceFixture();
@@ -1404,6 +1449,37 @@ class NftServiceIntegrationTests {
         assertNftError(NftErrorCode.PHOTOCARD_NOT_MINTED,
                 () -> nftService.registerListing(sellerId, pendingCardId,
                         new NftListingCreateRequest(100L, "아직 판매 불가")));
+    }
+
+    @Test
+    void 인기_공연은_최근_조회_활동으로_순위를_계산한다() {
+        Fixture first = insertPerformanceFixture();
+        Fixture second = insertPerformanceFixture();
+        performanceService.recordView(first.performanceId(), UUID.randomUUID().toString());
+        performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
+        performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
+
+        var ranking = rankingService.popularConcerts();
+
+        assertThat(ranking).extracting(item -> item.concertId())
+                .containsExactly(second.performanceId(), first.performanceId());
+        assertThat(ranking).extracting(item -> item.score()).containsExactly(2L, 1L);
+    }
+
+    @Test
+    void 실시간_검색어는_이전_시간_순위와_비교해_변동을_계산한다() {
+        LocalDateTime current = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).minusHours(1);
+        searchTrendRepository.replace(current.minusHours(1), List.of(
+                new SearchTrendRepository.Snapshot(1, "alpha", "Alpha", 10),
+                new SearchTrendRepository.Snapshot(2, "beta", "Beta", 8)));
+        searchTrendRepository.replace(current, List.of(
+                new SearchTrendRepository.Snapshot(1, "beta", "Beta", 12),
+                new SearchTrendRepository.Snapshot(2, "gamma", "Gamma", 7)));
+
+        var trends = searchService.trends();
+
+        assertThat(trends.items()).extracting(item -> item.keyword()).containsExactly("Beta", "Gamma");
+        assertThat(trends.items()).extracting(item -> item.trend()).containsExactly("UP", "NEW");
     }
 
     /** 카드팩에서 뽑힌 카드처럼 ticket_id 없이 카드 행을 만든다. ownerId 는 지갑까지 갖춘 회원이어야 한다 */

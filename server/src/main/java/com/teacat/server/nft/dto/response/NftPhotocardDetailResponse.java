@@ -45,7 +45,10 @@ public record NftPhotocardDetailResponse(
         NftPhotocardGrade grade,
 
         @Schema(description = "같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null", example = "1500")
-        Long averagePrice
+        Long averagePrice,
+
+        @Schema(description = "상세 조회 수", example = "42")
+        long viewCount
 ) {
 
     public record Auction(

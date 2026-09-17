@@ -91,6 +91,9 @@ public class NftPhotocard {
     @Column(name = "mint_failure_code", length = 100, updatable = false)
     private String mintFailureCode;
 
+    @Column(name = "view_count", nullable = false)
+    private long viewCount;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -8,6 +8,7 @@ import type {
   PhotocardDetail,
   PhotocardListing,
   PhotocardTradeHistory,
+  PhotocardViewResult,
   PocaDrawResult,
   PocaDrawStatus,
   PocaPackClaim,
@@ -31,6 +32,11 @@ export const nftApi = {
     http.get<CursorPage<MarketPhotocard>>('/nft-market/photocards', { params }),
 
   detail: (photocardId: number) => http.get<PhotocardDetail>(`/photocards/${photocardId}`),
+
+  recordView: (photocardId: number, viewSession: string) =>
+    http.post<PhotocardViewResult>(`/photocards/${photocardId}/views`, undefined, {
+      headers: { 'X-View-Session': viewSession },
+    }),
 
   /**
    * 등록된 카드 그림 전체 (감춘 것 제외, 최신순).

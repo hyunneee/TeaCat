@@ -2,6 +2,7 @@ export {
   useNftMarket,
   usePhotocardArts,
   usePhotocardDetail,
+  useRecordPhotocardView,
   useClaimEventPack,
   useDrawAvailability,
   useMyPhotocards,

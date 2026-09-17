@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
+import { getViewSessionId } from '@/shared/lib';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
 import { useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
 import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
+import type { PhotocardDetail } from '../model/nft.types';
 
 const PAGE_SIZE = 20;
 
@@ -74,6 +76,29 @@ export function usePhotocardDetail(photocardId: number) {
     // URL 파라미터가 숫자가 아니면(`/nft/abc`) 부르지 않습니다. 화면은 에러 상태를 그립니다.
     enabled: Number.isInteger(photocardId) && photocardId > 0,
   });
+}
+
+export function useRecordPhotocardView(photocardId: number, enabled: boolean) {
+  const recordedId = useRef<number | null>(null);
+  const record = useMutation({
+    mutationFn: (id: number) => nftApi.recordView(id, getViewSessionId()),
+    onSuccess: (result, id) => {
+      queryClient.setQueryData<PhotocardDetail>(
+        nftKeys.detail(id),
+        (current) => (current ? { ...current, viewCount: result.viewCount } : current),
+      );
+    },
+  });
+  const { mutate } = record;
+
+  useEffect(() => {
+    if (!enabled || !Number.isInteger(photocardId) || photocardId <= 0) return;
+    if (recordedId.current === photocardId) return;
+    recordedId.current = photocardId;
+    mutate(photocardId);
+  }, [enabled, mutate, photocardId]);
+
+  return record;
 }
 
 /**
@@ -242,7 +267,7 @@ export function useListPhotocard() {
     }: {
       photocardId: number;
       price: number;
-      /** 선택입니다. 지금 화면에는 입력칸이 없어 안 보냅니다(2차 배포 때 다시 붙습니다) */
+      /** 판매 카드 상태와 거래 조건을 설명하는 선택 입력입니다. */
       description?: string;
     }) => nftApi.list(photocardId, { price, description }),
     onSuccess: () => {

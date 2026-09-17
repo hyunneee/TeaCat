@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -28,7 +29,7 @@ public class NftMarketQueryRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id AS photocard_id, l.id AS listing_id, d.name AS design_name,
                        d.image_url, pg.title AS performance_title, l.price,
-                       seller.nickname AS seller_nickname, l.listed_at
+                       seller.nickname AS seller_nickname, l.listed_at, p.view_count
                 FROM nft_photocard_listings l
                 JOIN nft_photocards p ON p.id = l.photocard_id
                 JOIN nft_photocard_designs d ON d.id = p.design_id
@@ -51,6 +52,7 @@ public class NftMarketQueryRepository {
             case RECENT -> " ORDER BY l.listed_at DESC, l.id DESC";
             case PRICE_ASC -> " ORDER BY l.price ASC, l.id ASC";
             case PRICE_DESC -> " ORDER BY l.price DESC, l.id DESC";
+            case VIEW_DESC -> " ORDER BY p.view_count DESC, l.id DESC";
         });
         sql.append(" LIMIT :limit");
         params.addValue("limit", limit);
@@ -63,7 +65,8 @@ public class NftMarketQueryRepository {
                 rs.getString("performance_title"),
                 rs.getLong("price"),
                 rs.getString("seller_nickname"),
-                rs.getObject("listed_at", LocalDateTime.class)
+                rs.getObject("listed_at", LocalDateTime.class),
+                rs.getLong("view_count")
         ));
     }
 
@@ -76,7 +79,7 @@ public class NftMarketQueryRepository {
                        p.created_at AS issued_at, t.id AS ticket_id, pa.grade AS seat_grade, a.area_code,
                        s.row_label, s.seat_number, p.status, l.id AS listing_id,
                        l.price, l.description AS seller_description, l.listed_at,
-                       d.group_name, d.grade::text AS grade,
+                       d.group_name, d.grade::text AS grade, p.view_count,
                        (SELECT round(avg(tr.price))::bigint
                           FROM nft_photocard_trades tr
                           JOIN nft_photocards pc ON pc.id = tr.photocard_id
@@ -117,9 +120,41 @@ public class NftMarketQueryRepository {
                         rs.getObject("listed_at", LocalDateTime.class),
                         rs.getString("group_name"),
                         rs.getString("grade") == null ? null : NftPhotocardGrade.valueOf(rs.getString("grade")),
-                        (Long) rs.getObject("average_price")
+                        (Long) rs.getObject("average_price"),
+                        rs.getLong("view_count")
                 ));
         return rows.stream().findFirst();
+    }
+
+    /**
+     * A view event and the denormalized counter move in the same statement. Concurrent requests for the
+     * same session/bucket can insert at most one event because of uq_nft_photocard_views_bucket.
+     */
+    public ViewCountRow recordPhotocardView(Long photocardId, UUID sessionId, LocalDateTime bucketStartedAt) {
+        String sql = """
+                WITH inserted AS (
+                    INSERT INTO nft_photocard_views
+                           (photocard_id, session_id, bucket_started_at)
+                    VALUES (:photocardId, :sessionId, :bucketStartedAt)
+                    ON CONFLICT (photocard_id, session_id, bucket_started_at) DO NOTHING
+                    RETURNING photocard_id
+                ), updated AS (
+                    UPDATE nft_photocards p
+                       SET view_count = p.view_count + 1
+                      FROM inserted i
+                     WHERE p.id = i.photocard_id
+                    RETURNING p.view_count
+                )
+                SELECT p.view_count, EXISTS (SELECT 1 FROM updated) AS counted
+                  FROM nft_photocards p
+                 WHERE p.id = :photocardId
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("photocardId", photocardId)
+                .addValue("sessionId", sessionId)
+                .addValue("bucketStartedAt", bucketStartedAt);
+        return jdbcTemplate.queryForObject(sql, params,
+                (rs, rowNum) -> new ViewCountRow(rs.getLong("view_count"), rs.getBoolean("counted")));
     }
 
     public List<UserTradeRow> findPurchaseHistory(Long userId,
@@ -548,8 +583,10 @@ public class NftMarketQueryRepository {
         params.addValue("cursorPrice", Long.parseLong(cursorValue));
         if (sort == NftMarketSort.PRICE_ASC) {
             sql.append(" AND (l.price > :cursorPrice OR (l.price = :cursorPrice AND l.id > :cursorId))");
-        } else {
+        } else if (sort == NftMarketSort.PRICE_DESC) {
             sql.append(" AND (l.price < :cursorPrice OR (l.price = :cursorPrice AND l.id < :cursorId))");
+        } else {
+            sql.append(" AND (p.view_count < :cursorPrice OR (p.view_count = :cursorPrice AND l.id < :cursorId))");
         }
     }
 
@@ -574,7 +611,7 @@ public class NftMarketQueryRepository {
 
     public record MarketRow(Long photocardId, Long listingId, String designName, String imageUrl,
                             String performanceTitle, Long price, String sellerNickname,
-                            LocalDateTime listedAt) {
+                            LocalDateTime listedAt, long viewCount) {
     }
 
     public record DetailRow(Long photocardId, String designName, String imageUrl,
@@ -584,7 +621,7 @@ public class NftMarketQueryRepository {
                             String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
                             NftMintStatus status, Long listingId, Long price, String sellerDescription,
                             LocalDateTime listedAt,
-                            String groupName, NftPhotocardGrade grade, Long averagePrice) {
+                            String groupName, NftPhotocardGrade grade, Long averagePrice, long viewCount) {
     }
 
     public record UserTradeRow(Long tradeId, Long photocardId, String designName, String imageUrl,
@@ -613,5 +650,8 @@ public class NftMarketQueryRepository {
     /** 발행 요청에 실어 보낼 한 장. 관계형 ID와 온체인 식별자를 함께 유지한다. */
     public record PendingMintRow(Long photocardId, String issueKey, Long designId,
                                  BigDecimal chainTokenId, String address) {
+    }
+
+    public record ViewCountRow(long viewCount, boolean counted) {
     }
 }

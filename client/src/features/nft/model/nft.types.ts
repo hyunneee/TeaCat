@@ -27,6 +27,7 @@ export interface MarketPhotocard {
   /** 판매가(CAT) */
   price: number;
   sellerNickname: string;
+  viewCount: number;
 }
 
 /**
@@ -62,6 +63,7 @@ export interface MyPhotocard extends PocaDesignInfo {
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */
   performanceTitle: string | null;
   status: PhotocardMintStatus;
+  viewCount: number;
   /** 판매 등록 여부. 가격은 오지 않는다 (서버 미결) */
   listed: boolean;
 }
@@ -111,6 +113,11 @@ export interface PhotocardListing {
   price: number;
   description: string;
   status: ListingStatus;
+}
+
+export interface PhotocardViewResult {
+  viewCount: number;
+  counted: boolean;
 }
 
 /** 구매(P5) 응답 */

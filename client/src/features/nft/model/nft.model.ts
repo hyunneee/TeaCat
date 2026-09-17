@@ -20,6 +20,7 @@ export const NFT_SORTS = [
   { value: 'RECENT', label: '최신순' },
   { value: 'PRICE_ASC', label: '낮은 가격순' },
   { value: 'PRICE_DESC', label: '높은 가격순' },
+  { value: 'VIEW_DESC', label: '조회순' },
 ] as const;
 
 export type NftSort = (typeof NFT_SORTS)[number]['value'];
