@@ -23,7 +23,10 @@ public record NftMarketPhotocardResponse(
         Long price,
 
         @Schema(description = "판매자 닉네임", example = "고척돔지박령")
-        String sellerNickname
+        String sellerNickname,
+
+        @Schema(description = "상세 조회 수", example = "42")
+        long viewCount
 ) {
 }
 

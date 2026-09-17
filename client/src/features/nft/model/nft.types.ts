@@ -15,7 +15,9 @@
  */
 
 export type PhotocardMintStatus = 'PENDING' | 'MINTING' | 'MINTED' | 'FAILED';
-export type ListingStatus = 'ACTIVE' | 'SOLD' | 'CANCELLED';
+export type ListingStatus = 'ACTIVE' | 'SETTLING' | 'SOLD' | 'CANCELLED';
+export type PhotocardMarketType = 'FIXED_PRICE' | 'AUCTION';
+export type PhotocardMarketStatus = 'ACTIVE' | 'SETTLING';
 
 /** 마켓 목록 항목 — 판매 중인 카드만 온다 */
 export interface MarketPhotocard {
@@ -27,6 +29,20 @@ export interface MarketPhotocard {
   /** 판매가(CAT) */
   price: number;
   sellerNickname: string;
+  viewCount: number;
+}
+
+/**
+ * 카드 그림 한 장 (템플릿).
+ *
+ * 🔴 **카드(소유물)가 아니라 그림입니다.** 누가 무엇을 가졌는지와 무관하게,
+ * 서버에 등록된 도안 전체가 내려옵니다. 마켓(`MarketPhotocard`)은 **판매 중인 카드**라
+ * 아무도 안 올리면 0장이지만, 이쪽은 관리자가 올린 그림이라 항상 있습니다.
+ */
+export interface PhotocardArt {
+  templateId: number;
+  name: string;
+  imageUrl: string | null;
 }
 
 /** 내 포카 목록 항목 */
@@ -49,8 +65,13 @@ export interface MyPhotocard extends PocaDesignInfo {
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */
   performanceTitle: string | null;
   status: PhotocardMintStatus;
+  viewCount: number;
   /** 판매 등록 여부. 가격은 오지 않는다 (서버 미결) */
   listed: boolean;
+  /** 고정가/경매 구분. 판매 중이 아니면 null */
+  marketType?: PhotocardMarketType | null;
+  /** ACTIVE 또는 온체인 정산 중. 판매 중이 아니면 null */
+  marketStatus?: PhotocardMarketStatus | null;
 }
 
 /** 포카가 발행된 좌석 */
@@ -78,6 +99,7 @@ export interface PhotocardDetail extends PocaDesignInfo {
   /** 판매 중이 아니면 null. 서버 봉투가 null 을 생략할 수도 있어 undefined 도 허용 */
   listing?: {
     listingId: number;
+    status: ListingStatus;
     price: number;
     sellerDescription: string;
     listedAt: string;
@@ -85,6 +107,7 @@ export interface PhotocardDetail extends PocaDesignInfo {
   /** 경매 중이 아니면 null. 화면은 경매 브랜치에서 그린다 */
   auction?: {
     auctionId: number;
+    status: 'ACTIVE' | 'SETTLING';
     currentPrice: number;
     buyNowPrice: number | null;
     bidCount: number;
@@ -100,12 +123,32 @@ export interface PhotocardListing {
   status: ListingStatus;
 }
 
+export interface PhotocardViewResult {
+  viewCount: number;
+  counted: boolean;
+}
+
 /** 구매(P5) 응답 */
+export type TradeSettlementStatus =
+  | 'PENDING'
+  | 'CAT_SUBMITTED'
+  | 'CAT_CONFIRMED'
+  | 'NFT_SUBMITTED'
+  | 'COMPLETED'
+  | 'COMPENSATING'
+  | 'REFUND_SUBMITTED'
+  | 'COMPENSATED'
+  | 'FAILED'
+  | 'MANUAL_REVIEW';
+
 export interface PurchaseResult {
   tradeId: number;
   photocardId: number;
   price: number;
-  tradedAt: string;
+  tradedAt?: string | null;
+  status: TradeSettlementStatus;
+  completedAt?: string | null;
+  failureCode?: string | null;
 }
 
 /** 내 구매 내역 항목 */

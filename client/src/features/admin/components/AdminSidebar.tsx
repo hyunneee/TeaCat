@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Images,
+  ScanFace,
   Sparkles,
   Music,
   Users,
@@ -79,6 +80,12 @@ const ADMIN_MENU: AdminMenuItem[] = [
     icon: Users,
     visible: can.manageUsers,
     matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_CHECK_IN,
+    label: '입장 확인',
+    icon: ScanFace,
+    visible: can.checkIn,
   },
   {
     to: ROUTES.ADMIN_POCA_TEMPLATES,

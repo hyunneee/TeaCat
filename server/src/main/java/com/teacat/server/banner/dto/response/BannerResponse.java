@@ -1,6 +1,7 @@
 package com.teacat.server.banner.dto.response;
 
 import com.teacat.server.banner.entity.MainBanner;
+import com.teacat.server.banner.entity.MainBannerImageFocus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -28,6 +29,9 @@ public record BannerResponse(
         @Schema(description = "배너 이미지 주소. 공연 배너면 그 공연의 포스터다. 없으면 null")
         String imageUrl,
 
+        @Schema(description = "그림에서 보여줄 부분. 화면이 object-position 으로 옮긴다", example = "CENTER")
+        MainBannerImageFocus imageFocus,
+
         @Schema(description = "누르면 이동할 서비스 내 경로. 없으면 null", example = "/nft")
         String linkPath,
 
@@ -42,6 +46,7 @@ public record BannerResponse(
                 banner.getSubtitle(),
                 banner.getLabel(),
                 imageUrl,
+                banner.getImageFocus(),
                 banner.getLinkPath(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getId()
         );

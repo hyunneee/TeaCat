@@ -7,6 +7,7 @@ import {
   NftCard,
   PocaPackTile,
   groupPhotocards,
+  photocardMarketState,
   photocardSource,
   useDrawAvailability,
   useMyPhotocards,
@@ -88,7 +89,7 @@ export function MyNftsPage() {
                     designName={card.designName}
                     imageUrl={card.imageUrl}
                     performanceTitle={photocardSource(card.performanceTitle)}
-                    state={card.listed ? 'LISTED' : 'STORED'}
+                    state={photocardMarketState(card)}
                     count={count}
                     onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
                   />

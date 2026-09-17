@@ -12,9 +12,11 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
@@ -33,6 +35,8 @@ import com.teacat.server.user.entity.User;
 import com.teacat.server.user.exception.UserErrorCode;
 import com.teacat.server.user.repository.UserRepository;
 import com.teacat.server.wallet.client.BlockchainProperties;
+import com.teacat.server.wallet.entity.CatMoneyHoldRefType;
+import com.teacat.server.wallet.service.CatMoneyHoldService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -74,6 +78,7 @@ public class NftService {
     private final UserRepository userRepository;
     private final NftCursorCodec cursorCodec;
     private final BlockchainProperties blockchainProperties;
+    private final CatMoneyHoldService holdService;
 
     public NftCursorPageResponse<NftMarketPhotocardResponse> getMarketPhotocards(
             Long performanceId, String keyword, NftMarketSort sort, String cursor, Integer requestedSize) {
@@ -90,7 +95,7 @@ public class NftService {
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.price(), row.sellerNickname()))
+                        row.performanceTitle(), row.price(), row.sellerNickname(), row.viewCount()))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -115,11 +120,12 @@ public class NftService {
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
                 : new NftPhotocardDetailResponse.Listing(
-                        row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+                        row.listingId(), row.listingStatus(), row.price(),
+                        row.sellerDescription(), row.listedAt());
         // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
         NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
                 .map(summary -> new NftPhotocardDetailResponse.Auction(
-                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.auctionId(), summary.status(), summary.currentPrice(), summary.buyNowPrice(),
                         summary.bidCount(), summary.endsAt()))
                 .orElse(null);
 
@@ -143,7 +149,24 @@ public class NftService {
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
-                row.groupName(), row.grade(), row.averagePrice());
+                row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
+    }
+
+    @Transactional
+    public NftPhotocardViewResponse recordPhotocardView(Long photocardId, Long viewerId, String sessionHeader) {
+        // Keep the visibility rule identical to the detail endpoint. A hidden card must not be enumerable.
+        getPhotocard(photocardId, viewerId);
+        UUID sessionId;
+        try {
+            sessionId = UUID.fromString(sessionHeader);
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_VIEW_SESSION);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime bucket = now.withMinute(now.getMinute() < 30 ? 0 : 30).withSecond(0).withNano(0);
+        NftMarketQueryRepository.ViewCountRow row =
+                queryRepository.recordPhotocardView(photocardId, sessionId, bucket);
+        return new NftPhotocardViewResponse(row.viewCount(), row.counted());
     }
 
     @Transactional
@@ -154,11 +177,16 @@ public class NftService {
         if (!photocard.isOwnedBy(userId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
         }
-        if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
+        if (!photocard.isMinted()) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_MINTED);
+        }
+        if (listingRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftListingStatus.ACTIVE, NftListingStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
         }
         // 경매 등록도 포카 행 락을 먼저 잡으므로, 여기서 본 결과는 커밋까지 유효하다
-        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+        if (auctionRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftAuctionStatus.ACTIVE, NftAuctionStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
@@ -214,14 +242,23 @@ public class NftService {
         User buyer = userRepository.findById(buyerId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        // TODO(cat-money): CAT 도메인 확정 후 이 위치에서 구매자 차감과 판매자 지급을 수행한다.
-        // 이 연동 전에는 무료 소유권 이전이 되므로 구매 API를 운영 환경에 노출하면 안 된다.
-        LocalDateTime now = LocalDateTime.now();
-        listing.sold(now);
-        photocard.transferTo(buyer);
         NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.complete(listing, buyer, idempotencyKey));
+                NftPhotocardTrade.pendingListing(listing, buyer, idempotencyKey));
+        trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.hold(buyerId, listing.getPrice(), CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.holdIncoming(listing.getSeller().getId(), listing.getPrice(),
+                CatMoneyHoldRefType.NFT_TRADE_SELLER, trade.getId());
+        listing.startSettlement();
         return NftPurchaseResponse.from(trade);
+    }
+
+    public NftTradeStatusResponse getTradeStatus(Long userId, Long tradeId) {
+        NftPhotocardTrade trade = tradeRepository.findById(tradeId)
+                .orElseThrow(() -> new BusinessException(NftErrorCode.TRADE_NOT_FOUND));
+        if (!trade.isParticipant(userId)) {
+            throw new BusinessException(NftErrorCode.TRADE_ACCESS_DENIED);
+        }
+        return NftTradeStatusResponse.from(trade);
     }
 
     public NftCursorPageResponse<NftPurchaseHistoryResponse> getPurchaseHistory(
@@ -269,7 +306,12 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
+                        row.status(), row.listed(),
+                        row.marketType() == null ? null
+                                : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
+                        row.marketStatus() == null ? null
+                                : MyNftPhotocardResponse.MarketStatus.valueOf(row.marketStatus()),
+                        row.groupName(), row.grade(), row.averagePrice()))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),
@@ -574,7 +616,11 @@ public class NftService {
     }
 
     private String marketCursor(NftMarketSort sort, NftMarketQueryRepository.MarketRow row) {
-        String value = sort == NftMarketSort.RECENT ? row.listedAt().toString() : row.price().toString();
+        String value = switch (sort) {
+            case RECENT -> row.listedAt().toString();
+            case VIEW_DESC -> Long.toString(row.viewCount());
+            default -> row.price().toString();
+        };
         return cursorCodec.encode(MARKET_SCOPE_PREFIX + sort.name(), value, row.listingId());
     }
 

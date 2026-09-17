@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Armchair, BadgeCheck, Coins, Gavel, Hand, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
-import { Badge, Button, Card, Input, Segmented } from '@/shared/components/ui';
+import { Badge, Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import { AuctionCountdown, AuctionCreateForm, useCreateAuction } from '@/features/auction';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
@@ -23,6 +23,7 @@ import {
   pocaSeed,
   useListPhotocard,
   usePhotocardDetail,
+  useRecordPhotocardView,
   usePurchasePhotocard,
   useUnlistPhotocard,
 } from '@/features/nft';
@@ -54,12 +55,14 @@ export function NftDetailPage() {
   const createAuction = useCreateAuction(photocardId);
 
   const { data: card, isPending, isError, error } = usePhotocardDetail(photocardId);
+  useRecordPhotocardView(photocardId, !!card);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();
   const unlist = useUnlistPhotocard();
 
   const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
   const [sellMode, setSellMode] = useState<SellMode>('FIXED');
   const [zoomed, setZoomed] = useState(false);
   /* 판매 폼은 **누른 뒤에** 펼칩니다 — 내 카드를 보러 왔을 뿐인데 폼이 먼저 보이면
@@ -103,12 +106,14 @@ export function NftDetailPage() {
   const mine = isOwner(card, user?.nickname);
   const listing = card.listing ?? null;
   const auction = card.auction ?? null;
+  const settling = listing?.status === 'SETTLING' || auction?.status === 'SETTLING';
   /* 살 수 있는지 판단하는 기준도 **쓸 수 있는 금액**입니다.
      총액으로 판단하면 경매에 묶인 돈까지 셈에 넣어 "살 수 있다" 고 해놓고 서버가 거절합니다. */
   const balance = token?.available ?? 0;
-  const affordable = listing !== null && balance >= listing.price;
+  const affordable = listing?.status === 'ACTIVE' && balance >= listing.price;
   const mintLabel = mintStatusLabel(card.status);
-  const canSubmitListing = Number(price) > 0;
+  const canSubmitListing =
+    card.status === 'MINTED' && Number(price) > 0 && description.length <= 500;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -174,8 +179,8 @@ export function NftDetailPage() {
               {auction ? (
                 <div className="surface-2 space-y-3 rounded-2xl p-4">
                   <div className="flex items-center gap-2">
-                    <Badge tone="live" size="md">
-                      경매 진행 중
+                    <Badge tone={auction.status === 'SETTLING' ? 'quiet' : 'live'} size="md">
+                      {auction.status === 'SETTLING' ? '거래 정산 중' : '경매 진행 중'}
                     </Badge>
                     <span className="text-subtle inline-flex items-center gap-0.5 text-sm">
                       <Gavel size={13} />
@@ -193,15 +198,30 @@ export function NftDetailPage() {
                     </p>
                   </div>
 
-                  <div className="border-line flex items-center justify-between border-t pt-3">
-                    <span className="text-muted text-sm">남은 시간</span>
-                    <AuctionCountdown endsAt={auction.endsAt} className="text-sm font-extrabold" />
-                  </div>
+                  {auction.status === 'ACTIVE' ? (
+                    <div className="border-line flex items-center justify-between border-t pt-3">
+                      <span className="text-muted text-sm">남은 시간</span>
+                      <AuctionCountdown
+                        endsAt={auction.endsAt}
+                        className="text-sm font-extrabold"
+                      />
+                    </div>
+                  ) : (
+                    <p className="border-line text-subtle border-t pt-3 text-sm">
+                      온체인 소유권 이전을 확인하고 있어요.
+                    </p>
+                  )}
 
                   <Button
                     fullWidth
                     leftIcon={<Gavel size={17} />}
-                    onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))}
+                    onClick={() =>
+                      navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)), {
+                        /* 포카 상세와 경매 상세를 왕복하며 같은 두 화면이 기록에
+                           계속 쌓이지 않게 현재 상세 단계를 경매 상세로 교체합니다. */
+                        replace: true,
+                      })
+                    }
                   >
                     경매 보러 가기
                   </Button>
@@ -219,6 +239,12 @@ export function NftDetailPage() {
                     </p>
                   ) : (
                     <p className="text-ink-muted mt-1 text-base font-medium">판매 중이 아닙니다</p>
+                  )}
+
+                  {listing?.status === 'SETTLING' && (
+                    <p className="text-subtle mt-2 text-sm">
+                      온체인 소유권 이전을 확인하고 있어요.
+                    </p>
                   )}
 
                   <p className="text-subtle mt-2 flex items-center gap-1.5 text-sm">
@@ -270,7 +296,7 @@ export function NftDetailPage() {
           {/* 파는 방법이 둘이라 **한 카드 안에서 고릅니다.**
               폼을 둘 다 펼쳐 놓으면 초록 버튼이 두 개가 되어 어느 쪽이 지금 할 일인지
               알 수 없습니다 (DESIGN.md 1장 — 한 화면에 primary 는 하나). */}
-          {mine && !listing && !auction && selling && (
+          {mine && !listing && !auction && !settling && selling && (
             <Card className="space-y-3">
               <span ref={sellFormRef} aria-hidden className="block scroll-mt-24" />
               <p className="text-sm font-bold">판매 등록</p>
@@ -282,9 +308,12 @@ export function NftDetailPage() {
                   onSubmit={(values) =>
                     createAuction.mutate(values, {
                       /* 올린 뒤 "어디로 갔지" 를 찾게 하지 않습니다 —
-                         만들어진 경매로 바로 보냅니다. */
+                         만들어진 경매로 바로 보냅니다. 판매 등록 전 상세는 이미
+                         유효한 단계가 아니므로 기록에서 교체해 뒤로가기로 되살리지 않습니다. */
                       onSuccess: (created) =>
-                        navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId))),
+                        navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId)), {
+                          replace: true,
+                        }),
                     })
                   }
                 />
@@ -298,6 +327,15 @@ export function NftDetailPage() {
                     inputMode="numeric"
                     leftIcon={<Coins size={16} />}
                     hint={`보유 캣머니 ${balance.toLocaleString()}개`}
+                  />
+                  <Textarea
+                    label="판매 설명"
+                    showRequirement
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value.slice(0, 500))}
+                    placeholder="카드 상태나 거래 관련 설명을 입력해 주세요."
+                    hint={`${description.length}/500자`}
+                    rows={3}
                   />
                   {/* 값을 정할 기준 — 같은 도안이 지금까지 얼마에 거래됐는지.
                       기준이 없으면 아무 숫자나 적게 되고, 그 값이 다시 다음 사람의 기준이 됩니다. */}
@@ -323,6 +361,7 @@ export function NftDetailPage() {
                         {
                           photocardId: card.photocardId,
                           price: Number(price),
+                          description: description.trim() || undefined,
                         },
                         /* 등록되면 폼을 접습니다 — 나중에 판매를 내렸을 때 폼이
                            펼쳐진 채로 되살아나지 않게 */
@@ -344,7 +383,11 @@ export function NftDetailPage() {
 
       {!auction && (
         <BottomBar>
-          {mine ? (
+          {settling ? (
+            <p className="text-subtle text-center text-sm">
+              거래 정산 중입니다. 완료되면 자동으로 갱신돼요.
+            </p>
+          ) : mine ? (
             listing ? (
               <Button
                 variant="danger-ghost"
@@ -370,22 +413,13 @@ export function NftDetailPage() {
                 판매 그만두기
               </Button>
             ) : (
-              /* 🔴 포카 거래는 **2차 배포** 항목입니다. 화면과 폼은 다 만들어 뒀고,
-                 그때 이 onClick 을 `() => setSelling(true)` 로 되돌리기만 하면 됩니다. */
               <Button
                 size="lg"
                 fullWidth
-                onClick={() =>
-                  open('common/confirm', {
-                    title: '아직 준비 중이에요',
-                    message: '포카 거래는 2차 배포 때 만냐옹~',
-                    confirmText: '네~!',
-                    hideCancel: true,
-                    onConfirm: () => {},
-                  })
-                }
+                disabled={card.status !== 'MINTED'}
+                onClick={() => setSelling(true)}
               >
-                판매하기
+                {card.status === 'MINTED' ? '판매하기' : '발행 완료 후 판매할 수 있어요'}
               </Button>
             )
           ) : listing ? (

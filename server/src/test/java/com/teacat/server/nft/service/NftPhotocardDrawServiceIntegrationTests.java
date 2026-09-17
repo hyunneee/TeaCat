@@ -248,8 +248,13 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
         verify(chainClient).issuePhotocards(items.capture());
         assertThat(items.getValue()).hasSize(1);
         IssueItem item = items.getValue().getFirst();
-        assertThat(item.photocardKey()).isEqualTo(response.photocardId().toString());
-        assertThat(item.designId()).isEqualTo(designId.toString());
+        assertThat(item.photocardKey()).isEqualTo(jdbcTemplate.queryForObject(
+                "SELECT issue_key FROM nft_photocards WHERE id = ?", String.class, response.photocardId()));
+        assertThat(item.designId()).isEqualTo(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(chain_token_id::text, id::text) FROM nft_photocard_designs WHERE id = ?",
+                String.class, designId));
+        assertThat(item.photocardId()).isEqualTo(response.photocardId().toString());
+        assertThat(item.designDbId()).isEqualTo(designId.toString());
         assertThat(item.to()).isEqualTo(addressOf(userId));
     }
 
