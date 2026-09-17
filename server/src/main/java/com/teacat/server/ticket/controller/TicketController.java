@@ -3,6 +3,7 @@ package com.teacat.server.ticket.controller;
 import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.ticket.dto.response.MyTicketResponse;
+import com.teacat.server.ticket.dto.response.TicketQrResponse;
 import com.teacat.server.ticket.service.TicketQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -99,5 +100,30 @@ public class TicketController {
     ) {
         return ResponseEntity.ok(BaseResponse.success(
                 ticketQueryService.getMyTicket(authUser.id(), ticketId)));
+    }
+
+    @Operation(
+            summary = "티켓 QR 조회",
+            description = """
+                    게이트에서 보여줄 QR 문자열입니다. **QR 이미지가 아니라 문자열**이고,
+                    그림은 화면이 그립니다.
+
+                    🔴 티켓 번호를 그대로 담지 않고 **서버가 서명한 값**입니다. 번호를 그대로
+                    담으면 아무 숫자나 QR 로 만들어 게이트에 들이대는 것만으로 남의 예매 정보가
+                    검표 화면에 뜹니다.
+
+                    만료는 없습니다 — 공연장 입구는 보통 전파가 나빠서 짧은 수명 토큰이면
+                    화면을 띄우는 동안 만료됩니다. 대신 **한 번 입장하면 그 티켓은 다시 쓸 수 없습니다.**
+                    """
+    )
+    @GetMapping("/{ticketId}/qr")
+    public ResponseEntity<BaseResponse<TicketQrResponse>> getMyTicketQr(
+            @Parameter(description = "티켓 ID", example = "1")
+            @PathVariable Long ticketId,
+
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser
+    ) {
+        return ResponseEntity.ok(BaseResponse.success(
+                ticketQueryService.getMyTicketQr(authUser.id(), ticketId)));
     }
 }

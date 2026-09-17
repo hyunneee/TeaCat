@@ -19,12 +19,9 @@ export const ROUTES = {
   FACE_REGISTER: '/face',
   /** 등록 성공 화면. 상단 알림 한 줄로는 "된 건가?" 가 남습니다. */
   FACE_DONE: '/face/done',
-  /**
-   * 본인 확인 (검증용) — 카메라 속 얼굴이 등록해 둔 얼굴과 같은 사람인지 대조합니다.
-   * 티켓 상세에서 들어오고, `state.from` 으로 돌아갈 곳을 받습니다.
-   * ⚠️ 아직 입장 처리가 아닙니다. 확인만 하고 티켓 상태는 바꾸지 않습니다.
-   */
-  FACE_VERIFY: '/face/verify',
+  /* 🔴 사용자용 "본인 확인" 화면은 없앴습니다 (예전 `/face/verify`).
+     확인만 하고 티켓 상태는 바꾸지 않는 **검증용 화면**이라 사용자가 할 일이 없었고,
+     진짜 본인 확인은 공연장 게이트에서 합니다 — `ADMIN_CHECK_IN`. */
 
   /* ── 검색 (공연 + 포토카드 한 화면) ── */
   SEARCH: '/search',
@@ -109,6 +106,8 @@ export const ROUTES = {
         `features/admin` 의 ADMIN_MENU 에 한 줄만 추가하면 됩니다. */
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** 게이트 입장 확인 — QR + 얼굴로 본인을 확인하고 입장 처리합니다 */
+  ADMIN_CHECK_IN: '/admin/check-in',
   /** 회원 상세 — 예매·포카를 탭으로 봅니다. 되돌릴 수 없는 동작도 여기에 모읍니다 */
   ADMIN_USER_DETAIL: (userId: string) => `/admin/users/${userId}`,
   MONITORING: '/admin/monitoring',
