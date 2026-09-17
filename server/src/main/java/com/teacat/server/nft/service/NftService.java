@@ -12,6 +12,7 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
@@ -94,7 +95,7 @@ public class NftService {
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.price(), row.sellerNickname()))
+                        row.performanceTitle(), row.price(), row.sellerNickname(), row.viewCount()))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -119,11 +120,12 @@ public class NftService {
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
                 : new NftPhotocardDetailResponse.Listing(
-                        row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+                        row.listingId(), row.listingStatus(), row.price(),
+                        row.sellerDescription(), row.listedAt());
         // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
         NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
                 .map(summary -> new NftPhotocardDetailResponse.Auction(
-                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.auctionId(), summary.status(), summary.currentPrice(), summary.buyNowPrice(),
                         summary.bidCount(), summary.endsAt()))
                 .orElse(null);
 
@@ -147,7 +149,24 @@ public class NftService {
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
-                row.groupName(), row.grade(), row.averagePrice());
+                row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
+    }
+
+    @Transactional
+    public NftPhotocardViewResponse recordPhotocardView(Long photocardId, Long viewerId, String sessionHeader) {
+        // Keep the visibility rule identical to the detail endpoint. A hidden card must not be enumerable.
+        getPhotocard(photocardId, viewerId);
+        UUID sessionId;
+        try {
+            sessionId = UUID.fromString(sessionHeader);
+        } catch (RuntimeException e) {
+            throw new BusinessException(NftErrorCode.INVALID_VIEW_SESSION);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime bucket = now.withMinute(now.getMinute() < 30 ? 0 : 30).withSecond(0).withNano(0);
+        NftMarketQueryRepository.ViewCountRow row =
+                queryRepository.recordPhotocardView(photocardId, sessionId, bucket);
+        return new NftPhotocardViewResponse(row.viewCount(), row.counted());
     }
 
     @Transactional
@@ -287,7 +306,12 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
+                        row.status(), row.listed(),
+                        row.marketType() == null ? null
+                                : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
+                        row.marketStatus() == null ? null
+                                : MyNftPhotocardResponse.MarketStatus.valueOf(row.marketStatus()),
+                        row.groupName(), row.grade(), row.averagePrice()))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),
@@ -592,7 +616,11 @@ public class NftService {
     }
 
     private String marketCursor(NftMarketSort sort, NftMarketQueryRepository.MarketRow row) {
-        String value = sort == NftMarketSort.RECENT ? row.listedAt().toString() : row.price().toString();
+        String value = switch (sort) {
+            case RECENT -> row.listedAt().toString();
+            case VIEW_DESC -> Long.toString(row.viewCount());
+            default -> row.price().toString();
+        };
         return cursorCodec.encode(MARKET_SCOPE_PREFIX + sort.name(), value, row.listingId());
     }
 

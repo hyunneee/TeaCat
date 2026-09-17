@@ -12,6 +12,7 @@ import { DEFAULT_AUCTION_SORT, type AuctionSort } from '../model/auction.model';
 import type { AuctionStatus } from '../model/auction.types';
 
 const PAGE_SIZE = 20;
+const LIST_POLL_MS = 5000;
 
 /** 서버 커서 페이지 → 다음 pageParam. 마지막 페이지면 undefined (더 안 부름) */
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
@@ -21,8 +22,7 @@ function nextCursor<T>(last: CursorPage<T>): string | undefined {
  * 진행 중 경매 목록 — 커서 페이지.
  *
  * `data` 는 페이지들을 평탄화한 배열입니다.
- * 폴링하지 않습니다 — 카드의 남은 시간은 클라이언트가 계산하고, 현재가는
- * 목록에서 몇 초 늦어도 문제가 없습니다. 정확한 값이 필요한 곳은 상세입니다.
+ * 현재가와 입찰 수가 목록에서도 오래 멈춰 보이지 않도록 5초마다 갱신합니다.
  */
 export function useAuctions(
   params: { keyword?: string; sort?: AuctionSort; performanceId?: number } = {},
@@ -33,21 +33,28 @@ export function useAuctions(
   return useInfiniteQuery({
     queryKey: auctionKeys.list(trimmed, sort, performanceId),
     queryFn: ({ pageParam }) =>
-      auctionApi.list({ keyword: trimmed, sort, performanceId, cursor: pageParam, size: PAGE_SIZE }),
+      auctionApi.list({
+        keyword: trimmed,
+        sort,
+        performanceId,
+        cursor: pageParam,
+        size: PAGE_SIZE,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
+    refetchInterval: LIST_POLL_MS,
     select: (data) => data.pages.flatMap((page) => page.items),
   });
 }
 
 /** 진행 중인 경매를 다시 물어보는 주기. 현재가·입찰 수가 이 간격으로 갱신됩니다 */
-const POLL_MS = 4000;
+const POLL_MS = 3000;
 
 /**
  * 경매 상세.
  *
- * 진행 중일 때만 폴링합니다. 종료된 경매는 더 바뀔 것이 없어 멈춥니다
+ * 진행 중이거나 온체인 정산 중일 때만 폴링합니다. 종료되면 스스로 멈춥니다
  * (`refetchInterval` 이 false 를 돌려주면 TanStack Query 가 타이머를 끕니다).
  * 탭이 백그라운드로 가면 기본값(`refetchIntervalInBackground: false`)이 알아서 멈춥니다.
  *
@@ -61,15 +68,17 @@ export function useAuctionDetail(auctionId: number) {
     // 현재가는 남이 언제든 올릴 수 있어 캐시를 신뢰하지 않습니다.
     staleTime: 0,
     enabled: Number.isInteger(auctionId) && auctionId > 0,
-    refetchInterval: (query) => (query.state.data?.status === 'ACTIVE' ? POLL_MS : false),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'ACTIVE' || query.state.data?.status === 'SETTLING'
+        ? POLL_MS
+        : false,
   });
 }
 
 /**
- * 입찰 이력 — 최신순 커서 페이지.
- * 폴링하지 않습니다. 상세가 새 현재가를 물어올 때 이 키도 함께 무효화됩니다.
+ * 입찰 이력 — 최신순 커서 페이지. 진행 중인 상세에서는 현재가와 같은 주기로 갱신합니다.
  */
-export function useAuctionBids(auctionId: number) {
+export function useAuctionBids(auctionId: number, live = false) {
   return useInfiniteQuery({
     queryKey: auctionKeys.bids(auctionId),
     queryFn: ({ pageParam }) => auctionApi.bids(auctionId, { cursor: pageParam, size: PAGE_SIZE }),
@@ -77,6 +86,7 @@ export function useAuctionBids(auctionId: number) {
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
     enabled: Number.isInteger(auctionId) && auctionId > 0,
+    refetchInterval: live ? POLL_MS : false,
     select: (data) => data.pages.flatMap((page) => page.items),
   });
 }
@@ -169,17 +179,23 @@ export function usePlaceBid(auctionId: number) {
  */
 export function useBuyNow(auctionId: number) {
   return useMutation({
-    mutationFn: (idempotencyKey: string) =>
-      auctionApi.buyNow(auctionId, idempotencyKey).then(nftApi.waitForTrade),
+    mutationFn: async (idempotencyKey: string) => {
+      const trade = await auctionApi.buyNow(auctionId, idempotencyKey);
+      // 서버는 즉시 SETTLING 으로 바꿉니다. 블록 확정을 기다리는 동안에도 화면에 먼저 반영합니다.
+      invalidateAuction(auctionId);
+      return nftApi.waitForTrade(trade);
+    },
     retry: false,
     onSuccess: (trade) => {
+      invalidateAuction(auctionId);
       if (trade.status !== 'COMPLETED') {
-        toast.error(trade.status === 'COMPENSATED'
-          ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
-          : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.');
+        toast.error(
+          trade.status === 'COMPENSATED'
+            ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
+            : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.',
+        );
         return;
       }
-      invalidateAuction(auctionId);
       toast.success('즉시구매로 포토카드를 가져왔어요.');
     },
     onError: (error) => {

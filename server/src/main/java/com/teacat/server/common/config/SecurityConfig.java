@@ -38,7 +38,8 @@ public class SecurityConfig {
             "/auth/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            "/search"
     };
 
     /** GET 만 인증 없이 열어두는 경로 */
@@ -52,7 +53,9 @@ public class SecurityConfig {
             "/areas/**",
             "/performances/**",
             // 홈 상단 슬라이드. 비로그인도 첫 화면을 봐야 한다
-            "/banners"
+            "/banners",
+            "/rankings/**",
+            "/search/trends"
     };
 
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;
@@ -107,6 +110,7 @@ public class SecurityConfig {
                         .requestMatchers("/internal/**").permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/concerts/*/views", "/photocards/*/views").permitAll()
                         // 🔴 /photocards/** 보다 **먼저** 와야 한다. 남은 카드팩 수는 "내" 것이라
                         //    아래 permitAll 에 걸리면 인증 없이 컨트롤러까지 들어가고,
                         //    @AuthenticationPrincipal 이 null 이라 NPE(500)가 난다 — 401 이 아니라.

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
+  BadgeDollarSign,
   Coins,
   Gavel,
   HandCoins,
@@ -197,6 +198,11 @@ export function MyPage() {
               icon={<Receipt size={18} />}
               title="포카 거래 내역"
               onClick={() => navigate(ROUTES.MY_NFT_TRADES)}
+            />
+            <ListRow
+              icon={<BadgeDollarSign size={18} />}
+              title="내 판매 내역"
+              onClick={() => navigate(ROUTES.MY_NFT_SALES)}
             />
             <ListRow
               icon={<MessageSquare size={18} />}

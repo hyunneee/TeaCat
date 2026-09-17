@@ -11,6 +11,7 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
@@ -78,6 +79,17 @@ public class NftController {
             @PathVariable Long photocardId) {
         return ResponseEntity.ok(BaseResponse.success(
                 nftService.getPhotocard(photocardId, authUser == null ? null : authUser.id())));
+    }
+
+    @Operation(summary = "NFT 포토카드 상세 조회 기록",
+            description = "브라우저 세션과 30분 버킷을 기준으로 중복을 제거해 조회 수를 기록합니다.")
+    @PostMapping("/photocards/{photocardId}/views")
+    public ResponseEntity<BaseResponse<NftPhotocardViewResponse>> recordPhotocardView(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId,
+            @RequestHeader(name = "X-View-Session") String viewSession) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.recordPhotocardView(
+                photocardId, authUser == null ? null : authUser.id(), viewSession)));
     }
 
     @Operation(
@@ -168,7 +180,7 @@ public class NftController {
 
     @Operation(
             summary = "내 NFT 포토카드 목록 조회",
-            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 판매 등록 여부를 필터링할 수 있습니다."
+            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 고정가 또는 경매 판매 진행 여부를 필터링할 수 있습니다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/users/me/photocards")

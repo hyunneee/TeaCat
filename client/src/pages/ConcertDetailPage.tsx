@@ -8,7 +8,13 @@ import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
-import { ScheduleList, posterSeedOf, useConcertDetail, useStartBooking } from '@/features/concert';
+import {
+  ScheduleList,
+  posterSeedOf,
+  useConcertDetail,
+  useRecordConcertView,
+  useStartBooking,
+} from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -21,6 +27,7 @@ export function ConcertDetailPage() {
      오래된 링크가 여기로 떨어집니다. 서버에 물어봐야 500 만 받으므로 묻지 않습니다. */
   const isConcertId = /^\d+$/.test(concertId);
   const { data: concert, isPending, isError } = useConcertDetail(isConcertId ? concertId : '');
+  useRecordConcertView(concertId, isConcertId && !!concert);
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 

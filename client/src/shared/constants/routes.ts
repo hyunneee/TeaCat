@@ -74,6 +74,7 @@ export const ROUTES = {
   MY_BIDS: '/my/bids',
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
+  MY_NFT_SALES: '/my/nfts/sales',
 
   /* ── 캣머니 ── */
   TOKEN: '/token',

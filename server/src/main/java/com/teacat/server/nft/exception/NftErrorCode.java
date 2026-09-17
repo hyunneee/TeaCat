@@ -111,7 +111,8 @@ public enum NftErrorCode implements ErrorCode {
     PHOTOCARD_TRANSFER_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "NFT_051",
             "포토카드 소유권을 이전하지 못했습니다. 자동으로 재시도합니다."),
     TRADE_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_052", "존재하지 않는 포토카드 거래입니다."),
-    TRADE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "NFT_053", "이 거래를 조회할 권한이 없습니다.");
+    TRADE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "NFT_053", "이 거래를 조회할 권한이 없습니다."),
+    INVALID_VIEW_SESSION(HttpStatus.BAD_REQUEST, "NFT_054", "조회 세션 값이 올바르지 않습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -3,7 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { wrapCreateBrowserRouter } from '@sentry/react';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
-import { AppLayout, PlainLayout } from '@/shared/components/layout';
+import { AppLayout, PlainLayout, SearchLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
 
@@ -48,6 +48,7 @@ const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsP
 const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
+const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
 
@@ -323,6 +324,12 @@ const routes: RouteObject[] = [
     ],
   },
 
+  /* 모바일은 전체화면 검색, 데스크톱은 공통 상단 내비를 유지합니다. */
+  {
+    element: <SearchLayout />,
+    children: [{ path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) }],
+  },
+
   /* ══ 전체화면 (하단 탭 없음) ═════════════════════════════ */
   {
     element: <PlainLayout />,
@@ -338,9 +345,6 @@ const routes: RouteObject[] = [
       /* 경매 상세는 **가드 밖**입니다. 로그인해야 볼 수 있게 하면 경매가 열려 있는지조차
          알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
       { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
-
-      /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
-      { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
 
       {
         element: <RequireAuth />,
@@ -370,6 +374,7 @@ const routes: RouteObject[] = [
             element: withMask(withBoundary(<TicketDetailPage />)),
           },
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
           { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
           { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
