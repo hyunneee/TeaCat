@@ -215,7 +215,13 @@ export function NftDetailPage() {
                   <Button
                     fullWidth
                     leftIcon={<Gavel size={17} />}
-                    onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))}
+                    onClick={() =>
+                      navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)), {
+                        /* 포카 상세와 경매 상세를 왕복하며 같은 두 화면이 기록에
+                           계속 쌓이지 않게 현재 상세 단계를 경매 상세로 교체합니다. */
+                        replace: true,
+                      })
+                    }
                   >
                     경매 보러 가기
                   </Button>
@@ -302,9 +308,12 @@ export function NftDetailPage() {
                   onSubmit={(values) =>
                     createAuction.mutate(values, {
                       /* 올린 뒤 "어디로 갔지" 를 찾게 하지 않습니다 —
-                         만들어진 경매로 바로 보냅니다. */
+                         만들어진 경매로 바로 보냅니다. 판매 등록 전 상세는 이미
+                         유효한 단계가 아니므로 기록에서 교체해 뒤로가기로 되살리지 않습니다. */
                       onSuccess: (created) =>
-                        navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId))),
+                        navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId)), {
+                          replace: true,
+                        }),
                     })
                   }
                 />
