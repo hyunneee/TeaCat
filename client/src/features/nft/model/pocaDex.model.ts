@@ -1,4 +1,5 @@
 import type { DrawPoolCard, MyPhotocard, PocaGrade } from './nft.types';
+import { photocardMarketState } from './nft.model';
 import { pocaRole, type PocaRole } from './pocaDraw.model';
 
 /**
@@ -19,18 +20,35 @@ export interface PocaDexEntry {
   /** 몇 장 가졌는가. 0 이면 아직 없는 칸 */
   count: number;
   /**
-   * 그중 몇 장이 마켓에 올라가 있는가.
+   * 그중 몇 장이 마켓에 나가 있는가 — 판매 중·경매 중·정산 중을 **모두** 셉니다.
    *
-   * 🔴 `count` 에서 빼지 **않습니다** — 판매 중인 카드도 팔리기 전까지 내 것입니다.
+   * 🔴 `count` 에서 빼지 **않습니다** — 마켓에 올려도 팔리기 전까지 내 것입니다.
    * 이 값은 "내 카드가 지금 어디 있나" 를 점 하나로 알려주기 위한 것뿐입니다.
    */
-  listedCount: number;
+  marketCount: number;
+  /**
+   * 마켓에 나간 것 중 **대표 한 장의 상태** — 점의 색과 글에 씁니다.
+   * 마켓에 나간 것이 없으면 null (= 전부 보관 중).
+   *
+   * ⚠️ 여러 장을 서로 다른 방식으로 올렸으면 그중 하나만 말합니다. 칸 하나에 상태를
+   * 여러 개 적을 자리가 없고, 자세한 것은 카드 상세의 몫입니다.
+   */
+  marketState: PocaDexMarketState | null;
   /**
    * 대표 카드의 photocardId — 눌렀을 때 열 상세.
    * 안 가진 칸은 null 이라 누를 것이 없습니다.
    */
   photocardId: number | null;
 }
+
+/**
+ * 도감 칸에 표시하는 마켓 상태.
+ *
+ * 🔴 **낱말은 `NftCard`(마켓·홈의 포카 한 장)와 같습니다.** 같은 뜻을 화면마다 다르게
+ *    부르면 사용자가 두 번 배워야 합니다 — 거기서 "경매 중" 인 카드가 여기서 "판매 중" 이면
+ *    거짓말입니다. `photocardMarketState` 한 곳에서 판정을 가져옵니다.
+ */
+export type PocaDexMarketState = Exclude<ReturnType<typeof photocardMarketState>, 'STORED'>;
 
 /** 역할 필터 — '전체' 는 필터를 걸지 않는다는 뜻이라 별도 값으로 둡니다 */
 export const DEX_ROLE_ALL = 'ALL' as const;
@@ -59,34 +77,44 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
 export function buildPocaDex(pool: DrawPoolCard[], mine: MyPhotocard[]): PocaDexEntry[] {
   interface Owned {
     count: number;
-    listedCount: number;
+    marketCount: number;
+    marketState: PocaDexMarketState | null;
     photocardId: number;
-    /** 대표로 고른 카드가 판매 중인가 — 아래에서 더 나은 대표로 바꿀 때만 씁니다 */
-    representativeListed: boolean;
+    /** 대표로 고른 카드가 마켓에 나가 있는가 — 더 나은 대표로 바꿀 때만 씁니다 */
+    representativeOnMarket: boolean;
   }
   const owned = new Map<number, Owned>();
 
   for (const card of mine) {
+    /* 🔴 판정을 여기서 다시 쓰지 않고 `photocardMarketState` 를 부릅니다 — 마켓 상태의
+       규칙(경매냐 고정가냐, 정산 중이냐)은 한 곳에만 있어야 합니다. */
+    const state = photocardMarketState(card);
+    const onMarket = state !== 'STORED';
+
     const found = owned.get(card.designId);
     if (!found) {
       owned.set(card.designId, {
         count: 1,
-        listedCount: card.listed ? 1 : 0,
+        marketCount: onMarket ? 1 : 0,
+        marketState: onMarket ? state : null,
         photocardId: card.photocardId,
-        representativeListed: card.listed,
+        representativeOnMarket: onMarket,
       });
       continue;
     }
 
     found.count += 1;
-    if (card.listed) found.listedCount += 1;
+    if (onMarket) {
+      found.marketCount += 1;
+      found.marketState ??= state;
+    }
 
     /* 🔴 대표는 **보관 중인 카드를 먼저** 고릅니다. 세 장 중 한 장만 마켓에 올려 둔 사람이
        칸을 눌렀을 때 판매 중인 카드의 상세로 떨어지면, 거기서 할 수 있는 일이 "판매 내리기"
        뿐이라 남은 두 장을 보러 온 사람에게는 막힌 길입니다. */
-    if (found.representativeListed && !card.listed) {
+    if (found.representativeOnMarket && !onMarket) {
       found.photocardId = card.photocardId;
-      found.representativeListed = false;
+      found.representativeOnMarket = false;
     }
   }
 
@@ -103,7 +131,8 @@ export function buildPocaDex(pool: DrawPoolCard[], mine: MyPhotocard[]): PocaDex
          틀린 칸에 넣는 것보다 안 보이는 쪽이 고치기 쉽습니다. */
       role: design.group ? pocaRole(design.group, design.grade ?? undefined) : null,
       count: has?.count ?? 0,
-      listedCount: has?.listedCount ?? 0,
+      marketCount: has?.marketCount ?? 0,
+      marketState: has?.marketState ?? null,
       photocardId: has?.photocardId ?? null,
     };
   });

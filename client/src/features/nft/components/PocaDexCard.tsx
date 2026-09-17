@@ -3,7 +3,7 @@ import { Badge } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
 import { PocaArt } from './PocaArt';
 import { pocaSeed } from '../model/nft.model';
-import type { PocaDexEntry } from '../model/pocaDex.model';
+import type { PocaDexEntry, PocaDexMarketState } from '../model/pocaDex.model';
 
 interface Props {
   entry: PocaDexEntry;
@@ -23,23 +23,44 @@ interface Props {
  * ⚠️ 대신 안 가진 칸은 **모양으로도 구분되지 않습니다.** 그게 도감의 재미이기도 하지만,
  * "어떤 카드가 남았는지 힌트라도" 라는 요구가 오면 이름만 여는 쪽부터 검토하세요.
  */
+/** 마켓 상태 → 점 색과 사람 말. 낱말은 `NftCard` 의 배지와 같습니다 */
+const MARKET_WORD: Record<PocaDexMarketState, string> = {
+  LISTED: '판매 중',
+  AUCTION: '경매 중',
+  SETTLING: '정산 중',
+};
+
 /**
- * 이 칸이 "지금 어디 있나" — 마켓에 올라간 장이 하나라도 있으면 판매 중으로 봅니다.
+ * 이 칸이 "지금 어디 있나" — 마켓에 나간 장이 하나라도 있으면 그 상태를 말합니다.
  *
- * 🔴 **점의 색·자리는 `NftCard` 와 같습니다.** 같은 뜻을 두 화면에서 다르게 그리면
- *    사용자가 두 번 배워야 합니다. 다만 도감은 우상단을 ×N 배지가 쓰므로 **좌상단**입니다.
+ * ── 🔴 왜 글자가 아니라 점인가 ────────────────────────────────
+ * `NftCard` 는 같은 뜻을 **글자 배지**로 보여줍니다. 도감은 3열 격자라 칸 폭이 폰에서
+ * 100px 남짓이고, 그 자리에 "판매 중" 배지와 `×N` 배지를 함께 올리면 그림이 배지에
+ * 덮입니다. 그래서 **모양만** 점으로 줄이고 **낱말은 그대로** 씁니다(`MARKET_WORD`) —
+ * 거기서 "경매 중" 인 카드가 여기서 "판매 중" 이면 거짓말이 됩니다.
+ *
+ * 자리는 좌상단입니다. 우상단은 `×N` 배지가 씁니다.
  *
  * 색만으로는 뜻이 전해지지 않으므로(색각 이상 · 2.5px 짜리 점) 손을 올리면 글이 나오고,
  * 스크린리더에는 항상 읽힙니다.
  */
-function StateDot({ count, listedCount }: { count: number; listedCount: number }) {
-  const listed = listedCount > 0;
-  /* 섞여 있으면 몇 장이 올라가 있는지까지 알려줍니다 — "3장 중 1장" 은 점만으로는 못 셉니다 */
-  const label = !listed
-    ? '보관 중 — 내 보관함에만 있어요.'
-    : count > listedCount
-      ? count + '장 중 ' + listedCount + '장 판매 중 — 나머지는 보관함에 있어요.'
-      : '판매 중 — 마켓에 올라가 있어요.';
+function StateDot({
+  count,
+  marketCount,
+  marketState,
+}: {
+  count: number;
+  marketCount: number;
+  marketState: PocaDexMarketState | null;
+}) {
+  const word = marketState ? MARKET_WORD[marketState] : null;
+  /* 섞여 있으면 몇 장이 나가 있는지까지 알려줍니다 — "3장 중 1장" 은 점만으로는 못 셉니다 */
+  const label =
+    word === null
+      ? '보관 중 — 내 보관함에만 있어요.'
+      : count > marketCount
+        ? count + '장 중 ' + marketCount + '장 ' + word + ' — 나머지는 보관함에 있어요.'
+        : word + ' — 마켓에 올라가 있어요.';
 
   return (
     <span title={label} className="absolute top-1 left-1 flex items-center">
@@ -48,9 +69,12 @@ function StateDot({ count, listedCount }: { count: number; listedCount: number }
         aria-hidden
         className={cn(
           'size-2.5 rounded-full',
-          listed
-            ? 'bg-danger shadow-[0_0_0_3px_var(--color-danger-soft)]'
-            : 'bg-accent-600 shadow-[0_0_0_3px_var(--color-accent-50)]',
+          /* 정산 중은 내 손을 떠난 상태라 "지금 뭘 할 수 있다" 는 신호를 주지 않습니다 */
+          marketState === 'SETTLING'
+            ? 'bg-ink-subtle shadow-[0_0_0_3px_var(--color-surface-2)]'
+            : word !== null
+              ? 'bg-danger shadow-[0_0_0_3px_var(--color-danger-soft)]'
+              : 'bg-accent-600 shadow-[0_0_0_3px_var(--color-accent-50)]',
         )}
       />
     </span>
@@ -84,7 +108,13 @@ export function PocaDexCard({ entry, onOpen }: Props) {
         {art}
 
         {/* 안 가진 칸에는 붙이지 않습니다 — 없는 카드의 "보관 중" 은 뜻이 없습니다 */}
-        {owned && <StateDot count={entry.count} listedCount={entry.listedCount} />}
+        {owned && (
+          <StateDot
+            count={entry.count}
+            marketCount={entry.marketCount}
+            marketState={entry.marketState}
+          />
+        )}
 
         {/* 🔴 여러 장 가졌을 때만. ×1 은 아무것도 알려주지 않으면서 칸마다 배지를 붙입니다 */}
         {entry.count > 1 && (
