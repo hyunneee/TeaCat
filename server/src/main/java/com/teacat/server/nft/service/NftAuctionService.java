@@ -333,7 +333,7 @@ public class NftAuctionService {
     private MyNftBidResponse toMyBid(Long userId, NftAuctionQueryRepository.MyBidRow row) {
         boolean isTop = userId.equals(row.topBidderId());
         MyNftBidResponse.Result result;
-        if (row.status() == NftAuctionStatus.ACTIVE || row.status() == NftAuctionStatus.SETTLING) {
+        if (row.status() == NftAuctionStatus.ACTIVE) {
             result = isTop ? MyNftBidResponse.Result.BIDDING : MyNftBidResponse.Result.OUTBID;
         } else if (row.status() == NftAuctionStatus.SETTLING) {
             result = userId.equals(row.winnerId())
