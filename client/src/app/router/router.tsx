@@ -5,7 +5,7 @@ import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout, SearchLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
-import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
+import { RequireAuth, RequireFace, RequireCaptcha, RequireQueue, RequireRole } from './guards';
 
 /* 페이지는 전부 lazy 로 나눕니다.
    티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
@@ -26,6 +26,7 @@ const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertLi
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
 
 const BookingVerifyPage = page(() => import('@/pages/BookingVerifyPage'), 'BookingVerifyPage');
+const QueueWaitingPage = page(() => import('@/pages/QueueWaitingPage'), 'QueueWaitingPage');
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
@@ -420,9 +421,12 @@ const routes: RouteObject[] = [
           },
 
           /* ── 예매 플로우 ──────────────────────────────────
-             봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료
+             봇 확인 → 대기실 → 구역 → 좌석 → 확인 → 결제 → 완료
              얼굴 등록(RequireFace)은 예매 진입 조건,
-             봇 확인 통과(RequireCaptcha)는 구역 선택부터의 조건입니다. */
+             봇 확인 통과(RequireCaptcha)는 대기실부터의 조건,
+             대기실 입장(RequireQueue)은 구역 선택부터의 조건입니다.
+             대기실 화면 자체는 RequireQueue 밖에 있어야 합니다 — 안에 두면 입장 전 사용자가
+             대기실로 보내지고, 대기실이 다시 자기 자신으로 보내는 고리가 됩니다. */
           {
             element: <RequireFace />,
             children: [
@@ -436,20 +440,29 @@ const routes: RouteObject[] = [
                 element: <RequireCaptcha />,
                 children: [
                   {
-                    path: ROUTES.BOOKING_SECTION(':scheduleId'),
-                    element: withBoundary(<SectionSelectPage />),
+                    path: ROUTES.BOOKING_WAITING(':scheduleId'),
+                    element: withBoundary(<QueueWaitingPage />),
                   },
                   {
-                    path: ROUTES.BOOKING_SEATS(':scheduleId'),
-                    element: withBoundary(<SeatSelectPage />),
-                  },
-                  {
-                    path: ROUTES.BOOKING_REVIEW(':scheduleId'),
-                    element: withMask(withBoundary(<BookingReviewPage />)),
-                  },
-                  {
-                    path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
-                    element: withMask(withBoundary(<PaymentPage />)),
+                    element: <RequireQueue />,
+                    children: [
+                      {
+                        path: ROUTES.BOOKING_SECTION(':scheduleId'),
+                        element: withBoundary(<SectionSelectPage />),
+                      },
+                      {
+                        path: ROUTES.BOOKING_SEATS(':scheduleId'),
+                        element: withBoundary(<SeatSelectPage />),
+                      },
+                      {
+                        path: ROUTES.BOOKING_REVIEW(':scheduleId'),
+                        element: withMask(withBoundary(<BookingReviewPage />)),
+                      },
+                      {
+                        path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
+                        element: withMask(withBoundary(<PaymentPage />)),
+                      },
+                    ],
                   },
                 ],
               },

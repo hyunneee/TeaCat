@@ -8,6 +8,7 @@ import { ROUTES } from '@/shared/constants';
 import { useAuth, can } from '@/features/auth';
 import { useBookingStore } from '@/features/booking';
 import { PocaPackGotModal } from '@/features/nft';
+import { useLeaveQueue } from '@/features/queue';
 
 /**
  * 예매 완료.
@@ -31,6 +32,18 @@ export function BookingDonePage() {
   // 결제 훅에서 하면 결제 페이지의 "선점 없음" 가드가 먼저 발동해 튕깁니다.
   const reset = useBookingStore((s) => s.reset);
   useEffect(() => reset(), [reset]);
+
+  /* 대기실 자리 비우기. 예매가 끝났으니 다음 분이 들어오게 합니다.
+     scheduleId 는 첫 렌더에서 읽어 둡니다 — 위 reset 이 effect 에서 지우기 전 값입니다.
+     실패해도 무시합니다. 서버 TTL(10분)이 뒤처리합니다. */
+  const queueScheduleId = useBookingStore((s) => s.scheduleId);
+  const leaveQueue = useLeaveQueue();
+  const leaveMutate = leaveQueue.mutate;
+  useEffect(() => {
+    if (queueScheduleId) leaveMutate(queueScheduleId);
+    // 마운트 시 한 번. reset 뒤 scheduleId 가 null 로 바뀌어도 다시 부르지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const needsFace = !can.useTicket(user);
 
