@@ -106,7 +106,12 @@ public enum NftErrorCode implements ErrorCode {
             "이벤트 풀 카드는 뽑기 풀에서 뺄 수 없습니다."),
     /** 도안 이름은 "{템플릿 이름} · {공연 제목}" 이고 nft_photocard_designs.name 이 varchar(100) 이다 */
     DESIGN_NAME_TOO_LONG(HttpStatus.BAD_REQUEST, "NFT_049",
-            "카드 이름과 공연 제목을 합치면 100자를 넘습니다. 둘 중 하나를 줄여 주세요.");
+            "카드 이름과 공연 제목을 합치면 100자를 넘습니다. 둘 중 하나를 줄여 주세요."),
+    PHOTOCARD_NOT_MINTED(HttpStatus.CONFLICT, "NFT_050", "발행이 완료된 포토카드만 거래할 수 있습니다."),
+    PHOTOCARD_TRANSFER_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "NFT_051",
+            "포토카드 소유권을 이전하지 못했습니다. 자동으로 재시도합니다."),
+    TRADE_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_052", "존재하지 않는 포토카드 거래입니다."),
+    TRADE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "NFT_053", "이 거래를 조회할 권한이 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

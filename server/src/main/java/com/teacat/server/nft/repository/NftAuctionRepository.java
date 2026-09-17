@@ -47,6 +47,8 @@ public interface NftAuctionRepository extends JpaRepository<NftAuction, Long> {
 
     boolean existsByPhotocardIdAndStatus(Long photocardId, NftAuctionStatus status);
 
+    boolean existsByPhotocardIdAndStatusIn(Long photocardId, List<NftAuctionStatus> statuses);
+
     /**
      * 판매자 취소. 권한·상태·입찰 유무를 WHERE 에 넣어 한 번에 판정한다 (booking.releaseHold 와 같은 방식).
      *

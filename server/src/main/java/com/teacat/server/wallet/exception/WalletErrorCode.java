@@ -50,7 +50,9 @@ public enum WalletErrorCode implements ErrorCode {
      * 부르는 쪽이 잡아서 재시도에 맡긴다 — 멱등 키가 있어 다시 보내도 두 번 태우지 않는다.
      */
     BURN_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "WALLET_008",
-            "캣머니를 사용하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            "캣머니를 사용하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    TRANSFER_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "WALLET_009",
+            "캣머니를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;

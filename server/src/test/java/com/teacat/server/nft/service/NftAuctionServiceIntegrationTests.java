@@ -44,6 +44,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
+    @Override
+    protected Long insertPhotocardOwnedBy(Long ownerId) {
+        Long photocardId = super.insertPhotocardOwnedBy(ownerId);
+        jdbcTemplate.update("UPDATE nft_photocards SET status = 'MINTED' WHERE id = ?", photocardId);
+        return photocardId;
+    }
+
     @Autowired
     private NftAuctionRepository auctionRepository;
 
@@ -67,6 +74,9 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
     @Autowired
     private NftAuctionCloser closer;
+
+    @Autowired
+    private NftTradeSettlementWriter settlementWriter;
 
     @Autowired
     private MockMvc mockMvc;
@@ -293,7 +303,7 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void 즉시구매는_경매를_끝내고_소유권을_넘기며_최고_입찰자의_홀드를_풀어준다() {
+    void 즉시구매는_온체인_정산을_시작하고_완료_전까지_소유권과_홀드를_유지한다() {
         Long sellerId = insertUser("s@test.com", "판매자");
         Long a = insertFundedUser("a@test.com", "A", 10_000);
         Long buyer = insertFundedUser("b@test.com", "구매자", 10_000);
@@ -304,22 +314,45 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         var trade = auctionService.buyNow(buyer, auctionId, UUID.randomUUID().toString());
 
         assertThat(trade.price()).isEqualTo(5_000L);
+        assertThat(trade.status().name()).isEqualTo("PENDING");
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(buyer);
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(sellerId);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SOLD");
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SETTLING");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT winner_id FROM nft_auctions WHERE id = ?", Long.class, auctionId)).isEqualTo(buyer);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT auction_id FROM nft_photocard_trades WHERE id = ?", Long.class, trade.tradeId()))
                 .isEqualTo(auctionId);
-        assertThat(holdStatus("AUCTION_BID", bid.bidId())).isEqualTo("RELEASED");
-        assertThat(holdStatus("AUCTION_BUY_NOW", auctionId)).isEqualTo("CAPTURED");
-        assertThat(holdService.availableBalance(a)).isEqualTo(10_000L);
+        assertThat(holdStatus("AUCTION_BID", bid.bidId())).isEqualTo("ACTIVE");
+        assertThat(holdStatus("NFT_TRADE_BUYER", trade.tradeId())).isEqualTo("ACTIVE");
+        assertThat(holdStatus("NFT_TRADE_SELLER", trade.tradeId())).isEqualTo("ACTIVE");
+        assertThat(holdService.availableBalance(a)).isEqualTo(8_000L);
         // 구매/판매 내역 API 가 경매 거래를 그대로 보여준다
-        assertThat(nftService.getPurchaseHistory(buyer, null, 20).items()).hasSize(1);
-        assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
-        assertThat(nftService.getPhotocardTrades(photocardId, buyer, null, 20).items()).hasSize(1);
+        assertThat(nftService.getPurchaseHistory(buyer, null, 20).items()).isEmpty();
+        assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).isEmpty();
+    }
+
+    @Test
+    void 최고_입찰자가_즉시구매해도_정산_완료_후_입찰_홀드를_해제한다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long bidderId = insertFundedUser("a@test.com", "입찰자", 10_000);
+        Long photocardId = insertPhotocardOwnedBy(sellerId);
+        Long auctionId = insertAuction(photocardId, sellerId, 1_000, 5_000L, "now() + interval '1 day'");
+        var bid = auctionService.placeBid(bidderId, auctionId, new NftBidRequest(2_000L));
+
+        var trade = auctionService.buyNow(bidderId, auctionId, UUID.randomUUID().toString());
+        settlementWriter.catConfirmed(trade.tradeId());
+        settlementWriter.nftSubmitted(trade.tradeId(), null);
+        settlementWriter.complete(trade.tradeId());
+
+        assertThat(holdStatus("AUCTION_BID", bid.bidId())).isEqualTo("RELEASED");
+        assertThat(holdStatus("NFT_TRADE_BUYER", trade.tradeId())).isEqualTo("CAPTURED");
+        assertThat(holdStatus("NFT_TRADE_SELLER", trade.tradeId())).isEqualTo("RELEASED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(bidderId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SOLD");
     }
 
     @Test
@@ -367,7 +400,7 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void 마감_시_최고_입찰자에게_낙찰되고_거래_이력이_남는다() {
+    void 마감_시_최고_입찰자의_홀드로_온체인_정산을_시작한다() {
         Long sellerId = insertUser("s@test.com", "판매자");
         Long a = insertFundedUser("a@test.com", "A", 10_000);
         Long b = insertFundedUser("b@test.com", "B", 10_000);
@@ -381,15 +414,21 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
 
         assertThat(closed).isTrue();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SOLD");
+                "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId)).isEqualTo("SETTLING");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT winner_id FROM nft_auctions WHERE id = ?", Long.class, auctionId)).isEqualTo(b);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(b);
+                "SELECT owner_id FROM nft_photocards WHERE id = ?", Long.class, photocardId)).isEqualTo(sellerId);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT price FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isEqualTo(2_000L);
-        assertThat(holdStatus("AUCTION_BID", top.bidId())).isEqualTo("CAPTURED");
-        assertThat(nftService.getPurchaseHistory(b, null, 20).items()).hasSize(1);
+        Long tradeId = jdbcTemplate.queryForObject(
+                "SELECT id FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT chain_status::text FROM nft_photocard_trades WHERE id = ?", String.class, tradeId))
+                .isEqualTo("PENDING");
+        assertThat(holdStatus("AUCTION_BID", top.bidId())).isEqualTo("ACTIVE");
+        assertThat(holdStatus("NFT_TRADE_SELLER", tradeId)).isEqualTo("ACTIVE");
+        assertThat(nftService.getPurchaseHistory(b, null, 20).items()).isEmpty();
     }
 
     @Test
@@ -529,9 +568,9 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
         var closed = auctionService.getAuction(auctionId, b);
 
-        assertThat(closed.status()).isEqualTo(NftAuctionStatus.SOLD);
+        assertThat(closed.status()).isEqualTo(NftAuctionStatus.SETTLING);
         assertThat(closed.winnerNickname()).isEqualTo("B");
-        assertThat(closed.finalPrice()).isEqualTo(2_000L);
+        assertThat(closed.finalPrice()).isNull();
         assertCode(() -> auctionService.getAuction(999_999L, null), NftErrorCode.AUCTION_NOT_FOUND);
     }
 
@@ -558,10 +597,10 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(myBidsA.items()).hasSize(2);
         assertThat(myBidsA.items()).extracting(MyNftBidResponse::auctionId).containsExactly(running, won);
         assertThat(myBidsA.items().get(0).result()).isEqualTo(MyNftBidResponse.Result.OUTBID);
-        assertThat(myBidsA.items().get(1).result()).isEqualTo(MyNftBidResponse.Result.WON);
+        assertThat(myBidsA.items().get(1).result()).isEqualTo(MyNftBidResponse.Result.SETTLING);
         assertThat(myBidsA.items().get(1).myHighestBid()).isEqualTo(2_500L);
         assertThat(myBidsB.items()).extracting(MyNftBidResponse::result)
-                .containsExactly(MyNftBidResponse.Result.BIDDING, MyNftBidResponse.Result.LOST);
+                .containsExactly(MyNftBidResponse.Result.BIDDING, MyNftBidResponse.Result.OUTBID);
     }
 
     @Test
@@ -654,15 +693,16 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         mockMvc.perform(post("/auctions/" + auctionId + "/buy-now")
                         .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
                         .header("Idempotency-Key", UUID.randomUUID().toString()))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.data.photocardId").value(photocardId))
-                .andExpect(jsonPath("$.data.price").value(5000));
+                .andExpect(jsonPath("$.data.price").value(5000))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
 
         mockMvc.perform(get("/users/me/auctions")
                         .header(HttpHeaders.AUTHORIZATION, bearer(sellerId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].auctionId").value(auctionId))
-                .andExpect(jsonPath("$.data.items[0].status").value("SOLD"))
+                .andExpect(jsonPath("$.data.items[0].status").value("SETTLING"))
                 .andExpect(jsonPath("$.data.items[0].winnerNickname").value("즉시구매자"));
 
         mockMvc.perform(get("/users/me/bids")

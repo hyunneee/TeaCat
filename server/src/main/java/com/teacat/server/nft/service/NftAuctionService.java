@@ -97,10 +97,15 @@ public class NftAuctionService {
         if (!photocard.isOwnedBy(sellerId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
         }
-        if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
+        if (!photocard.isMinted()) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_MINTED);
+        }
+        if (listingRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftListingStatus.ACTIVE, NftListingStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
         }
-        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+        if (auctionRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftAuctionStatus.ACTIVE, NftAuctionStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
@@ -219,16 +224,13 @@ public class NftAuctionService {
         User buyer = getUser(buyerId);
         Long price = auction.getBuyNowPrice();
 
-        holdService.hold(buyerId, price, CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
-        holdService.capture(CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
-        if (auction.hasBids()) {
-            holdService.release(CatMoneyHoldRefType.AUCTION_BID, auction.getTopBid().getId());
-        }
-
-        photocard.transferTo(buyer);
-        auction.soldTo(buyer, price, LocalDateTime.now());
         NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.fromAuction(auction, buyer, price, idempotencyKey));
+                NftPhotocardTrade.pendingAuction(auction, buyer, price, idempotencyKey));
+        trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.hold(buyerId, price, CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.holdIncoming(auction.getSeller().getId(), price,
+                CatMoneyHoldRefType.NFT_TRADE_SELLER, trade.getId());
+        auction.startSettlement(buyer, price, LocalDateTime.now());
         return NftPurchaseResponse.from(trade);
     }
 
@@ -333,6 +335,10 @@ public class NftAuctionService {
         MyNftBidResponse.Result result;
         if (row.status() == NftAuctionStatus.ACTIVE) {
             result = isTop ? MyNftBidResponse.Result.BIDDING : MyNftBidResponse.Result.OUTBID;
+        } else if (row.status() == NftAuctionStatus.SETTLING) {
+            result = userId.equals(row.winnerId())
+                    ? MyNftBidResponse.Result.SETTLING
+                    : MyNftBidResponse.Result.LOST;
         } else {
             // 입찰이 있으면 취소·유찰이 불가능하므로 종료된 경매는 SOLD 다
             result = userId.equals(row.winnerId()) ? MyNftBidResponse.Result.WON : MyNftBidResponse.Result.LOST;
