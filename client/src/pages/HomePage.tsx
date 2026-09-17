@@ -242,8 +242,12 @@ export function HomePage() {
           묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
           같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
       <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
+        {/* 🔴 `fade` — 올라오기를 끄고 페이드만 합니다. 라벨(글자)이 올라오다 멈추는 순간
+            motion 이 `transform: none` 을 써넣어 합성 레이어가 사라지고, 그때 글자가 한 번
+            다시 그려져 **끊겨 보였습니다** (QA · `staggerChildFade` 주석). */}
         <Stagger
           as="ul"
+          fade
           className="lg:bg-surface-1 lg:shadow-card grid grid-cols-5 gap-x-1.5 lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
         >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
