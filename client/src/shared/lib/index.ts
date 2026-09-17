@@ -22,6 +22,7 @@ export {
   popIn,
   staggerParent,
   staggerChild,
+  staggerChildFade,
   pageTransition,
   sheetTransition,
   dialogTransition,
