@@ -58,7 +58,8 @@ export function market() {
 
 /** setup() 에서 한 번 부른다. 테스트가 돌 동안 돌려 쓸 공연 ID 목록을 가져온다 */
 export function fetchConcertIds() {
-    const res = http.get(`${API}/concerts?size=50`, { tags: { name: 'setup' } });
+    // responseType: 'text' — discardResponseBodies 를 켠 시나리오(seatmap-poll.js)에서도 본문을 읽어야 한다
+    const res = http.get(`${API}/concerts?size=50`, { tags: { name: 'setup' }, responseType: 'text' });
     if (res.status !== 200) {
         throw new Error(`setup: /concerts 가 ${res.status} 를 돌려줬다. 대상 주소를 확인하라 (${API})`);
     }
