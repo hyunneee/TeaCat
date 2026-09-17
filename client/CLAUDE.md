@@ -449,6 +449,22 @@ npm run typecheck && npm run lint
 - 통과하면 그 회차 예매가 끝날 때까지 유지됩니다 (`captchaVerifiedFor`).
 - 진짜 검증은 서버가 합니다 — 좌석 선점 API 가 `CAPTCHA_REQUIRED` 를 던집니다.
 
+### 가상 대기실 (봇 확인 → **대기실** → 구역)
+
+티켓 오픈 때 서버가 좌석 페이지 인원을 **정원(기본 5,000) 이하**로 묶습니다 (`server/QUEUE_DESIGN.md`).
+넘치는 사용자는 `/booking/:scheduleId/waiting` 에서 순번을 보며 기다리고, 서버가 들여보내면 구역 선택으로 넘어갑니다.
+
+- 대기실은 **회차마다 관리자가 켭니다.** 꺼진 회차(기본)는 `status.enabled: false` 라 화면·가드가 전부 지금처럼 통과합니다.
+- 가드 순서는 `RequireFace → RequireCaptcha → RequireQueue`. 봇 확인을 통과한 사람만 대기열 자리를 잡습니다.
+  🔴 대기실 화면은 `RequireQueue` **밖**에 둡니다 — 안에 두면 자기 자신으로 보내는 고리가 됩니다.
+- 진짜 방어선은 **서버 인터셉터**입니다. 좌석맵·선점 API 는 입장 표식이 없으면 `ERR_QUEUE_002`(428) 를 냅니다.
+  `useQueueEviction` 이 TanStack Query 캐시 이벤트를 구독해 그 코드를 잡고 대기실로 되돌립니다 —
+  화면마다 catch 를 심지 말고, `shared/api/client.ts` 에도 넣지 마세요 (shared 는 도메인·라우터를 모릅니다).
+- 순번은 서버가 진입 시각으로 셉니다. **새로고침·뒤로가기에서 `leave` 를 부르지 마세요** — 자리를 잃습니다.
+  `leave` 는 결제 완료 화면(`BookingDonePage`)에서만 부르고, 안 불려도 서버가 무활동 10분 뒤 자리를 비웁니다.
+- 대기 취소는 되돌릴 수 없는 동작입니다 — `danger-ghost` + 확인 모달(4-7).
+- 폴링 주기는 서버가 `pollAfterSec` 로 알려 줍니다. 화면에 숫자를 적지 마세요.
+
 ### 동시 결제 / 좌석 락
 
 진짜 락은 **서버**가 잡습니다. 프론트에서 "누가 먼저 눌렀나"를 판정하려 하지 마세요.
@@ -733,6 +749,7 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
   | `booking_start` | `useStartBooking` (오픈 확인 통과) | `schedule_id` |
   | `booking_blocked` | 같은 곳, 오픈 전/마감 | `schedule_id` `fail_reason` |
   | `captcha_pass` / `captcha_fail` | `useCaptcha` | `schedule_id` |
+  | `queue_admitted` / `queue_evicted` | `useQueueWaiting` · `useQueueEviction` | `schedule_id` |
   | `face_verify_success` / `_fail` | `useFaceVerify` | `fail_reason` |
   | `seat_hold_success` / `_fail` | `useSeatHold` | `schedule_id` `fail_reason` |
   | `payment_start` | `usePayment` | `schedule_id` `payment_method` |
@@ -874,6 +891,14 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 ---
 
 ## [규칙 변경 이력]
+
+- 2026-09-17 **가상 대기실 추가** (7장 "가상 대기실" 절 신설, 라우팅 가드 `RequireQueue` 추가 — 0번 "가드 정책").
+  부하테스트에서 좌석 페이지 사용자 5,000명이 서버 한계로 확인돼(`loadtest/k6/README.md`), 그 위는 서버가
+  대기열에 세우고 `features/queue` 가 순번 화면(`/booking/:scheduleId/waiting`)을 그립니다.
+  가드 순서는 `RequireFace → RequireCaptcha → RequireQueue` 이고, 대기실이 꺼진 회차(기본)는 전부 지금처럼 통과합니다.
+  🔴 입장 표식이 사라졌을 때(428 `ERR_QUEUE_002`)의 되돌림은 `shared/api/client.ts` 가 아니라
+     `useQueueEviction` 의 쿼리 캐시 구독으로 풀었습니다 — shared 는 라우터를 모르기 때문입니다.
+  🔴 `leave` 는 결제 완료에서만 부릅니다. 새로고침·뒤로가기에 걸면 자리를 잃습니다. 사용자 요청
 
 - 2026-09-14 **쿠키 동의 + 개인정보처리방침 추가** (7장 "쿠키 동의와 개인정보처리방침" 절
   신설, 8장 세 항목 정리). GA 를 운영에 켜면서 미뤄 둘 수 없게 된 숙제입니다.

@@ -38,6 +38,11 @@ export const ROUTES = {
   /* ── 예매 플로우 ──
      공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */
   BOOKING_VERIFY: (scheduleId: string) => `/booking/${scheduleId}/verify`,
+  /**
+   * 가상 대기실 (봇 확인 → **대기실** → 구역). 서버가 좌석 페이지 인원을 정원(5,000) 이하로 묶고,
+   * 넘치면 여기서 순번을 보며 기다립니다. 대기실이 꺼진 회차(기본)는 이 화면을 건너뜁니다.
+   */
+  BOOKING_WAITING: (scheduleId: string) => `/booking/${scheduleId}/waiting`,
   BOOKING_SECTION: (scheduleId: string) => `/booking/${scheduleId}/section`,
   BOOKING_SEATS: (scheduleId: string) => `/booking/${scheduleId}/seats`,
   BOOKING_REVIEW: (scheduleId: string) => `/booking/${scheduleId}/review`,
