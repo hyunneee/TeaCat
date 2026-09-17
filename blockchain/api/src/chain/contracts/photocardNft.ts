@@ -11,6 +11,7 @@ import { userSigner } from '../keys/hdWallet';
 import { ensureLocalGas } from '../localGas';
 import { sendSerialized } from '../nonce';
 import { hashOf } from '../hash';
+import type { HistoricalIssue, ReceiptIssueEvent } from '../../services/photocardIssueEvidence';
 
 /**
  * 포토카드 NFT 컨트랙트 접근. (PHOTOCARD_PLAN.md 3장)
@@ -116,6 +117,55 @@ export async function getDesign(designId: bigint): Promise<OnChainDesign> {
  */
 export async function isIssued(photocardKey: string): Promise<boolean> {
   return read().isIssued(hashOf(photocardKey));
+}
+
+/** 키가 이미 소비됐을 때 원래 발행의 도안·수령인을 검증한다. */
+export async function findPhotocardIssuance(photocardKey: string): Promise<HistoricalIssue | null> {
+  const contract = read();
+  const keyHash = hashOf(photocardKey);
+  const events = await contract.queryFilter(
+    contract.filters.PhotocardIssued(undefined, undefined, keyHash),
+    0,
+    'latest',
+  );
+  if (events.length !== 1) return null;
+  const event = events[0];
+  if (!event) return null;
+  return {
+    keyHash,
+    tokenId: event.args.tokenId.toString(),
+    to: event.args.to.toLowerCase(),
+    txHash: event.transactionHash,
+  };
+}
+
+/** 성공 영수증의 발행/건너뜀 이벤트를 카드별로 모두 보존한다. */
+export async function getPhotocardIssueEvents(txHash: string): Promise<ReceiptIssueEvent[]> {
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt || receipt.status !== 1) return [];
+  const address = requireAddress().toLowerCase();
+  const iface = PhotocardNFT__factory.createInterface();
+  const events: ReceiptIssueEvent[] = [];
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== address) continue;
+    try {
+      const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+      if (parsed?.name === 'PhotocardIssued') {
+        events.push({
+          kind: 'ISSUED',
+          tokenId: String(parsed.args.tokenId),
+          to: String(parsed.args.to).toLowerCase(),
+          keyHash: String(parsed.args.photocardKey).toLowerCase(),
+        });
+      } else if (parsed?.name === 'IssueSkipped') {
+        events.push({ kind: 'SKIPPED', keyHash: String(parsed.args.photocardKey).toLowerCase() });
+      }
+    } catch {
+      // 이 컨트랙트의 다른 이벤트거나 파싱할 수 없는 로그다.
+    }
+  }
+  return events;
 }
 
 /**
