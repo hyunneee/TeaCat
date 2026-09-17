@@ -253,6 +253,22 @@ function alignFace(frame: ImageBitmap, landmarksPx: readonly (readonly [number, 
   return alignCtx.getImageData(0, 0, EMBED_INPUT_SIZE, EMBED_INPUT_SIZE);
 }
 
+/**
+ * 가장 크게 잡힌 얼굴 = 카메라에 가장 가까운 사람.
+ *
+ * 🔴 정규화 전 좌표(640 기준)로 고르지만, 정규화는 균일 배율이라 순위가 바뀌지 않습니다 —
+ *    그래서 메인 스레드의 {@code selectPrimaryFace} 와 <b>항상 같은 얼굴</b>을 고릅니다.
+ */
+function largestFace(faces: readonly RawFace[]): RawFace | null {
+  let largest: RawFace | null = null;
+
+  for (const face of faces) {
+    if (!largest || face.w > largest.w) largest = face;
+  }
+
+  return largest;
+}
+
 async function embedFace(frame: ImageBitmap, face: RawFace, fit: ReturnType<typeof fitFrame>) {
   if (!embedder) throw new Error('인식 모델이 준비되지 않았습니다.');
 
@@ -330,9 +346,19 @@ self.onmessage = async (event: MessageEvent<FaceWorkerRequest>) => {
       try {
         const { raw, fit, faces } = await detectFaces(message.frame);
 
-        // 얼굴이 정확히 하나일 때만 무거운 모델을 돌립니다.
-        // 여러 개면 어느 얼굴을 등록할지 정할 수 없고, 없으면 돌릴 게 없습니다.
-        if (raw.length !== 1) {
+        /* 🔴 예전에는 `raw.length !== 1` 이면 임베딩을 건너뛰었습니다. 조용한 방에서
+           혼자 등록할 때만 성립하는 규칙이라 **현장 검표에서는 아예 동작하지 않습니다** —
+           공연장 입구에는 언제나 뒤에 줄이 서 있습니다.
+
+           이제 가장 크게 잡힌 얼굴 하나를 고릅니다. 카메라에 가장 가까운 사람이고,
+           그게 가이드 원 안에 선 사람입니다.
+
+           🔴 **`faceQuality.selectPrimaryFace` 와 같은 규칙이어야 합니다.** 둘이 갈라지면
+              화면은 A 를 통과시켰는데 임베딩은 B 에서 뽑힙니다 — 남의 얼굴로 등록되고
+              아무도 눈치채지 못합니다. "두 사람이 나란히 선" 모호한 경우를 막는 건
+              그쪽이 하므로, 여기서는 고르기만 합니다. */
+        const primary = largestFace(raw);
+        if (!primary) {
           reply({
             type: 'embedded',
             id: message.id,
@@ -344,7 +370,7 @@ self.onmessage = async (event: MessageEvent<FaceWorkerRequest>) => {
           return;
         }
 
-        const result = await embedFace(message.frame, raw[0]!, fit);
+        const result = await embedFace(message.frame, primary, fit);
         reply(
           {
             type: 'embedded',
