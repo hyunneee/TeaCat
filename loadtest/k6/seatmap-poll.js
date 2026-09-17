@@ -23,6 +23,10 @@ const POLL_SEC = 3; // useSeatMap refetchInterval: 3000
 const ABORT = !__ENV.NO_ABORT;
 
 export const options = {
+    // 🔴 응답 본문을 버린다. 좌석맵은 19KB 라 VU 수천 명이면 k6 가 초당 수십 MB 를 파싱·보관하느라
+    //    먼저 죽는다 (EC2 에서 1GB 한도로 1800 명에 OOM). 상태코드만 검사해도 "서버가 버티는가" 는 잰다.
+    //    setup() 은 회차를 고르느라 본문이 필요해서 요청마다 responseType: 'text' 로 되살린다.
+    discardResponseBodies: true,
     scenarios: {
         seat_page: {
             executor: 'ramping-vus',
@@ -51,9 +55,9 @@ export const options = {
 export function setup() {
     const scheduleIds = [];
     for (const cid of fetchConcertIds()) {
-        const res = http.get(`${API}/concerts/${cid}/schedules`, { tags: { name: 'setup' } });
+        const res = http.get(`${API}/concerts/${cid}/schedules`, { tags: { name: 'setup' }, responseType: 'text' });
         for (const sid of pickIds(res, 'scheduleId')) {
-            const seats = http.get(`${API}/schedules/${sid}/seats`, { tags: { name: 'setup' } });
+            const seats = http.get(`${API}/schedules/${sid}/seats`, { tags: { name: 'setup' }, responseType: 'text' });
             if (seats.status === 200 && seats.body.length > 1000) scheduleIds.push(sid);
         }
     }
@@ -76,12 +80,8 @@ export default function (data) {
         tags: { name: 'GET /schedules/{id}/seats' },
         timeout: '10s',
     });
-    check(res, {
-        'seats 200': (r) => r.status === 200,
-        'seats has areas': (r) => {
-            try { return Array.isArray(r.json('data.areas')); } catch (_) { return false; }
-        },
-    });
+    // 본문은 버렸으므로(discardResponseBodies) 상태코드만 본다. 본문 검사는 smoke.js 가 한다
+    check(res, { 'seats 200': (r) => r.status === 200 });
 
     // TanStack 은 응답을 받은 뒤 3초 후 다시 요청한다
     sleep(POLL_SEC);
