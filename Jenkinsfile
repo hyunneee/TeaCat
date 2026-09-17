@@ -8,6 +8,35 @@
 //
 // 시크릿은 저장소에 없다. ~/teacat/.env.<env> 를 그대로 읽는다.
 //
+// ── 무중단 배포 (운영만) ──────────────────────────────────
+// 운영 서버는 색이 둘이다 (prod-server-blue / prod-server-green). 한 번에 하나만 뜬다.
+// 배포는 유휴 색을 새 이미지로 띄워 /actuator/health 가 UP 이 될 때까지 기다린 뒤,
+// nginx 가 보는 한 줄(~/teacat/nginx/conf.d/prod-backend.inc)을 바꿔 reload 하고
+// 옛 색을 멈춘다. 스프링이 뜨는 40~60초 동안 트래픽이 끊기지 않는다.
+//
+// 🔴 전환 전에 실패하면 nginx 를 건드리지 않는다 — 옛 색이 계속 받고 있으므로 그게 롤백이다.
+//    전환까지 끝난 뒤 되돌리려면 두 가지를 함께 해야 한다 (옛 색은 지우지 않고 멈춰만 뒀다):
+//      docker start prod-server-<옛색>
+//      prod-backend.inc 의 set 줄을 옛색으로 바꾸고
+//      docker exec nginx nginx -t && docker exec nginx nginx -s reload
+//
+// 🔴 마이그레이션은 **뒤로 호환되게** 써야 한다. 새 색이 기동하면서 Flyway 가 스키마를
+//    올리는데, 그 순간 옛 색이 아직 옛 코드로 서비스 중이다. 컬럼을 지우거나 이름을
+//    바꾸면 전환하는 동안 옛 색이 깨진다. 지우는 건 다음 배포에서 따로 한다.
+//
+// 전환하는 몇 초간 두 인스턴스가 함께 산다. 스케줄러가 그 사이 같은 건을 두 번 집을 수
+// 있지만 **낭비일 뿐 위험하지 않다.** 확인하고 넘어온 것이라 적어 둔다 —
+//   - 돈이 움직이는 둘은 DB 가 막는다. 경매 마감은 SELECT ... FOR UPDATE + ACTIVE 조건이라
+//     두 번째 호출이 락을 기다렸다 false 를 받고 끝나고, 좌석 생성은 ON CONFLICT DO NOTHING
+//     이다. 애플리케이션 락이 아니라 **DB 락이라 인스턴스가 몇 개든 유효하다.**
+//   - 결제 복구(TicketOrderScheduler·TokenChargeScheduler)는 initial-delay 가 30초라
+//     겹치는 10초 구간에 **아예 돌지 않는다.** 체인 확정 폴링도 20초다.
+//   - 나머지는 조회이거나 체인 멱등키(photocardKey)로 막힌다.
+// ShedLock 은 서버를 정말 여러 대로 늘릴 때 필요하다 (SchedulingConfig 주석:
+// "조회·멱등 요청이라 위험하진 않지만 낭비다"). 블루-그린 때문에 할 일은 아니다.
+//
+// 개발(dev)은 그대로 단일 컨테이너다. 잠깐 끊겨도 되는 환경에 색을 둘 두면 메모리만 먹는다.
+//
 // ── 빌드 시간 ─────────────────────────────────────────────
 // 세 이미지를 매번 다 빌드하면 t3.small 에서 5~8분이 걸린다. 대부분의 푸시는
 // 한 서비스만 건드리므로 '변경 감지' 가 직전 성공 커밋과 비교해 바뀐 것만 빌드한다.
@@ -78,7 +107,14 @@ pipeline {
                     #    $COMPOSE 는 아래 '설정 동기화' 가 저장소에서 복사해 만든다. 그걸 여기서
                     #    미리 요구하면 그 환경의 첫 배포가 영원히 실패한다 — 파일을 만드는 단계까지
                     #    가보지도 못한다. (개발은 파일이 이미 있어서 이 순서 문제가 드러나지 않았다)
-                    for f in "docker/docker-compose.$DEPLOY_ENV.yml" "docker/nginx/conf.d/$DEPLOY_ENV.conf"; do
+                    REQUIRED="docker/docker-compose.$DEPLOY_ENV.yml docker/nginx/conf.d/$DEPLOY_ENV.conf"
+                    # 🔴 `[ 조건 ] && 변수=...` 로 쓰지 말 것. dev 에서 조건이 거짓이면 그 줄의
+                    #    종료코드가 1 이라 set -e 가 파이프라인을 여기서 죽인다.
+                    if [ "$DEPLOY_ENV" = "prod" ]; then
+                        # 블루-그린 전환 스위치의 첫 배포용 기본값 (docker/nginx/conf.d/prod.conf 가 include)
+                        REQUIRED="$REQUIRED docker/nginx/conf.d/prod-backend.inc"
+                    fi
+                    for f in $REQUIRED; do
                         test -r "$f" || { echo "저장소에 $f 가 없습니다."; exit 1; }
                     done
 
@@ -224,7 +260,7 @@ pipeline {
                     # (측정 ID 는 스크립트 주소에 실리는 공개 값이라 여기 적어도 된다.
                     #  Data API 서비스 계정 키는 전혀 다른 물건이고 절대 여기 두면 안 된다)
                     case "$DEPLOY_ENV" in
-                        prod) GA_ID="G-5BPSG2K5K9" ;;
+                        prod) GA_ID="G-Y46EH6RRQM" ;;
                         *)    GA_ID="" ;;
                     esac
 
@@ -333,6 +369,19 @@ pipeline {
                     cp -f "docker/nginx/conf.d/$DEPLOY_ENV.conf" "$DEPLOY_DIR/nginx/conf.d/"
                     cp -f "docker/docker-compose.$DEPLOY_ENV.yml" "$COMPOSE"
 
+                    # 🔴 블루-그린 전환 스위치는 **cp -f 로 덮지 않는다.**
+                    #    이 파일만은 저장소가 원본이 아니라 **서버의 현재 색이 정답**이다.
+                    #    덮으면 배포마다 blue 로 되돌아가, green 이 떠 있는 상태에서
+                    #    nginx 가 죽은 blue 를 가리켜 운영 전체가 502 가 된다.
+                    #    없을 때만(=첫 배포) 저장소 기본값을 깔아 준다.
+                    if [ "$DEPLOY_ENV" = "prod" ]; then
+                        INC="$DEPLOY_DIR/nginx/conf.d/prod-backend.inc"
+                        if [ ! -f "$INC" ]; then
+                            cp "docker/nginx/conf.d/prod-backend.inc" "$INC"
+                            echo "블루-그린 스위치를 새로 만들었습니다 ($INC)."
+                        fi
+                    fi
+
                     # nginx.conf 와 proxy.yml 은 양쪽 환경이 함께 쓴다.
                     # 자동으로 덮어쓰면 한쪽 배포가 다른 쪽을 건드리므로 알려만 준다.
                     for f in nginx/nginx.conf docker-compose.proxy.yml; do
@@ -347,8 +396,10 @@ pipeline {
             }
         }
 
-        stage('앱 배포') {
+        stage('앱 배포 (개발)') {
+            when { not { environment name: 'DEPLOY_ENV', value: 'prod' } }
             steps {
+                script { env.SERVER_CONTAINER = "${env.DEPLOY_ENV}-server" }
                 sh '''
                     set -e
                     # Sentry 이슈에 어느 배포에서 났는지를 붙인다. 프론트는 빌드 인자로 이미 넘기고 있고
@@ -360,6 +411,123 @@ pipeline {
                     export SENTRY_RELEASE="teacat-server@$TAG"
 
                     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" up -d --remove-orphans
+                '''
+            }
+        }
+
+        // 운영은 컨테이너를 바꿔 끼우는 동안에도 트래픽이 끊기면 안 된다.
+        // 유휴 색을 새 이미지로 띄워 /actuator/health 가 UP 이 된 뒤에야 nginx 를 돌린다.
+        // 그 전에 실패하면 **nginx 를 건드리지 않는다** — 옛 색이 계속 받고 있으므로 그게 곧 롤백이다.
+        //
+        // 전환하는 동안 두 인스턴스가 10초쯤 함께 산다. 스케줄러가 같은 건을 두 번 집을
+        // 수 있지만 DB 락(FOR UPDATE·ON CONFLICT)과 멱등키가 막아서 낭비로 끝난다.
+        // 자세한 근거는 이 파일 첫머리의 '무중단 배포' 절에 있다.
+        stage('앱 배포 (운영 · 블루그린)') {
+            when { environment name: 'DEPLOY_ENV', value: 'prod' }
+            steps {
+                script {
+                    // 🔴 지금 색은 **nginx 가 실제로 보고 있는 파일**에서 읽는다.
+                    //    컨테이너 목록으로 판단하면 실패한 배포가 남긴 유휴 컨테이너에 속는다.
+                    def inc = "${DEPLOY_DIR}/nginx/conf.d/prod-backend.inc"
+                    def cur = sh(returnStdout: true, script:
+                        "sed -n 's|.*prod-server-\\([a-z][a-z]*\\):8080.*|\\1|p' '${inc}' | head -n1").trim()
+
+                    if (cur != 'blue' && cur != 'green') {
+                        echo "현재 색을 읽지 못했습니다 ('${cur}'). blue 로 보고 green 에 올립니다."
+                        cur = 'blue'
+                    }
+                    env.OLD_COLOR = cur
+                    env.NEW_COLOR = (cur == 'blue') ? 'green' : 'blue'
+                    // '기동 확인' 과 post.failure 가 이 이름을 쓴다
+                    env.SERVER_CONTAINER = "prod-server-${env.NEW_COLOR}"
+                    echo "블루-그린 전환: ${env.OLD_COLOR} → ${env.NEW_COLOR} (${env.TAG})"
+                }
+                sh '''
+                    set -e
+                    export SENTRY_RELEASE="teacat-server@$TAG"
+
+                    INC="$DEPLOY_DIR/nginx/conf.d/prod-backend.inc"
+                    NEWC="prod-server-$NEW_COLOR"
+                    OLDC="prod-server-$OLD_COLOR"
+
+                    # ── 1. 인프라 ────────────────────────────────────────────────
+                    # 🔴 여기서는 --remove-orphans 를 쓰지 않는다. 블루-그린 이전의 단일
+                    #    컨테이너 prod-server 는 compose 파일에서 사라져 지금은 '고아' 다.
+                    #    여기서 지우면 새 색이 뜨기도 전에 운영이 끊긴다 — 무중단이 목적인데
+                    #    그 반대가 된다. 그 컨테이너는 전환이 끝난 5단계에서 지운다.
+                    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" up -d --wait \
+                        postgres redis minio blockchain
+
+                    # ── 2. 유휴 색을 새 이미지로 ─────────────────────────────────
+                    # 🔴 --force-recreate 가 필요하다. 이미지 태그가 teacat-server:prod 로
+                    #    고정이라 태그만으로는 compose 가 "바뀐 게 없다" 고 볼 수 있다.
+                    # 🔴 --no-deps: 인프라는 위에서 --wait 로 확인했다. 빼면 depends_on 이
+                    #    blockchain 헬스를 처음부터 다시 기다려 전환이 느려진다.
+                    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" \
+                        up -d --no-deps --force-recreate "server-$NEW_COLOR"
+
+                    # ── 3. 새 색이 진짜 받을 준비가 됐는지 ───────────────────────
+                    # 🔴 로그의 "Started TeacatApplication" 이 아니라 /actuator/health 를 본다.
+                    #    로그는 컨텍스트가 떴다는 말일 뿐이고, health 는 DB·Redis 까지 UP 이어야
+                    #    준다. 트래픽을 넘기는 판단이라 더 엄한 쪽을 쓴다.
+                    #    (8081 은 관리 포트다. 호스트로 열지 않아 teacat-net 안에서만 닿는다)
+                    OK=no
+                    for i in $(seq 1 60); do
+                        STATE=$(docker inspect -f '{{.State.Status}}' "$NEWC" 2>/dev/null || echo missing)
+                        case "$STATE" in
+                            missing)
+                                echo "❌ $NEWC 컨테이너가 만들어지지 않았습니다."; exit 1 ;;
+                            exited|dead)
+                                echo "❌ $NEWC 가 기동 중 죽었습니다. 마지막 로그:"
+                                docker logs --tail 80 "$NEWC" 2>&1 || true
+                                echo "   운영은 $OLDC 가 그대로 받고 있습니다 — 전환하지 않았습니다."
+                                exit 1 ;;
+                        esac
+                        if curl -sf -m 5 "http://$NEWC:8081/actuator/health" | grep -q '"status":"UP"'; then
+                            OK=yes; echo "$NEWC 준비 완료 (${i}번째 확인)"; break
+                        fi
+                        sleep 5
+                    done
+                    if [ "$OK" != "yes" ]; then
+                        echo "❌ $NEWC 가 5분 안에 UP 이 되지 않았습니다. 마지막 로그:"
+                        docker logs --tail 80 "$NEWC" 2>&1 || true
+                        echo "   운영은 $OLDC 가 그대로 받고 있습니다 — 전환하지 않았습니다."
+                        exit 1
+                    fi
+
+                    # ── 4. 전환 ─────────────────────────────────────────────────
+                    # 🔴 원본을 남기고 바꾼다. nginx -t 가 실패하면 되돌리고 reload 하지 않는다.
+                    #    깨진 설정으로 reload 하면 nginx 는 옛 설정을 유지한 채 초록불만 켜진다.
+                    # 🔴 sed 패턴에 $ 를 넣지 않는다 (`^set ` 로만 잡는다). 정규식의 $ 와
+                    #    셸 인용이 엉켜 조용히 안 바뀌는 사고가 나기 쉽다.
+                    cp "$INC" "$INC.bak"
+                    sed -i "s|^set .*|set \\$api http://$NEWC:8080;|" "$INC"
+                    grep -q "$NEWC:8080" "$INC" || {
+                        mv "$INC.bak" "$INC"
+                        echo "❌ 스위치 파일을 바꾸지 못했습니다. $INC 의 set 줄을 확인하세요."
+                        exit 1; }
+
+                    if ! docker exec nginx nginx -t; then
+                        mv "$INC.bak" "$INC"
+                        echo "❌ nginx 설정 검사 실패 — 전환하지 않았습니다. $OLDC 가 그대로 받습니다."
+                        exit 1
+                    fi
+                    docker exec nginx nginx -s reload
+                    rm -f "$INC.bak"
+                    echo "트래픽을 $NEWC 로 넘겼습니다."
+
+                    # ── 5. 옛 색 정리 ───────────────────────────────────────────
+                    # 🔴 stop 만 한다. rm 하지 않는 이유는 되돌릴 때 `docker start` 한 줄이면
+                    #    되기 때문이다 (docker/nginx/conf.d/prod-backend.inc 주석 참고).
+                    docker stop "$OLDC" >/dev/null 2>&1 || true
+
+                    # 블루-그린 이전의 단일 컨테이너. 이름이 prod-server 라 두 색이 단
+                    # prod-server 별칭과 겹쳐 프로메테우스가 엉뚱한 쪽을 긁게 된다.
+                    # 트래픽은 이미 새 색으로 넘어갔으므로 지금 지워도 끊기지 않는다.
+                    if docker inspect prod-server >/dev/null 2>&1; then
+                        echo "블루-그린 이전의 prod-server 컨테이너를 정리합니다."
+                        docker rm -f prod-server >/dev/null 2>&1 || true
+                    fi
                 '''
             }
         }
@@ -380,7 +548,9 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    NAME="$DEPLOY_ENV-server"
+                    # 개발은 dev-server, 운영은 방금 전환한 색(prod-server-blue|green).
+                    # 배포 스테이지가 env.SERVER_CONTAINER 에 넣어 준다.
+                    NAME="$SERVER_CONTAINER"
                     for i in $(seq 1 60); do
                         STATE=$(docker inspect -f '{{.State.Status}}' "$NAME" 2>/dev/null || echo missing)
                         [ "$STATE" = "missing" ] && { echo "$NAME 컨테이너가 없습니다"; exit 1; }
@@ -533,9 +703,10 @@ pipeline {
             sh '''
                 echo "── 실패 직전 상태 ──"
                 docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps || true
-                for s in server blockchain; do
-                    echo "── $DEPLOY_ENV-$s ──"
-                    docker logs --tail 50 "$DEPLOY_ENV-$s" 2>&1 || true
+                # 서버는 운영이면 색이 붙는다. 환경 결정 전에 죽었으면 비어 있을 수 있어 폴백을 둔다.
+                for c in "${SERVER_CONTAINER:-$DEPLOY_ENV-server}" "$DEPLOY_ENV-blockchain"; do
+                    echo "── $c ──"
+                    docker logs --tail 50 "$c" 2>&1 || true
                 done
             '''
             script { notifyMM('#D24B4E', "❌ ${env.DEPLOY_ENV ?: '?'} 배포 실패", '범인') }

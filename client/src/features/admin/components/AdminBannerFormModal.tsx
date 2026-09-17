@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageUp } from 'lucide-react';
 import { Button, Input, Modal, Segmented, Select, Textarea } from '@/shared/components/ui';
 import { useConcerts } from '@/features/concert';
+import { DEFAULT_BANNER_FOCUS, type BannerImageFocus } from '@/features/banner';
+import { BannerFocusPicker } from './BannerFocusPicker';
 import type {
   AdminBanner,
   AdminBannerType,
@@ -51,6 +53,9 @@ export function AdminBannerFormModal({
   );
   const [imageKey, setImageKey] = useState(banner?.imageKey ?? '');
   const [preview, setPreview] = useState(banner?.imageUrl ?? '');
+  const [imageFocus, setImageFocus] = useState<BannerImageFocus>(
+    banner?.imageFocus ?? DEFAULT_BANNER_FOCUS,
+  );
   const [submitted, setSubmitted] = useState(false);
 
   /* 공연을 고르면 제목을 비워 둔 경우에만 공연명으로 채워 줍니다.
@@ -70,6 +75,15 @@ export function AdminBannerFormModal({
     setPreview(URL.createObjectURL(file));
   };
 
+  /* 크롭 위치를 고르려면 **무엇이 잘리는지** 보여야 합니다. 이미지 배너는 방금 올린
+     그림, 공연 배너는 고른 공연의 포스터입니다 (수정 중이고 목록이 아직 안 왔으면
+     서버가 준 지금 그림으로 버팁니다 — 그 사이에 격자가 사라졌다 나타나면 놀랍니다). */
+  const focusPreview =
+    type === 'IMAGE'
+      ? preview
+      : (concerts?.find((c) => String(c.concertId) === performanceId)?.posterUrl ??
+        (banner?.type === 'PERFORMANCE' ? banner.imageUrl : null));
+
   const linkPathInvalid = linkPath.length > 0 && !/^\/(?!\/)/.test(linkPath);
   const valid =
     title.trim().length > 0 &&
@@ -86,6 +100,8 @@ export function AdminBannerFormModal({
       subtitle: subtitle.trim() || null,
       label: label.trim() || null,
       imageKey: type === 'IMAGE' ? imageKey : null,
+      /* 타입과 무관합니다 — 공연 포스터도 같은 틀에 담겨 잘립니다 */
+      imageFocus,
       performanceId: type === 'PERFORMANCE' ? Number(performanceId) : null,
       linkPath: type === 'IMAGE' ? linkPath.trim() || null : null,
       active: banner?.active ?? true,
@@ -140,14 +156,6 @@ export function AdminBannerFormModal({
             {submitted && !imageKey && (
               <p className="text-danger text-xs">배너 이미지를 올려 주세요.</p>
             )}
-
-            {preview && (
-              <img
-                src={preview}
-                alt="배너 미리보기"
-                className="aspect-[4/3] w-full rounded-xl object-cover"
-              />
-            )}
           </div>
         ) : (
           <div className="space-y-2">
@@ -168,6 +176,15 @@ export function AdminBannerFormModal({
               이미지는 그 공연의 포스터를 쓰고, 누르면 공연 상세로 갑니다.
             </p>
           </div>
+        )}
+
+        {/* 미리보기 겸 크롭 위치 고르기. 그림이 정해지기 전에는 보여줄 것이 없습니다 */}
+        {focusPreview && (
+          <BannerFocusPicker
+            imageUrl={focusPreview}
+            value={imageFocus}
+            onChange={setImageFocus}
+          />
         )}
 
         <Input

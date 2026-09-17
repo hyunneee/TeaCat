@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
@@ -5,10 +6,10 @@ import {
   Hourglass,
   MessageSquare,
   Images,
-  ScanFace,
+  Receipt,
   Search,
+  ScanFace,
   Ticket,
-  UserRound,
 } from 'lucide-react';
 import {
   Badge,
@@ -20,6 +21,7 @@ import {
   PosterImage,
   RAIL_ANCHOR,
   Rail,
+  Segmented,
   SectionTitle,
   Skeleton,
 } from '@/shared/components/ui';
@@ -38,6 +40,9 @@ import {
   posterSeedOf,
   useConcerts,
 } from '@/features/concert';
+import { AuctionCard, useAuctions } from '@/features/auction';
+import { NftCard, useNftMarket } from '@/features/nft';
+import { RankBadge, usePopularConcerts, usePopularPhotocards } from '@/features/ranking';
 
 /**
  * 바로가기 — **5칸 한 줄.**
@@ -49,12 +54,17 @@ import {
 const SHORTCUTS = [
   { to: ROUTES.MY_TICKETS, label: '내 티켓', icon: Ticket },
   { to: ROUTES.MY_RESALE, label: '취소표', icon: Hourglass },
-  /* 캣머니 자리였습니다. 잔액은 MY 상단에 이미 큰 숫자로 있어서 같은 목적지가 두 번
-     나오는 셈이었고, 대신 막혔을 때 말할 곳이 홈에 없었습니다 */
-  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
   { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
-  { to: ROUTES.MY, label: '마이', icon: UserRound },
+  { to: ROUTES.MY_NFT_TRADES, label: '거래내역', icon: Receipt },
+  { to: ROUTES.MY_INQUIRIES, label: '문의하기', icon: MessageSquare },
 ] as const;
+
+const MARKET_MODES = [
+  { value: 'SHOP', label: '판매 중' },
+  { value: 'AUCTION', label: '경매 중' },
+] as const;
+
+type MarketMode = (typeof MARKET_MODES)[number]['value'];
 
 /** 가로 레일에 몇 장까지 실을지. 너무 많으면 끝까지 미는 사람이 없습니다. */
 const RAIL_LIMIT = 8;
@@ -99,9 +109,15 @@ const RAIL_CARD_WIDTH = 'lg:w-[calc((100%-4rem)/5)]';
 export function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [marketMode, setMarketMode] = useState<MarketMode>('SHOP');
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
+  /* 홈에서는 거래 중인 일부만 보여줍니다. 전체 목록은 포카 탭에 있습니다. */
+  const { data: marketPocas, isPending: marketPending } = useNftMarket();
+  const { data: marketAuctions, isPending: auctionPending } = useAuctions();
+  const { data: popularConcerts, isPending: popularConcertsPending } = usePopularConcerts();
+  const { data: popularPhotocards, isPending: popularPhotocardsPending } = usePopularPhotocards();
   /* 결제창을 닫고 나와도 자리는 잡혀 있습니다. 돌아갈 길이 없으면 10분 동안
      본인도 남도 그 자리를 못 삽니다 (서버 GET /me/holds) */
   const activeHolds = useActiveHolds();
@@ -127,7 +143,8 @@ export function HomePage() {
    * 사람들이 홈에 보러 오는 정보였습니다.
    *
    * 섞여도 헷갈리지 않는 것은 카드마다 상태 칩이 붙고(예매중·매진·오픈 예정),
-   * **살 수 있는 것이 앞에 오도록** 정렬하기 때문입니다 (`compareForRail`).
+   * **티켓팅 시각 오름차순**으로 정렬하기 때문입니다 (`compareForRail`) — 이미 열린 공연이
+   * 앞에, 그 뒤에 곧 열릴 공연이 임박한 순으로 붙습니다.
    */
   const rail = (concerts ?? []).filter(isConcertOnRail).sort(compareForRail).slice(0, RAIL_LIMIT);
 
@@ -194,13 +211,11 @@ export function HomePage() {
             <Logo size={26} markSize={39} invert />
           </span>
 
-          {/* 검색은 아이콘 하나로. 입력창을 헤더에 두면 로고 자리가 좁아집니다.
-              누르면 공연·포카를 함께 찾는 검색 화면으로 갑니다. */}
           <button
             type="button"
-            aria-label="검색"
+            aria-label="통합 검색"
             onClick={() => navigate(ROUTES.SEARCH)}
-            className="-mr-2 flex size-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/12 active:bg-white/20"
+            className="-mr-2 flex size-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10"
           >
             <Search size={26} strokeWidth={2.2} />
           </button>
@@ -228,8 +243,12 @@ export function HomePage() {
           묶은 면이 흰색이므로 안쪽 타일은 흰색·그림자를 거둡니다.
           같은 층을 두 번 쌓으면 타일이 면에서 또 떠 보입니다. */}
       <div className="relative px-4 pt-6 lg:px-0 lg:pt-0">
+        {/* 🔴 `fade` — 올라오기를 끄고 페이드만 합니다. 라벨(글자)이 올라오다 멈추는 순간
+            motion 이 `transform: none` 을 써넣어 합성 레이어가 사라지고, 그때 글자가 한 번
+            다시 그려져 **끊겨 보였습니다** (QA · `staggerChildFade` 주석). */}
         <Stagger
           as="ul"
+          fade
           className="lg:bg-surface-1 lg:shadow-card grid grid-cols-5 gap-x-1.5 lg:gap-x-4 lg:rounded-b-2xl lg:px-8 lg:py-7"
         >
           {SHORTCUTS.map(({ to, label, icon: Icon }) => (
@@ -414,10 +433,189 @@ export function HomePage() {
           )}
         </section>
 
-        {/* 🔴 "새로 올라온 포토카드" 레일은 1차 배포에서 뺐습니다.
-            마켓(구매·판매)이 닫혀 있어(`/nft` → ComingSoonPage) 살 수 없는 물건을
-            홈에서 권하는 꼴이 됩니다. 2차 배포 때 이 자리에 되돌립니다 —
-            `useNftMarket()` 조회와 `pocaRail` 자동 스크롤도 함께 지웠습니다. */}
+        <section>
+          <SectionTitle
+            action={
+              <button
+                type="button"
+                onClick={() => navigate(ROUTES.CONCERTS)}
+                className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
+              >
+                더보기 <ChevronRight size={13} />
+              </button>
+            }
+          >
+            실시간 인기 공연
+          </SectionTitle>
+          {popularConcertsPending ? (
+            <Loading label="인기 공연을 불러오는 중" className="min-h-0 py-8" />
+          ) : !popularConcerts || popularConcerts.length === 0 ? (
+            <p className="text-subtle py-8 text-center text-sm">집계된 인기 공연이 아직 없어요.</p>
+          ) : (
+            <Rail label="실시간 인기 공연" className="-mx-4 lg:mx-0">
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                {popularConcerts.map((concert) => (
+                  <li
+                    key={concert.concertId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
+                    <motion.button
+                      type="button"
+                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full text-left"
+                    >
+                      <div className="relative" {...RAIL_ANCHOR}>
+                        <PosterImage
+                          src={concert.posterUrl}
+                          seed={`popular-${concert.concertId}`}
+                          alt={`${concert.title} 포스터`}
+                        />
+                        <RankBadge rank={concert.rank} trend={concert.trend} />
+                      </div>
+                      <p className="mt-2 truncate text-sm font-bold">{concert.title}</p>
+                      <p className="text-ink-muted truncate text-xs">{concert.stadiumName}</p>
+                    </motion.button>
+                  </li>
+                ))}
+              </ul>
+            </Rail>
+          )}
+        </section>
+
+        <section>
+          <SectionTitle
+            action={
+              <button
+                type="button"
+                onClick={() => navigate(ROUTES.NFT_MARKET)}
+                className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
+              >
+                더보기 <ChevronRight size={13} />
+              </button>
+            }
+          >
+            지금 가장 주목받는 포카
+          </SectionTitle>
+          {popularPhotocardsPending ? (
+            <Loading label="인기 포카를 불러오는 중" className="min-h-0 py-8" />
+          ) : !popularPhotocards || popularPhotocards.length === 0 ? (
+            <p className="text-subtle py-8 text-center text-sm">최근 거래된 포카가 아직 없어요.</p>
+          ) : (
+            <Rail label="지금 가장 주목받는 포카" className="-mx-4 lg:mx-0">
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                {popularPhotocards.map((card) => (
+                  <li
+                    key={card.designId}
+                    className={cn('relative w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
+                    <NftCard
+                      photocardId={card.photocardId}
+                      designName={card.designName}
+                      imageUrl={card.imageUrl}
+                      performanceTitle={card.performanceTitle ?? '이벤트 포카'}
+                      caption={`24시간 거래 ${card.tradeCount}건`}
+                      onClick={() =>
+                        navigate(
+                          card.marketType === 'AUCTION' && card.auctionId
+                            ? ROUTES.AUCTION_DETAIL(String(card.auctionId))
+                            : ROUTES.NFT_DETAIL(String(card.photocardId)),
+                        )
+                      }
+                    />
+                    <RankBadge rank={card.rank} trend={card.trend} />
+                  </li>
+                ))}
+              </ul>
+            </Rail>
+          )}
+        </section>
+
+        {/* 포카 거래 — 고정가 판매와 경매를 한 레일에서 바꿔 봅니다.
+            현재 거래 도메인에는 구매 희망 주문이 없어, 실제로 존재하는 두 거래 방식을 보여줍니다. */}
+        <section>
+          <SectionTitle
+            action={
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    marketMode === 'AUCTION'
+                      ? `${ROUTES.NFT_MARKET}?mode=auction`
+                      : ROUTES.NFT_MARKET,
+                  )
+                }
+                className="text-subtle hover:text-ink flex items-center text-sm transition-colors"
+              >
+                더보기 <ChevronRight size={13} />
+              </button>
+            }
+          >
+            포카 마켓
+          </SectionTitle>
+
+          <Segmented
+            options={MARKET_MODES}
+            value={marketMode}
+            onChange={setMarketMode}
+            className="mb-3 w-48"
+          />
+
+          {marketMode === 'SHOP' ? (
+            marketPending ? (
+              <Loading label="판매 중인 포카를 불러오는 중" className="min-h-0 py-8" />
+            ) : !marketPocas || marketPocas.length === 0 ? (
+              <p className="text-subtle py-8 text-center text-sm">판매 중인 포카가 없어요.</p>
+            ) : (
+              <Rail label="판매 중인 포카" className="-mx-4 lg:mx-0">
+                <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                  {marketPocas.slice(0, RAIL_LIMIT).map((card) => (
+                    <li
+                      key={card.photocardId}
+                      className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                    >
+                      <NftCard
+                        photocardId={card.photocardId}
+                        designName={card.designName}
+                        imageUrl={card.imageUrl}
+                        performanceTitle={card.performanceTitle}
+                        price={card.price}
+                        onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Rail>
+            )
+          ) : auctionPending ? (
+            <Loading label="진행 중인 경매를 불러오는 중" className="min-h-0 py-8" />
+          ) : !marketAuctions || marketAuctions.length === 0 ? (
+            <p className="text-subtle py-8 text-center text-sm">진행 중인 경매가 없어요.</p>
+          ) : (
+            <Rail label="진행 중인 경매" className="-mx-4 lg:mx-0">
+              <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
+                {marketAuctions.slice(0, RAIL_LIMIT).map((auction) => (
+                  <li
+                    key={auction.auctionId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
+                    <AuctionCard
+                      photocardId={auction.photocardId}
+                      designName={auction.designName}
+                      imageUrl={auction.imageUrl}
+                      performanceTitle={auction.performanceTitle}
+                      currentPrice={auction.currentPrice}
+                      bidCount={auction.bidCount}
+                      endsAt={auction.endsAt}
+                      buyNowPrice={auction.buyNowPrice}
+                      onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </Rail>
+          )}
+        </section>
       </div>
     </div>
   );

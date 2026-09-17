@@ -50,7 +50,12 @@ const photocardKey = z.string().min(1).max(200);
  */
 const metadataCid = z.string().min(1).max(200);
 
-export const designBody = z.object({ designId, maxSupply: positiveAmount, metadataCid });
+export const designBody = z.object({
+  designId,
+  tokenId: designId.optional(),
+  maxSupply: positiveAmount,
+  metadataCid,
+});
 
 /**
  * 상한은 컨트랙트의 `MAX_BATCH` 와 맞춥니다. 서비스가 체인에서 읽어 한 번 더 봅니다 —
@@ -58,7 +63,13 @@ export const designBody = z.object({ designId, maxSupply: positiveAmount, metada
  */
 export const issueBody = z.object({
   items: z
-    .array(z.object({ photocardKey, designId, to: address }))
+    .array(z.object({
+      photocardKey,
+      designId,
+      to: address,
+      photocardId: designId.optional(),
+      designDbId: designId.optional(),
+    }))
     .min(1)
     .max(200),
 });
@@ -96,6 +107,7 @@ export async function postPhotocardDesign(req: Request, res: Response): Promise<
 
   const result = await registerPhotocardDesign(
     BigInt(parsed.data.designId),
+    parsed.data.tokenId === undefined ? undefined : BigInt(parsed.data.tokenId),
     BigInt(parsed.data.maxSupply),
     parsed.data.metadataCid,
   );
@@ -110,7 +122,8 @@ export async function postPhotocardIssue(req: Request, res: Response): Promise<v
     throw errors.badRequest('요청 본문이 올바르지 않습니다', parsed.error.flatten());
   }
 
-  res.status(202).json(await issuePhotocards(parsed.data.items));
+  const result = await issuePhotocards(parsed.data.items);
+  res.status(result.status === 'PENDING' ? 202 : 200).json(result);
 }
 
 export async function getPhotocardByKey(req: Request, res: Response): Promise<void> {

@@ -33,6 +33,10 @@ public class NftPhotocard {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 개별 카드의 온체인 발행 키. 신규 카드는 UUID, 제출된 레거시 카드는 기존 숫자 문자열이다. */
+    @Column(name = "issue_key", length = 64, updatable = false)
+    private String issueKey;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "design_id", nullable = false)
     private NftPhotocardDesign design;
@@ -50,7 +54,7 @@ public class NftPhotocard {
     private Long walletId;
 
     /*
-     * ── 아래 여섯 개는 블록체인 서비스가 쓴다 (blockchain/DESIGN.md 1장 예외) ──────
+     * ── 아래 일곱 개는 블록체인 서비스가 쓴다 (blockchain/DESIGN.md 1장 예외) ──────
      *
      * 확정을 Spring 대신 그쪽이 기다려서 이 행을 직접 UPDATE 한다. 그래서 전부
      * updatable = false 다. 안 그러면 로드해 둔 이 엔티티가 flush 되면서
@@ -68,7 +72,7 @@ public class NftPhotocard {
     @Column(name = "contract_address", length = 42, columnDefinition = "char(42)", updatable = false)
     private String contractAddress;
 
-    /** {@code design_id} 와 같은 값이다. 포카의 tokenId 는 카드가 아니라 도안이다 */
+    /** {@code design.chain_token_id} 와 같은 값이다. 포카의 tokenId 는 카드가 아니라 도안이다 */
     @Column(name = "token_id", precision = 78, updatable = false)
     private BigDecimal tokenId;
 
@@ -84,6 +88,12 @@ public class NftPhotocard {
     @Column(name = "minted_at", updatable = false)
     private LocalDateTime mintedAt;
 
+    @Column(name = "mint_failure_code", length = 100, updatable = false)
+    private String mintFailureCode;
+
+    @Column(name = "view_count", nullable = false)
+    private long viewCount;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -96,6 +106,7 @@ public class NftPhotocard {
         this.design = design;
         this.ticketId = ticketId;
         this.owner = owner;
+        this.issueKey = NftChainIdentity.newIssueKey();
         this.status = NftMintStatus.PENDING;
     }
 
@@ -108,6 +119,7 @@ public class NftPhotocard {
         this.ticketId = null;
         this.owner = owner;
         this.walletId = walletId;
+        this.issueKey = NftChainIdentity.newIssueKey();
         this.status = NftMintStatus.PENDING;
     }
 
@@ -119,12 +131,17 @@ public class NftPhotocard {
         return new NftPhotocard(design, owner, walletId);
     }
 
-    public void transferTo(User buyer) {
+    /** 온체인 이전이 확정된 뒤 DB 투영을 갱신한다. */
+    public void transferTo(User buyer, Long buyerWalletId) {
         this.owner = buyer;
-        // TODO(blockchain): 온체인 연동 시 현재 소유자의 지갑으로 transferFrom을 요청하고 walletId를 갱신한다.
+        this.walletId = buyerWalletId;
     }
 
     public boolean isOwnedBy(Long userId) {
         return owner.getId().equals(userId);
+    }
+
+    public boolean isMinted() {
+        return status == NftMintStatus.MINTED;
     }
 }

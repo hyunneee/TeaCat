@@ -65,16 +65,40 @@ export function canStartCut(x: number): boolean {
   return x <= PACK.width * 0.3;
 }
 
+/** 손을 뗀 자리에서 다시 잡을 때 인정하는 거리. 터치 타겟과 같은 44px */
+const RESUME_REACH = 44;
+
+/**
+ * 지금 이 x 에 손을 대면 자르기가 **시작되거나 이어지는가.**
+ *
+ * 🔴 **뗀 자리에서 이어 잡을 수 있어야 합니다.** 예전에는 시작 조건(`canStartCut`)만 봐서,
+ * 가운데쯤에서 손을 떼고 그 자리를 다시 누르면 아무 일도 일어나지 않았습니다 —
+ * 잘린 자국은 남아 있는데 더는 못 잘라서 **봉지가 영영 안 열렸습니다.**
+ * (뽑기 요청 전이라 팩이 사라지진 않았지만, 화면을 나갔다 와야 다시 뜯을 수 있었습니다)
+ *
+ * 앞질러 가지는 못합니다 — 마지막으로 자른 곳보다 `RESUME_REACH` 이상 오른쪽은 막습니다.
+ * 그래서 오른쪽 끝을 눌러 한 번에 여는 길은 그대로 닫혀 있습니다.
+ */
+export function canGrabCut(points: CutPoint[], x: number): boolean {
+  const last = points[points.length - 1];
+  if (!last) return canStartCut(x);
+  return x <= last.x + RESUME_REACH;
+}
+
 /**
  * 끝까지 잘렸는가.
  *
  * 🔴 마지막 점만 보면 안 됩니다. 오른쪽 끝을 한 번 탭해도 조건이 참이 되어
  * **밀지 않고 열리는** 버그가 됩니다. 왼쪽에서 시작해 오른쪽까지 **지나온 것**을 봅니다.
+ *
+ * 점 개수는 둘(시작·끝)이면 충분합니다. 예전에는 넷을 요구했는데, 빠르게 휙 밀면
+ * 포인터 이벤트가 그만큼 안 잡혀서 **끝까지 밀었는데도 안 열렸습니다.** 시작 위치는
+ * `canStartCut` 과 아래 `first.x` 가 두 번 막고 있으므로 개수로 또 막을 필요가 없습니다.
  */
 export function isCutThrough(points: CutPoint[]): boolean {
   const first = points[0];
   const last = points[points.length - 1];
-  if (!first || !last || points.length < 4) return false;
+  if (!first || !last || points.length < 2) return false;
   return first.x <= PACK.width * 0.3 && last.x >= PACK.width - 8;
 }
 

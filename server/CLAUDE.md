@@ -195,6 +195,18 @@ throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
   512차원 임베딩만 받아 `faces.embedding` 에 저장합니다.
   (프론트 규칙 `client/CLAUDE.md` 7장과 한 쌍입니다 — 서버가 이미지를 받고 싶어지면 먼저 상의)
 - 회원 탈퇴는 소프트 삭제(`users.deleted_at`)이고, **생체정보는 탈퇴 시 즉시 파기**합니다.
+- 🔴 **생체정보가 두 곳에 있습니다** — `faces.embedding` 과 `tickets.face_embedding`.
+  티켓은 예매 당시 얼굴을 **가리키지 않고 베껴** 갖습니다(2026-09-15, 아래 이력).
+  그래서 파기할 때 `faces` 만 지우면 **반쪽**입니다.
+
+  | | `faces` 행 | `tickets.face_embedding` |
+  |---|---|---|
+  | 얼굴 삭제 (API-110) | 파기 | **남김** — 발권 기록이라 건드리지 않습니다 |
+  | 회원 탈퇴 (API-106) | 파기 | **파기** (`TicketRepository.eraseFaceOf`) |
+
+  🔴 **탈퇴 경로는 두 곳입니다** (`UserService`·`AdminUserService`). 한쪽만 고치면
+  관리자가 내린 탈퇴에서만 생체정보가 남고, 그건 눈에 띄지 않습니다 —
+  `FaceDeletionIntegrationTests` 가 양쪽을 다 지킵니다.
 - 로그에 이메일·전화번호·토큰·임베딩을 남기지 마세요.
   🔴 이 규칙이 더 중요해졌습니다 — `ERROR` 로그는 이제 **Sentry 로도 나갑니다**(9장).
   로그에 남기면 외부 서비스에 남는 것입니다.
@@ -303,3 +315,36 @@ Sentry 가 부트 4 를 지원하면 그 클래스를 지우고 스타터로 갈
      사람이 `USER_007` 로 거절당해 삭제부터 해야 합니다. 진짜 얼굴이 등록된 뒤에는
      예전처럼 `USER_007` 로 막힙니다.
   기존 회원은 `V20260914_1600__add_default_face_for_existing_users.sql` 이 채웁니다. 사용자 요청
+- 2026-09-15 **티켓이 얼굴을 가리키지 않고 베껴 둡니다** (6장 생체정보와 한 쌍).
+  `tickets.face_id` 외래키 때문에 **예매를 한 번이라도 한 회원은 얼굴 삭제도 탈퇴도
+  불가능했습니다** — `orphanRemoval` 이 `faces` 행을 지우려다 `fk_tickets_face` 에 막혔고,
+  운영에서 `PSQLException` 으로 드러났습니다.
+  원래 의도가 "예매 당시 얼굴을 티켓에 남긴다" 였으므로 포인터를 **복사본**으로 바꿨습니다
+  (`V20260915_1000` 백필 후 `face_id`·FK 제거, `V20260915_1010` 으로 NULL 허용).
+  🔴 **기존 데이터는 잃지 않습니다.** `face_id` 가 NOT NULL + FK 라 모든 티켓이 실재하는
+     얼굴 행을 가리키는 것이 제약으로 보장되고, 백필이 비면 `SET NOT NULL` 에서
+     마이그레이션이 실패해 조용히 넘어가지 않습니다 — 그 확인용으로 일부러 걸었고
+     1010 에서 다시 풀었습니다. 실제 Postgres 에 옛 스키마·데이터를 만들어 돌려봤습니다.
+  🔴 **파기 범위가 두 곳이 됐습니다.** 6장의 표를 보세요 — 얼굴 삭제는 티켓을 남기고,
+     탈퇴는 티켓까지 지웁니다(`TicketRepository.eraseFaceOf`). 탈퇴 경로가 둘이라
+     `UserService`·`AdminUserService` 양쪽에서 부릅니다.
+  ✅ 개인정보처리방침("탈퇴 또는 얼굴 삭제 요청 시 즉시 파기")과 **어긋나지 않습니다.**
+     처음에는 탈퇴해도 티켓의 복사본을 남기기로 했다가, 그러면 고지가 사실과 달라져
+     사용자 지적으로 탈퇴 시 파기로 바꿨습니다.
+     ⚠️ 다만 **얼굴 삭제**는 티켓의 복사본을 남기므로, 고지의 "얼굴 삭제 요청 시" 부분은
+        엄밀히는 "프로필에서 삭제" 입니다. 얼굴을 되살리기(`FEATURE.face = true`) 전에
+        문구를 한 번 다듬는 게 좋습니다. 법률 자문이 아니므로 사람이 판단해야 합니다. 사용자 요청
+
+- 2026-09-17 **없는 경로·틀린 메서드를 500 으로 내보내지 않습니다** (3장 공통 예외 구조 — 0번 대상).
+  `GlobalExceptionHandler` 의 `@ExceptionHandler(Exception.class)` 가 스프링의
+  `NoResourceFoundException` 까지 삼켜서, **오타 하나·봇 스캔 하나가 전부 500** 이었습니다.
+  🔴 500 은 `log.error` 라서 그대로 **Sentry 이슈**가 되고(9장) `teacat.unexpected.error`
+     카운터도 같이 오릅니다. 그 카운터는 "1건도 알림 대상" 인 지표인데, `/.env`·`/wp-login.php`
+     같은 스캔이 하루 수백 건 섞여 들어오면 **진짜 장애를 가립니다.**
+  404(`NoResourceFoundException` · `NoHandlerFoundException`)와 405
+  (`HttpRequestMethodNotSupportedException`)를 따로 잡고, 로그는 `warn` 으로 낮췄습니다.
+  405 에는 `Allow` 헤더를 붙입니다.
+  ⚠️ 로그에 경로만 남기고 **쿼리스트링은 붙이지 않습니다** — 스캔 주소에 토큰·이메일이
+     실려 오는 일이 있고, `warn` 도 Sentry 이벤트의 빵부스러기로 올라갑니다(6장·9장).
+  어떤 예외가 실제로 오는지는 스프링이 정하므로 `NotFoundResponseIntegrationTests` 가
+  실제 요청을 흘려 확인합니다. 사용자 승인

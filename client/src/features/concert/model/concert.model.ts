@@ -41,30 +41,28 @@ export function isConcertOnRail(concert: ConcertSummary): boolean {
   );
 }
 
-/** 홈 레일 정렬 순서. 살 수 있는 것이 앞, 곧 열릴 것이 뒤입니다 */
-const RAIL_ORDER: Record<BookingOpenStatus, number> = {
-  OPEN: 0,
-  SOLDOUT: 1,
-  BEFORE: 2,
-  CLOSED: 3,
-};
-
 /**
- * 홈 레일 정렬 — **지금 살 수 있는 것이 먼저**입니다.
+ * 홈 레일 정렬 — **티켓팅 시각 오름차순 하나**입니다.
  *
- * 예정을 함께 싣게 되면서 순서가 중요해졌습니다. 서버 목록 순서를 그대로 쓰면 오픈 예정이
- * 맨 앞에 올 수 있고, 그러면 지금 살 수 있는 공연이 레일 밖으로 밀려 안 보입니다.
+ * ── 이 한 줄이 두 가지를 동시에 해결합니다 ──────────────────
+ * 이미 열린 공연은 티켓팅 시각이 **과거**라 언제나 앞에 오고, 그 뒤에 오픈 예정이
+ * **임박한 순서**로 붙습니다. "진행 중인 것이 먼저" 와 "가장 일찍 열리는 것이 앞" 이
+ * 따로 규칙을 두지 않아도 같이 성립합니다.
  *
- * 오픈 예정끼리는 **임박한 순서**입니다 — 다음 티켓팅이 언제인지가 그 칸의 용건입니다.
+ * 🔴 **예전에는 상태로 칸을 나눴습니다**(예매중·매진이 한 칸, 예정이 다음 칸). 그런데 칸
+ * 안에서는 서버 순서(= 최신 등록순)를 그대로 썼더니, 최근에 올린 공연이 앞을 차지해
+ * **지금 예매할 수 있는 공연이 레일 8장 밖으로 밀려났습니다** (QA: "진행 중인 게 잘 안 보인다").
+ * 상태 칸을 없애고 시각 하나로 줄여서 그 밀림을 없앴습니다.
+ *
+ * ⚠️ 예매중끼리는 **가장 오래 전에 열린 공연이 맨 앞**입니다. 대체로 마감이 가까운 쪽이라
+ * 의도한 결과지만, 새로 올린 공연은 뒤로 갑니다 — 레일은 앞에서부터 잘리므로
+ * (`RAIL_LIMIT`) 공연이 많아지면 새 공연이 홈에서 안 보일 수 있습니다.
+ *
+ * 문자열 비교로 충분합니다 — 서버가 주는 값이 `2026-10-08T19:00:00` 형식이라
+ * 사전식 순서가 곧 시간순입니다. `new Date` 로 파싱하면 카드 수만큼 객체만 늘어납니다.
  */
 export function compareForRail(a: ConcertSummary, b: ConcertSummary): number {
-  const byStatus = RAIL_ORDER[a.bookingStatus] - RAIL_ORDER[b.bookingStatus];
-  if (byStatus !== 0) return byStatus;
-
-  if (a.bookingStatus === 'BEFORE') {
-    return a.ticketingStartAt.localeCompare(b.ticketingStartAt);
-  }
-  return 0;
+  return a.ticketingStartAt.localeCompare(b.ticketingStartAt);
 }
 
 /** 목록 카드 칩 문구. 회차 목록의 문구(`scheduleStatusLabel`)와 달리 공연 한 건을 요약합니다 */

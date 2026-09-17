@@ -3,10 +3,9 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { wrapCreateBrowserRouter } from '@sentry/react';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
-import { AppLayout, PlainLayout } from '@/shared/components/layout';
+import { AppLayout, PlainLayout, SearchLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
-import { ComingSoonPage } from '@/pages/ComingSoonPage';
 
 /* 페이지는 전부 lazy 로 나눕니다.
    티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
@@ -20,7 +19,6 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
-const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -41,26 +39,25 @@ const MyResalePage = page(() => import('@/pages/MyResalePage'), 'MyResalePage');
 const MyTicketsPage = page(() => import('@/pages/MyTicketsPage'), 'MyTicketsPage');
 const TicketDetailPage = page(() => import('@/pages/TicketDetailPage'), 'TicketDetailPage');
 
-/* 1차 배포에서 닫아 둔 화면(포토카드 마켓·내 경매·내 입찰·포카 거래 내역)의 lazy 선언은
-   ComingSoonPage 로 바꾸면서 뺐습니다. 2차 배포 때 이 자리에 되돌립니다.
-   (ComingSoonPage 는 파일 맨 위에서 바로 import 합니다 — `page()` 는 props 를 못 넘기고,
-    Header + EmptyState 뿐이라 따로 청크를 나눌 것도 없습니다) */
+const NftMarketPage = page(() => import('@/pages/NftMarketPage'), 'NftMarketPage');
 const NftDetailPage = page(() => import('@/pages/NftDetailPage'), 'NftDetailPage');
 const PocaPackClaimPage = page(() => import('@/pages/PocaPackClaimPage'), 'PocaPackClaimPage');
 const PocaDrawPage = page(() => import('@/pages/PocaDrawPage'), 'PocaDrawPage');
 const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'AuctionDetailPage');
+const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
+const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
+const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
+const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
+const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const PasswordChangePage = page(() => import('@/pages/PasswordChangePage'), 'PasswordChangePage');
 const NicknameChangePage = page(() => import('@/pages/NicknameChangePage'), 'NicknameChangePage');
 const AboutPage = page(() => import('@/pages/AboutPage'), 'AboutPage');
-const PrivacyPolicyPage = page(
-  () => import('@/pages/PrivacyPolicyPage'),
-  'PrivacyPolicyPage',
-);
+const PrivacyPolicyPage = page(() => import('@/pages/PrivacyPolicyPage'), 'PrivacyPolicyPage');
 
 const OauthCallbackPage = page(() => import('@/pages/OauthCallbackPage'), 'OauthCallbackPage');
 const OauthSignupPage = page(() => import('@/pages/OauthSignupPage'), 'OauthSignupPage');
@@ -82,6 +79,7 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminCheckInPage = page(() => import('@/pages/AdminCheckInPage'), 'AdminCheckInPage');
 const AdminUserDetailPage = page(
   () => import('@/pages/AdminUserDetailPage'),
   'AdminUserDetailPage',
@@ -267,6 +265,7 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
                   {
                     /* 개인정보 마스킹은 위 AdminLayout 의 withMask 가 이미 덮습니다 */
                     path: ROUTES.ADMIN_USER_DETAIL(':userId'),
@@ -312,21 +311,23 @@ const routes: RouteObject[] = [
          여기 앱 화면에도 같은 기능이 한 벌 더 있었는데, 관람객 화면에 관리 기능이 섞여
          있었고 화면이 두 벌이라 한쪽만 고치면 어긋났습니다. */
       { path: ROUTES.CONCERT_DETAIL(':concertId'), element: withBoundary(<ConcertDetailPage />) },
-      /* 🔴 1차 배포에서 닫아 둡니다. 원래 화면은 `NftMarketPage` 이고 파일은 그대로 있습니다 —
-         2차 배포 때 이 줄만 되돌리면 됩니다 (아래 내 경매·내 입찰·포카 거래 내역도 같습니다). */
-      {
-        path: ROUTES.NFT_MARKET,
-        element: withBoundary(<ComingSoonPage title="포토카드 마켓" showBack={false} />),
-      },
+      { path: ROUTES.NFT_MARKET, element: withBoundary(<NftMarketPage />) },
 
       {
         element: <RequireAuth />,
         children: [
           { path: ROUTES.MY, element: withMask(withBoundary(<MyPage />)) },
           { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
+          { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
         ],
       },
     ],
+  },
+
+  /* 모바일은 전체화면 검색, 데스크톱은 공통 상단 내비를 유지합니다. */
+  {
+    element: <SearchLayout />,
+    children: [{ path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) }],
   },
 
   /* ══ 전체화면 (하단 탭 없음) ═════════════════════════════ */
@@ -345,9 +346,6 @@ const routes: RouteObject[] = [
          알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
       { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
 
-      /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
-      { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
-
       {
         element: <RequireAuth />,
         children: [
@@ -363,27 +361,22 @@ const routes: RouteObject[] = [
                   element: withMask(withBoundary(<FaceRegisterPage />)),
                 },
                 { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
-                { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
               ]
             : []),
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
+          { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
 
           {
             path: ROUTES.TICKET_DETAIL(':ticketId'),
             element: withMask(withBoundary(<TicketDetailPage />)),
           },
-          { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
-          /* 🔴 1차 배포에서 닫아 둡니다 (위 포토카드 마켓과 같은 이유).
-             원래 화면은 NftTradesPage · MyAuctionsPage · MyBidsPage 이고 파일은 그대로입니다. */
-          {
-            path: ROUTES.MY_NFT_TRADES,
-            element: withBoundary(<ComingSoonPage title="포카 거래 내역" />),
-          },
-          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<ComingSoonPage title="내 경매" />) },
-          { path: ROUTES.MY_BIDS, element: withBoundary(<ComingSoonPage title="내 입찰" />) },
+          { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.SETTINGS, element: withMask(withBoundary(<SettingsPage />)) },
           {

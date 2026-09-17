@@ -19,6 +19,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "nft_photocard_designs")
@@ -29,6 +30,10 @@ public class NftPhotocardDesign {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** ERC-1155 tokenId. 관계형 도안 PK와 독립적이며 한번 정해지면 재시도에서도 유지한다. */
+    @Column(name = "chain_token_id", precision = 78)
+    private BigDecimal chainTokenId;
 
     /** 공연 도안이면 공연 id. 뽑기 풀 도안은 null 이다 (DB CHECK 가 둘 중 하나임을 강제한다) */
     @Column(name = "performance_general_id")
@@ -120,6 +125,7 @@ public class NftPhotocardDesign {
         this.issuedSupply = 0;
         this.imageCid = imageCid;
         this.metadataCid = metadataCid;
+        this.chainTokenId = NftChainIdentity.newChainTokenId();
         this.chainStatus = NftDesignChainStatus.PENDING;
         this.drawPool = false;
     }
@@ -261,5 +267,22 @@ public class NftPhotocardDesign {
 
     public boolean hasPins() {
         return imageCid != null && metadataCid != null;
+    }
+
+    /**
+     * 마이그레이션 전 행을 블루그린 배포 중 처음 만났을 때 식별자를 확정한다.
+     * 제출 이력이 있으면 레거시 DB PK를 보존하고, 진짜 미제출 행만 새 전역 값을 받는다.
+     */
+    public BigDecimal ensureChainTokenId() {
+        if (chainTokenId == null) {
+            boolean submitted = registerTxHash != null || chainStatus != NftDesignChainStatus.PENDING;
+            chainTokenId = submitted ? BigDecimal.valueOf(id) : NftChainIdentity.newChainTokenId();
+        }
+        return chainTokenId;
+    }
+
+    /** 제출된 레거시 행의 전환 기간 조회 fallback. */
+    public BigDecimal chainTokenIdOrLegacy() {
+        return chainTokenId != null ? chainTokenId : BigDecimal.valueOf(id);
     }
 }

@@ -2,19 +2,19 @@ import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CalendarDays, MapPin, ShieldAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import {
-  Card,
-  Lightbox,
-  PosterImage,
-  SectionTitle,
-  Skeleton,
-} from '@/shared/components/ui';
+import { Card, Lightbox, PosterImage, SectionTitle, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
-import { ScheduleList, posterSeedOf, useConcertDetail, useStartBooking } from '@/features/concert';
+import {
+  ScheduleList,
+  posterSeedOf,
+  useConcertDetail,
+  useRecordConcertView,
+  useStartBooking,
+} from '@/features/concert';
 
 export function ConcertDetailPage() {
   const navigate = useNavigate();
@@ -27,6 +27,7 @@ export function ConcertDetailPage() {
      오래된 링크가 여기로 떨어집니다. 서버에 물어봐야 500 만 받으므로 묻지 않습니다. */
   const isConcertId = /^\d+$/.test(concertId);
   const { data: concert, isPending, isError } = useConcertDetail(isConcertId ? concertId : '');
+  useRecordConcertView(concertId, isConcertId && !!concert);
   /* 포스터 크게 보기. 목록의 작은 그림만으로는 무슨 공연인지 잘 안 보입니다. */
   const [posterZoomed, setPosterZoomed] = useState(false);
 
@@ -66,7 +67,7 @@ export function ConcertDetailPage() {
   if (!isConcertId) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <EmptyState
           mood="sad"
           title="페이지를 찾을 수 없어요"
@@ -79,7 +80,7 @@ export function ConcertDetailPage() {
   if (isPending) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <div className="space-y-4 p-4">
           <Skeleton className="aspect-[3/4] w-40" />
           <Skeleton className="h-6 w-2/3" />
@@ -92,7 +93,7 @@ export function ConcertDetailPage() {
   if (isError || !concert) {
     return (
       <>
-        <Header showBack />
+        <Header showBack className="lg:hidden" />
         <EmptyState icon={ShieldAlert} title="공연 정보를 불러오지 못했어요" />
       </>
     );
@@ -105,7 +106,7 @@ export function ConcertDetailPage() {
       {/* 🔴 수정 버튼을 두지 않습니다. 공연 관리는 어드민 콘솔(`/admin`)로 옮기기로 했습니다 —
           여기는 관람객이 보는 화면입니다. 수정 화면(`/concerts/:id/edit`)과 라우트 가드는
           그대로 살아 있으니, 어드민에 "공연 관리" 메뉴가 생기면 거기서 이어 붙이면 됩니다. */}
-      <Header title={concert.title} showBack />
+      <Header title={concert.title} showBack className="lg:hidden" />
 
       <Lightbox
         open={posterZoomed}
@@ -150,7 +151,7 @@ export function ConcertDetailPage() {
               <MapPin size={13} className="mt-0.5 shrink-0" />
               <span className="min-w-0">
                 <span className="block break-keep">{concert.stadium.name}</span>
-                <span className="text-subtle block break-keep text-xs">
+                <span className="text-subtle block text-xs break-keep">
                   {concert.stadium.address}
                 </span>
               </span>
@@ -173,24 +174,14 @@ export function ConcertDetailPage() {
           </time>
         </section>
 
-        {/* 소개 — 회차보다 **먼저** 옵니다.
-            "이게 무슨 공연인지" 를 판단하기 전에 날짜를 고르라고 하면
-            위아래로 오가며 다시 읽게 됩니다. 읽고 나서 고르는 순서입니다.
-            소개는 글이 아니라 **세로로 긴 이미지 한 장**입니다 (관리자가 올린 상세 이미지). */}
-        {concert.detailImageUrl && (
-          <section>
-            <SectionTitle>공연 소개</SectionTitle>
-            <img
-              src={concert.detailImageUrl}
-              alt={`${concert.title} 상세 안내`}
-              loading="lazy"
-              draggable={false}
-              className="border-line w-full rounded-xl border"
-            />
-          </section>
-        )}
-
-        {/* 회차 */}
+        {/* 회차 — 소개보다 **먼저** 옵니다.
+            🔴 예전에는 소개가 위였습니다("읽고 나서 고르는 순서"). 그런데 소개는 글이
+               아니라 **세로로 긴 이미지 한 장**이라, 상세 이미지를 올린 공연에서는
+               예매 버튼이 화면 몇 개 아래로 밀려났습니다. 이 화면에 오는 사람 대부분은
+               이미 무슨 공연인지 알고 예매하러 옵니다 — 그 사람들에게 스크롤을
+               강요하는 대가가, 읽고 고르는 순서로 얻는 것보다 큽니다.
+               소개를 읽고 싶은 사람은 아래로 내리면 되고, 내려간 자리에서 되돌아올
+               필요는 없습니다(회차는 이미 지나온 자리입니다). */}
         <section>
           <SectionTitle>회차 선택</SectionTitle>
           {concert.schedules.length === 0 ? (
@@ -215,6 +206,20 @@ export function ConcertDetailPage() {
             />
           )}
         </section>
+
+        {/* 소개 — 관리자가 올린 **세로로 긴 이미지 한 장**입니다 (글이 아닙니다) */}
+        {concert.detailImageUrl && (
+          <section>
+            <SectionTitle>공연 소개</SectionTitle>
+            <img
+              src={concert.detailImageUrl}
+              alt={`${concert.title} 상세 안내`}
+              loading="lazy"
+              draggable={false}
+              className="border-line w-full rounded-xl border"
+            />
+          </section>
+        )}
 
         {/* 안내 */}
         <Card className="flex gap-3">

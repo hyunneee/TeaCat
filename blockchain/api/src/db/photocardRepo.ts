@@ -1,5 +1,4 @@
 import { db, dbEnabled } from './pool';
-import { logger } from '../shared/logger';
 
 /**
  * Spring 의 `nft_photocards` 에서 **확정 결과 컬럼만** 갱신합니다. (DESIGN.md 1장 예외)
@@ -24,12 +23,14 @@ const STATUS_ENUM = 'nft_mint_status';
 
 const COLUMNS = {
   id: 'id',
+  issueKey: 'issue_key',
   status: 'status',
   tokenId: 'token_id',
   chainId: 'chain_id',
   contractAddress: 'contract_address',
   mintTxHash: 'mint_tx_hash',
   mintedAt: 'minted_at',
+  failureCode: 'mint_failure_code',
   updatedAt: 'updated_at',
   createdAt: 'created_at',
 } as const;
@@ -38,40 +39,30 @@ const COLUMNS = {
 export type MintStatus = 'PENDING' | 'MINTING' | 'MINTED' | 'FAILED';
 
 export interface PendingPhotocard {
-  /** `nft_photocards.id`. 이 값이 곧 `photocardKey` 입니다 */
   photocardKey: string;
   mintTxHash: string | null;
+  tokenId: string;
+  to: string;
 }
 
 /** 전송 직후 기록할 값. 카드마다 도안이 달라 `tokenId` 가 행마다 다릅니다. */
 export interface SentPhotocard {
   photocardKey: string;
-  /** = designId. 포카의 tokenId 는 도안입니다 */
   tokenId: string;
+  to: string;
 }
 
-/**
- * `photocardKey` 는 `nft_photocards.id` 입니다. 숫자가 아니면 행을 찾을 수 없으므로
- * 조용히 넘어가지 않고 알립니다 — PK 가 바뀌었는데 아무도 모르는 상황이 제일 나쁩니다.
- */
-function asRowId(photocardKey: string): string | null {
-  return /^[0-9]{1,19}$/.test(photocardKey) ? photocardKey : null;
+export interface StoredIssueOutcome {
+  photocardKey: string;
+  tokenId: string;
+  status: 'MINTED' | 'FAILED';
+  failureCode: string | null;
+  txHash?: string | null;
 }
 
-function partition(keys: SentPhotocard[]): { ids: string[]; tokenIds: string[] } {
-  const ids: string[] = [];
-  const tokenIds: string[] = [];
-
-  for (const item of keys) {
-    const rowId = asRowId(item.photocardKey);
-    if (rowId === null) {
-      logger.error(`전송 기록 건너뜀 — photocardKey 가 id 형식이 아닙니다 (${item.photocardKey})`);
-      continue;
-    }
-    ids.push(rowId);
-    tokenIds.push(item.tokenId);
-  }
-  return { ids, tokenIds };
+export interface LegacyIssueIdentity {
+  photocardKey: string;
+  tokenId: string;
 }
 
 /**
@@ -95,25 +86,28 @@ export async function markIssueSent(
 ): Promise<number> {
   if (!dbEnabled() || cards.length === 0) return 0;
 
-  const { ids, tokenIds } = partition(cards);
-  if (ids.length === 0) return 0;
+  const keys = cards.map((card) => card.photocardKey);
+  const tokenIds = cards.map((card) => card.tokenId);
 
   /* `unnest` 로 행마다 다른 tokenId 를 한 번에 넣습니다. 200번 UPDATE 를 보내면
      그만큼 왕복이 생기고, 그 사이에 프로세스가 죽으면 절반만 기록됩니다. */
   const sql = `
     UPDATE ${TABLE} AS p
        SET ${COLUMNS.status} = 'MINTING'::${STATUS_ENUM},
+           ${COLUMNS.issueKey} = v.issue_key,
            ${COLUMNS.tokenId} = v.token_id::numeric,
            ${COLUMNS.chainId} = $3::int,
            ${COLUMNS.contractAddress} = $4,
            ${COLUMNS.mintTxHash} = $5,
+           ${COLUMNS.failureCode} = NULL,
            ${COLUMNS.updatedAt} = now()
-      FROM unnest($1::bigint[], $2::text[]) AS v(id, token_id)
-     WHERE p.${COLUMNS.id} = v.id
+      FROM unnest($1::text[], $2::text[]) AS v(issue_key, token_id)
+     WHERE (p.${COLUMNS.issueKey} = v.issue_key
+            OR (v.issue_key ~ '^[0-9]{1,19}$' AND p.${COLUMNS.id}::text = v.issue_key))
        AND p.${COLUMNS.status} = 'PENDING'::${STATUS_ENUM}`;
 
   const result = await db().query(sql, [
-    ids,
+    keys,
     tokenIds,
     chainId,
     contractAddress.toLowerCase(),
@@ -131,26 +125,41 @@ export async function markIssueSent(
  * `updated_at` 을 직접 넣습니다. Hibernate 의 `@UpdateTimestamp` 를 우회하므로
  * 우리가 안 쓰면 그 컬럼이 발행 시점에 멈춰 있습니다.
  */
-export async function markIssueResult(
-  photocardKeys: string[],
-  status: 'MINTED' | 'FAILED',
+export async function markIssueResults(
+  outcomes: StoredIssueOutcome[],
   mintTxHash: string | null,
+  chainId?: number,
+  contractAddress?: string,
 ): Promise<number> {
-  if (!dbEnabled() || photocardKeys.length === 0) return 0;
-
-  const ids = photocardKeys.map(asRowId).filter((id): id is string => id !== null);
-  if (ids.length === 0) return 0;
+  if (!dbEnabled() || outcomes.length === 0) return 0;
 
   const sql = `
-    UPDATE ${TABLE}
-       SET ${COLUMNS.status} = $2::${STATUS_ENUM},
-           ${COLUMNS.mintedAt} = CASE WHEN $2 = 'MINTED' THEN now() ELSE ${COLUMNS.mintedAt} END,
-           ${COLUMNS.mintTxHash} = COALESCE($3, ${COLUMNS.mintTxHash}),
+    UPDATE ${TABLE} AS p
+       SET ${COLUMNS.issueKey} = v.issue_key,
+           ${COLUMNS.status} = v.status::${STATUS_ENUM},
+           ${COLUMNS.tokenId} = COALESCE(p.${COLUMNS.tokenId}, v.token_id::numeric),
+           ${COLUMNS.chainId} = COALESCE(p.${COLUMNS.chainId}, $5::int),
+            ${COLUMNS.contractAddress} = COALESCE(p.${COLUMNS.contractAddress}, lower($6::text)),
+           ${COLUMNS.mintedAt} = CASE WHEN v.status = 'MINTED' THEN now() ELSE p.${COLUMNS.mintedAt} END,
+           ${COLUMNS.mintTxHash} = COALESCE(v.tx_hash, $4, p.${COLUMNS.mintTxHash}),
+           ${COLUMNS.failureCode} = v.failure_code,
            ${COLUMNS.updatedAt} = now()
-     WHERE ${COLUMNS.id} = ANY($1::bigint[])
-       AND ${COLUMNS.status} = 'MINTING'::${STATUS_ENUM}`;
+      FROM unnest($1::text[], $2::text[], $3::text[], $7::text[], $8::text[])
+           AS v(issue_key, token_id, status, failure_code, tx_hash)
+     WHERE (p.${COLUMNS.issueKey} = v.issue_key
+            OR (v.issue_key ~ '^[0-9]{1,19}$' AND p.${COLUMNS.id}::text = v.issue_key))
+       AND p.${COLUMNS.status} IN ('PENDING'::${STATUS_ENUM}, 'MINTING'::${STATUS_ENUM})`;
 
-  const result = await db().query(sql, [ids, status, mintTxHash]);
+  const result = await db().query(sql, [
+    outcomes.map((item) => item.photocardKey),
+    outcomes.map((item) => item.tokenId),
+    outcomes.map((item) => item.status),
+    mintTxHash,
+    chainId ?? null,
+    contractAddress ?? null,
+    outcomes.map((item) => item.failureCode),
+    outcomes.map((item) => item.txHash ?? null),
+  ]);
   return result.rowCount ?? 0;
 }
 
@@ -170,14 +179,20 @@ export async function findMinting(
   if (!dbEnabled()) return [];
 
   const sql = `
-    SELECT ${COLUMNS.id}::text AS photocard_key, ${COLUMNS.mintTxHash} AS mint_tx_hash
-      FROM ${TABLE}
-     WHERE ${COLUMNS.status} = 'MINTING'::${STATUS_ENUM}
-       AND ${COLUMNS.updatedAt} < now() - make_interval(secs => $1)
-     ORDER BY ${COLUMNS.updatedAt}
+    SELECT COALESCE(p.${COLUMNS.issueKey}, p.${COLUMNS.id}::text) AS photocard_key,
+           p.${COLUMNS.mintTxHash} AS mint_tx_hash,
+           p.${COLUMNS.tokenId}::text AS token_id,
+           trim(w.address) AS recipient
+      FROM ${TABLE} p
+      JOIN wallets w ON w.id = p.wallet_id
+     WHERE p.${COLUMNS.status} = 'MINTING'::${STATUS_ENUM}
+       AND p.${COLUMNS.updatedAt} < now() - make_interval(secs => $1)
+     ORDER BY p.${COLUMNS.updatedAt}
      LIMIT $2`;
 
-  const result = await db().query<{ photocard_key: string; mint_tx_hash: string | null }>(sql, [
+  const result = await db().query<{
+    photocard_key: string; mint_tx_hash: string | null; token_id: string; recipient: string;
+  }>(sql, [
     olderThanSeconds,
     limit,
   ]);
@@ -185,7 +200,38 @@ export async function findMinting(
   return result.rows.map((row) => ({
     photocardKey: row.photocard_key,
     mintTxHash: row.mint_tx_hash,
+    tokenId: row.token_id,
+    to: row.recipient,
   }));
+}
+
+/** 구 버전 Spring 요청의 DB PK를 새 온체인 식별자로 번역한다. */
+export async function resolveLegacyIssueIdentity(
+  photocardId: string,
+  designId: string,
+): Promise<LegacyIssueIdentity | null> {
+  if (!dbEnabled() || !/^[0-9]{1,19}$/.test(photocardId) || !/^[0-9]{1,19}$/.test(designId)) {
+    return null;
+  }
+  const sql = `
+    SELECT COALESCE(p.issue_key, p.id::text) AS issue_key,
+           COALESCE(d.chain_token_id, d.id::numeric)::text AS token_id
+      FROM nft_photocards p
+      JOIN nft_photocard_designs d ON d.id = p.design_id
+     WHERE p.id = $1::bigint AND d.id = $2::bigint`;
+  const result = await db().query<{ issue_key: string; token_id: string }>(sql, [photocardId, designId]);
+  const row = result.rows[0];
+  return row ? { photocardKey: row.issue_key, tokenId: row.token_id } : null;
+}
+
+export async function resolveLegacyDesignTokenId(designId: string): Promise<string | null> {
+  if (!dbEnabled() || !/^[0-9]{1,19}$/.test(designId)) return null;
+  const result = await db().query<{ token_id: string }>(
+    `SELECT COALESCE(chain_token_id, id::numeric)::text AS token_id
+       FROM nft_photocard_designs WHERE id = $1::bigint`,
+    [designId],
+  );
+  return result.rows[0]?.token_id ?? null;
 }
 
 /**

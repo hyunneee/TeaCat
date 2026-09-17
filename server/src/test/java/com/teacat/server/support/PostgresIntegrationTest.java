@@ -164,8 +164,8 @@ public abstract class PostgresIntegrationTest {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, fixture.areaId(), seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, insertFace());
     }
 

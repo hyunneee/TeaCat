@@ -40,6 +40,11 @@ interface ApiTicket {
   totalAmount?: number | null;
 }
 
+/** 게이트에 보여줄 QR. 이미지가 아니라 **문자열**이고 그림은 화면이 그립니다 */
+interface ApiTicketQr {
+  token: string;
+}
+
 /** 취소 응답 = 주문 응답. 화면은 환불 금액만 씁니다 */
 interface ApiTicketOrder {
   ticketOrderId: number;
@@ -97,6 +102,15 @@ export const ticketApi = {
     http.get<ApiTicket>(`/users/me/tickets/${ticketId}`).then(toTicket),
 
   /**
+   * 게이트에 보여줄 QR 문자열.
+   *
+   * 🔴 **본인 티켓만 받을 수 있습니다** (서버가 소유자를 검사합니다). 이 문자열이 곧
+   * 입장권이라, 남의 것을 받아 갈 수 있으면 서명을 붙인 의미가 없습니다.
+   */
+  qr: (ticketId: string) =>
+    http.get<ApiTicketQr>(`/users/me/tickets/${ticketId}/qr`).then((res) => res.token),
+
+  /**
    * 예매 취소.
    *
    * 🔴 **티켓 ID 가 아니라 주문 ID 로 겁니다** (`Ticket.orderId`).
@@ -115,4 +129,5 @@ export const ticketKeys = {
   all: ['ticket'] as const,
   list: () => [...ticketKeys.all, 'list'] as const,
   detail: (ticketId: string) => [...ticketKeys.all, 'detail', ticketId] as const,
+  qr: (ticketId: string) => [...ticketKeys.all, 'qr', ticketId] as const,
 };

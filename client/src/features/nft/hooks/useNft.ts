@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
+import { getViewSessionId } from '@/shared/lib';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
 import { useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
 import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
+import type { PhotocardDetail } from '../model/nft.types';
+import { buildPocaDex } from '../model/pocaDex.model';
 
 const PAGE_SIZE = 20;
 
@@ -47,15 +50,95 @@ export function useNftMarket(
   });
 }
 
+/**
+ * 등록된 카드 그림 전체.
+ *
+ * 누구에게나 같은 목록이고 좀처럼 바뀌지 않아 오래 들고 있습니다.
+ * 🔴 **소유 정보가 아닙니다** — 내 카드 목록은 `useMyPhotocards` 입니다.
+ */
+export function usePhotocardArts() {
+  return useQuery({
+    queryKey: nftKeys.arts(),
+    queryFn: nftApi.arts,
+    staleTime: STALE_TIME.LONG,
+    /* 🔴 재시도하지 않습니다. 이 목록을 쓰는 곳(캣머니 게임)은 **기다리는 화면**이라,
+       실패했을 때 기본값대로 두 번 더 물어보면 그동안 시작 버튼이 돌기만 합니다.
+       그림은 없어도 게임이 되므로(시드 SVG) 한 번 실패하면 바로 그쪽으로 갑니다. */
+    retry: false,
+  });
+}
+
+/**
+ * 도감 — 전체 도안 위에 내가 가진 것을 얹습니다.
+ *
+ * 🔴 **내 카드를 끝까지 받습니다.** 목록이 커서 페이지(20장)라, 첫 페이지만 보고 세면
+ * 21번째부터 가진 카드가 도감에서 "아직 없음" 으로 보입니다. 다 받을 때까지는
+ * `isPending` 을 유지해서 **모자란 장수를 잠깐이라도 보여주지 않습니다** —
+ * 도감에서 "×2 였는데 ×1 이 됐다" 는 버그로 읽힙니다.
+ */
+export function usePocaDex() {
+  const pool = useQuery({
+    queryKey: nftKeys.drawPool(),
+    queryFn: nftApi.drawPool,
+    staleTime: STALE_TIME.LONG,
+  });
+  const mine = useMyPhotocards();
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const entries = useMemo(
+    () => buildPocaDex(pool.data ?? [], mine.data ?? []),
+    [pool.data, mine.data],
+  );
+
+  return {
+    entries,
+    isPending: pool.isPending || mine.isPending || !!hasNextPage,
+    isError: pool.isError,
+  };
+}
+
 export function usePhotocardDetail(photocardId: number) {
   return useQuery({
     queryKey: nftKeys.detail(photocardId),
     queryFn: () => nftApi.detail(photocardId),
     staleTime: STALE_TIME.SHORT,
-    refetchInterval: (query) => (query.state.data?.status === 'PENDING' ? MINT_POLL_MS : false),
+    refetchInterval: (query) => {
+      const card = query.state.data;
+      if (card?.status === 'PENDING') return MINT_POLL_MS;
+      if (card?.listing?.status === 'SETTLING' || card?.auction?.status === 'SETTLING') {
+        return MINT_POLL_MS;
+      }
+      return false;
+    },
     // URL 파라미터가 숫자가 아니면(`/nft/abc`) 부르지 않습니다. 화면은 에러 상태를 그립니다.
     enabled: Number.isInteger(photocardId) && photocardId > 0,
   });
+}
+
+export function useRecordPhotocardView(photocardId: number, enabled: boolean) {
+  const recordedId = useRef<number | null>(null);
+  const record = useMutation({
+    mutationFn: (id: number) => nftApi.recordView(id, getViewSessionId()),
+    onSuccess: (result, id) => {
+      queryClient.setQueryData<PhotocardDetail>(nftKeys.detail(id), (current) =>
+        current ? { ...current, viewCount: result.viewCount } : current,
+      );
+    },
+  });
+  const { mutate } = record;
+
+  useEffect(() => {
+    if (!enabled || !Number.isInteger(photocardId) || photocardId <= 0) return;
+    if (recordedId.current === photocardId) return;
+    recordedId.current = photocardId;
+    mutate(photocardId);
+  }, [enabled, mutate, photocardId]);
+
+  return record;
 }
 
 /**
@@ -114,9 +197,11 @@ export function useMyPhotocards() {
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn,
-    /* 방금 뽑은 카드가 확정될 때까지만. 목록에 PENDING 이 하나도 없으면 멈춥니다 */
+    /* 민팅 또는 거래 정산이 끝날 때까지만 갱신합니다. 완료되면 스스로 멈춥니다. */
     refetchInterval: (query) =>
-      query.state.data?.pages.some((page) => page.items.some((c) => c.status === 'PENDING'))
+      query.state.data?.pages.some((page) =>
+        page.items.some((c) => c.status === 'PENDING' || c.marketStatus === 'SETTLING'),
+      )
         ? MINT_POLL_MS
         : false,
     select: (data) => data.pages.flatMap((page) => page.items),
@@ -175,6 +260,21 @@ export function useMyTrades() {
   };
 }
 
+/** 내 판매 내역 — 마이페이지의 독립 메뉴에서 판매 건만 확인합니다. */
+export function useMySales() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useInfiniteQuery({
+    queryKey: nftKeys.sales(),
+    queryFn: ({ pageParam }) => nftApi.sales({ cursor: pageParam, size: PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    select: (data) => data.pages.flatMap((page) => page.items),
+  });
+}
+
 /**
  * 거래가 끝나면 **카드 소유자와 캣머니 잔액**이 함께 바뀝니다.
  * 잔액은 별도 feature(`@/features/token`)가 들고 있으므로 그 키도 함께 무효화합니다.
@@ -192,16 +292,29 @@ function invalidateTrade() {
  */
 export function usePurchasePhotocard() {
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       photocardId,
       idempotencyKey,
     }: {
       photocardId: number;
       idempotencyKey: string;
-    }) => nftApi.purchase(photocardId, idempotencyKey),
-    retry: false,
-    onSuccess: () => {
+    }) => {
+      const trade = await nftApi.purchase(photocardId, idempotencyKey);
+      // 정산 시작 상태를 곧바로 보여주고, 소유권 이전 완료까지는 이어서 기다립니다.
       invalidateTrade();
+      return nftApi.waitForTrade(trade);
+    },
+    retry: false,
+    onSuccess: (trade) => {
+      invalidateTrade();
+      if (trade.status !== 'COMPLETED') {
+        toast.error(
+          trade.status === 'COMPENSATED'
+            ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
+            : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.',
+        );
+        return;
+      }
       toast.success('포토카드를 구매했어요.');
     },
     onError: (error) =>
@@ -218,7 +331,7 @@ export function useListPhotocard() {
     }: {
       photocardId: number;
       price: number;
-      /** 선택입니다. 지금 화면에는 입력칸이 없어 안 보냅니다(2차 배포 때 다시 붙습니다) */
+      /** 판매 카드 상태와 거래 조건을 설명하는 선택 입력입니다. */
       description?: string;
     }) => nftApi.list(photocardId, { price, description }),
     onSuccess: () => {

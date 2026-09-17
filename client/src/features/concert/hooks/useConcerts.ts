@@ -1,8 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
-import { trackGaEvent } from '@/shared/lib';
+import { getViewSessionId, trackGaEvent } from '@/shared/lib';
 import { concertApi, concertKeys } from '../api/concertApi';
 import { bookingNotOpenMessage } from '../model/concert.model';
 
@@ -23,6 +24,22 @@ export function useConcertDetail(concertId: string) {
     staleTime: STALE_TIME.SHORT,
     enabled: !!concertId,
   });
+}
+
+export function useRecordConcertView(concertId: string, enabled: boolean) {
+  const recordedId = useRef<string | null>(null);
+  const record = useMutation({
+    mutationFn: (id: string) => concertApi.recordView(id, getViewSessionId()),
+  });
+  const { mutate } = record;
+
+  useEffect(() => {
+    if (!enabled || !/^\d+$/.test(concertId) || recordedId.current === concertId) return;
+    recordedId.current = concertId;
+    mutate(concertId);
+  }, [concertId, enabled, mutate]);
+
+  return record;
 }
 
 /**

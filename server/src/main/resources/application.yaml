@@ -103,6 +103,18 @@ booking:
   hold:
     # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
     duration: ${BOOKING_HOLD_DURATION:10m}
+  seat-map:
+    cache:
+      # 좌석맵 응답을 이 시간만큼 재사용한다. 폴링 주기(3초)보다 **짧아야** 의미가 있다 —
+      #   3초를 넘기면 사용자가 보는 정보가 지금보다 낡아진다.
+      #   0 으로 두지 말 것. 캐시를 끄려는 것이면 코드를 되돌리는 게 맞다
+      #   (Caffeine 은 0 을 "즉시 만료" 로 받아 매 요청 미스 + 락 비용만 남는다).
+      # 🔴 무효화는 하지 않는다. 선점마다 지우면 오픈 피크에 효과가 170배 깎인다
+      #    (SeatMapCacheRepository 주석 참고).
+      ttl: ${BOOKING_SEAT_MAP_CACHE_TTL:1s}
+      # 캐시할 (회차 × 구역) 조합의 상한. 좌석 1만 석 스냅샷이 1~2MB 라 상한이 없으면
+      #   힙을 먹는다. 넘치면 오래된 것이 밀려나 미스가 늘 뿐 오답이 나오지는 않는다.
+      max-entries: ${BOOKING_SEAT_MAP_CACHE_MAX_ENTRIES:200}
   seat-generation:
     # 티켓 오픈 시각이 지난 회차의 누락 좌석을 멱등하게 생성한다.
     enabled: ${BOOKING_SEAT_GENERATION_ENABLED:true}

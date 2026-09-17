@@ -6,6 +6,7 @@ import com.teacat.server.booking.dto.response.SeatStatusResponse;
 import com.teacat.server.booking.entity.SeatBookingStatus;
 import com.teacat.server.booking.exception.BookingErrorCode;
 import com.teacat.server.booking.repository.PerformanceSeatRepository;
+import com.teacat.server.booking.repository.SeatMapCacheRepository;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.performance.entity.PerformanceArea;
 import com.teacat.server.performance.entity.PerformanceDetail;
@@ -47,11 +48,38 @@ public class SeatMapService {
     private final PerformanceAreaRepository performanceAreaRepository;
     private final PerformanceSeatRepository performanceSeatRepository;
     private final SeatRepository seatRepository;
+    private final SeatMapCacheRepository seatMapCache;
 
     /**
+     * 회차 좌석 현황. 3초 주기 폴링이 때리는 경로다.
+     *
+     * <p>응답을 1초간 재사용한다({@link SeatMapCacheRepository}). 캐시가 맞으면 아래 조립을
+     * 건너뛰므로 쿼리가 한 건도 나가지 않는다 — Hibernate 는 첫 쿼리에서 커넥션을 지연
+     * 획득하므로, 이 트랜잭션은 커넥션도 잡지 않는다.
+     *
      * @param areaId 특정 구역만 볼 때. null 이면 전 구역
      */
     public ScheduleSeatMapResponse getSeatMap(Long scheduleId, Long areaId) {
+        return withCurrentServerTime(
+                seatMapCache.get(scheduleId, areaId, () -> loadSeatMap(scheduleId, areaId)));
+    }
+
+    /**
+     * 캐시된 스냅샷의 {@code serverTime} 을 지금 시각으로 갈아 준다.
+     *
+     * <p>스냅샷을 통째로 캐시하므로 만들 때 찍은 시각도 함께 묵는다. 지금 프론트는 이 값을
+     * 읽지 않지만, "응답을 만든 시점" 이라고 내려보내면서 1초 전 시각을 주는 것은 거짓이다.
+     * 나중에 델타 폴링의 {@code since} 기준으로 쓰면 그 1초가 좌석 유실이 된다.
+     *
+     * <p>좌석 상태는 갈지 않는다 — 스냅샷이 1초 묵는 것은 의도한 동작이다.
+     */
+    private ScheduleSeatMapResponse withCurrentServerTime(ScheduleSeatMapResponse snapshot) {
+        return new ScheduleSeatMapResponse(
+                snapshot.scheduleId(), LocalDateTime.now(), snapshot.areas());
+    }
+
+    /** 세 곳(공연장·공연·회차)에서 읽어 좌석맵 한 장을 조립한다. 캐시가 빌 때만 실행된다 */
+    private ScheduleSeatMapResponse loadSeatMap(Long scheduleId, Long areaId) {
         PerformanceDetail detail = performanceDetailRepository.findById(scheduleId)
                 .orElseThrow(() -> new BusinessException(BookingErrorCode.PERFORMANCE_DETAIL_NOT_FOUND));
 

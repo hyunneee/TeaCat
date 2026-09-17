@@ -11,8 +11,14 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
 import com.teacat.server.nft.client.PhotocardChainClient;
 import com.teacat.server.nft.client.PhotocardIssueResult;
+import com.teacat.server.wallet.client.CatMoneyBalanceResult;
+import com.teacat.server.wallet.client.CatMoneyClient;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
+import com.teacat.server.performance.service.PerformanceService;
+import com.teacat.server.ranking.service.RankingService;
+import com.teacat.server.search.repository.SearchTrendRepository;
+import com.teacat.server.search.service.SearchService;
 import com.teacat.server.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +35,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -42,6 +49,7 @@ import java.util.concurrent.Future;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.times;
@@ -77,6 +85,9 @@ class NftServiceIntegrationTests {
     private NftService nftService;
 
     @Autowired
+    private NftTradeSettlementWriter settlementWriter;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -97,6 +108,18 @@ class NftServiceIntegrationTests {
     @Autowired
     private com.teacat.server.nft.repository.NftMarketQueryRepository nftMarketQueryRepository;
 
+    @Autowired
+    private PerformanceService performanceService;
+
+    @Autowired
+    private RankingService rankingService;
+
+    @Autowired
+    private SearchTrendRepository searchTrendRepository;
+
+    @Autowired
+    private SearchService searchService;
+
     /*
      * 체인은 붙이지 않는다. server/.env 가 테스트에서도 로드되므로 스텁으로 막지 않으면
      * 진짜 블록체인 서비스로 발행 요청이 나가 실제 체인에 카드가 민팅된다.
@@ -104,13 +127,19 @@ class NftServiceIntegrationTests {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.teacat.server.nft.client.PhotocardChainClient photocardChainClient;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private CatMoneyClient catMoneyClient;
+
     @BeforeEach
     void cleanDatabase() {
         jdbcTemplate.execute("TRUNCATE TABLE users, faces, stadiums RESTART IDENTITY CASCADE");
+        willReturn(new CatMoneyBalanceResult("0x0000000000000000000000000000000000000000",
+                "1000000000", 0, "CAT"))
+                .given(catMoneyClient).getBalance(anyString());
     }
 
     @Test
-    void 동시에_구매해도_한_명만_소유권을_얻는다() throws Exception {
+    void 동시에_구매해도_한_건만_온체인_정산을_시작한다() throws Exception {
         Long sellerId = insertUser("seller@test.com", "판매자");
         Fixture fixture = insertPerformanceFixture();
         Long ticketId = insertTicket(sellerId, fixture);
@@ -154,10 +183,13 @@ class NftServiceIntegrationTests {
                     Long.class, photocardId)).isEqualTo(1L);
             assertThat(jdbcTemplate.queryForObject(
                     "SELECT owner_id FROM nft_photocards WHERE id = ?",
-                    Long.class, photocardId)).isEqualTo(winners.getFirst());
+                    Long.class, photocardId)).isEqualTo(sellerId);
             assertThat(jdbcTemplate.queryForObject(
                     "SELECT status::text FROM nft_photocard_listings WHERE photocard_id = ?",
-                    String.class, photocardId)).isEqualTo("SOLD");
+                    String.class, photocardId)).isEqualTo("SETTLING");
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT chain_status::text FROM nft_photocard_trades WHERE photocard_id = ?",
+                    String.class, photocardId)).isEqualTo("PENDING");
         } finally {
             executor.shutdownNow();
         }
@@ -233,7 +265,7 @@ class NftServiceIntegrationTests {
     }
 
     @Test
-    void 구매_후_구매자_판매자_카드별_내역과_보유_목록에_반영된다() {
+    void 구매_정산_완료_전에는_이력과_보유_목록을_변경하지_않는다() {
         Long sellerId = insertUser("seller@test.com", "판매자");
         Long buyerId = insertUser("buyer@test.com", "구매자");
         Fixture fixture = insertPerformanceFixture();
@@ -242,15 +274,48 @@ class NftServiceIntegrationTests {
         Long photocardId = insertPhotocard(designId, ticketId, sellerId);
         insertListing(photocardId, sellerId, 3_000L);
 
-        nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
+        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
 
+        assertThat(trade.status().name()).isEqualTo("PENDING");
+        assertThat(nftService.getPurchaseHistory(buyerId, null, 20).items()).isEmpty();
+        assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).isEmpty();
+        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
+                .isEmpty();
+        var sellerCard = nftService.getMyPhotocards(sellerId, null, null, 20).items().getFirst();
+        assertThat(sellerCard.photocardId()).isEqualTo(photocardId);
+        assertThat(sellerCard.listed()).isTrue();
+        assertThat(sellerCard.marketType().name()).isEqualTo("FIXED_PRICE");
+        assertThat(sellerCard.marketStatus().name()).isEqualTo("SETTLING");
+        assertThat(nftService.getPhotocard(photocardId, buyerId).listing().status().name())
+                .isEqualTo("SETTLING");
+    }
+
+    @Test
+    void 정산이_완료되면_구매자_보유_목록으로_소유권이_이동한다() {
+        Long sellerId = insertUser("seller@test.com", "판매자");
+        Long buyerId = insertUser("buyer@test.com", "구매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "소유권 이동 포토카드", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        insertListing(photocardId, sellerId, 3_000L);
+
+        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
+        settlementWriter.catConfirmed(trade.tradeId());
+        settlementWriter.nftSubmitted(trade.tradeId(), null);
+        settlementWriter.complete(trade.tradeId());
+
+        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
+                .singleElement()
+                .satisfies(card -> {
+                    assertThat(card.photocardId()).isEqualTo(photocardId);
+                    assertThat(card.listed()).isFalse();
+                    assertThat(card.marketType()).isNull();
+                    assertThat(card.marketStatus()).isNull();
+                });
+        assertThat(nftService.getMyPhotocards(sellerId, null, null, 20).items()).isEmpty();
         assertThat(nftService.getPurchaseHistory(buyerId, null, 20).items()).hasSize(1);
         assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
-        assertThat(nftService.getPhotocardTrades(photocardId, buyerId, null, 20).items()).hasSize(1);
-        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
-                .extracting(item -> item.photocardId())
-                .containsExactly(photocardId);
-        assertThat(nftService.getMyPhotocards(sellerId, null, null, 20).items()).isEmpty();
     }
 
     @Test
@@ -745,8 +810,10 @@ class NftServiceIntegrationTests {
         Long unlistedCardId = insertPhotocard(designId, insertTicket(ownerId, fixture), ownerId);
         insertListing(listedCardId, ownerId, 100L);
 
-        assertThat(nftService.getMyPhotocards(ownerId, true, null, 20).items())
-                .extracting(item -> item.photocardId()).containsExactly(listedCardId);
+        var listed = nftService.getMyPhotocards(ownerId, true, null, 20).items();
+        assertThat(listed).extracting(item -> item.photocardId()).containsExactly(listedCardId);
+        assertThat(listed.getFirst().marketType().name()).isEqualTo("FIXED_PRICE");
+        assertThat(listed.getFirst().marketStatus().name()).isEqualTo("ACTIVE");
         assertThat(nftService.getMyPhotocards(ownerId, false, null, 20).items())
                 .extracting(item -> item.photocardId()).containsExactly(unlistedCardId);
     }
@@ -879,10 +946,15 @@ class NftServiceIntegrationTests {
 
         List<PhotocardChainClient.IssueItem> items = sent.getValue();
         assertThat(items).hasSize(1);
-        // photocardKey 는 nft_photocards.id 다. 이 값 하나가 한 티켓에 두 장이 나가는 것을 막는다
+        // 체인 식별자는 DB PK와 분리하고, 호환용 DB ID도 함께 전달한다.
         assertThat(items.getFirst().photocardKey()).isEqualTo(
-                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class).toString());
-        assertThat(items.getFirst().designId()).isEqualTo(designId.toString());
+                jdbcTemplate.queryForObject("SELECT issue_key FROM nft_photocards", String.class));
+        assertThat(items.getFirst().designId()).isEqualTo(jdbcTemplate.queryForObject(
+                "SELECT COALESCE(chain_token_id::text, id::text) FROM nft_photocard_designs WHERE id = ?",
+                String.class, designId));
+        assertThat(items.getFirst().photocardId()).isEqualTo(
+                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class));
+        assertThat(items.getFirst().designDbId()).isEqualTo(designId);
         assertThat(items.getFirst().to()).isEqualTo("0x" + String.format("%040x", userId));
     }
 
@@ -1207,8 +1279,8 @@ class NftServiceIntegrationTests {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, areaId, seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, scheduleId, areaId, seatId, faceId);
     }
 
@@ -1309,20 +1381,20 @@ class NftServiceIntegrationTests {
                 VALUES (?, '3', ?) RETURNING id
                 """, Long.class, fixture.areaId(), seatNumber);
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, ?, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, ?, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), seatId, faceId);
     }
 
     private Long insertStandingTicket(Long userId, Fixture fixture) {
         Long faceId = insertFace();
         return jdbcTemplate.queryForObject("""
-                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_id)
-                VALUES (?, ?, ?, NULL, 'CONFIRMED', ?) RETURNING id
+                INSERT INTO tickets (user_id, performance_detail_id, area_id, seat_id, status, face_embedding, face_model_version)
+                VALUES (?, ?, ?, NULL, 'CONFIRMED', (SELECT embedding FROM faces WHERE id = ?), 'test-model') RETURNING id
                 """, Long.class, userId, fixture.performanceDetailId(), fixture.areaId(), faceId);
     }
 
-    /** tickets.face_id 가 NOT NULL 이라 (V20260904_1430) 티켓마다 얼굴 행이 하나 필요하다 */
+    /** 티켓에 베껴 넣을 얼굴을 하나 만든다 (tickets 는 이제 faces 를 가리키지 않고 값을 복사한다) */
     private Long insertFace() {
         String zeros = "[" + "0,".repeat(127) + "0]";
         return jdbcTemplate.queryForObject("""
@@ -1368,8 +1440,83 @@ class NftServiceIntegrationTests {
     private Long insertPhotocard(Long designId, Long ticketId, Long ownerId) {
         return jdbcTemplate.queryForObject("""
                 INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
-                VALUES (?, ?, ?, 'PENDING') RETURNING id
+                VALUES (?, ?, ?, 'MINTED') RETURNING id
                 """, Long.class, designId, ticketId, ownerId);
+    }
+
+    @Test
+    void 조회순은_세션별_중복을_제거하고_커서에서도_누락되지_않는다() {
+        Long sellerId = insertUser("view-seller@test.com", "조회 판매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long designId = insertDesign(fixture.performanceId(), "조회 포카", 2);
+        Long firstCardId = insertPhotocard(designId, insertTicket(sellerId, fixture), sellerId);
+        Long secondCardId = insertPhotocard(designId, insertTicket(sellerId, fixture), sellerId);
+        insertListing(firstCardId, sellerId, 100L);
+        insertListing(secondCardId, sellerId, 200L);
+
+        String firstSession = UUID.randomUUID().toString();
+        assertThat(nftService.recordPhotocardView(firstCardId, null, firstSession).counted()).isTrue();
+        assertThat(nftService.recordPhotocardView(firstCardId, null, firstSession).counted()).isFalse();
+        nftService.recordPhotocardView(secondCardId, null, UUID.randomUUID().toString());
+        nftService.recordPhotocardView(secondCardId, null, UUID.randomUUID().toString());
+
+        var firstPage = nftService.getMarketPhotocards(null, null, NftMarketSort.VIEW_DESC, null, 1);
+        var secondPage = nftService.getMarketPhotocards(
+                null, null, NftMarketSort.VIEW_DESC, firstPage.nextCursor(), 1);
+
+        assertThat(firstPage.items()).extracting(NftMarketPhotocardResponse::photocardId)
+                .containsExactly(secondCardId);
+        assertThat(firstPage.items().getFirst().viewCount()).isEqualTo(2L);
+        assertThat(secondPage.items()).extracting(NftMarketPhotocardResponse::photocardId)
+                .containsExactly(firstCardId);
+        assertThat(secondPage.items().getFirst().viewCount()).isEqualTo(1L);
+    }
+
+    @Test
+    void 발행이_끝나지_않은_포카는_판매할_수_없다() {
+        Long sellerId = insertUser("pending-seller@test.com", "발행 대기 판매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long pendingCardId = jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocards (design_id, ticket_id, owner_id, status)
+                VALUES (?, ?, ?, 'PENDING') RETURNING id
+                """, Long.class,
+                insertDesign(fixture.performanceId(), "발행 대기 포카", 1),
+                insertTicket(sellerId, fixture), sellerId);
+
+        assertNftError(NftErrorCode.PHOTOCARD_NOT_MINTED,
+                () -> nftService.registerListing(sellerId, pendingCardId,
+                        new NftListingCreateRequest(100L, "아직 판매 불가")));
+    }
+
+    @Test
+    void 인기_공연은_최근_조회_활동으로_순위를_계산한다() {
+        Fixture first = insertPerformanceFixture();
+        Fixture second = insertPerformanceFixture();
+        performanceService.recordView(first.performanceId(), UUID.randomUUID().toString());
+        performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
+        performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
+
+        var ranking = rankingService.popularConcerts();
+
+        assertThat(ranking).extracting(item -> item.concertId())
+                .containsExactly(second.performanceId(), first.performanceId());
+        assertThat(ranking).extracting(item -> item.score()).containsExactly(2L, 1L);
+    }
+
+    @Test
+    void 실시간_검색어는_이전_시간_순위와_비교해_변동을_계산한다() {
+        LocalDateTime current = LocalDateTime.now().withMinute(0).withSecond(0).withNano(0).minusHours(1);
+        searchTrendRepository.replace(current.minusHours(1), List.of(
+                new SearchTrendRepository.Snapshot(1, "alpha", "Alpha", 10),
+                new SearchTrendRepository.Snapshot(2, "beta", "Beta", 8)));
+        searchTrendRepository.replace(current, List.of(
+                new SearchTrendRepository.Snapshot(1, "beta", "Beta", 12),
+                new SearchTrendRepository.Snapshot(2, "gamma", "Gamma", 7)));
+
+        var trends = searchService.trends();
+
+        assertThat(trends.items()).extracting(item -> item.keyword()).containsExactly("Beta", "Gamma");
+        assertThat(trends.items()).extracting(item -> item.trend()).containsExactly("UP", "NEW");
     }
 
     /** 카드팩에서 뽑힌 카드처럼 ticket_id 없이 카드 행을 만든다. ownerId 는 지갑까지 갖춘 회원이어야 한다 */

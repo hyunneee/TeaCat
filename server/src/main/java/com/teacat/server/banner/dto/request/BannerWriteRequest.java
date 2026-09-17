@@ -1,6 +1,7 @@
 package com.teacat.server.banner.dto.request;
 
 import com.teacat.server.banner.entity.MainBanner;
+import com.teacat.server.banner.entity.MainBannerImageFocus;
 import com.teacat.server.banner.entity.MainBannerType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -38,6 +39,12 @@ public record BannerWriteRequest(
                 example = "banner/2026/09/a1b2c3.png")
         String imageKey,
 
+        @Schema(description = """
+                그림에서 보여줄 부분. 배너 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면
+                나머지가 잘린다. 타입과 무관하며, 비우면 CENTER 다.
+                """, example = "TOP")
+        MainBannerImageFocus imageFocus,
+
         @Schema(description = "연결할 공연 ID (PERFORMANCE 일 때 필수)", example = "3")
         Long performanceId,
 
@@ -53,4 +60,12 @@ public record BannerWriteRequest(
         @NotNull(message = "노출 여부를 선택해 주세요.")
         Boolean active
 ) {
+
+    /**
+     * 크롭 위치는 <b>필수로 받지 않는다.</b> 이 칸을 모르는 예전 화면이 보낸 요청에서
+     * 400 이 나면 배너를 아예 못 고치게 된다. 안 오면 지금까지와 같은 가운데다.
+     */
+    public MainBannerImageFocus imageFocusOrCenter() {
+        return imageFocus == null ? MainBannerImageFocus.CENTER : imageFocus;
+    }
 }
