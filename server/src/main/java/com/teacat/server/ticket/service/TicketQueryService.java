@@ -7,6 +7,7 @@ import com.teacat.server.nft.repository.NftTicketRepository;
 import com.teacat.server.payment.entity.TicketOrder;
 import com.teacat.server.payment.repository.TicketOrderRepository;
 import com.teacat.server.ticket.dto.response.MyTicketResponse;
+import com.teacat.server.ticket.dto.response.TicketQrResponse;
 import com.teacat.server.ticket.entity.Ticket;
 import com.teacat.server.ticket.exception.TicketErrorCode;
 import com.teacat.server.ticket.repository.TicketRepository;
@@ -36,6 +37,7 @@ public class TicketQueryService {
     private final TicketRepository ticketRepository;
     private final NftTicketRepository nftTicketRepository;
     private final TicketOrderRepository ticketOrderRepository;
+    private final TicketQrSigner qrSigner;
     private final FileStorageService fileStorageService;
 
     public List<MyTicketResponse> getMyTickets(Long userId) {
@@ -78,6 +80,26 @@ public class TicketQueryService {
                 nftTicketRepository.findByTicketId(ticketId).orElse(null),
                 ticketOrderRepository.findByTicketId(ticketId).orElse(null),
                 posterUrl(ticket));
+    }
+
+    /**
+     * 게이트에 보여줄 QR 문자열.
+     *
+     * <p>🔴 <b>본인 티켓만.</b> 이 문자열이 곧 입장권이라, 남의 것을 받아 갈 수 있으면
+     * 서명을 붙인 의미가 없다.
+     *
+     * <p>취소된 티켓에도 내준다 — 게이트가 "취소된 표" 라고 알려주는 편이, QR 이 아예
+     * 안 나와서 사람이 창구에서 헤매는 것보다 낫다 (거절은 서버가 한다).
+     */
+    public TicketQrResponse getMyTicketQr(Long userId, Long ticketId) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new BusinessException(TicketErrorCode.TICKET_NOT_FOUND));
+
+        if (!ticket.isOwnedBy(userId)) {
+            throw new BusinessException(TicketErrorCode.TICKET_NOT_OWNED);
+        }
+
+        return new TicketQrResponse(qrSigner.sign(ticket.getId()));
     }
 
     /** 포스터가 없는 공연도 있다. 그때는 URL 을 만들지 않는다 */

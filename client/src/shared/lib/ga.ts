@@ -50,10 +50,28 @@ declare global {
   }
 }
 
-/** gtag 큐. 스크립트가 아직 안 왔어도 여기 쌓였다가 로드되는 순간 한꺼번에 처리됩니다. */
-function gtag(...args: unknown[]): void {
-  window.dataLayer?.push(args);
-}
+/**
+ * gtag 큐. 스크립트가 아직 안 왔어도 여기 쌓였다가 로드되는 순간 한꺼번에 처리됩니다.
+ *
+ * 🔴 **`arguments` 를 그대로 넣어야 합니다. 배열로 바꾸면 안 됩니다.**
+ *    `dataLayer.push([...])` 처럼 진짜 `Array` 를 넣으면 gtag.js 가 **명령으로 읽지
+ *    않고 조용히 버립니다.** 그러면 `config` 가 등록되지 않아 측정 컨텍스트 자체가
+ *    안 만들어지고, 그 뒤 모든 이벤트가 전송 없이 사라집니다 —
+ *    **에러도 경고도 없고, 스크립트는 정상 로드되며, dataLayer 에는 값이 잘 쌓여 있어서**
+ *    코드만 봐서는 멀쩡해 보입니다. (운영에서 실제로 이 상태로 나갔습니다)
+ *
+ *    살아 있는지 확인하는 법: 콘솔에서 `typeof window.gaGlobal` 이 `'object'` 여야 합니다.
+ *    `'undefined'` 면 config 가 먹지 않은 것입니다.
+ *
+ *    rest 파라미터를 써도 일반 함수에서는 `arguments` 가 그대로 살아 있습니다.
+ *    타입만 rest 로 받아 호출부의 자동완성을 유지하고, 넣는 것은 `arguments` 입니다.
+ */
+type GtagCommand = (...args: unknown[]) => void;
+
+const gtag: GtagCommand = function () {
+  // eslint-disable-next-line prefer-rest-params
+  window.dataLayer?.push(arguments);
+};
 
 /** 앱이 그려지기 전에 딱 한 번. `main.tsx` 가 import 하는 `instrument.ts` 에서 부릅니다. */
 export function initGa(): void {

@@ -79,6 +79,15 @@ public class NftPhotocardListing {
         this.closedAt = now;
     }
 
+    public void startSettlement() {
+        this.status = NftListingStatus.SETTLING;
+    }
+
+    public void reopen() {
+        this.status = NftListingStatus.ACTIVE;
+        this.closedAt = null;
+    }
+
     public boolean isActive() {
         return status == NftListingStatus.ACTIVE;
     }

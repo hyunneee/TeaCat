@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 /**
  * 도안의 온체인 등록 상태를 쓰는 <b>트랜잭션 단위</b>들.
@@ -35,7 +36,8 @@ public class NftDesignChainWriter {
     private final NftPhotocardTemplateRepository templateRepository;
 
     /** 등록 요청에 실어 보낼 값. 이걸 꺼낸 뒤에는 트랜잭션 없이 체인을 부른다 */
-    public record RegistrationTarget(Long designId, int maxSupply, String metadataCid) {
+    public record RegistrationTarget(Long designId, BigDecimal chainTokenId,
+                                     int maxSupply, String metadataCid) {
     }
 
     @Transactional
@@ -87,7 +89,8 @@ public class NftDesignChainWriter {
             throw new BusinessException(NftErrorCode.DESIGN_PINS_MISSING);
         }
 
-        return new RegistrationTarget(design.getId(), design.getTotalSupply(), design.getMetadataCid());
+        return new RegistrationTarget(design.getId(), design.ensureChainTokenId(),
+                design.getTotalSupply(), design.getMetadataCid());
     }
 
     /**

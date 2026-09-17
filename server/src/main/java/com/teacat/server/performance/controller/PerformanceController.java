@@ -7,6 +7,7 @@ import com.teacat.server.performance.dto.response.ConcertDetailResponse;
 import com.teacat.server.performance.dto.response.ConcertListResponse;
 import com.teacat.server.performance.dto.response.ConcertSummaryResponse;
 import com.teacat.server.performance.dto.response.ScheduleSummaryResponse;
+import com.teacat.server.performance.dto.response.PerformanceViewResponse;
 import com.teacat.server.performance.service.PerformanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +21,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -75,6 +78,13 @@ public class PerformanceController {
     public ResponseEntity<BaseResponse<ConcertDetailResponse>> getConcert(
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long concertId) {
         return ResponseEntity.ok(BaseResponse.success(performanceService.getConcert(concertId)));
+    }
+
+    @PostMapping("/{concertId}/views")
+    public ResponseEntity<BaseResponse<PerformanceViewResponse>> recordView(
+            @PathVariable Long concertId,
+            @RequestHeader("X-View-Session") String sessionId) {
+        return ResponseEntity.ok(BaseResponse.success(performanceService.recordView(concertId, sessionId)));
     }
 
     @Operation(summary = "공연 회차 목록 조회", description = "공연의 회차 목록과 회차별 예매 가능 여부를 조회합니다.")

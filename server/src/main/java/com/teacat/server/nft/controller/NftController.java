@@ -12,9 +12,11 @@ import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
+import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
+import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
 import com.teacat.server.nft.service.NftPhotocardDesignService;
 import com.teacat.server.nft.service.NftPhotocardTemplateService;
 import com.teacat.server.nft.service.NftService;
@@ -82,6 +84,17 @@ public class NftController {
                 nftService.getPhotocard(photocardId, authUser == null ? null : authUser.id())));
     }
 
+    @Operation(summary = "NFT 포토카드 상세 조회 기록",
+            description = "브라우저 세션과 30분 버킷을 기준으로 중복을 제거해 조회 수를 기록합니다.")
+    @PostMapping("/photocards/{photocardId}/views")
+    public ResponseEntity<BaseResponse<NftPhotocardViewResponse>> recordPhotocardView(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long photocardId,
+            @RequestHeader(name = "X-View-Session") String viewSession) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.recordPhotocardView(
+                photocardId, authUser == null ? null : authUser.id(), viewSession)));
+    }
+
     @Operation(
             summary = "NFT 포토카드 판매 등록",
             description = "본인이 소유한 포토카드를 CAT 가격과 판매자 설명으로 판매 등록합니다. 이미 판매 중인 카드이거나 소유자가 아니면 등록할 수 없습니다."
@@ -111,9 +124,8 @@ public class NftController {
 
     @Operation(
             summary = "NFT 포토카드 구매",
-            description = "활성 판매를 구매하고 판매 상태·포토카드 소유권·거래 이력을 한 트랜잭션에서 변경합니다. "
-                    + "동시 구매는 행 잠금으로 한 건만 체결되며, 필수 UUID Idempotency-Key로 같은 요청의 중복 체결을 방지합니다. "
-                    + "현재 CAT 원장 미연동 상태이므로 잔액 차감·판매자 지급과 구매 후 잔액 반환은 추후 추가됩니다."
+            description = "캣머니를 예약하고 비동기 온체인 정산을 시작합니다. 응답 status가 COMPLETED가 될 때 소유권 이전이 완료됩니다. "
+                    + "필수 UUID Idempotency-Key로 같은 요청의 중복 체결을 방지합니다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @Parameter(
@@ -128,8 +140,17 @@ public class NftController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
-        return ResponseEntity.ok(BaseResponse.success(
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(BaseResponse.success(
                 nftService.purchase(authUser.id(), photocardId, idempotencyKey)));
+    }
+
+    @Operation(summary = "NFT 거래 정산 상태 조회")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/nft-trades/{tradeId}")
+    public ResponseEntity<BaseResponse<NftTradeStatusResponse>> getTradeStatus(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long tradeId) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getTradeStatus(authUser.id(), tradeId)));
     }
 
     @Operation(
@@ -162,7 +183,7 @@ public class NftController {
 
     @Operation(
             summary = "내 NFT 포토카드 목록 조회",
-            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 판매 등록 여부를 필터링할 수 있습니다."
+            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 고정가 또는 경매 판매 진행 여부를 필터링할 수 있습니다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/users/me/photocards")

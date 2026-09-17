@@ -51,7 +51,8 @@ public class NftPhotocardDrawService {
 
         if (!outcome.replayed()) {
             try {
-                minter.mintDrawn(outcome.photocardId(), outcome.designId(), outcome.walletAddress());
+                minter.mintDrawn(outcome.photocardId(), outcome.issueKey(), outcome.designId(),
+                        outcome.chainTokenId(), outcome.walletAddress());
             } catch (RuntimeException e) {
                 log.error("뽑기 카드는 만들었지만 체인 발행 요청에 실패했습니다. 스위퍼가 재시도합니다 photocardId={}",
                         outcome.photocardId(), e);

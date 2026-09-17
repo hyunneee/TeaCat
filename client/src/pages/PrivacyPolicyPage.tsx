@@ -58,11 +58,11 @@ const SECTIONS: { title: string; body: string[] }[] = [
     body: [
       '서비스 운영과 개선을 위해 아래 사업자에 처리를 위탁하며, 데이터가 국외로 이전됩니다.',
       '• Sentry (Functional Software, Inc. / 미국) — 오류 발생 시 화면 주소, 브라우저 정보, 오류 내용. 서비스 장애 파악·복구 목적. 서비스 제공에 필요하여 동의 없이 처리하며, 이용자를 특정하는 정보는 전송하지 않습니다.',
-      '• Google (미국) — Google Analytics 4. 방문 기록, 화면 이동, 예매 단계 진행 여부. 이용 통계 분석 목적. 동의하신 경우에만 수집합니다.',
-      '• Microsoft (미국) — Clarity. 화면 조작 기록. 사용성 개선 목적. 동의하신 경우에만 수집합니다.',
+      '• Google (미국) — Google Analytics 4. 방문 기록, 화면 이동, 예매 단계 진행 여부. 이용 통계 분석 목적.',
+      '• Microsoft (미국) — Clarity. 화면 조작 기록. 사용성 개선 목적.',
       '이전 시기와 방법: 서비스 이용 시점에 네트워크를 통해 자동 전송됩니다.',
       '보유 기간: 각 사업자의 보관 정책에 따르며, 위탁 계약 종료 시 파기됩니다.',
-      '동의를 거부하셔도 예매를 포함한 모든 서비스를 이용할 수 있습니다. 동의는 화면 하단 배너 또는 이 화면에서 언제든 철회할 수 있습니다.',
+      '이용 통계 수집은 기본으로 동작하며, 이 화면 위쪽에서 언제든 거부할 수 있습니다. 거부하셔도 예매를 포함한 모든 서비스를 그대로 이용할 수 있습니다.',
     ],
   },
   {
@@ -72,7 +72,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
       '• 티켓 예매·결제·발권·취소 처리',
       ...(FEATURE.face ? ['• 입장 시 티켓 소유자 본인 확인 (암표 거래 방지)'] : []),
       '• 문의 응대와 공지 전달',
-      '• 서비스 개선을 위한 이용 통계 분석 (동의한 경우)',
+      '• 서비스 개선을 위한 이용 통계 분석 (거부하지 않은 경우)',
     ],
   },
   {
@@ -98,7 +98,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     title: '쿠키',
     body: [
       '로그인 유지를 위해 필수 쿠키를 사용합니다. 이 쿠키는 거부할 수 없으며, 없으면 로그인이 유지되지 않습니다.',
-      '이용 통계 분석을 위한 쿠키는 동의하신 경우에만 사용합니다.',
+      '이용 통계 분석을 위한 쿠키는 기본으로 사용하며, 이 화면 위쪽에서 거부할 수 있습니다.',
       '브라우저 설정에서 쿠키를 차단할 수 있으나, 그 경우 로그인이 필요한 기능을 쓸 수 없습니다.',
     ],
   },
@@ -123,15 +123,15 @@ const SECTIONS: { title: string; body: string[] }[] = [
 export function PrivacyPolicyPage() {
   const [consent, setConsent] = useState(readAnalyticsConsent);
 
-  /* 처리방침을 읽고 나서 마음을 바꾸는 것이 자연스러운 자리라, 철회·재동의를
-     여기서 바로 할 수 있게 둡니다. (배너는 한 번 정하면 다시 뜨지 않습니다) */
+  /* 🔴 수집은 **기본으로 켜져 있습니다**(`src/instrument.ts` 의 opt-out 판단).
+     그래서 이 화면은 "동의를 받는 자리" 가 아니라 **거부할 수 있는 유일한 자리**입니다.
+     동의 배너는 붙이지 않았으므로(`App.tsx`) 여기를 없애면 거부할 방법이 사라집니다. */
   const allow = () => {
     writeAnalyticsConsent(true);
     setConsent(true);
     startAnalytics();
-    /* 배너와 같은 이유로 지금 화면을 한 번 보냅니다 — 라우트 구독은 **다음 이동부터**
-       도는데, 그때까지 이 세션은 페이지뷰가 0 이라 유입 경로가 통째로 빕니다.
-       (`CookieConsent` 의 같은 줄과 짝입니다. 한쪽만 고치지 마세요) */
+    /* 거부했다가 다시 켠 경우입니다. 지금 화면을 한 번 보냅니다 — 라우트 구독은
+       **다음 이동부터** 도는데, 그때까지 이 세션은 페이지뷰가 0 이라 유입 경로가 빕니다. */
     trackPageView(window.location.pathname);
   };
 
@@ -149,17 +149,16 @@ export function PrivacyPolicyPage() {
 
       <div className="space-y-6 p-4">
         <section>
-          <SectionTitle description="동의하지 않아도 모든 기능을 쓸 수 있어요">
+          <SectionTitle description="거부하셔도 모든 기능을 그대로 쓸 수 있어요">
             이용 통계 수집
           </SectionTitle>
           <Card className="space-y-3">
+            {/* 🔴 `null`(아직 아무 말도 안 한 사람)은 **수집 중**입니다. "아직 선택하지 않음"
+                으로 적으면 안 됩니다 — 수집되고 있는데 안 되는 것처럼 읽힙니다. */}
             <p className="text-sm">
-              현재 상태:{' '}
-              <span className="font-bold">
-                {consent === null ? '아직 선택하지 않음' : consent ? '동의함' : '거부함'}
-              </span>
+              현재 상태: <span className="font-bold">{consent === false ? '거부함' : '수집 중'}</span>
             </p>
-            {consent === true && (
+            {consent !== false && (
               <p className="text-muted text-xs leading-relaxed">
                 거부로 바꾸면 <b>다음 방문부터</b> 수집이 멈춥니다. 이미 실행 중인 스크립트는
                 이번 방문 동안 종료할 수 없습니다.
@@ -169,8 +168,8 @@ export function PrivacyPolicyPage() {
               <Button variant="secondary" disabled={consent === false} onClick={deny}>
                 거부
               </Button>
-              <Button disabled={consent === true} onClick={allow}>
-                동의
+              <Button disabled={consent !== false} onClick={allow}>
+                수집 허용
               </Button>
             </div>
           </Card>

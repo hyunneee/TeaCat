@@ -96,6 +96,19 @@ public class Ticket {
     @Column(name = "booked_at", nullable = false, updatable = false)
     private LocalDateTime bookedAt;
 
+    /**
+     * 게이트에서 입장 확인을 통과한 시각. null 이면 아직 들어오지 않았다.
+     *
+     * <p>🔴 <b>예매 상태와 다른 축이라 컬럼을 따로 뒀다</b> (V20260917_1000). status 는
+     * "표가 유효한가", 이 값은 "그 표로 들어왔는가" 다. 한 칸에 섞으면 "입장했는데
+     * 취소된 표" 를 표현할 수 없다.
+     *
+     * <p>⚠️ 한 번 찍히면 <b>다시 들어올 수 없다.</b> 같은 QR 로 두 명이 들어가는 것을
+     * 막는 것이 암표 방지의 마지막 고리다.
+     */
+    @Column(name = "checked_in_at")
+    private LocalDateTime checkedInAt;
+
     private Ticket(User user, PerformanceDetail performanceDetail, Area area, Seat seat, Face face) {
         this.user = user;
         this.performanceDetail = performanceDetail;
@@ -116,6 +129,48 @@ public class Ticket {
      */
     public static Ticket issue(User user, PerformanceDetail performanceDetail, Area area, Seat seat, Face face) {
         return new Ticket(user, performanceDetail, area, seat, face);
+    }
+
+    public boolean isCheckedIn() {
+        return checkedInAt != null;
+    }
+
+    /** 입장 확인을 통과했다. 부르는 쪽이 이미 검사를 끝냈다고 본다 */
+    public void checkIn(LocalDateTime at) {
+        this.checkedInAt = at;
+    }
+
+    /**
+     * 예매 당시 얼굴과 <b>대조할 수 있는 상태인가.</b>
+     *
+     * <p>두 경우에 대조가 성립하지 않는다.
+     * <ul>
+     *   <li>값이 비었다 — 탈퇴하면서 파기됐다 ({@code TicketRepository.eraseFaceOf})</li>
+     *   <li>🔴 가입할 때 채워 둔 <b>기본 얼굴</b>이다. 사람에게서 뽑은 값이 아니라
+     *       모든 계정이 같은 벡터를 갖는다 ({@link Face#defaultFace()}). 이걸 대조하면
+     *       <b>아무나 통과하거나 아무도 못 통과한다</b> — 둘 다 최악이다.</li>
+     * </ul>
+     */
+    public boolean canVerifyFace() {
+        return faceEmbedding != null
+                && faceModelVersion != null
+                && !Face.DEFAULT_MODEL_VERSION.equals(faceModelVersion);
+    }
+
+    /** 같은 모델로 뽑은 값인가. 모델이 다르면 좌표계가 달라 대조 자체가 성립하지 않는다 */
+    public boolean isSameFaceModel(String otherModelVersion) {
+        return faceModelVersion != null && faceModelVersion.equals(otherModelVersion);
+    }
+
+    /**
+     * 지금 찍은 얼굴이 예매 당시 얼굴과 얼마나 닮았는가.
+     *
+     * <p>{@link Face#cosineSimilarityTo} 와 같은 이유로 <b>계산을 엔티티 안에 둔다</b> —
+     * 저장해 둔 임베딩을 게터로 꺼내면 서비스·DTO·로그로 번질 길이 생긴다. 나가는 것은
+     * 숫자 하나뿐이다.
+     */
+    public double faceSimilarityTo(float[] other) {
+        return Face.cosineSimilarity(faceEmbedding, other);
     }
 
     /** 예매 취소. SBT 소각은 별도로 요청한다 */

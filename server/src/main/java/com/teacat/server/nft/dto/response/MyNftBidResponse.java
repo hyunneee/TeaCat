@@ -24,6 +24,8 @@ public record MyNftBidResponse(
         BIDDING,
         /** 진행 중, 밀림 */
         OUTBID,
+        /** 낙찰됐지만 온체인 정산이 아직 끝나지 않음 */
+        SETTLING,
         WON,
         LOST
     }

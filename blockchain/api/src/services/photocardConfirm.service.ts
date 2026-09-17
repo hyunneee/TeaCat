@@ -1,14 +1,25 @@
 import { getTxStatus } from '../chain/tx';
-import { isIssued, photocardNftAddress } from '../chain/contracts/photocardNft';
+import {
+  findPhotocardIssuance,
+  getPhotocardIssueEvents,
+  photocardNftAddress,
+} from '../chain/contracts/photocardNft';
+import { hashOf } from '../chain/hash';
 import { env } from '../config';
 import { dbEnabled } from '../db/pool';
 import {
   findMinting,
-  markIssueResult,
+  markIssueResults,
   markIssueSent,
   missingColumns,
   type SentPhotocard,
 } from '../db/photocardRepo';
+import {
+  classifyIssueReceipt,
+  verifyHistoricalIssue,
+  type ExpectedIssue,
+  type IssueOutcome,
+} from './photocardIssueEvidence';
 import { logger, short } from '../shared/logger';
 import { confirmDuration, sweepProcessed, txDropped, watchingCount } from '../metrics';
 
@@ -47,7 +58,7 @@ const SWEEP_LIMIT = 500;
 const DROP_AFTER_MS = 5 * 60_000;
 
 interface Watched {
-  photocardKeys: string[];
+  cards: SentPhotocard[];
   since: number;
 }
 
@@ -70,7 +81,7 @@ let sweeping = false;
 export async function watchIssueBatch(cards: SentPhotocard[], txHash: string): Promise<void> {
   if (!dbEnabled()) return;
 
-  watching.set(txHash, { photocardKeys: cards.map((card) => card.photocardKey), since: Date.now() });
+  watching.set(txHash, { cards, since: Date.now() });
   watchingCount.set({ kind: 'photocard' }, watching.size);
 
   const address = photocardNftAddress();
@@ -90,16 +101,24 @@ export async function watchIssueBatch(cards: SentPhotocard[], txHash: string): P
 
 /** DB 쓰기는 실패해도 프로세스를 죽이지 않습니다. 훑기가 다음 번에 따라잡습니다. */
 async function write(
-  photocardKeys: string[],
-  status: 'MINTED' | 'FAILED',
+  outcomes: IssueOutcome[],
   txHash: string | null,
 ): Promise<void> {
   try {
-    const changed = await markIssueResult(photocardKeys, status, txHash);
-    logger.info(`확정 기록 ${status} ${changed}/${photocardKeys.length}건`);
+    const changed = await markIssueResults(outcomes, txHash);
+    logger.info(`발행 결과 기록 ${changed}/${outcomes.length}건`);
   } catch (error) {
-    logger.error(`확정 기록 실패 (${status}) — 훑기가 다시 시도합니다`, error);
+    logger.error('발행 결과 기록 실패 — 훑기가 다시 시도합니다', error);
   }
+}
+
+function expected(cards: SentPhotocard[]): ExpectedIssue[] {
+  return cards.map((card) => ({
+    photocardKey: card.photocardKey,
+    keyHash: hashOf(card.photocardKey),
+    tokenId: card.tokenId,
+    to: card.to,
+  }));
 }
 
 /** ① 추적 중인 트랜잭션의 영수증을 봅니다. */
@@ -134,17 +153,26 @@ async function tick(): Promise<void> {
          어느 쪽이든 그 키는 체인에서 소비됐으므로 MINTED 입니다. */
       if (!chain.success) {
         logger.error(
-          `발행 실패 ${item.photocardKeys.length}건 tx=${short(txHash)} — ` +
+          `발행 실패 ${item.cards.length}건 tx=${short(txHash)} — ` +
             `${chain.revertReason ?? '사유 불명'}`,
         );
       }
-      // 배치 하나가 카드 여러 장이라, 한 번의 확정이 곧 그 장수만큼의 발행이다
+      // 성공 영수증도 카드별 이벤트가 다를 수 있다. 각 요청의 증거를 따로 판정한다.
       confirmDuration.observe(
         { kind: 'photocard', result: chain.success ? 'minted' : 'failed' },
         (Date.now() - item.since) / 1000,
       );
 
-      await write(item.photocardKeys, chain.success ? 'MINTED' : 'FAILED', txHash);
+      const outcomes = chain.success
+        ? await classifyIssueReceipt(expected(item.cards), await getPhotocardIssueEvents(txHash), findPhotocardIssuance)
+        : item.cards.map((card) => ({
+            photocardKey: card.photocardKey,
+            tokenId: card.tokenId,
+            status: 'FAILED' as const,
+            failureCode: 'TX_REVERTED',
+            txHash,
+          }));
+      await write(outcomes, txHash);
     }
   } finally {
     ticking = false;
@@ -167,17 +195,22 @@ async function sweep(): Promise<void> {
 
     logger.info(`훑기 — MINTING ${rows.length}건`);
 
-    const minted: string[] = [];
-    const failed: string[] = [];
+    const outcomes: IssueOutcome[] = [];
 
     for (const row of rows) {
       // 추적 중이면 ①이 처리합니다.
       if (row.mintTxHash !== null && watching.has(row.mintTxHash)) continue;
 
-      if (await isIssued(row.photocardKey)) {
-        // 추적이 놓친 것을 훑기가 주웠다는 뜻이다
+      const expectedRow: ExpectedIssue = {
+        photocardKey: row.photocardKey,
+        keyHash: hashOf(row.photocardKey),
+        tokenId: row.tokenId,
+        to: row.to,
+      };
+      const historical = await findPhotocardIssuance(row.photocardKey);
+      if (historical !== null) {
         sweepProcessed.inc({ kind: 'photocard' });
-        minted.push(row.photocardKey);
+        outcomes.push(await verifyHistoricalIssue(expectedRow, async () => historical));
         continue;
       }
 
@@ -187,16 +220,31 @@ async function sweep(): Promise<void> {
       if (row.mintTxHash === null) continue;
 
       const chain = await getTxStatus(row.mintTxHash);
-      if (chain.found) continue; // 아직 살아 있습니다
+      if (chain.found && !chain.mined) continue; // 아직 살아 있습니다
+      if (chain.mined) {
+        outcomes.push({
+          photocardKey: row.photocardKey,
+          tokenId: row.tokenId,
+          status: 'FAILED',
+          failureCode: chain.success ? 'MISSING_ISSUE_EVENT' : 'TX_REVERTED',
+          txHash: row.mintTxHash,
+        });
+        continue;
+      }
 
       logger.error(`트랜잭션 드롭 card=${row.photocardKey} tx=${short(row.mintTxHash)}`);
       // 🔴 0 이어야 정상인 값. 카드가 유실된 것이라 1건도 알림 대상이다
       txDropped.inc({ kind: 'photocard' });
-      failed.push(row.photocardKey);
+      outcomes.push({
+        photocardKey: row.photocardKey,
+        tokenId: row.tokenId,
+        status: 'FAILED',
+        failureCode: 'TX_DROPPED',
+        txHash: row.mintTxHash,
+      });
     }
 
-    if (minted.length > 0) await write(minted, 'MINTED', null);
-    if (failed.length > 0) await write(failed, 'FAILED', null);
+    if (outcomes.length > 0) await write(outcomes, null);
   } catch (error) {
     logger.error('포카 훑기 실패 — 다음 주기에 다시 시도합니다', error);
   } finally {

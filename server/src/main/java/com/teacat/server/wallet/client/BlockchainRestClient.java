@@ -3,6 +3,8 @@ package com.teacat.server.wallet.client;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.exception.ErrorCode;
 import com.teacat.server.wallet.exception.WalletErrorCode;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,6 +32,7 @@ import java.util.Optional;
 public class BlockchainRestClient {
 
     private static final String INTERNAL_KEY_HEADER = "x-internal-key";
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final BlockchainProperties properties;
     private final RestClient restClient;
@@ -92,7 +95,7 @@ public class BlockchainRestClient {
             }
             log.error("블록체인 서비스 호출 실패 path={} status={} body={}",
                     path, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new BusinessException(onFailure);
+            throw apiException(e, onFailure);
         } catch (RuntimeException e) {
             log.error("블록체인 서비스 호출이 실패했습니다. path={}", path, e);
             throw new BusinessException(onFailure);
@@ -126,13 +129,26 @@ public class BlockchainRestClient {
             // 블록체인 서비스는 { code, message } 로 이유를 알려준다 (CHAIN_UNAVAILABLE 등)
             log.error("블록체인 서비스 호출 실패 path={} status={} body={}",
                     path, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new BusinessException(onFailure);
+            throw apiException(e, onFailure);
         } catch (BusinessException e) {
             throw e;
         } catch (RuntimeException e) {
             log.error("블록체인 서비스 호출이 실패했습니다. path={}", path, e);
             throw new BusinessException(onFailure);
         }
+    }
+
+    private BlockchainApiException apiException(RestClientResponseException exception, ErrorCode fallback) {
+        String code = null;
+        String message = null;
+        try {
+            JsonNode body = OBJECT_MAPPER.readTree(exception.getResponseBodyAsString());
+            code = body.path("code").isTextual() ? body.path("code").asText() : null;
+            message = body.path("message").isTextual() ? body.path("message").asText() : null;
+        } catch (RuntimeException | java.io.IOException ignored) {
+            // 응답이 JSON이 아니어도 기존 fallback 에러로 처리한다.
+        }
+        return new BlockchainApiException(fallback, code, message);
     }
 
     private void requireConfigured() {
