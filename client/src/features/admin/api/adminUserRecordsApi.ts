@@ -1,6 +1,6 @@
 import { http } from '@/shared/api';
 import type { CursorPage } from '@/shared/types';
-import type { Ticket } from '@/features/ticket';
+import { ticketApi } from '@/features/ticket';
 import type { MyPhotocard, PurchaseHistory, SaleHistory } from '@/features/nft';
 
 /**
@@ -20,8 +20,16 @@ export interface RecordPageParams {
 }
 
 export const adminUserRecordsApi = {
-  /** 예매 목록. 취소된 예매도 함께 옵니다 — 관리자는 "취소했다" 도 봐야 합니다 */
-  tickets: (userId: number) => http.get<Ticket[]>(`/admin/users/${userId}/tickets`),
+  /**
+   * 예매 목록. 취소된 예매도 함께 옵니다 — 관리자는 "취소했다" 도 봐야 합니다.
+   *
+   * 🔴 <b>`ticketApi.ofUser` 를 그대로 씁니다.</b> 티켓만 서버 필드 이름이 화면과 달라
+   * (`title`/`performanceDate`/`stadiumName` ↔ `concertTitle`/`startAt`/`venueName`)
+   * 어댑터를 거쳐야 합니다. 여기서 `http.get<Ticket[]>` 로 부르면 타입만 맞고 값이
+   * undefined 가 되어 날짜 포맷에서 터집니다 — 실제로 그렇게 냈습니다.
+   * 포카·거래는 서버 형태가 화면 형태와 같아 아래처럼 바로 부릅니다.
+   */
+  tickets: (userId: number) => ticketApi.ofUser(userId),
 
   /** 지금 보유한 포카. 판매 등록 중인 것도 아직 본인 소유라 함께 옵니다 */
   photocards: (userId: number, params: RecordPageParams) =>

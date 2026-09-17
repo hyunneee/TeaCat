@@ -1,4 +1,4 @@
-export { useMyTickets, useTicketDetail, useCancelTicket } from './hooks/useTickets';
+export { useMyTickets, useTicketDetail, useTicketQr, useCancelTicket } from './hooks/useTickets';
 export { TicketCard } from './components/TicketCard';
 export { TicketQr } from './components/TicketQr';
 export { ticketApi, ticketKeys } from './api/ticketApi';

@@ -3,9 +3,9 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { wrapCreateBrowserRouter } from '@sentry/react';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
-import { AppLayout, PlainLayout } from '@/shared/components/layout';
+import { AppLayout, PlainLayout, SearchLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
-import { RequireAuth, RequireFace, RequireCaptcha, RequireRole } from './guards';
+import { RequireAuth, RequireFace, RequireCaptcha, RequireQueue, RequireRole } from './guards';
 
 /* 페이지는 전부 lazy 로 나눕니다.
    티켓팅 오픈 순간의 첫 진입 속도가 곧 전환율입니다.
@@ -19,7 +19,6 @@ const SignupPage = page(() => import('@/pages/SignupPage'), 'SignupPage');
 const SignupDonePage = page(() => import('@/pages/SignupDonePage'), 'SignupDonePage');
 const FaceRegisterPage = page(() => import('@/pages/FaceRegisterPage'), 'FaceRegisterPage');
 const FaceDonePage = page(() => import('@/pages/FaceDonePage'), 'FaceDonePage');
-const FaceVerifyPage = page(() => import('@/pages/FaceVerifyPage'), 'FaceVerifyPage');
 
 const SearchPage = page(() => import('@/pages/SearchPage'), 'SearchPage');
 
@@ -27,6 +26,7 @@ const ConcertListPage = page(() => import('@/pages/ConcertListPage'), 'ConcertLi
 const ConcertDetailPage = page(() => import('@/pages/ConcertDetailPage'), 'ConcertDetailPage');
 
 const BookingVerifyPage = page(() => import('@/pages/BookingVerifyPage'), 'BookingVerifyPage');
+const QueueWaitingPage = page(() => import('@/pages/QueueWaitingPage'), 'QueueWaitingPage');
 const SectionSelectPage = page(() => import('@/pages/SectionSelectPage'), 'SectionSelectPage');
 const SeatSelectPage = page(() => import('@/pages/SeatSelectPage'), 'SeatSelectPage');
 const BookingReviewPage = page(() => import('@/pages/BookingReviewPage'), 'BookingReviewPage');
@@ -49,7 +49,9 @@ const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsP
 const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
+const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
+const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
@@ -78,6 +80,7 @@ const NotFoundPage = page(() => import('@/pages/NotFoundPage'), 'NotFoundPage');
 const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
+const AdminCheckInPage = page(() => import('@/pages/AdminCheckInPage'), 'AdminCheckInPage');
 const AdminUserDetailPage = page(
   () => import('@/pages/AdminUserDetailPage'),
   'AdminUserDetailPage',
@@ -269,6 +272,7 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
+                  { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
                   {
                     /* 개인정보 마스킹은 위 AdminLayout 의 withMask 가 이미 덮습니다 */
                     path: ROUTES.ADMIN_USER_DETAIL(':userId'),
@@ -327,6 +331,12 @@ const routes: RouteObject[] = [
     ],
   },
 
+  /* 모바일은 전체화면 검색, 데스크톱은 공통 상단 내비를 유지합니다. */
+  {
+    element: <SearchLayout />,
+    children: [{ path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) }],
+  },
+
   /* ══ 전체화면 (하단 탭 없음) ═════════════════════════════ */
   {
     element: <PlainLayout />,
@@ -343,9 +353,6 @@ const routes: RouteObject[] = [
          알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
       { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
 
-      /* 검색은 하단 탭 없이 화면을 꽉 씁니다 — 입력에 집중하고 뒤로가기로 나갑니다 */
-      { path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) },
-
       {
         element: <RequireAuth />,
         children: [
@@ -361,19 +368,20 @@ const routes: RouteObject[] = [
                   element: withMask(withBoundary(<FaceRegisterPage />)),
                 },
                 { path: ROUTES.FACE_DONE, element: withMask(withBoundary(<FaceDonePage />)) },
-                { path: ROUTES.FACE_VERIFY, element: withMask(withBoundary(<FaceVerifyPage />)) },
               ]
             : []),
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
+          { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
 
           {
             path: ROUTES.TICKET_DETAIL(':ticketId'),
             element: withMask(withBoundary(<TicketDetailPage />)),
           },
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
           { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
           { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
@@ -419,9 +427,12 @@ const routes: RouteObject[] = [
           },
 
           /* ── 예매 플로우 ──────────────────────────────────
-             봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료
+             봇 확인 → 대기실 → 구역 → 좌석 → 확인 → 결제 → 완료
              얼굴 등록(RequireFace)은 예매 진입 조건,
-             봇 확인 통과(RequireCaptcha)는 구역 선택부터의 조건입니다. */
+             봇 확인 통과(RequireCaptcha)는 대기실부터의 조건,
+             대기실 입장(RequireQueue)은 구역 선택부터의 조건입니다.
+             대기실 화면 자체는 RequireQueue 밖에 있어야 합니다 — 안에 두면 입장 전 사용자가
+             대기실로 보내지고, 대기실이 다시 자기 자신으로 보내는 고리가 됩니다. */
           {
             element: <RequireFace />,
             children: [
@@ -435,20 +446,29 @@ const routes: RouteObject[] = [
                 element: <RequireCaptcha />,
                 children: [
                   {
-                    path: ROUTES.BOOKING_SECTION(':scheduleId'),
-                    element: withBoundary(<SectionSelectPage />),
+                    path: ROUTES.BOOKING_WAITING(':scheduleId'),
+                    element: withBoundary(<QueueWaitingPage />),
                   },
                   {
-                    path: ROUTES.BOOKING_SEATS(':scheduleId'),
-                    element: withBoundary(<SeatSelectPage />),
-                  },
-                  {
-                    path: ROUTES.BOOKING_REVIEW(':scheduleId'),
-                    element: withMask(withBoundary(<BookingReviewPage />)),
-                  },
-                  {
-                    path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
-                    element: withMask(withBoundary(<PaymentPage />)),
+                    element: <RequireQueue />,
+                    children: [
+                      {
+                        path: ROUTES.BOOKING_SECTION(':scheduleId'),
+                        element: withBoundary(<SectionSelectPage />),
+                      },
+                      {
+                        path: ROUTES.BOOKING_SEATS(':scheduleId'),
+                        element: withBoundary(<SeatSelectPage />),
+                      },
+                      {
+                        path: ROUTES.BOOKING_REVIEW(':scheduleId'),
+                        element: withMask(withBoundary(<BookingReviewPage />)),
+                      },
+                      {
+                        path: ROUTES.BOOKING_PAYMENT(':scheduleId'),
+                        element: withMask(withBoundary(<PaymentPage />)),
+                      },
+                    ],
                   },
                 ],
               },

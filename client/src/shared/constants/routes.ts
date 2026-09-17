@@ -19,12 +19,9 @@ export const ROUTES = {
   FACE_REGISTER: '/face',
   /** 등록 성공 화면. 상단 알림 한 줄로는 "된 건가?" 가 남습니다. */
   FACE_DONE: '/face/done',
-  /**
-   * 본인 확인 (검증용) — 카메라 속 얼굴이 등록해 둔 얼굴과 같은 사람인지 대조합니다.
-   * 티켓 상세에서 들어오고, `state.from` 으로 돌아갈 곳을 받습니다.
-   * ⚠️ 아직 입장 처리가 아닙니다. 확인만 하고 티켓 상태는 바꾸지 않습니다.
-   */
-  FACE_VERIFY: '/face/verify',
+  /* 🔴 사용자용 "본인 확인" 화면은 없앴습니다 (예전 `/face/verify`).
+     확인만 하고 티켓 상태는 바꾸지 않는 **검증용 화면**이라 사용자가 할 일이 없었고,
+     진짜 본인 확인은 공연장 게이트에서 합니다 — `ADMIN_CHECK_IN`. */
 
   /* ── 검색 (공연 + 포토카드 한 화면) ── */
   SEARCH: '/search',
@@ -38,6 +35,11 @@ export const ROUTES = {
   /* ── 예매 플로우 ──
      공연상세 → 봇 확인 → 구역 → 좌석 → 확인 → 결제 → 완료 */
   BOOKING_VERIFY: (scheduleId: string) => `/booking/${scheduleId}/verify`,
+  /**
+   * 가상 대기실 (봇 확인 → **대기실** → 구역). 서버가 좌석 페이지 인원을 정원(5,000) 이하로 묶고,
+   * 넘치면 여기서 순번을 보며 기다립니다. 대기실이 꺼진 회차(기본)는 이 화면을 건너뜁니다.
+   */
+  BOOKING_WAITING: (scheduleId: string) => `/booking/${scheduleId}/waiting`,
   BOOKING_SECTION: (scheduleId: string) => `/booking/${scheduleId}/section`,
   BOOKING_SEATS: (scheduleId: string) => `/booking/${scheduleId}/seats`,
   BOOKING_REVIEW: (scheduleId: string) => `/booking/${scheduleId}/review`,
@@ -77,9 +79,13 @@ export const ROUTES = {
   MY_BIDS: '/my/bids',
   MY_NFTS: '/my/nfts',
   MY_NFT_TRADES: '/my/nfts/trades',
+  MY_NFT_SALES: '/my/nfts/sales',
 
-  /* ── 토큰 벌기 (컨텐츠 미정) ── */
+  /* ── 캣머니 ── */
   TOKEN: '/token',
+  /* 게임은 머리말만 남기고 화면을 꽉 쓰므로 잔액 화면과 **길을 나눕니다** —
+     마이페이지에서 잔액을 보러 눌렀는데 게임이 시작되면 안 됩니다. */
+  TOKEN_GAME: '/token/game',
 
   /* ── 마이페이지 ── */
   MY: '/my',
@@ -106,6 +112,8 @@ export const ROUTES = {
         `features/admin` 의 ADMIN_MENU 에 한 줄만 추가하면 됩니다. */
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
+  /** 게이트 입장 확인 — QR + 얼굴로 본인을 확인하고 입장 처리합니다 */
+  ADMIN_CHECK_IN: '/admin/check-in',
   /** 회원 상세 — 예매·포카를 탭으로 봅니다. 되돌릴 수 없는 동작도 여기에 모읍니다 */
   ADMIN_USER_DETAIL: (userId: string) => `/admin/users/${userId}`,
   MONITORING: '/admin/monitoring',

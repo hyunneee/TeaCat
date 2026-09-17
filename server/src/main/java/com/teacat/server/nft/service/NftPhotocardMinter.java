@@ -24,7 +24,7 @@ import java.util.List;
  * (blockchain/DESIGN.md 1장 예외). Spring 이 같은 컬럼을 또 쓰면 서로 덮어쓴다.
  *
  * <h3>재시도가 안전한 이유</h3>
- * {@code photocardKey} 가 {@code nft_photocards.id} 라 영구히 유일하고, 컨트랙트가 이미 발행된
+ * {@code photocardKey} 가 {@code nft_photocards.issue_key} 라 영구히 유일하고, 컨트랙트가 이미 발행된
  * 키를 <b>revert 가 아니라 건너뛴다.</b> 응답을 못 받아 다시 보내도 카드가 두 장 나가지 않는다.
  * 게다가 대상은 {@code PENDING} 행만이라, 이미 보낸 {@code MINTING} 은 다시 잡히지 않는다.
  */
@@ -74,9 +74,11 @@ public class NftPhotocardMinter {
      * <p>실패하면 예외가 그대로 나간다 — 부르는 쪽({@link NftPhotocardDrawService})이 삼키고
      * 카드는 PENDING 으로 남아 {@link #mintPendingDraws} 가 다음 주기에 다시 보낸다.
      */
-    public void mintDrawn(Long photocardId, Long designId, String address) {
+    public void mintDrawn(Long photocardId, String issueKey, Long designId,
+                          String chainTokenId, String address) {
         chainClient.issuePhotocards(List.of(
-                new IssueItem(photocardId.toString(), designId.toString(), address)));
+                new IssueItem(issueKey, chainTokenId, address,
+                        photocardId.toString(), designId.toString())));
         log.info("뽑기 포토카드 발행 요청 photocardId={}", photocardId);
     }
 
@@ -94,9 +96,11 @@ public class NftPhotocardMinter {
         for (List<PendingMintRow> batch : chunk(rows)) {
             List<IssueItem> items = batch.stream()
                     .map(row -> new IssueItem(
+                            row.issueKey(),
+                            row.chainTokenId().toPlainString(),
+                            row.address(),
                             row.photocardId().toString(),
-                            row.designId().toString(),
-                            row.address()))
+                            row.designId().toString()))
                     .toList();
 
             chainClient.issuePhotocards(items);

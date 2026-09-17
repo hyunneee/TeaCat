@@ -334,3 +334,17 @@ Sentry 가 부트 4 를 지원하면 그 클래스를 지우고 스타터로 갈
      ⚠️ 다만 **얼굴 삭제**는 티켓의 복사본을 남기므로, 고지의 "얼굴 삭제 요청 시" 부분은
         엄밀히는 "프로필에서 삭제" 입니다. 얼굴을 되살리기(`FEATURE.face = true`) 전에
         문구를 한 번 다듬는 게 좋습니다. 법률 자문이 아니므로 사람이 판단해야 합니다. 사용자 요청
+
+- 2026-09-17 **없는 경로·틀린 메서드를 500 으로 내보내지 않습니다** (3장 공통 예외 구조 — 0번 대상).
+  `GlobalExceptionHandler` 의 `@ExceptionHandler(Exception.class)` 가 스프링의
+  `NoResourceFoundException` 까지 삼켜서, **오타 하나·봇 스캔 하나가 전부 500** 이었습니다.
+  🔴 500 은 `log.error` 라서 그대로 **Sentry 이슈**가 되고(9장) `teacat.unexpected.error`
+     카운터도 같이 오릅니다. 그 카운터는 "1건도 알림 대상" 인 지표인데, `/.env`·`/wp-login.php`
+     같은 스캔이 하루 수백 건 섞여 들어오면 **진짜 장애를 가립니다.**
+  404(`NoResourceFoundException` · `NoHandlerFoundException`)와 405
+  (`HttpRequestMethodNotSupportedException`)를 따로 잡고, 로그는 `warn` 으로 낮췄습니다.
+  405 에는 `Allow` 헤더를 붙입니다.
+  ⚠️ 로그에 경로만 남기고 **쿼리스트링은 붙이지 않습니다** — 스캔 주소에 토큰·이메일이
+     실려 오는 일이 있고, `warn` 도 Sentry 이벤트의 빵부스러기로 올라갑니다(6장·9장).
+  어떤 예외가 실제로 오는지는 스프링이 정하므로 `NotFoundResponseIntegrationTests` 가
+  실제 요청을 흘려 확인합니다. 사용자 승인

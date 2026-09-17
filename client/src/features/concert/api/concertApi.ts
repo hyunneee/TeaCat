@@ -21,6 +21,11 @@ export const concertApi = {
   /** 공연 상세 (API-202) */
   detail: (concertId: string) => http.get<ConcertDetail>(`/concerts/${concertId}`),
 
+  recordView: (concertId: string, viewSession: string) =>
+    http.post<{ counted: boolean }>(`/concerts/${concertId}/views`, undefined, {
+      headers: { 'X-View-Session': viewSession },
+    }),
+
   /** 회차 단건 (API-203) */
   schedule: (scheduleId: string) => http.get<ScheduleDetail>(`/schedules/${scheduleId}`),
 

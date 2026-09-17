@@ -66,9 +66,11 @@ public class AdminBannerService {
 
         MainBanner banner = request.type() == MainBannerType.IMAGE
                 ? MainBanner.ofImage(request.title(), request.subtitle(), request.label(),
-                requireUploadedImage(request.imageKey()), request.linkPath(), sortOrder, request.active())
+                requireUploadedImage(request.imageKey()), request.imageFocusOrCenter(),
+                request.linkPath(), sortOrder, request.active())
                 : MainBanner.ofPerformance(request.title(), request.subtitle(), request.label(),
-                requirePerformance(request.performanceId()), sortOrder, request.active());
+                request.imageFocusOrCenter(), requirePerformance(request.performanceId()),
+                sortOrder, request.active());
 
         return toResponse(mainBannerRepository.save(banner));
     }
@@ -79,6 +81,7 @@ public class AdminBannerService {
         String previousImageKey = banner.getImageKey();
 
         banner.editText(request.title(), request.subtitle(), request.label());
+        banner.changeImageFocus(request.imageFocusOrCenter());
         banner.changeActive(request.active());
 
         if (request.type() == MainBannerType.IMAGE) {

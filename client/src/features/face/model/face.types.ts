@@ -16,38 +16,13 @@ export interface FaceEnrollRequest {
   modelVersion: string;
 }
 
-/**
- * 본인 확인 요청 — 등록과 같은 모양입니다. 여기서도 나가는 건 특징값뿐입니다.
- */
-export interface FaceVerifyRequest {
-  embedding: number[];
-  modelVersion: string;
-}
-
-/**
- * 본인 확인 결과.
- *
- * 🔴 **판정(`match`)은 서버가 합니다.** 저장된 임베딩은 브라우저로 내려오지 않고,
- *    화면은 서버가 준 답을 보여줄 뿐입니다. 프론트에서 점수를 다시 계산해
- *    판정하지 마세요 — 그러면 콘솔로 통과시킬 수 있습니다.
- */
-export interface FaceVerifyResult {
-  match: boolean;
-  /** 코사인 유사도. **검증 단계라서** 내려오는 값입니다 */
-  similarity: number;
-  /** 이 값 이상이면 같은 사람 */
-  threshold: number;
-}
+/* 🔴 대조(본인 확인) 타입은 여기 없습니다 — 공연장 게이트에서만 하고,
+   그 타입은 `features/checkin` 의 `model/checkIn.types.ts` 에 있습니다.
+   이 feature 는 **얼굴을 등록하는 것**까지만 압니다. */
 
 /** 품질 게이트에서 걸린 이유 */
 export type FaceQualityCode =
-  | 'NO_FACE'
-  | 'MANY_FACES'
-  | 'TOO_SMALL'
-  | 'OFF_CENTER'
-  | 'NOT_FRONTAL'
-  | 'BLURRY'
-  | 'TOO_DARK';
+  'NO_FACE' | 'MANY_FACES' | 'TOO_SMALL' | 'OFF_CENTER' | 'NOT_FRONTAL' | 'BLURRY' | 'TOO_DARK';
 
 export interface FaceQualityIssue {
   code: FaceQualityCode;

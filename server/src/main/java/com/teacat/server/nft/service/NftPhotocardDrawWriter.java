@@ -35,7 +35,7 @@ import java.util.UUID;
  *
  * <p><b>여기에는 외부 호출이 없다.</b> 체인은 {@link NftPhotocardDrawService} 가 커밋 뒤에 부른다.
  * 체인이 실패해도 이 트랜잭션은 되돌리지 않는다 — 카드 행은 이미 사용자 것이고
- * {@code photocardKey = nft_photocards.id} 라 재전송이 안전하다. 되돌리면 팩만 돌아오고 카드 행은 고아가 된다.
+ * {@code photocardKey = nft_photocards.issue_key} 라 재전송이 안전하다. 되돌리면 팩만 돌아오고 카드 행은 고아가 된다.
  *
  * <p>같은 {@code (user, key)} 가 <b>동시에</b> 두 번 오면 둘 다 조회에서 못 찾고 각자 팩을 잠근 뒤 커밋에서
  * {@code uq_nft_photocard_packs_idempotency} 에 걸린다. 그 예외는 밖으로 나가고 서비스가 잡아
@@ -62,7 +62,8 @@ public class NftPhotocardDrawWriter {
      *
      * @param replayed 같은 키의 이전 결과를 그대로 돌려준 것인가. true 면 체인에 다시 보내지 않는다
      */
-    public record DrawOutcome(Long photocardId, Long designId, String designName, String imageUrl,
+    public record DrawOutcome(Long photocardId, String issueKey, Long designId, String chainTokenId,
+                              String designName, String imageUrl,
                               String group, NftPhotocardGrade grade, LocalDateTime issuedAt,
                               String walletAddress, boolean replayed) {
     }
@@ -98,7 +99,8 @@ public class NftPhotocardDrawWriter {
         NftPhotocard photocard = photocardRepository.save(NftPhotocard.draw(design, owner, wallet.walletId()));
         pack.consume(photocard.getId(), key, LocalDateTime.now());
 
-        return new DrawOutcome(photocard.getId(), design.getId(), design.getName(), design.getImageUrl(),
+        return new DrawOutcome(photocard.getId(), photocard.getIssueKey(), design.getId(),
+                design.chainTokenIdOrLegacy().toPlainString(), design.getName(), design.getImageUrl(),
                 design.getGroupName(), design.getGrade(), photocard.getCreatedAt(),
                 wallet.address(), false);
     }
@@ -162,7 +164,8 @@ public class NftPhotocardDrawWriter {
         NftPhotocard photocard = photocardRepository.findById(pack.getPhotocardId())
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
         NftPhotocardDesign design = photocard.getDesign();
-        return new DrawOutcome(photocard.getId(), design.getId(), design.getName(), design.getImageUrl(),
+        return new DrawOutcome(photocard.getId(), photocard.getIssueKey(), design.getId(),
+                design.chainTokenIdOrLegacy().toPlainString(), design.getName(), design.getImageUrl(),
                 design.getGroupName(), design.getGrade(), photocard.getCreatedAt(),
                 null, true);
     }

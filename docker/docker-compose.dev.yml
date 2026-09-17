@@ -29,6 +29,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # CPU 상한. 이유는 아래 server 의 cpus 주석 참고.
+    # 부하 시 server 다음으로 많이 쓰는 게 DB 라 1 코어를 준다.
+    cpus: 1.0
+    cpu_shares: 512
     networks: [teacat-net]
     # 포트를 열지 않는다. DB 접속이 필요하면 SSH 터널을 쓴다.
 
@@ -46,6 +50,9 @@ services:
       retries: 10
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # CPU 상한. 이유는 아래 server 의 cpus 주석 참고
+    cpus: 0.25
+    cpu_shares: 512
     networks: [teacat-net]
 
   minio:
@@ -63,6 +70,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # CPU 상한. 이유는 아래 server 의 cpus 주석 참고
+    cpus: 0.25
+    cpu_shares: 512
     networks: [teacat-net]
 
   blockchain:
@@ -97,6 +107,9 @@ services:
       # CONTRACT_OPERATOR_PRIVATE_KEY 와 DRAW_SEED_SECRET 은 개인키·시드라
       # 니모닉과 같이 .env.dev.chain 에 두고 env_file 로 들어온다.
     mem_limit: 512m
+    # CPU 상한. 이유는 아래 server 의 cpus 주석 참고
+    cpus: 0.5
+    cpu_shares: 512
     networks: [teacat-net]
     # 포트를 열지 않는다. 마스터 니모닉을 쥔 프로세스라 server 만 내부에서 붙는다.
 
@@ -108,7 +121,13 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
-      blockchain: { condition: service_healthy }
+      # 🔴 service_healthy 로 두면 안 된다 — blockchain 은 server 가 Flyway 로
+      #    만드는 컬럼(nft_photocards 등)이 없으면 스스로 죽는다(fail-fast).
+      #    그 컬럼은 server 가 떠야 생기는데, server 가 blockchain healthy 를
+      #    기다리면 서로 상대를 기다리며 영원히 안 뜬다 (S15P21A402-190).
+      #    server 는 부팅 시점에 blockchain 을 호출하지 않고 런타임에만 쓰므로
+      #    컨테이너가 시작되기만 하면 충분하다.
+      blockchain: { condition: service_started }
     # .env.dev 에 적은 값이 그대로 들어간다. 스프링이 쓰는 이름으로 적으면
     # compose 를 안 고쳐도 된다 (JWT_SECRET, SSAFY_*, REFRESH_COOKIE_* 등).
     env_file:
@@ -159,10 +178,24 @@ services:
       # 🔴 이걸 빼면 기본값(http://localhost:8080/...)이 SSAFY 에 그대로 나가서
       #    로그인을 마친 사용자가 localhost 로 튕긴다. SSAFY 개발자센터에 등록한 주소와 같아야 한다
       SSAFY_REDIRECT_URI: https://dev.teacat.site/api/auth/oauth/ssafy/callback
+
+      # 가상 대기실 정원 (server/QUEUE_DESIGN.md 5장). 부하테스트로 잰 값이라 코드 밖에 둔다.
+      #   2026-09-17 재측정: 이 서버(cpus 1.5 · 좌석맵 1초 캐시)가 좌석 페이지 사용자 5,000명까지 처리했다.
+      #   .env.dev 에 QUEUE_CAPACITY 가 있으면 그 값, 없으면 5000
+      QUEUE_CAPACITY: ${QUEUE_CAPACITY:-5000}
     # 🔴 이 제한이 없으면 JVM 이 호스트 메모리(16G)의 75% 를 최대 힙으로 잡는다.
     #    Dockerfile 의 -XX:MaxRAMPercentage=75 가 cgroup 제한을 읽기 때문이다.
     #    운영까지 올리면 JVM 두 개가 각각 12G 를 노리게 된다.
     mem_limit: 2g
+    # 🔴 CPU 상한. 운영과 같은 EC2(t3.xlarge, 4 vCPU)를 나눠 쓰므로 개발 쪽 부하테스트가
+    #    운영 응답을 잡아먹지 않게 한다 (loadtest/k6/README.md).
+    #    - cpus       : 하드 캡. 개발 스택 전체 합이 3.5 지만 실제로는 server+postgres 가
+    #                   같이 뛰어 최대 2.5 정도라 운영 몫 1.5 코어 이상은 항상 남는다.
+    #    - cpu_shares : 경합 시 가중치(기본 1024). 개발을 512 로 낮춰 운영이 2:1 로 이긴다.
+    #                   유휴 CPU 는 그대로 쓸 수 있어 평소 성능은 달라지지 않는다.
+    #    JVM 은 cpus=1.5 를 availableProcessors=2 로 읽는다. 스레드풀 크기가 그만큼 줄어든다.
+    cpus: 1.5
+    cpu_shares: 512
     networks: [teacat-net]
     # 포트를 열지 않는다. nginx 가 /api 를 프록시한다.
 

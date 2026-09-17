@@ -4,6 +4,8 @@ import com.teacat.server.common.response.BaseResponse;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -11,6 +13,11 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.Set;
 
 @RestControllerAdvice
 @Slf4j
@@ -104,6 +111,59 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(BaseResponse.fail("%s 값의 형식이 올바르지 않습니다.".formatted(e.getName())));
+    }
+
+    /**
+     * 그런 경로가 없다 — 404.
+     *
+     * <p>🔴 이걸 포괄 핸들러에 맡기면 <b>500 이 나가고 Sentry 이슈가 열린다.</b> 인터넷에 열린
+     *    서버는 {@code /.env}, {@code /wp-login.php} 같은 스캔을 하루에도 수백 번 받는다.
+     *    그 전부가 "예상 못 한 예외" 로 집계되면 {@code teacat.unexpected.error} 카운터가
+     *    쓸모없어진다 — 1건도 알림 대상인 지표인데 봇 소리에 묻힌다.
+     *    프론트에 남은 옛 링크·오타 하나도 같은 이유로 장애 알림이 됐다.
+     *
+     * <p>두 예외를 같이 잡는다. 스프링은 남는 경로를 정적 리소스 핸들러에 맡기므로 보통
+     * {@link NoResourceFoundException} 이 오지만, 설정에 따라 {@link NoHandlerFoundException}
+     * 이 오는 경로도 있다. 둘은 공통 조상이 없어서 한 클래스로는 못 잡는다.
+     *
+     * <p>로그는 {@code warn} 이다 — {@code error} 는 그대로 Sentry 로 나간다(CLAUDE.md 9장).
+     * 경로만 남기고 쿼리스트링은 붙이지 않는다. 스캔 주소에는 토큰·이메일이 실려 오기도 한다.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<BaseResponse<Void>> handleNotFound(Exception e) {
+        log.warn("존재하지 않는 경로 요청: {}", requestPathOf(e));
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(BaseResponse.fail("요청한 경로를 찾을 수 없습니다."));
+    }
+
+    /**
+     * 경로는 맞지만 메서드가 다르다 — 405. (예: {@code POST /auth/login} 을 GET 으로 부름)
+     *
+     * <p>404 와 같은 이유로 여기서 잡는다. 포괄 핸들러에 맡기면 500 이 나가고, 이건
+     * <b>클라이언트가 고쳐야 하는 요청</b>이라 재시도로는 절대 풀리지 않는다.
+     *
+     * <p>{@code Allow} 헤더를 붙인다 — 스펙이 405 에 요구하는 헤더이고, 무엇으로 다시
+     * 불러야 하는지 알 수 있는 유일한 단서다.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
+        log.warn("허용되지 않은 메서드: {}", e.getMethod());
+
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> allowed = e.getSupportedHttpMethods();
+        if (allowed != null && !allowed.isEmpty()) {
+            response.allow(allowed.toArray(HttpMethod[]::new));
+        }
+
+        return response.body(BaseResponse.fail("허용되지 않은 요청 방식입니다."));
+    }
+
+    /** 두 404 예외는 공통 조상이 없어서 경로를 꺼내는 방법도 갈린다 */
+    private static String requestPathOf(Exception e) {
+        if (e instanceof NoResourceFoundException resource) return resource.getResourcePath();
+        if (e instanceof NoHandlerFoundException handler) return handler.getRequestURL();
+        return "(알 수 없음)";
     }
 
     /**

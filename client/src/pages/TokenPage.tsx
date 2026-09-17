@@ -1,21 +1,24 @@
-import { Coins, Construction } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Coins, Gamepad2 } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Card } from '@/shared/components/ui';
+import { Card, ListRow } from '@/shared/components/ui';
+import { ROUTES } from '@/shared/constants';
 import { useTokenBalance } from '@/features/token';
 
 /**
- * 토큰 벌기.
+ * 캣머니 — 잔액과 모으는 방법.
  *
- * ⚠️ 컨텐츠가 아직 정해지지 않았습니다 (순발력 미니게임? 출석 벌기?).
- * 잔액 조회와 화면 자리만 잡아두었습니다.
- * 기획이 확정되면 `features/token` 에 훅을 더하고 이 페이지는 조립만 하세요.
+ * 🔴 **여기서 바로 게임이 시작되지 않습니다.** 마이페이지에서 잔액을 보려고 누르는
+ * 자리라, 들어오자마자 판이 깔리면 잔액을 볼 수 없습니다. 게임은 `/token/game` 으로
+ * 길을 나눠 두었습니다 (`ROUTES.TOKEN_GAME`).
  */
 export function TokenPage() {
+  const navigate = useNavigate();
   const { data: token } = useTokenBalance();
 
   return (
     <>
-      <Header title="캣머니 벌기" showBack />
+      <Header title="캣머니" showBack />
 
       <div className="space-y-4 p-4">
         <Card className="flex flex-col items-center gap-2 py-8">
@@ -35,29 +38,23 @@ export function TokenPage() {
             <div className="border-line mt-3 w-full space-y-1 border-t pt-3 text-xs">
               <p className="flex justify-between">
                 <span className="text-muted">보유 총액</span>
-                <span className="tabular-nums font-semibold">
-                  {token.balance.toLocaleString()}
-                </span>
+                <span className="font-semibold tabular-nums">{token.balance.toLocaleString()}</span>
               </p>
               <p className="flex justify-between">
                 <span className="text-muted">경매 입찰로 묶임</span>
-                <span className="tabular-nums font-semibold">
-                  −{token.held.toLocaleString()}
-                </span>
+                <span className="font-semibold tabular-nums">−{token.held.toLocaleString()}</span>
               </p>
             </div>
           )}
         </Card>
 
-        <Card className="flex gap-3">
-          <Construction size={20} className="text-warning shrink-0" />
-          <div className="space-y-1 text-xs">
-            <p className="text-[0.8125rem] font-bold">캣머니 모으기는 준비 중이에요</p>
-            <p className="text-muted leading-relaxed">
-              곧 캣머니를 모을 수 있는 방법을 열어 드릴게요. 지금 가진 캣머니는 포토카드 마켓에서
-              카드를 사고파는 데 쓸 수 있어요.
-            </p>
-          </div>
+        <Card padded={false} className="overflow-hidden">
+          <ListRow
+            icon={<Gamepad2 size={18} />}
+            title="캣머니 게임하기"
+            description="포토카드 짝 맞추기"
+            onClick={() => navigate(ROUTES.TOKEN_GAME)}
+          />
         </Card>
       </div>
     </>

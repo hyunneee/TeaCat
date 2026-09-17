@@ -103,6 +103,18 @@ booking:
   hold:
     # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
     duration: ${BOOKING_HOLD_DURATION:10m}
+  seat-map:
+    cache:
+      # 좌석맵 응답을 이 시간만큼 재사용한다. 폴링 주기(3초)보다 **짧아야** 의미가 있다 —
+      #   3초를 넘기면 사용자가 보는 정보가 지금보다 낡아진다.
+      #   0 으로 두지 말 것. 캐시를 끄려는 것이면 코드를 되돌리는 게 맞다
+      #   (Caffeine 은 0 을 "즉시 만료" 로 받아 매 요청 미스 + 락 비용만 남는다).
+      # 🔴 무효화는 하지 않는다. 선점마다 지우면 오픈 피크에 효과가 170배 깎인다
+      #    (SeatMapCacheRepository 주석 참고).
+      ttl: ${BOOKING_SEAT_MAP_CACHE_TTL:1s}
+      # 캐시할 (회차 × 구역) 조합의 상한. 좌석 1만 석 스냅샷이 1~2MB 라 상한이 없으면
+      #   힙을 먹는다. 넘치면 오래된 것이 밀려나 미스가 늘 뿐 오답이 나오지는 않는다.
+      max-entries: ${BOOKING_SEAT_MAP_CACHE_MAX_ENTRIES:200}
   seat-generation:
     # 티켓 오픈 시각이 지난 회차의 누락 좌석을 멱등하게 생성한다.
     enabled: ${BOOKING_SEAT_GENERATION_ENABLED:true}
@@ -120,6 +132,23 @@ booking:
     #   🔴 카드팩 개봉 시각도 같은 값을 읽는다. 둘이 어긋나면 그 차이만큼
     #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
     cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
+
+# 가상 대기실 (server/QUEUE_DESIGN.md). 회차마다 관리자 API 로 켜고 끈다 — 기본은 전부 꺼져 있다.
+queue:
+  # 좌석 페이지 동시 사용자 정원. 부하테스트로 잰 값이라 코드가 아니라 여기 둔다.
+  #   2026-09-17 재측정: dev-server(CPU 1.5코어 · 좌석맵 1초 캐시)가 5,000명까지 처리했다.
+  #   서버를 늘리거나 캐시가 바뀌면 다시 재서 이 값만 바꾼다. 회차별 예외는 관리자 API 의 override.
+  capacity: ${QUEUE_CAPACITY:5000}
+  # 한 틱(admit-interval)에 들여보내는 최대 인원. 정원이 5,000 비어 있어도 한 번에 5,000명을
+  #   넣으면 좌석맵 첫 로드가 한꺼번에 몰린다. 200 이면 25초에 걸쳐 완만하게 찬다
+  max-per-tick: ${QUEUE_MAX_PER_TICK:200}
+  # 입장 후 무활동 이탈. 좌석·선점 API 를 부를 때마다 이만큼 연장된다.
+  #   좌석 고르다 잠깐 자리를 비우는 정도는 봐주고, 탭을 닫고 떠난 사람은 이 시간 뒤 빠진다
+  ttl: ${QUEUE_TTL:10m}
+  # 입장 관리자 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+  admit-interval: ${QUEUE_ADMIT_INTERVAL:PT1S}
+  # 입장 관리자 켬/끔. 테스트에서 끄고 runOnce 를 직접 부른다
+  admitter-enabled: true
 
 payment:
   toss:

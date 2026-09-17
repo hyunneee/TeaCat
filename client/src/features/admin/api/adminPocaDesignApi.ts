@@ -1,4 +1,5 @@
 import { http } from '@/shared/api';
+import { downscaleImage } from '@/shared/lib';
 import type {
   AdminPerformanceDrawPool,
   AdminPocaDesign,
@@ -16,16 +17,34 @@ import type {
  *   ① 템플릿 등록: 그림을 IPFS 에 한 번 올립니다 (수량 없음)
  *   ② 공연/이벤트 풀에 넣기: 그 템플릿을 **몇 장** 풀지 정합니다 → 온체인 카드가 됩니다
  */
+/**
+ * 카드 그림을 줄일 긴 변의 한도(px).
+ *
+ * 가장 크게 보이는 곳이 크게 보기(`PocaFullscreen`)이고, 앱 기둥이 30rem(480px)이라
+ * 카드 폭은 넉넉히 잡아도 330px 안팎입니다. 고해상도 화면(3배)까지 감당할 만큼만 둡니다.
+ * (공연 포스터와 같은 기준 — `features/organizer` 의 MAX_IMAGE_WIDTH)
+ *
+ * ⚠️ WebP 로 올려도 **치수가 크면 여전히 큽니다.** 형식이 아니라 픽셀 수가 전송량을 정합니다.
+ */
+const POCA_IMAGE_MAX_WIDTH = 1000;
+
 export const adminPocaDesignApi = {
   /* ── 템플릿 ─────────────────────────────────────────── */
 
   /** 감춘 템플릿은 내려오지 않습니다 */
   templates: () => http.get<AdminPocaTemplate[]>('/admin/photocard-templates'),
 
-  createTemplate: (body: AdminPocaTemplateCreateRequest) => {
+  createTemplate: async (body: AdminPocaTemplateCreateRequest) => {
+    /* 🔴 올리기 직전이 **유일하게 줄일 수 있는 지점**입니다.
+       서버는 형식과 용량(5MB)만 보고 그대로 IPFS 에 핀하고, CID 는 내용 주소라
+       한 번 올라가면 **다시 인코딩할 수 없습니다** — 체인에 박힌 값과 어긋납니다.
+       포스터·배너는 이미 이 처리를 거치는데(shared/lib/image.ts 주석의 18MB 사건)
+       카드 그림만 빠져 있었습니다. 그대로 두면 원본이 모든 사용자에게 영원히 나갑니다. */
+    const image = await downscaleImage(body.image, { maxWidth: POCA_IMAGE_MAX_WIDTH });
+
     const form = new FormData();
     form.append('name', body.name);
-    form.append('image', body.image);
+    form.append('image', image);
     form.append('group', body.group);
     form.append('grade', body.grade);
     if (body.description) form.append('description', body.description);

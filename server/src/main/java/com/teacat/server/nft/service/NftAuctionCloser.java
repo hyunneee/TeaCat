@@ -64,14 +64,12 @@ public class NftAuctionCloser {
         NftPhotocard photocard = photocardRepository.findByIdForUpdate(auction.getPhotocard().getId())
                 .orElseThrow(() -> new IllegalStateException("경매의 포토카드가 없다 auctionId=" + auctionId));
 
-        // 낙찰자의 담보를 확정한다. 최고 입찰 홀드는 밀리지 않았으므로 반드시 ACTIVE 여야 한다
-        if (!holdService.capture(CatMoneyHoldRefType.AUCTION_BID, winningBid.getId())) {
-            throw new IllegalStateException("최고 입찰의 홀드가 없거나 이미 끝났다 bidId=" + winningBid.getId());
-        }
-
-        photocard.transferTo(winner);
-        auction.soldTo(winner, winningBid.getAmount(), now);
-        tradeRepository.save(NftPhotocardTrade.fromAuction(auction, winner, winningBid.getAmount(), UUID.randomUUID()));
+        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
+                NftPhotocardTrade.pendingAuction(auction, winner, winningBid.getAmount(), UUID.randomUUID()));
+        trade.initializeSettlement(CatMoneyHoldRefType.AUCTION_BID, winningBid.getId());
+        holdService.holdIncoming(auction.getSeller().getId(), winningBid.getAmount(),
+                CatMoneyHoldRefType.NFT_TRADE_SELLER, trade.getId());
+        auction.startSettlement(winner, winningBid.getAmount(), now);
         auctionRepository.flush(); // 위 유찰 분기와 같은 이유
         log.info("경매 낙찰 auctionId={} winnerId={} price={}", auctionId, winner.getId(), winningBid.getAmount());
         return true;

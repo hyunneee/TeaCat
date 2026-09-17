@@ -4,9 +4,12 @@ import type { NftSort } from '../model/nft.model';
 import type {
   MarketPhotocard,
   MyPhotocard,
+  DrawPoolCard,
+  PhotocardArt,
   PhotocardDetail,
   PhotocardListing,
   PhotocardTradeHistory,
+  PhotocardViewResult,
   PocaDrawResult,
   PocaDrawStatus,
   PocaPackClaim,
@@ -31,6 +34,25 @@ export const nftApi = {
 
   detail: (photocardId: number) => http.get<PhotocardDetail>(`/photocards/${photocardId}`),
 
+  recordView: (photocardId: number, viewSession: string) =>
+    http.post<PhotocardViewResult>(`/photocards/${photocardId}/views`, undefined, {
+      headers: { 'X-View-Session': viewSession },
+    }),
+
+  /**
+   * 등록된 카드 그림 전체 (감춘 것 제외, 최신순).
+   * 커서가 없는 **단순 배열**입니다 — 도안 수가 많지 않습니다.
+   */
+  arts: () => http.get<PhotocardArt[]>('/photocard-templates'),
+
+  /**
+   * 도감에 깔 **전체 도안** (뽑기에서 나올 수 있는 카드).
+   *
+   * 🔴 내 카드가 아니라 도안 목록입니다 — 도감은 안 가진 칸도 그려야 합니다.
+   * 커서가 없는 단순 배열입니다(도안 수가 많지 않습니다).
+   */
+  drawPool: () => http.get<DrawPoolCard[]>('/photocard-designs/draw-pool'),
+
   /**
    * 포카 뽑기. **어떤 카드가 나오는지는 서버가 정합니다** — 응답을 그대로 연출합니다.
    * `Idempotency-Key` 로 재시도해도 한 장만 발행됩니다 (purchase 와 같은 규칙).
@@ -38,7 +60,7 @@ export const nftApi = {
   draw: (idempotencyKey: string) =>
     http.post<PocaDrawResult>('/photocards/draw', undefined, { idempotencyKey }),
 
-  /** 내 포카. `listed` 로 판매 중만 / 보관 중만 거를 수 있다 */
+  /** 내 포카. `listed` 로 고정가/경매 판매 중인 카드와 보관 중인 카드를 거를 수 있다 */
   mine: (params: PageParams & { listed?: boolean }) =>
     http.get<CursorPage<MyPhotocard>>('/users/me/photocards', { params }),
 
@@ -61,6 +83,19 @@ export const nftApi = {
       idempotencyKey,
     }),
 
+  tradeStatus: (tradeId: number) => http.get<PurchaseResult>(`/nft-trades/${tradeId}`),
+
+  /** 블록 확정까지 구매 버튼의 pending 상태를 유지한다. */
+  waitForTrade: async (trade: PurchaseResult): Promise<PurchaseResult> => {
+    let current = trade;
+    const terminal = ['COMPLETED', 'COMPENSATED', 'FAILED', 'MANUAL_REVIEW'];
+    for (let attempt = 0; attempt < 90 && !terminal.includes(current.status); attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+      current = await http.get<PurchaseResult>(`/nft-trades/${trade.tradeId}`);
+    }
+    return current;
+  },
+
   /** 판매 등록. `description` 은 선택입니다(서버 500자 제한) */
   list: (photocardId: number, body: { price: number; description?: string }) =>
     http.post<PhotocardListing>(`/photocards/${photocardId}/listing`, body),
@@ -82,6 +117,8 @@ export const nftKeys = {
   market: (keyword?: string, sort?: NftSort, performanceId?: number) =>
     [...nftKeys.all, 'market', keyword ?? '', sort ?? '', performanceId ?? 0] as const,
   detail: (photocardId: number) => [...nftKeys.all, 'detail', photocardId] as const,
+  arts: () => [...nftKeys.all, 'arts'] as const,
+  drawPool: () => [...nftKeys.all, 'draw-pool'] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
   drawAvailability: () => [...nftKeys.all, 'draw-availability'] as const,
   purchases: () => [...nftKeys.all, 'purchases'] as const,

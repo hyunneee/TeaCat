@@ -143,6 +143,15 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi queueApi() {
+        return GroupedOpenApi.builder()
+                .group("11-queue")
+                .displayName("가상 대기실")
+                .packagesToScan(BASE_PACKAGE + ".queue")
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi analyticsApi() {
         return GroupedOpenApi.builder()
                 .group("10-analytics")

@@ -406,7 +406,7 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         verify(ipfsPinService, never()).pinImage(any());
         // 메타데이터는 새로 핀했고 온체인 등록이 나갔다
         verify(ipfsPinService).pinJson(anyString(), any());
-        verify(chainClient).registerDesign(anyLong(), eq(20), anyString());
+        verify(chainClient).registerDesign(anyLong(), any(), eq(20), anyString());
     }
 
     @Test
@@ -778,7 +778,7 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         willReturn("bafyMETA_NEW").given(ipfsPinService).pinJson(anyString(), any());
         willReturn(new PhotocardDesignRegisterResult(
                 "PENDING", "0x" + "1".repeat(64), null, null, null))
-                .given(chainClient).registerDesign(anyLong(), anyInt(), anyString());
+                .given(chainClient).registerDesign(anyLong(), any(), anyInt(), anyString());
         willReturn("0xcontract").given(chainClient).photocardContractAddress();
     }
 

@@ -99,8 +99,13 @@ export function EmptyState({
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      /* 🔴 **올라오지 않고 페이드만 합니다.** 예전에는 `y: 10 → 0` 이었는데, 그 값이 0 에
+         닿는 순간 motion 이 `transform: none` 을 써넣습니다. 그러면 합성 레이어가 사라지면서
+         **글자가 한 번 다시 그려져** 끊겨 보였습니다 (QA: "다 올라오고 나서 한 번 끊김").
+         여기는 글자와 아이콘뿐이라 잃는 것이 없습니다 — 자세한 사정은 `staggerChildFade` 주석.
+         ⚠️ 움직임을 되살리려면 그 주석의 해결책을 먼저 읽으세요. */
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: 0.28 }}
       style={fill ? { minHeight: fill } : undefined}
       className={cn(

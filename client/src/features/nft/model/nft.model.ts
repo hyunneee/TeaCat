@@ -20,6 +20,7 @@ export const NFT_SORTS = [
   { value: 'RECENT', label: '최신순' },
   { value: 'PRICE_ASC', label: '낮은 가격순' },
   { value: 'PRICE_DESC', label: '높은 가격순' },
+  { value: 'VIEW_DESC', label: '조회순' },
 ] as const;
 
 export type NftSort = (typeof NFT_SORTS)[number]['value'];
@@ -155,13 +156,23 @@ export function groupPhotocards(cards: MyPhotocard[]): PhotocardGroup[] {
   const groups = new Map<string, PhotocardGroup>();
 
   for (const card of cards) {
-    const key = `${card.designName}|${card.listed}`;
+    const key = `${card.designName}|${card.marketType ?? ''}|${card.marketStatus ?? ''}`;
     const found = groups.get(key);
     if (found) found.count += 1;
     else groups.set(key, { card, count: 1 });
   }
 
   return [...groups.values()];
+}
+
+/** 내 포카 카드에 표시할 판매 상태. 서버의 실제 판매 방식과 정산 상태를 그대로 옮깁니다. */
+export function photocardMarketState(
+  card: MyPhotocard,
+): 'STORED' | 'LISTED' | 'AUCTION' | 'SETTLING' {
+  if (card.marketStatus === 'SETTLING') return 'SETTLING';
+  if (card.marketType === 'AUCTION') return 'AUCTION';
+  if (card.marketType === 'FIXED_PRICE' || card.listed) return 'LISTED';
+  return 'STORED';
 }
 
 /** 발행이 끝나지 않은 카드에만 한 줄. MINTED 면 null (아무것도 안 보임) */
