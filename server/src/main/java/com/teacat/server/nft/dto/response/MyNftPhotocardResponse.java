@@ -6,6 +6,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 public record MyNftPhotocardResponse(
         @Schema(description = "포토카드 ID") Long photocardId,
+        /* 🔴 도감이 "이 카드를 가졌나" 를 맞추는 열쇠다. 이름으로 맞추면 어드민이 도안 이름을
+           바꾸는 순간 도감의 보유 표시가 통째로 어긋난다 — 이름은 표시용일 뿐이다. */
+        @Schema(description = "도안 ID. 도감이 보유 여부를 이 값으로 맞춥니다", example = "11")
+        Long designId,
         @Schema(description = "도안명") String designName,
         @Schema(description = "이미지 URL") String imageUrl,
         @Schema(description = "공연명. 뽑기 카드는 null") String performanceTitle,

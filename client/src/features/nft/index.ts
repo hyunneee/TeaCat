@@ -1,6 +1,7 @@
 export {
   useNftMarket,
   usePhotocardArts,
+  usePocaDex,
   usePhotocardDetail,
   useClaimEventPack,
   useDrawAvailability,
@@ -12,6 +13,7 @@ export {
 } from './hooks/useNft';
 export { usePocaDraw, type DrawPhase } from './hooks/usePocaDraw';
 export { NftCard } from './components/NftCard';
+export { PocaDexCard } from './components/PocaDexCard';
 export { PocaArt } from './components/PocaArt';
 export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
@@ -25,6 +27,15 @@ export { PocaLiveCard } from './components/PocaLiveCard';
 export { PocaSpotlight } from './components/PocaSpotlight';
 export { PocaResultLine } from './components/PocaResultLine';
 export { nftApi, nftKeys } from './api/nftApi';
+export {
+  buildPocaDex,
+  filterPocaDex,
+  dexProgress,
+  DEX_ROLE_ALL,
+  DEX_ROLE_OPTIONS,
+  type DexRoleFilter,
+  type PocaDexEntry,
+} from './model/pocaDex.model';
 export {
   NFT_SORTS,
   DEFAULT_SORT,
@@ -57,6 +68,7 @@ export {
 } from './model/pocaDraw.model';
 export type {
   MarketPhotocard,
+  DrawPoolCard,
   PhotocardArt,
   MyPhotocard,
   PhotocardDetail,

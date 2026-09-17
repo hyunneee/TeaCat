@@ -268,8 +268,9 @@ public class NftService {
         List<NftMarketQueryRepository.OwnedRow> pageRows = takePage(rows, size);
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
-                        row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
+                        row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
+                        row.performanceTitle(), row.status(), row.listed(),
+                        row.groupName(), row.grade(), row.averagePrice()))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),

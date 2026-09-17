@@ -4,6 +4,7 @@ import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.ipfs.IpfsPinService;
 import com.teacat.server.nft.client.PhotocardNftMetadata;
 import com.teacat.server.nft.dto.request.NftPhotocardDesignCreateRequest;
+import com.teacat.server.nft.dto.response.NftDrawPoolCardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDesignResponse;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.exception.NftErrorCode;
@@ -12,6 +13,7 @@ import com.teacat.server.performance.repository.PerformanceGeneralRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -119,6 +121,23 @@ public class NftPhotocardDesignService {
     }
 
     /** 어드민이 보는 이벤트 풀 — 몇 종이 등록됐고 몇 장 남았나. 공연별 도안은 빠진다 */
+    /**
+     * 도감 목록 — <b>일반 사용자용</b>.
+     *
+     * <p>어드민의 {@link #getDrawPool()} 과 같은 행을 보지만 내려주는 것이 다르다
+     * ({@link NftDrawPoolCardResponse}) — 남은 수량·CID·체인 상태는 운영 정보다.
+     *
+     * <p>🔴 <b>공연 좌석에서 나오는 도안은 담기지 않는다</b>({@code performanceId IS NULL}).
+     * 그건 아직 열리지 않은 공연의 카드까지 도감에 미리 보여주는 셈이 되고, 역할
+     * 꼬리표({@code group})도 뽑기 풀 도안에만 붙어 있어 거를 방법이 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<NftDrawPoolCardResponse> getDrawPoolCards() {
+        return designRepository.findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc().stream()
+                .map(NftDrawPoolCardResponse::from)
+                .toList();
+    }
+
     public List<NftPhotocardDesignResponse> getDrawPool() {
         return designRepository.findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc().stream()
                 .map(NftPhotocardDesignResponse::from)

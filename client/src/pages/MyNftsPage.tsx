@@ -1,105 +1,130 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
+import { Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { useInfiniteScroll } from '@/shared/hooks';
 import {
-  NftCard,
+  DEX_ROLE_ALL,
+  DEX_ROLE_OPTIONS,
+  PocaDexCard,
   PocaPackTile,
-  groupPhotocards,
-  photocardSource,
+  dexProgress,
+  filterPocaDex,
   useDrawAvailability,
-  useMyPhotocards,
+  usePocaDex,
+  type DexRoleFilter,
 } from '@/features/nft';
 
+/**
+ * 내 포토카드 — **도감**.
+ *
+ * 가진 것만 늘어놓으면 "뭘 더 모아야 하는지" 를 알 수 없어서, 뽑기에 나오는 카드 전체를
+ * 깔고 그 위에 내가 가진 것을 얹습니다. 안 가진 칸은 물음표로 자리만 지킵니다
+ * (`PocaDexCard` 주석 — 그림을 아예 받지 않습니다).
+ *
+ * ⚠️ **공연 좌석에서 나온 카드는 도감에 없습니다.** 도감의 바탕이 뽑기 풀 도안이라서입니다 —
+ * 공연 카드까지 깔면 아직 열리지 않은 공연의 카드가 미리 보이고, 역할(코치·교육생·개발자)
+ * 꼬리표도 뽑기 풀 도안에만 붙어 거를 방법이 없습니다.
+ */
 export function MyNftsPage() {
   const navigate = useNavigate();
-  const {
-    data: cards,
-    isPending,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  } = useMyPhotocards();
+  const [keyword, setKeyword] = useState('');
+  const [role, setRole] = useState<DexRoleFilter>(DEX_ROLE_ALL);
+
+  const { entries, isPending, isError } = usePocaDex();
 
   /* 카드팩은 **서버가 남았다고 할 때만** 보입니다 — 다 쓴 팩이 남아 있으면
      눌러도 실패하는 칸이 됩니다. 응답 전에는 보여주지 않습니다(깜빡임 방지). */
   const { data: draw } = useDrawAvailability();
 
-  /* 카드도 카드팩도 없을 때만 빈 화면을 말합니다 — 팩이 있으면 할 일이 있는 화면이라
-     "없어요" 가 틀린 말이 됩니다 */
-  const nothing =
-    (cards ?? []).length === 0 &&
-    draw !== undefined &&
-    draw.remaining === 0 &&
-    draw.scheduled === 0;
-
-  const sentinel = useInfiniteScroll({
-    hasNext: !!hasNextPage,
-    isFetching: isFetchingNextPage,
-    onLoadMore: fetchNextPage,
-  });
-
-  /* 🔴 여기서 뜯지 않습니다 — 뽑기 화면으로 갈 뿐이고, 봉지를 끝까지 밀어야 실제로 뜯깁니다.
-     되돌릴 수 없는 동작 앞에 확인을 한 번 더 두는 자리가 이미 그 화면에 있는 셈입니다. */
-  const goToDraw = () => navigate(ROUTES.NFT_DRAW);
+  const visible = filterPocaDex(entries, { keyword, role });
+  /* 진행도는 **거르기 전 전체** 기준입니다 — 필터를 걸 때마다 "12/40" 이 "2/3" 으로
+     바뀌면 얼마나 모았는지를 알 수 없습니다 */
+  const progress = dexProgress(entries);
+  const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL;
 
   return (
     <>
       <Header title="내 포토카드" />
 
       <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
+        <div className="mb-4 flex items-center gap-2">
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onClear={() => setKeyword('')}
+            placeholder="카드 이름, 소속으로 검색"
+            leftIcon={<Search size={17} />}
+            type="search"
+            tone="contrast"
+          />
+          <Select
+            label="역할"
+            options={DEX_ROLE_OPTIONS}
+            value={role}
+            onChange={setRole}
+            className="shrink-0"
+          />
+        </div>
+
         {isPending ? (
-          <Loading label="포토카드를 불러오는 중" />
-        ) : nothing ? (
+          <Loading label="도감을 불러오는 중" />
+        ) : isError ? (
+          <EmptyState title="도감을 불러오지 못했어요" description="잠시 후 다시 시도해 주세요." />
+        ) : entries.length === 0 ? (
           <EmptyState
-            title="아직 보유한 포토카드가 없어요."
-            description="공연을 관람하거나 이벤트 카드팩을 열면 여기에 쌓입니다."
+            title="아직 모을 수 있는 카드가 없어요"
+            description="이벤트 카드팩이 열리면 여기에 도감이 생깁니다."
           />
         ) : (
           <>
-            <ul className="grid grid-cols-2 gap-3 lg:gap-4">
-              {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다 */}
-              {/* 🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다.
-                  한 칸으로 합치면 "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보여서
-                  산 팩이 사라진 것처럼 읽힙니다. 서버는 잠긴 팩이 있어도 열 수 있는 팩을
-                  정상적으로 꺼내 줍니다 — 하나가 잠겼다고 나머지가 막히지 않습니다. */}
-              {draw && draw.remaining > 0 && (
+            {/* 얼마나 모았는지가 이 화면의 첫 문장입니다 */}
+            <p className="text-muted mb-3 text-sm">
+              <span className="text-ink font-bold tabular-nums">{progress.owned}</span>
+              <span className="tabular-nums"> / {progress.total}</span> 장 모았어요
+            </p>
+
+            <ul className="grid grid-cols-3 gap-3 lg:grid-cols-5 lg:gap-4">
+              {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다.
+                  🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다. 한 칸으로 합치면
+                  "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보입니다.
+                  ⚠️ 검색·필터 중에는 감춥니다 — 거른 결과에 팩이 끼면 검색 결과로 읽힙니다. */}
+              {!searching && draw && draw.remaining > 0 && (
                 <li>
-                  <PocaPackTile count={draw.remaining} onClick={goToDraw} />
+                  <PocaPackTile count={draw.remaining} onClick={() => navigate(ROUTES.NFT_DRAW)} />
                 </li>
               )}
-
-              {draw && draw.scheduled > 0 && (
+              {!searching && draw && draw.scheduled > 0 && (
                 <li>
                   <PocaPackTile
                     count={draw.scheduled}
                     openAt={draw.nextOpenAt}
-                    onClick={goToDraw}
+                    onClick={() => navigate(ROUTES.NFT_DRAW)}
                   />
                 </li>
               )}
 
-              {/* 같은 도안은 한 칸으로 — 몇 장인지는 카드가 ×n 으로 알려 줍니다 */}
-              {groupPhotocards(cards ?? []).map(({ card, count }) => (
-                <li key={card.photocardId}>
-                  <NftCard
-                    photocardId={card.photocardId}
-                    designName={card.designName}
-                    imageUrl={card.imageUrl}
-                    performanceTitle={photocardSource(card.performanceTitle)}
-                    state={card.listed ? 'LISTED' : 'STORED'}
-                    count={count}
-                    onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+              {visible.map((entry) => (
+                <li key={entry.designId}>
+                  <PocaDexCard
+                    entry={entry}
+                    onOpen={(photocardId) => navigate(ROUTES.NFT_DETAIL(String(photocardId)))}
                   />
                 </li>
               ))}
             </ul>
+
+            {visible.length === 0 && (
+              <EmptyState
+                icon={Search}
+                title="찾는 카드가 없어요"
+                description="다른 이름이나 역할로 찾아보세요."
+              />
+            )}
           </>
         )}
-
-        <div ref={sentinel} aria-hidden className="h-px" />
-        {isFetchingNextPage && <Loading label="더 불러오는 중" />}
       </div>
     </>
   );

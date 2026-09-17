@@ -8,6 +8,7 @@ import { useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
 import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
+import { buildPocaDex } from '../model/pocaDex.model';
 
 const PAGE_SIZE = 20;
 
@@ -63,6 +64,39 @@ export function usePhotocardArts() {
        그림은 없어도 게임이 되므로(시드 SVG) 한 번 실패하면 바로 그쪽으로 갑니다. */
     retry: false,
   });
+}
+
+/**
+ * 도감 — 전체 도안 위에 내가 가진 것을 얹습니다.
+ *
+ * 🔴 **내 카드를 끝까지 받습니다.** 목록이 커서 페이지(20장)라, 첫 페이지만 보고 세면
+ * 21번째부터 가진 카드가 도감에서 "아직 없음" 으로 보입니다. 다 받을 때까지는
+ * `isPending` 을 유지해서 **모자란 장수를 잠깐이라도 보여주지 않습니다** —
+ * 도감에서 "×2 였는데 ×1 이 됐다" 는 버그로 읽힙니다.
+ */
+export function usePocaDex() {
+  const pool = useQuery({
+    queryKey: nftKeys.drawPool(),
+    queryFn: nftApi.drawPool,
+    staleTime: STALE_TIME.LONG,
+  });
+  const mine = useMyPhotocards();
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const entries = useMemo(
+    () => buildPocaDex(pool.data ?? [], mine.data ?? []),
+    [pool.data, mine.data],
+  );
+
+  return {
+    entries,
+    isPending: pool.isPending || mine.isPending || !!hasNextPage,
+    isError: pool.isError,
+  };
 }
 
 export function usePhotocardDetail(photocardId: number) {
