@@ -167,24 +167,14 @@ export function ConcertDetailPage() {
           </time>
         </section>
 
-        {/* 소개 — 회차보다 **먼저** 옵니다.
-            "이게 무슨 공연인지" 를 판단하기 전에 날짜를 고르라고 하면
-            위아래로 오가며 다시 읽게 됩니다. 읽고 나서 고르는 순서입니다.
-            소개는 글이 아니라 **세로로 긴 이미지 한 장**입니다 (관리자가 올린 상세 이미지). */}
-        {concert.detailImageUrl && (
-          <section>
-            <SectionTitle>공연 소개</SectionTitle>
-            <img
-              src={concert.detailImageUrl}
-              alt={`${concert.title} 상세 안내`}
-              loading="lazy"
-              draggable={false}
-              className="border-line w-full rounded-xl border"
-            />
-          </section>
-        )}
-
-        {/* 회차 */}
+        {/* 회차 — 소개보다 **먼저** 옵니다.
+            🔴 예전에는 소개가 위였습니다("읽고 나서 고르는 순서"). 그런데 소개는 글이
+               아니라 **세로로 긴 이미지 한 장**이라, 상세 이미지를 올린 공연에서는
+               예매 버튼이 화면 몇 개 아래로 밀려났습니다. 이 화면에 오는 사람 대부분은
+               이미 무슨 공연인지 알고 예매하러 옵니다 — 그 사람들에게 스크롤을
+               강요하는 대가가, 읽고 고르는 순서로 얻는 것보다 큽니다.
+               소개를 읽고 싶은 사람은 아래로 내리면 되고, 내려간 자리에서 되돌아올
+               필요는 없습니다(회차는 이미 지나온 자리입니다). */}
         <section>
           <SectionTitle>회차 선택</SectionTitle>
           {concert.schedules.length === 0 ? (
@@ -209,6 +199,20 @@ export function ConcertDetailPage() {
             />
           )}
         </section>
+
+        {/* 소개 — 관리자가 올린 **세로로 긴 이미지 한 장**입니다 (글이 아닙니다) */}
+        {concert.detailImageUrl && (
+          <section>
+            <SectionTitle>공연 소개</SectionTitle>
+            <img
+              src={concert.detailImageUrl}
+              alt={`${concert.title} 상세 안내`}
+              loading="lazy"
+              draggable={false}
+              className="border-line w-full rounded-xl border"
+            />
+          </section>
+        )}
 
         {/* 안내 */}
         <Card className="flex gap-3">
