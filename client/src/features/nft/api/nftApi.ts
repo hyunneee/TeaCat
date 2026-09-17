@@ -51,7 +51,7 @@ export const nftApi = {
   draw: (idempotencyKey: string) =>
     http.post<PocaDrawResult>('/photocards/draw', undefined, { idempotencyKey }),
 
-  /** 내 포카. `listed` 로 판매 중만 / 보관 중만 거를 수 있다 */
+  /** 내 포카. `listed` 로 고정가/경매 판매 중인 카드와 보관 중인 카드를 거를 수 있다 */
   mine: (params: PageParams & { listed?: boolean }) =>
     http.get<CursorPage<MyPhotocard>>('/users/me/photocards', { params }),
 

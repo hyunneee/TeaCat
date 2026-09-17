@@ -85,6 +85,9 @@ class NftServiceIntegrationTests {
     private NftService nftService;
 
     @Autowired
+    private NftTradeSettlementWriter settlementWriter;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -278,9 +281,41 @@ class NftServiceIntegrationTests {
         assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).isEmpty();
         assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
                 .isEmpty();
-        assertThat(nftService.getMyPhotocards(sellerId, null, null, 20).items())
-                .extracting(item -> item.photocardId())
-                .containsExactly(photocardId);
+        var sellerCard = nftService.getMyPhotocards(sellerId, null, null, 20).items().getFirst();
+        assertThat(sellerCard.photocardId()).isEqualTo(photocardId);
+        assertThat(sellerCard.listed()).isTrue();
+        assertThat(sellerCard.marketType().name()).isEqualTo("FIXED_PRICE");
+        assertThat(sellerCard.marketStatus().name()).isEqualTo("SETTLING");
+        assertThat(nftService.getPhotocard(photocardId, buyerId).listing().status().name())
+                .isEqualTo("SETTLING");
+    }
+
+    @Test
+    void 정산이_완료되면_구매자_보유_목록으로_소유권이_이동한다() {
+        Long sellerId = insertUser("seller@test.com", "판매자");
+        Long buyerId = insertUser("buyer@test.com", "구매자");
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "소유권 이동 포토카드", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        insertListing(photocardId, sellerId, 3_000L);
+
+        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
+        settlementWriter.catConfirmed(trade.tradeId());
+        settlementWriter.nftSubmitted(trade.tradeId(), null);
+        settlementWriter.complete(trade.tradeId());
+
+        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
+                .singleElement()
+                .satisfies(card -> {
+                    assertThat(card.photocardId()).isEqualTo(photocardId);
+                    assertThat(card.listed()).isFalse();
+                    assertThat(card.marketType()).isNull();
+                    assertThat(card.marketStatus()).isNull();
+                });
+        assertThat(nftService.getMyPhotocards(sellerId, null, null, 20).items()).isEmpty();
+        assertThat(nftService.getPurchaseHistory(buyerId, null, 20).items()).hasSize(1);
+        assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).hasSize(1);
     }
 
     @Test
@@ -775,8 +810,10 @@ class NftServiceIntegrationTests {
         Long unlistedCardId = insertPhotocard(designId, insertTicket(ownerId, fixture), ownerId);
         insertListing(listedCardId, ownerId, 100L);
 
-        assertThat(nftService.getMyPhotocards(ownerId, true, null, 20).items())
-                .extracting(item -> item.photocardId()).containsExactly(listedCardId);
+        var listed = nftService.getMyPhotocards(ownerId, true, null, 20).items();
+        assertThat(listed).extracting(item -> item.photocardId()).containsExactly(listedCardId);
+        assertThat(listed.getFirst().marketType().name()).isEqualTo("FIXED_PRICE");
+        assertThat(listed.getFirst().marketStatus().name()).isEqualTo("ACTIVE");
         assertThat(nftService.getMyPhotocards(ownerId, false, null, 20).items())
                 .extracting(item -> item.photocardId()).containsExactly(unlistedCardId);
     }

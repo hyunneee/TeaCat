@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Images,
   Receipt,
+  Search,
   ScanFace,
   Ticket,
 } from 'lucide-react';
@@ -41,7 +42,6 @@ import {
 } from '@/features/concert';
 import { AuctionCard, useAuctions } from '@/features/auction';
 import { NftCard, useNftMarket } from '@/features/nft';
-import { TrendingSearchInput } from '@/shared/search';
 import { RankBadge, usePopularConcerts, usePopularPhotocards } from '@/features/ranking';
 
 /**
@@ -110,7 +110,6 @@ export function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [marketMode, setMarketMode] = useState<MarketMode>('SHOP');
-  const [mobileSearch, setMobileSearch] = useState('');
   const { user, isLoggedIn } = useAuth();
   const { data: concerts, isPending } = useConcerts();
   const { data: banners, isPending: bannersPending } = useBanners();
@@ -211,15 +210,14 @@ export function HomePage() {
             <Logo size={26} markSize={39} invert />
           </span>
 
-          <TrendingSearchInput
-            value={mobileSearch}
-            onChange={setMobileSearch}
-            onSubmit={(value) => {
-              const q = value.trim();
-              navigate(q ? `${ROUTES.SEARCH}?q=${encodeURIComponent(q)}` : ROUTES.SEARCH);
-            }}
-            className="w-[min(62vw,18rem)]"
-          />
+          <button
+            type="button"
+            aria-label="통합 검색"
+            onClick={() => navigate(ROUTES.SEARCH)}
+            className="-mr-2 flex size-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10"
+          >
+            <Search size={26} strokeWidth={2.2} />
+          </button>
         </div>
       </header>
 
@@ -452,7 +450,10 @@ export function HomePage() {
             <Rail label="실시간 인기 공연" className="-mx-4 lg:mx-0">
               <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
                 {popularConcerts.map((concert) => (
-                  <li key={concert.concertId} className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}>
+                  <li
+                    key={concert.concertId}
+                    className={cn('w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
                     <motion.button
                       type="button"
                       onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
@@ -499,7 +500,10 @@ export function HomePage() {
             <Rail label="지금 가장 주목받는 포카" className="-mx-4 lg:mx-0">
               <ul className="flex w-max gap-3 px-4 pt-1 pb-2 lg:w-full lg:gap-4 lg:px-0">
                 {popularPhotocards.map((card) => (
-                  <li key={card.designId} className={cn('relative w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}>
+                  <li
+                    key={card.designId}
+                    className={cn('relative w-[8.5rem] shrink-0', RAIL_CARD_WIDTH)}
+                  >
                     <NftCard
                       photocardId={card.photocardId}
                       designName={card.designName}

@@ -227,16 +227,17 @@ public class NftAuctionQueryRepository {
         ));
     }
 
-    /** 포토카드 상세에 붙일 진행 중 경매 요약 */
+    /** 포토카드 상세에 붙일 진행 중 또는 온체인 정산 중인 경매 요약 */
     public Optional<AuctionSummaryRow> findActiveAuctionSummary(Long photocardId) {
         String sql = """
-                SELECT id, current_price, buy_now_price, bid_count, ends_at
+                SELECT id, status::text, current_price, buy_now_price, bid_count, ends_at
                   FROM nft_auctions
-                 WHERE photocard_id = :photocardId AND status = 'ACTIVE'
+                 WHERE photocard_id = :photocardId AND status IN ('ACTIVE', 'SETTLING')
                 """;
         return jdbcTemplate.query(sql, new MapSqlParameterSource("photocardId", photocardId),
                 (rs, rowNum) -> new AuctionSummaryRow(
                         rs.getLong("id"),
+                        NftAuctionStatus.valueOf(rs.getString("status")),
                         rs.getLong("current_price"),
                         (Long) rs.getObject("buy_now_price"),
                         rs.getInt("bid_count"),
@@ -269,7 +270,8 @@ public class NftAuctionQueryRepository {
                            NftAuctionStatus status, LocalDateTime endsAt, Long winnerId) {
     }
 
-    public record AuctionSummaryRow(Long auctionId, Long currentPrice, Long buyNowPrice, int bidCount,
+    public record AuctionSummaryRow(Long auctionId, NftAuctionStatus status,
+                                    Long currentPrice, Long buyNowPrice, int bidCount,
                                     LocalDateTime endsAt) {
     }
 }

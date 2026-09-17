@@ -72,7 +72,14 @@ export function usePhotocardDetail(photocardId: number) {
     queryKey: nftKeys.detail(photocardId),
     queryFn: () => nftApi.detail(photocardId),
     staleTime: STALE_TIME.SHORT,
-    refetchInterval: (query) => (query.state.data?.status === 'PENDING' ? MINT_POLL_MS : false),
+    refetchInterval: (query) => {
+      const card = query.state.data;
+      if (card?.status === 'PENDING') return MINT_POLL_MS;
+      if (card?.listing?.status === 'SETTLING' || card?.auction?.status === 'SETTLING') {
+        return MINT_POLL_MS;
+      }
+      return false;
+    },
     // URL 파라미터가 숫자가 아니면(`/nft/abc`) 부르지 않습니다. 화면은 에러 상태를 그립니다.
     enabled: Number.isInteger(photocardId) && photocardId > 0,
   });
@@ -83,9 +90,8 @@ export function useRecordPhotocardView(photocardId: number, enabled: boolean) {
   const record = useMutation({
     mutationFn: (id: number) => nftApi.recordView(id, getViewSessionId()),
     onSuccess: (result, id) => {
-      queryClient.setQueryData<PhotocardDetail>(
-        nftKeys.detail(id),
-        (current) => (current ? { ...current, viewCount: result.viewCount } : current),
+      queryClient.setQueryData<PhotocardDetail>(nftKeys.detail(id), (current) =>
+        current ? { ...current, viewCount: result.viewCount } : current,
       );
     },
   });
@@ -157,9 +163,11 @@ export function useMyPhotocards() {
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn,
-    /* 방금 뽑은 카드가 확정될 때까지만. 목록에 PENDING 이 하나도 없으면 멈춥니다 */
+    /* 민팅 또는 거래 정산이 끝날 때까지만 갱신합니다. 완료되면 스스로 멈춥니다. */
     refetchInterval: (query) =>
-      query.state.data?.pages.some((page) => page.items.some((c) => c.status === 'PENDING'))
+      query.state.data?.pages.some((page) =>
+        page.items.some((c) => c.status === 'PENDING' || c.marketStatus === 'SETTLING'),
+      )
         ? MINT_POLL_MS
         : false,
     select: (data) => data.pages.flatMap((page) => page.items),
@@ -218,6 +226,21 @@ export function useMyTrades() {
   };
 }
 
+/** 내 판매 내역 — 마이페이지의 독립 메뉴에서 판매 건만 확인합니다. */
+export function useMySales() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useInfiniteQuery({
+    queryKey: nftKeys.sales(),
+    queryFn: ({ pageParam }) => nftApi.sales({ cursor: pageParam, size: PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    select: (data) => data.pages.flatMap((page) => page.items),
+  });
+}
+
 /**
  * 거래가 끝나면 **카드 소유자와 캣머니 잔액**이 함께 바뀝니다.
  * 잔액은 별도 feature(`@/features/token`)가 들고 있으므로 그 키도 함께 무효화합니다.
@@ -235,22 +258,29 @@ function invalidateTrade() {
  */
 export function usePurchasePhotocard() {
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       photocardId,
       idempotencyKey,
     }: {
       photocardId: number;
       idempotencyKey: string;
-    }) => nftApi.purchase(photocardId, idempotencyKey).then(nftApi.waitForTrade),
+    }) => {
+      const trade = await nftApi.purchase(photocardId, idempotencyKey);
+      // 정산 시작 상태를 곧바로 보여주고, 소유권 이전 완료까지는 이어서 기다립니다.
+      invalidateTrade();
+      return nftApi.waitForTrade(trade);
+    },
     retry: false,
     onSuccess: (trade) => {
+      invalidateTrade();
       if (trade.status !== 'COMPLETED') {
-        toast.error(trade.status === 'COMPENSATED'
-          ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
-          : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.');
+        toast.error(
+          trade.status === 'COMPENSATED'
+            ? '포토카드 이전에 실패해 결제 금액을 돌려드렸어요.'
+            : '거래 확인이 지연되고 있어요. 잠시 후 거래 내역을 확인해 주세요.',
+        );
         return;
       }
-      invalidateTrade();
       toast.success('포토카드를 구매했어요.');
     },
     onError: (error) =>

@@ -106,10 +106,11 @@ export function NftDetailPage() {
   const mine = isOwner(card, user?.nickname);
   const listing = card.listing ?? null;
   const auction = card.auction ?? null;
+  const settling = listing?.status === 'SETTLING' || auction?.status === 'SETTLING';
   /* 살 수 있는지 판단하는 기준도 **쓸 수 있는 금액**입니다.
      총액으로 판단하면 경매에 묶인 돈까지 셈에 넣어 "살 수 있다" 고 해놓고 서버가 거절합니다. */
   const balance = token?.available ?? 0;
-  const affordable = listing !== null && balance >= listing.price;
+  const affordable = listing?.status === 'ACTIVE' && balance >= listing.price;
   const mintLabel = mintStatusLabel(card.status);
   const canSubmitListing =
     card.status === 'MINTED' && Number(price) > 0 && description.length <= 500;
@@ -178,8 +179,8 @@ export function NftDetailPage() {
               {auction ? (
                 <div className="surface-2 space-y-3 rounded-2xl p-4">
                   <div className="flex items-center gap-2">
-                    <Badge tone="live" size="md">
-                      경매 진행 중
+                    <Badge tone={auction.status === 'SETTLING' ? 'quiet' : 'live'} size="md">
+                      {auction.status === 'SETTLING' ? '거래 정산 중' : '경매 진행 중'}
                     </Badge>
                     <span className="text-subtle inline-flex items-center gap-0.5 text-sm">
                       <Gavel size={13} />
@@ -197,10 +198,19 @@ export function NftDetailPage() {
                     </p>
                   </div>
 
-                  <div className="border-line flex items-center justify-between border-t pt-3">
-                    <span className="text-muted text-sm">남은 시간</span>
-                    <AuctionCountdown endsAt={auction.endsAt} className="text-sm font-extrabold" />
-                  </div>
+                  {auction.status === 'ACTIVE' ? (
+                    <div className="border-line flex items-center justify-between border-t pt-3">
+                      <span className="text-muted text-sm">남은 시간</span>
+                      <AuctionCountdown
+                        endsAt={auction.endsAt}
+                        className="text-sm font-extrabold"
+                      />
+                    </div>
+                  ) : (
+                    <p className="border-line text-subtle border-t pt-3 text-sm">
+                      온체인 소유권 이전을 확인하고 있어요.
+                    </p>
+                  )}
 
                   <Button
                     fullWidth
@@ -223,6 +233,12 @@ export function NftDetailPage() {
                     </p>
                   ) : (
                     <p className="text-ink-muted mt-1 text-base font-medium">판매 중이 아닙니다</p>
+                  )}
+
+                  {listing?.status === 'SETTLING' && (
+                    <p className="text-subtle mt-2 text-sm">
+                      온체인 소유권 이전을 확인하고 있어요.
+                    </p>
                   )}
 
                   <p className="text-subtle mt-2 flex items-center gap-1.5 text-sm">
@@ -274,7 +290,7 @@ export function NftDetailPage() {
           {/* 파는 방법이 둘이라 **한 카드 안에서 고릅니다.**
               폼을 둘 다 펼쳐 놓으면 초록 버튼이 두 개가 되어 어느 쪽이 지금 할 일인지
               알 수 없습니다 (DESIGN.md 1장 — 한 화면에 primary 는 하나). */}
-          {mine && !listing && !auction && selling && (
+          {mine && !listing && !auction && !settling && selling && (
             <Card className="space-y-3">
               <span ref={sellFormRef} aria-hidden className="block scroll-mt-24" />
               <p className="text-sm font-bold">판매 등록</p>
@@ -358,7 +374,11 @@ export function NftDetailPage() {
 
       {!auction && (
         <BottomBar>
-          {mine ? (
+          {settling ? (
+            <p className="text-subtle text-center text-sm">
+              거래 정산 중입니다. 완료되면 자동으로 갱신돼요.
+            </p>
+          ) : mine ? (
             listing ? (
               <Button
                 variant="danger-ghost"

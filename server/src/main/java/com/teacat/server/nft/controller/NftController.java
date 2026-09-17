@@ -180,7 +180,7 @@ public class NftController {
 
     @Operation(
             summary = "내 NFT 포토카드 목록 조회",
-            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 판매 등록 여부를 필터링할 수 있습니다."
+            description = "인증 사용자가 현재 소유한 포토카드를 최신순 커서 기반으로 조회합니다. listed로 고정가 또는 경매 판매 진행 여부를 필터링할 수 있습니다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/users/me/photocards")

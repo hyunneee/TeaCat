@@ -51,7 +51,7 @@ export function AuctionDetailPage() {
   const { open } = useModal();
 
   const { data: auction, isPending, isError, refetch } = useAuctionDetail(auctionId);
-  const bids = useAuctionBids(auctionId);
+  const bids = useAuctionBids(auctionId, auction?.status === 'ACTIVE');
   const { data: token } = useTokenBalance();
   const { placeBid, isPending: bidding } = usePlaceBid(auctionId);
   const buyNow = useBuyNow(auctionId);
@@ -129,7 +129,7 @@ export function AuctionDetailPage() {
 
             <div className="border-line flex items-center justify-between border-t pt-3 text-sm">
               <span className="text-muted">시작가</span>
-              <span className="tabular-nums font-semibold">
+              <span className="font-semibold tabular-nums">
                 {auction.startPrice.toLocaleString()}
               </span>
             </div>
@@ -140,7 +140,7 @@ export function AuctionDetailPage() {
                   <Zap size={14} />
                   즉시구매가
                 </span>
-                <span className="tabular-nums font-semibold">
+                <span className="font-semibold tabular-nums">
                   {auction.buyNowPrice.toLocaleString()}
                 </span>
               </div>
@@ -181,11 +181,16 @@ export function AuctionDetailPage() {
               현재 최고 입찰자입니다.
             </p>
           )}
-          {running && viewer && !viewer.isSeller && !viewer.isTopBidder && viewer.myHighestBid != null && (
-            <p className="surface-2 text-muted rounded-2xl p-4 text-sm">
-              내 최고 입찰 {viewer.myHighestBid.toLocaleString()}캣머니 · 더 높은 입찰에 밀렸습니다.
-            </p>
-          )}
+          {running &&
+            viewer &&
+            !viewer.isSeller &&
+            !viewer.isTopBidder &&
+            viewer.myHighestBid != null && (
+              <p className="surface-2 text-muted rounded-2xl p-4 text-sm">
+                내 최고 입찰 {viewer.myHighestBid.toLocaleString()}캣머니 · 더 높은 입찰에
+                밀렸습니다.
+              </p>
+            )}
 
           {/* 이 카드가 어떤 포카인지 궁금하면 상세로. 출처와 발행 정보는 거기 있습니다 */}
           <button

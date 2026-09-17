@@ -120,11 +120,12 @@ public class NftService {
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));
         NftPhotocardDetailResponse.Listing listing = row.listingId() == null ? null
                 : new NftPhotocardDetailResponse.Listing(
-                        row.listingId(), row.price(), row.sellerDescription(), row.listedAt());
+                        row.listingId(), row.listingStatus(), row.price(),
+                        row.sellerDescription(), row.listedAt());
         // 진행 중 경매는 부분 인덱스(uq_nft_auctions_active) 를 타는 단건 조회다
         NftPhotocardDetailResponse.Auction auction = auctionQueryRepository.findActiveAuctionSummary(photocardId)
                 .map(summary -> new NftPhotocardDetailResponse.Auction(
-                        summary.auctionId(), summary.currentPrice(), summary.buyNowPrice(),
+                        summary.auctionId(), summary.status(), summary.currentPrice(), summary.buyNowPrice(),
                         summary.bidCount(), summary.endsAt()))
                 .orElse(null);
 
@@ -305,7 +306,12 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                        row.status(), row.listed(), row.groupName(), row.grade(), row.averagePrice()))
+                        row.status(), row.listed(),
+                        row.marketType() == null ? null
+                                : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
+                        row.marketStatus() == null ? null
+                                : MyNftPhotocardResponse.MarketStatus.valueOf(row.marketStatus()),
+                        row.groupName(), row.grade(), row.averagePrice()))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),

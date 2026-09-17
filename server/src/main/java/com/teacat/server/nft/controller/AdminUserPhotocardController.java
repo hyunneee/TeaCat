@@ -45,7 +45,7 @@ public class AdminUserPhotocardController {
     @GetMapping
     public ResponseEntity<BaseResponse<NftCursorPageResponse<MyNftPhotocardResponse>>> getUserPhotocards(
             @Parameter(description = "회원 ID", example = "42") @PathVariable Long userId,
-            @Parameter(description = "판매 등록 여부로 거르기. 비우면 전체") @RequestParam(required = false) Boolean listed,
+            @Parameter(description = "고정가 또는 경매 판매 진행 여부로 거르기. 비우면 전체") @RequestParam(required = false) Boolean listed,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") Integer size) {
         return ResponseEntity.ok(BaseResponse.success(
