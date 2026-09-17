@@ -1,6 +1,7 @@
 package com.teacat.server.banner.dto.response;
 
 import com.teacat.server.banner.entity.MainBanner;
+import com.teacat.server.banner.entity.MainBannerImageFocus;
 import com.teacat.server.banner.entity.MainBannerType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -31,6 +32,9 @@ public record AdminBannerResponse(
         @Schema(description = "업로드한 이미지 key. 공연 배너면 null")
         String imageKey,
 
+        @Schema(description = "그림에서 보여줄 부분", example = "CENTER")
+        MainBannerImageFocus imageFocus,
+
         @Schema(description = "연결된 공연 ID. 이미지 배너면 null", example = "3")
         Long performanceId,
 
@@ -59,6 +63,7 @@ public record AdminBannerResponse(
                 banner.getLabel(),
                 imageUrl,
                 banner.getImageKey(),
+                banner.getImageFocus(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getId(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getTitle(),
                 banner.getLinkPath(),
