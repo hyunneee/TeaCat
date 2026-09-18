@@ -38,7 +38,7 @@ export function CheckInResultCard({ result }: Props) {
         <p className="text-muted text-sm">
           {passed
             ? `${result.ticket.holderNickname} 님 · ${result.checkedInAt ? formatDateTime(result.checkedInAt) : ''}`
-            : '다시 찍거나 다른 방법으로 확인해 주세요.'}
+            : '조명이 밝은 곳에서 정면으로 다시 찍어보세요.'}
         </p>
       </div>
 
