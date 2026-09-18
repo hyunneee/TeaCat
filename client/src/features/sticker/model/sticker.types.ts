@@ -70,5 +70,60 @@ export interface Stroke {
 /** 서버로 보내는 낙서의 한 변 길이. 워커가 어차피 여백을 자르고 이 크기로 맞춥니다 */
 export const DOODLE_EXPORT_SIZE = 1024;
 
+/* ───────────────────────── 서버 계약 (구현 계획 0-1 · 설계 6-1) ─────────────────────────
+   서버가 아직 없어 이 타입이 **계약의 기준**입니다. 목업(mocks/handlers/sticker.ts)도 이 모양으로 응답합니다. */
+
+/** 생성 작업 상태. 워커가 집어가면 RUNNING, 결과가 올라오면 DONE */
+export type StickerJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+
+/** 만들어진 스티커 한 장. DONE 이 되는 순간 서버가 만들어 두므로 따로 "저장" 요청이 없습니다 */
+export interface Sticker {
+  id: number;
+  /** 투명 PNG (presigned URL, 배너와 같은 패턴) */
+  imageUrl: string;
+  createdAt: string;
+}
+
+export interface StickerJob {
+  jobId: number;
+  status: StickerJobStatus;
+  /** DONE 일 때만 */
+  sticker?: Sticker;
+  /** FAILED 일 때만. 화면에 그대로 보여줄 문장이 아니라 코드 */
+  failReason?: string;
+}
+
+/**
+ * 생성 요청. 🔴 파일이 아니라 **캔버스가 만든 PNG 의 base64** 입니다 (구현 계획 3-0).
+ * `subject` 는 재시도 때만, 20자 — 서버도 같은 길이로 막습니다 (설계 9-2).
+ */
+export interface CreateStickerRequest {
+  sketchBase64: string;
+  subject?: string;
+  /** "다시 만들기" 는 seed 를 바꿔 같은 낙서로 다른 결과를 냅니다 */
+  seed?: number;
+}
+
+export interface CreateStickerResponse {
+  jobId: number;
+  /** 오늘 더 만들 수 있는 장수 (일일 상한 5, 설계 9-1) */
+  remainingToday: number;
+}
+
+/** 오늘 몫. 화면이 "오늘 N장 남음" 을 보여줄 때 씁니다 */
+export interface StickerQuota {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+/** 서버가 일일 상한에서 내는 에러 코드 (429) */
+export const STICKER_ERROR = {
+  DAILY_LIMIT: 'STICKER_DAILY_LIMIT',
+} as const;
+
+/** 주제 입력 상한 (설계 9-2) */
+export const SUBJECT_MAX = 20;
+
 /** 되돌리기 스택 상한 (설계 5-3). 마우스 낙서는 이보다 길어지지 않습니다 */
 export const MAX_UNDO = 50;

@@ -156,6 +156,7 @@ export const ROUTES = {
    * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
    */
   DEV_STICKER: '/dev/sticker',
+  DEV_MY_STICKERS: '/dev/stickers',
 
   NOT_FOUND: '*',
 } as const;
