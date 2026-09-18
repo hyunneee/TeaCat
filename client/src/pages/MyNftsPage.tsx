@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Input, Select } from '@/shared/components/ui';
+import { Button, Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import {
   DEX_ROLE_ALL,
   DEX_ROLE_OPTIONS,
@@ -52,7 +52,23 @@ export function MyNftsPage() {
 
   return (
     <>
-      <Header title="내 포토카드" />
+      {/* 포카 꾸미기(AI 스티커) 진입점은 이 버튼 하나입니다 (구현 계획 1-3).
+          `FEATURE.sticker` 가 꺼지면 버튼도 라우트도 없습니다. */}
+      <Header
+        title="내 포토카드"
+        right={
+          FEATURE.sticker ? (
+            <Button
+              variant="soft"
+              size="sm"
+              leftIcon={<Sparkles size={15} />}
+              onClick={() => navigate(ROUTES.STICKER_CREATE)}
+            >
+              포카 꾸미기
+            </Button>
+          ) : undefined
+        }
+      />
 
       <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
         {/* 🔴 검색창과 드롭다운을 **같은 높이의 한 벌**로 둡니다. 예전에는 Select 가

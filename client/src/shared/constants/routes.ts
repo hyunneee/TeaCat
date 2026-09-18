@@ -81,6 +81,14 @@ export const ROUTES = {
   MY_NFT_TRADES: '/my/nfts/trades',
   MY_NFT_SALES: '/my/nfts/sales',
 
+  /* ── AI 스티커 (포카 꾸미기) ──
+     진입은 내 포카(`MY_NFTS`) 머리말의 "포카 꾸미기" 버튼 하나입니다.
+     `FEATURE.sticker` 가 꺼져 있으면 라우트도 버튼도 등록되지 않습니다. */
+  /** 그리기 → 만들기. 정적 경로라 `:id` 류보다 먼저 매칭됩니다 */
+  STICKER_CREATE: '/my/stickers/new',
+  /** 내가 만든 스티커 목록 */
+  MY_STICKERS: '/my/stickers',
+
   /* ── 캣머니 ── */
   TOKEN: '/token',
   /* 게임은 머리말만 남기고 화면을 꽉 쓰므로 잔액 화면과 **길을 나눕니다** —
@@ -142,6 +150,13 @@ export const ROUTES = {
    * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
    */
   DEV_FACE: '/dev/face',
+  /**
+   * 개발용 포카 꾸미기 미리보기 — 로그인 가드 밖에서 그림판을 봅니다.
+   * 백엔드가 안 닿는 곳(집·캠퍼스 밖)에서 화면 작업을 하기 위한 길입니다.
+   * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
+   */
+  DEV_STICKER: '/dev/sticker',
+  DEV_MY_STICKERS: '/dev/stickers',
 
   NOT_FOUND: '*',
 } as const;

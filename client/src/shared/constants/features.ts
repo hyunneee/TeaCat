@@ -1,3 +1,5 @@
+import { IS_DEV_BUILD } from '@/shared/config';
+
 /**
  * 배포 단계에 따라 **닫아 두는 기능**들.
  *
@@ -13,6 +15,16 @@
  *    닫아야 하는 기능이라면 서버에서도 함께 막아야 합니다.
  */
 export const FEATURE = {
+  /**
+   * AI 스티커 — 포카 꾸미기 (`features/sticker`). 내 포카 머리말의 "포카 꾸미기" 버튼과
+   * `/my/stickers/*` 라우트가 이 값 하나로 함께 열리고 닫힙니다.
+   *
+   * ── 지금은 **개발 빌드에서만** 켜져 있습니다 ─────────────────
+   * 만드는 중이라 `dev` 에 머지돼도 배포본에는 길이 나지 않습니다. 다 만들어지면
+   * `true` 로 바꿉니다. 서버 API 가 없는 동안은 `mocks/handlers/sticker.ts` 가 응답합니다.
+   */
+  sticker: IS_DEV_BUILD,
+
   /**
    * 얼굴 등록·본인확인 (`features/face`).
    *
