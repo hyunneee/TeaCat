@@ -124,7 +124,7 @@ public class AdminUserService {
                 request.role()));
 
         if (request.role() == UserRole.USER) {
-            walletService.provision(user);
+            walletService.requestProvision(user);
         }
 
         log.info("관리자가 회원을 생성했습니다. userId={} role={}", user.getId(), user.getRole());

@@ -64,6 +64,23 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks: [teacat-net]
 
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: prod-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?.env.prod 에 넣으세요}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?.env.prod 에 넣으세요}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    # 관리 UI(15672)는 외부에 열지 않는다. 필요하면 ssh 포트포워딩으로 본다
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_port_connectivity']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks: [teacat-net]
+
   minio:
     image: minio/minio
     container_name: prod-minio
@@ -139,6 +156,7 @@ services:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
       # 🔴 service_healthy 로 두면 안 된다 — blockchain 은 server 가 Flyway 로
       #    만드는 컬럼(nft_photocards 등)이 없으면 스스로 죽는다(fail-fast).
       #    그 컬럼은 server 가 떠야 생기는데, server 가 blockchain healthy 를
@@ -165,6 +183,10 @@ services:
       SPRING_DATA_REDIS_HOST: prod-redis
       SPRING_DATA_REDIS_PORT: '6379'
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SPRING_RABBITMQ_HOST: prod-rabbitmq
+      SPRING_RABBITMQ_PORT: '5672'
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
 
       # 🔴 개발과 다른 값을 쓴다. 같으면 개발에서 발급한 토큰이 운영에서도 통한다.
       JWT_SECRET: ${JWT_SECRET:?32바이트 이상}
@@ -257,4 +279,5 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
   minio_data:

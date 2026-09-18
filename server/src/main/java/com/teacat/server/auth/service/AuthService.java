@@ -35,8 +35,8 @@ public class AuthService {
     /**
      * 회원가입 (API-101).
      *
-     * 회원 생성과 지갑 발급(1,500 CAT 지급 포함)을 한 트랜잭션으로 처리한다.
-     * 지갑 발급이 실패하면 회원 생성도 함께 롤백되어 사용자가 다시 가입할 수 있다.
+     * 회원을 만들고 지갑 발급 요청을 남긴다. 지갑(1,500 CAT 포함)은 커밋 뒤 큐에서 만들어지므로
+     * 가입 응답은 블록체인 서비스 속도와 무관하다 (WalletService 주석 참고).
      */
     @Transactional
     public SignupResponse signup(SignupRequest request) {
@@ -60,8 +60,8 @@ public class AuthService {
            (Face.DEFAULT_MODEL_VERSION 주석). 나중에 진짜로 등록하면 덮어쓴다. */
         user.registerFace(Face.defaultFace());
 
-        // 실패하면 예외가 올라가 회원 생성까지 롤백된다
-        walletService.provision(user);
+        // 지갑은 커밋 뒤 큐에서 만든다. 여기서는 발급 요청 행만 남긴다
+        walletService.requestProvision(user);
 
         return SignupResponse.from(user);
     }
