@@ -80,12 +80,47 @@ async function timed(path, body) {
 const signup = (u) => timed('/auth/signup', u);
 const login = (u) => timed('/auth/login', { email: u.email, password: u.password });
 
+/**
+ * 가입 응답 뒤 지갑이 실제로 준비되기까지.
+ *
+ * 지갑이 없으면 잔액 조회가 409 WALLET_010(준비 중)을 돌려준다. 로그인해서 토큰을 받고
+ * 409 가 아닌 첫 응답이 올 때까지 폴링한다. 기준 시각은 가입 응답을 받은 순간이다.
+ * RabbitMQ 적용 전에는 가입 응답 시점에 이미 지갑이 있어 0 에 가깝고, 적용 후에는 큐를 거친 시간이 된다.
+ * 로그인 왕복(~100ms)이 포함되므로 그 아래로는 분해되지 않는다.
+ */
+async function waitWalletReady(u, signedUpAt, { pollMs = 100, timeoutMs = 15000 } = {}) {
+  let token = null;
+  try {
+    const res = await fetch(`${BASE}/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: u.email, password: u.password }),
+    });
+    token = (await res.json())?.data?.accessToken ?? null;
+  } catch { /* 아래에서 실패로 기록 */ }
+  if (!token) return { ms: NaN, status: -1, code: 'LOGIN_FAILED' };
+
+  let polls = 0;
+  while (performance.now() - signedUpAt < timeoutMs) {
+    polls++;
+    let status = 0; let code = null;
+    try {
+      const res = await fetch(`${BASE}/users/me/balance`, { headers: { Authorization: `Bearer ${token}` } });
+      status = res.status;
+      try { code = JSON.parse(await res.text())?.code ?? null; } catch { /* 무시 */ }
+    } catch { status = -1; }
+    if (status !== 409) return { ms: performance.now() - signedUpAt, status, code, polls };
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  return { ms: NaN, status: 409, code: 'TIMEOUT', polls };
+}
+
 function stats(samples, okStatus) {
-  const ok = samples.filter((s) => s.status === okStatus);
+  const isOk = typeof okStatus === 'function' ? okStatus : (s) => s.status === okStatus;
+  const ok = samples.filter((s) => isOk(s) && Number.isFinite(s.ms));
   const ms = ok.map((s) => s.ms).sort((a, b) => a - b);
   const pct = (p) => (ms.length ? ms[Math.min(ms.length - 1, Math.ceil((p / 100) * ms.length) - 1)] : null);
   const failures = {};
-  for (const s of samples) if (s.status !== okStatus) failures[`${s.status}${s.code ? ':' + s.code : ''}`] = (failures[`${s.status}${s.code ? ':' + s.code : ''}`] ?? 0) + 1;
+  for (const s of samples) if (!isOk(s)) failures[`${s.status}${s.code ? ':' + s.code : ''}`] = (failures[`${s.status}${s.code ? ':' + s.code : ''}`] ?? 0) + 1;
   return {
     n: samples.length,
     ok: ok.length,
@@ -115,12 +150,21 @@ async function main() {
   // 1. 순차 가입
   const created = [];
   const seqSamples = [];
+  const readySamples = [];
   for (let i = 0; i < SEQ; i++) {
     const u = newUser();
     const s = await signup(u);
-    if (s.status === 201) created.push(u);
+    const signedUpAt = performance.now();
     seqSamples.push(s);
-    process.stdout.write(`\r  sequential ${i + 1}/${SEQ}  last=${s.ms.toFixed(0)}ms status=${s.status}   `);
+    if (s.status === 201) {
+      created.push(u);
+      // 가입 직후 바로 지갑 준비를 기다린다. 한 건씩이라 다음 가입에 부하를 얹지 않는다
+      const r = await waitWalletReady(u, signedUpAt);
+      readySamples.push(r);
+      process.stdout.write(`\r  sequential ${i + 1}/${SEQ}  signup=${s.ms.toFixed(0)}ms  wallet-ready=${Number.isFinite(r.ms) ? r.ms.toFixed(0) + 'ms' : r.code}   `);
+    } else {
+      process.stdout.write(`\r  sequential ${i + 1}/${SEQ}  signup FAILED status=${s.status} ${s.code ?? ''}   `);
+    }
   }
   console.log();
 
@@ -161,11 +205,13 @@ async function main() {
     emailPattern: `bench-${RUN_ID}-%@teacat-bench.local`,
     metrics: {
       signup_sequential: stats(seqSamples, 201),
+      // 가입 응답 → 지갑 준비(잔액 조회가 409 를 벗어난 첫 응답). 로그인 왕복이 포함된다
+      wallet_ready_after_signup: stats(readySamples, (s) => s.status > 0 && s.status !== 409),
       signup_concurrent: stats(concSamples, 201),
       signup_duplicate_409: stats(dupSamples, 409),
       login: stats(loginSamples, 200),
     },
-    raw: { seqSamples, concSamples, dupSamples, loginSamples },
+    raw: { seqSamples, readySamples, concSamples, dupSamples, loginSamples },
   };
 
   const file = join(outDir, `${LABEL}-${result.at.replace(/[:.]/g, '-')}.json`);
@@ -174,7 +220,8 @@ async function main() {
   console.log('\n단위 ms · 클라이언트 왕복 (TLS·네트워크 포함)\n');
   console.log('| 구간 | 성공 | min | p50 | p90 | p95 | p99 | max | 평균 |');
   console.log('|---|---|---|---|---|---|---|---|---|');
-  console.log(row(`가입 순차 (체인 동기 포함)`, result.metrics.signup_sequential));
+  console.log(row(`가입 순차`, result.metrics.signup_sequential));
+  console.log(row(`가입 응답 → 지갑 준비 (로그인 왕복 포함)`, result.metrics.wallet_ready_after_signup));
   console.log(row(`가입 동시 ${CONC}건×${WAVES}`, result.metrics.signup_concurrent));
   console.log(row(`가입 중복 409 (체인 없음)`, result.metrics.signup_duplicate_409));
   console.log(row(`로그인 (체인 없음)`, result.metrics.login));
