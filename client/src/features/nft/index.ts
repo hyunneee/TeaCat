@@ -3,6 +3,7 @@ export {
   usePhotocardArts,
   usePocaDex,
   usePhotocardDetail,
+  useMyDesignCopies,
   useRecordPhotocardView,
   useClaimEventPack,
   useDrawAvailability,
@@ -16,6 +17,8 @@ export {
 export { usePocaDraw, type DrawPhase } from './hooks/usePocaDraw';
 export { NftCard } from './components/NftCard';
 export { PocaDexCard } from './components/PocaDexCard';
+export { PocaGridTile } from './components/PocaGridTile';
+export { PocaCopyList, PocaCopyPicker } from './components/PocaCopyList';
 export { PocaArt } from './components/PocaArt';
 export { PocaFullscreen } from './components/PocaFullscreen';
 export { PocaShowcase } from './components/PocaShowcase';
@@ -52,6 +55,9 @@ export {
   mintStatusLabel,
   groupPhotocards,
   photocardMarketState,
+  copyOriginLabel,
+  copyWhenLabel,
+  sellableCopies,
   type PhotocardGroup,
   type NftSort,
 } from './model/nft.model';
@@ -76,6 +82,7 @@ export type {
   MyPhotocard,
   PhotocardDetail,
   PhotocardOrigin,
+  MyDesignCopy,
   PhotocardListing,
   PurchaseResult,
   PurchaseHistory,

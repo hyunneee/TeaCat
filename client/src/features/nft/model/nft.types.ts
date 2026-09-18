@@ -97,6 +97,31 @@ export interface MyPhotocard extends PocaDesignInfo {
   marketStatus?: PhotocardMarketStatus | null;
 }
 
+/**
+ * 내가 가진 **같은 도안 카드 한 장**.
+ *
+ * 🔴 공연명이 없습니다 — 공연명은 포토카드가 아니라 **도안**에 붙어 있어서 같은 도안
+ * 세 장은 전부 같은 공연명입니다. 실제로 갈리는 것은 회차와 좌석이고, 화면은 이미
+ * 공연명을 알고 있습니다(상세가 띄우고 있는 그 카드의 공연입니다).
+ *
+ * ⚠️ 뽑기로 얻은 카드는 티켓이 없어 `origin` 과 회차가 모두 null 입니다.
+ * 그때 갈라 보는 기준은 발행 시각뿐입니다.
+ */
+export interface MyDesignCopy {
+  photocardId: number;
+  issuedAt: string;
+  /** 좌석. 뽑기 카드는 null */
+  origin: PhotocardOrigin | null;
+  /** 몇 회차인가. 뽑기 카드는 null */
+  performanceNum: number | null;
+  /** 그 회차의 공연 일시. 뽑기 카드는 null */
+  performanceDate: string | null;
+  status: PhotocardMintStatus;
+  /** 판매 중이 아니면 null — 장마다 다릅니다 */
+  marketType?: PhotocardMarketType | null;
+  marketStatus?: PhotocardMarketStatus | null;
+}
+
 /** 포카가 발행된 좌석 */
 export interface PhotocardOrigin {
   seatGrade: string;
@@ -110,6 +135,8 @@ export interface PhotocardOrigin {
 /** 포카 상세 */
 export interface PhotocardDetail extends PocaDesignInfo {
   photocardId: number;
+  /** 내가 가진 같은 도안 카드를 물을 때 쓰는 열쇠 (`nftApi.myCopies`) */
+  designId: number;
   designName: string;
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 */
