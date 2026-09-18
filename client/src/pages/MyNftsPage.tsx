@@ -40,9 +40,14 @@ export function MyNftsPage() {
   const { data: draw } = useDrawAvailability();
 
   const visible = filterPocaDex(entries, { keyword, role });
-  /* 진행도는 **거르기 전 전체** 기준입니다 — 필터를 걸 때마다 "12/40" 이 "2/3" 으로
-     바뀌면 얼마나 모았는지를 알 수 없습니다 */
-  const progress = dexProgress(entries);
+  /*
+   * 진행도는 **역할 드롭다운을 따라가고 검색어는 무시합니다.**
+   *
+   * 역할은 "코치를 몇 명 모았나" 라는 셈이 그대로 성립하는 묶음이라, 걸러도 분모가
+   * 뜻을 가집니다. 반면 검색어는 한 글자 칠 때마다 분모가 바뀌어서(21 → 7 → 2 → 1)
+   * 숫자가 튀는 것으로만 보입니다 — 무엇을 세는 중인지 알 수 없습니다.
+   */
+  const progress = dexProgress(filterPocaDex(entries, { role }));
   const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL;
 
   return (
