@@ -4,9 +4,8 @@ import type { FacePose } from './faceQuality';
  * 촬영 단계 하나 — 지시문과 <b>그 지시를 지켰는지 보는 검사</b>.
  *
  * <p>🔴 <b>지시만 하고 검증하지 않으면 소용이 없습니다.</b> 가만히 있어도 그대로 찍혀서
- * 거의 같은 프레임이 모이고, 그러면 평균을 내도 한 장으로 등록한 것과 다를 바가 없습니다.
- * 실측이라면 "같은 사람" 유사도가 0.99 로 떠서 실제로는 통과하지 못할 임계값도 통과해
- * 보입니다. 그래서 <b>조건을 맞출 때까지 셔터가 안 눌립니다.</b>
+ * 거의 같은 프레임이 다섯 장 모이고, 그러면 평균을 내도 한 장으로 등록한 것과 다를 바가
+ * 없습니다. 그래서 <b>조건을 맞출 때까지 셔터가 안 눌립니다.</b>
  *
  * <p>조건은 전부 <b>품질 게이트가 허용하는 범위 안</b>입니다 — "살짝" 이 붙은 이유입니다.
  * 운영에서는 {@code checkFaceQuality} 가 정면이 아닌 프레임을 아예 임베딩하지 않으므로,
@@ -32,9 +31,8 @@ export interface CaptureStep {
 /** 정면으로 볼 최대 치우침 — 기준선을 잡는 첫 장에만 쓴다 */
 const FRONTAL_YAW = 0.05;
 const FRONTAL_ROLL = 0.07;
-/** "살짝 돌림/기울임" 으로 인정할 최소 변화 */
+/** "살짝 돌림" 으로 인정할 최소 치우침 */
 const TURNED_YAW = 0.08;
-const TILTED_ROLL = 0.09;
 
 const FRONTAL: CaptureStep = {
   prompt: '정면을 보세요',
@@ -67,33 +65,23 @@ const TURNED_BACK: CaptureStep = {
   check: (p, taken) => {
     if (Math.abs(p.yaw - 0.5) < TURNED_YAW) return false;
 
-    /* 🔴 인덱스로 찾지 않습니다. 단계 목록이 화면마다 달라서(등록 5장 · 실측 7장)
-       "네 번째 장" 같은 가정은 한쪽을 고치는 순간 조용히 어긋납니다.
+    /* 🔴 인덱스로 찾지 않습니다. "네 번째 장" 같은 가정은 단계를 하나 끼워 넣는 순간
+       조용히 어긋납니다 — 에러도 안 나고 판정만 틀립니다.
        **직전에 돌렸던 자세**를 되짚어 부호를 비교합니다. */
     const previous = [...taken].reverse().find((t) => Math.abs(t.yaw - 0.5) >= TURNED_YAW);
     return !previous || Math.sign(p.yaw - 0.5) !== Math.sign(previous.yaw - 0.5);
   },
 };
 
-const TILTED: CaptureStep = {
-  prompt: '고개를 살짝 기울여요',
-  hint: '갸웃하듯 아주 조금만',
-  check: (p) => Math.abs(p.roll) >= TILTED_ROLL,
-};
-
-/* 표정은 랜드마크로 잴 수 없어 검증하지 않습니다. 그래도 현장에서 실제로 일어나는
-   변화라(웃는 사람·무표정인 사람) 표본에 섞어 둡니다.
-
-   🔴 **안경을 벗으라는 단계는 두지 않습니다.** 잴 수도 없거니와, 등록할 때 안경을 쓴
-      사람은 입장할 때도 대개 쓰고 옵니다. 안경 유무는 **서로 다른 갈래**라 평균에 섞으면
-      양쪽 다 어중간해집니다 (`centroidOf` 주석). 쓴 사람은 쓴 채로 찍습니다. */
-const SMILE: CaptureStep = { prompt: '살짝 웃어 보세요' };
-
 /**
  * 얼굴 등록 — 5장.
  *
  * <p>사용자가 앱에서 <b>한 번만</b> 하는 일이라 짧게 잡았습니다. 전부 검증되는 단계라
  * 다섯 장이 확실히 다른 조건에서 찍힙니다 — 그게 평균을 쓸모 있게 만듭니다.
+ *
+ * <p>🔴 <b>안경을 벗으라는 단계는 두지 않습니다.</b> 잴 수도 없거니와, 등록할 때 안경을 쓴
+ * 사람은 입장할 때도 대개 쓰고 옵니다. 안경 유무는 <b>서로 다른 갈래</b>라 평균에 섞으면
+ * 양쪽 다 어중간해집니다 ({@code centroidOf} 주석). 쓴 사람은 쓴 채로 찍습니다.
  */
 export const REGISTER_STEPS: readonly CaptureStep[] = [
   FRONTAL,
@@ -101,15 +89,4 @@ export const REGISTER_STEPS: readonly CaptureStep[] = [
   FARTHER,
   TURNED,
   TURNED_BACK,
-];
-
-/** 임계값 실측 — 7장. 분포를 보려면 표본이 넓을수록 좋습니다 */
-export const BENCH_STEPS: readonly CaptureStep[] = [
-  FRONTAL,
-  CLOSER,
-  FARTHER,
-  TURNED,
-  TURNED_BACK,
-  TILTED,
-  SMILE,
 ];

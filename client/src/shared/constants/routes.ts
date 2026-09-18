@@ -143,13 +143,6 @@ export const ROUTES = {
    */
   DEV_FACE: '/dev/face',
 
-  /**
-   * 개발용 임계값 실측 화면.
-   * 여러 사람을 찍어 게이트 검표가 쓰는 `Face.SAME_PERSON_THRESHOLD` 를 정합니다.
-   * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
-   */
-  DEV_FACE_BENCH: '/dev/face-bench',
-
   NOT_FOUND: '*',
 } as const;
 

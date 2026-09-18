@@ -18,8 +18,6 @@ export {
 } from './hooks/useGuidedCapture';
 export { useFaceRegistration } from './hooks/useFaceRegistration';
 export { useFaceRemoval } from './hooks/useFaceRemoval';
-/* 🛠 개발용 임계값 실측 화면(`/dev/face-bench`)만 씁니다. 운영 화면에서 부르지 마세요 */
-export { useFaceBench } from './hooks/useFaceBench';
 
 // View
 export { CameraStage } from './components/CameraStage';
@@ -35,14 +33,7 @@ export {
   FACE_GUIDE_READY,
 } from './model/faceQuality';
 export { cosineSimilarity, centroidOf, SFACE_COSINE_THRESHOLD } from './model/embedding';
-export { REGISTER_STEPS, BENCH_STEPS, type CaptureStep } from './model/captureSteps';
-export type {
-  BenchSample,
-  Distribution,
-  EnrollMode,
-  GateResult,
-  GateThresholds,
-} from './model/faceBench';
+export { REGISTER_STEPS, type CaptureStep } from './model/captureSteps';
 export type {
   FaceEnrollRequest,
   DetectedFace,
