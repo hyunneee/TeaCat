@@ -89,7 +89,14 @@ export function Modal({
           transition={{ duration: 0.18 }}
           onClick={() => dismissible && onClose()}
           className={cn(
-            'fixed inset-0 z-50 flex bg-black/70 backdrop-blur-sm',
+            /* 🔴 **뒤 배경을 흐리지(backdrop-filter) 않습니다.** 예전에는
+               흐림(`backdrop-filter: blur`)이 있었는데, 이 요소는 opacity 를 0→1 로 애니메이션합니다.
+               흐림이 걸린 면의 투명도를 움직이면 브라우저가 **매 프레임 뒤 화면을 다시
+               떠서 다시 흐려야** 하고, 모바일에서 그게 어긋나면서 화면 전체가 번쩍였습니다
+               (QA: "모달 띄울 때마다 깜빡임"). 화면을 꽉 덮는 요소라 증상이 전면에 보입니다.
+               `bg-black/70` 만으로 뒤 내용은 충분히 눌립니다 — 흐림을 되살리려면
+               흐림 레이어와 페이드 레이어를 **분리**해야 합니다(얻는 것보다 복잡합니다). */
+            'fixed inset-0 z-50 flex bg-black/70',
             /* 가로 가운데 정렬은 **항상** 필요합니다. 시트가 앱 폭으로 좁아지는
                구간(30rem~)에서 justify 가 없으면 시트가 화면 왼쪽에 붙습니다. */
             variant === 'sheet'
@@ -110,9 +117,7 @@ export function Modal({
               'surface border-line shadow-pop pb-safe relative flex max-h-[90dvh] w-full flex-col overflow-hidden border',
               /* 폭은 앱 기둥과 같습니다 — 데스크톱에서 모달만 넓으면
                  프레임 밖으로 삐져나와 화면이 두 겹으로 보입니다. */
-              variant === 'sheet'
-                ? 'rounded-t-2xl sm:rounded-2xl'
-                : 'rounded-2xl',
+              variant === 'sheet' ? 'rounded-t-2xl sm:rounded-2xl' : 'rounded-2xl',
               /* 폭은 variant 와 독립입니다. wide 는 데스크톱 전용 화면에서만 씁니다 */
               width === 'wide' ? 'w-full max-w-xl' : 'app-width',
             )}
@@ -131,11 +136,11 @@ export function Modal({
               </header>
             )}
 
-            {children && (
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">{children}</div>
-            )}
+            {children && <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">{children}</div>}
 
-            {footer && <footer className="border-line shrink-0 border-t px-5 py-4">{footer}</footer>}
+            {footer && (
+              <footer className="border-line shrink-0 border-t px-5 py-4">{footer}</footer>
+            )}
           </motion.div>
         </motion.div>
       )}

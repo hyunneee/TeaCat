@@ -57,6 +57,26 @@ export const staggerChild: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: DURATION.base, ease: EASE.out } },
 };
 
+/**
+ * 움직임 없이 **페이드만** 하는 자식 (`<Stagger fade>`).
+ *
+ * 🔴 **글자만 있는 블록에 씁니다.** 위 `staggerChild` 는 `y: 10 → 0` 인데, 이 값이
+ * 0 에 닿는 순간 motion 이 인라인 스타일에 `transform: none` 을 써넣습니다
+ * (motion-dom 의 `buildTransform`: 값이 전부 기본값이면 "none"). 그러면 그 요소에
+ * 잡혀 있던 합성 레이어가 사라지면서 **글자가 다시 래스터화**됩니다 — 합성 레이어의
+ * 회색조 안티에일리어싱에서 서브픽셀 안티에일리어싱으로 바뀌고 정수 픽셀에 다시 맞물리는데,
+ * 그 한 프레임이 <b>"다 올라오고 나서 한 번 끊김"</b> 으로 보입니다 (QA).
+ *
+ * transform 을 아예 쓰지 않으면 만들 레이어도, 없앨 레이어도 없어서 끊김이 사라집니다.
+ *
+ * ⚠️ 카드·이미지가 섞인 목록에는 `staggerChild` 를 그대로 두세요 — 거기서는 글자
+ * 재래스터화가 눈에 띄지 않고, 올라오는 움직임이 "읽는 순서" 를 만들어 줍니다.
+ */
+export const staggerChildFade: Variants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: DURATION.base, ease: EASE.out } },
+};
+
 /* ── 페이지 전환 ─────────────────────────────────────────
    좌우 슬라이드는 "앞으로 감/뒤로 감" 느낌을 주지만 라우터에서 방향을 알아야 합니다.
    방향 판단 없이도 자연스럽도록 아주 짧은 페이드+미세 이동만 씁니다. */

@@ -77,7 +77,8 @@ public class NftPhotocardMinter {
     public void mintDrawn(Long photocardId, String issueKey, Long designId,
                           String chainTokenId, String address) {
         chainClient.issuePhotocards(List.of(
-                new IssueItem(issueKey, chainTokenId, address, photocardId, designId)));
+                new IssueItem(issueKey, chainTokenId, address,
+                        photocardId.toString(), designId.toString())));
         log.info("뽑기 포토카드 발행 요청 photocardId={}", photocardId);
     }
 
@@ -98,8 +99,8 @@ public class NftPhotocardMinter {
                             row.issueKey(),
                             row.chainTokenId().toPlainString(),
                             row.address(),
-                            row.photocardId(),
-                            row.designId()))
+                            row.photocardId().toString(),
+                            row.designId().toString()))
                     .toList();
 
             chainClient.issuePhotocards(items);

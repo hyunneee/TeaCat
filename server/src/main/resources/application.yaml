@@ -144,6 +144,23 @@ booking:
     #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
     cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
 
+# 가상 대기실 (server/QUEUE_DESIGN.md). 회차마다 관리자 API 로 켜고 끈다 — 기본은 전부 꺼져 있다.
+queue:
+  # 좌석 페이지 동시 사용자 정원. 부하테스트로 잰 값이라 코드가 아니라 여기 둔다.
+  #   2026-09-17 재측정: dev-server(CPU 1.5코어 · 좌석맵 1초 캐시)가 5,000명까지 처리했다.
+  #   서버를 늘리거나 캐시가 바뀌면 다시 재서 이 값만 바꾼다. 회차별 예외는 관리자 API 의 override.
+  capacity: ${QUEUE_CAPACITY:5000}
+  # 한 틱(admit-interval)에 들여보내는 최대 인원. 정원이 5,000 비어 있어도 한 번에 5,000명을
+  #   넣으면 좌석맵 첫 로드가 한꺼번에 몰린다. 200 이면 25초에 걸쳐 완만하게 찬다
+  max-per-tick: ${QUEUE_MAX_PER_TICK:200}
+  # 입장 후 무활동 이탈. 좌석·선점 API 를 부를 때마다 이만큼 연장된다.
+  #   좌석 고르다 잠깐 자리를 비우는 정도는 봐주고, 탭을 닫고 떠난 사람은 이 시간 뒤 빠진다
+  ttl: ${QUEUE_TTL:10m}
+  # 입장 관리자 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+  admit-interval: ${QUEUE_ADMIT_INTERVAL:PT1S}
+  # 입장 관리자 켬/끔. 테스트에서 끄고 runOnce 를 직접 부른다
+  admitter-enabled: true
+
 payment:
   toss:
     base-url: ${TOSS_API_URL:https://api.tosspayments.com}

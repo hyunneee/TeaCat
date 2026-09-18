@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { ShieldCheck, TriangleAlert } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Card } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
@@ -9,12 +9,14 @@ import { useAuth } from '@/features/auth';
 import {
   CameraStage,
   FACE_GUIDE_IDLE,
-  FACE_GUIDE_READY,
-  checkFaceQuality,
+  REGISTER_STEPS,
+  centroidOf,
+  useAutoShutter,
   useCamera,
   useFaceEngine,
   useFaceGuide,
   useFaceRegistration,
+  useGuidedCapture,
 } from '@/features/face';
 
 /**
@@ -41,53 +43,53 @@ export function FaceRegisterPage() {
   const registration = useFaceRegistration();
 
   const guide = useFaceGuide(engine, camera.videoRef.current, camera.active);
-  const [capturing, setCapturing] = useState(false);
-  /** 캡처 시점에만 알 수 있는 실패 사유 (흔들림·어두움 등) */
-  const [captureIssue, setCaptureIssue] = useState<string | null>(null);
 
   const engineReady = engine.state === 'ready';
   const guidePassed = camera.active && engineReady && guide.issue === null;
-  const busy = capturing || registration.isPending;
 
-  const handleCapture = async () => {
-    const video = camera.videoRef.current;
-    if (!video) return;
+  /**
+   * 🔴 **여러 장을 찍어 평균을 보냅니다.**
+   *
+   * 한 장만 등록하면 하필 그 한 장이 그 사람 얼굴 분포의 가장자리에 있었을 때,
+   * 입장할 때마다 본인이 거절당합니다. 조건이 다른 다섯 장의 평균은 덩어리의
+   * 한가운데라 어느 한 장보다 그 사람을 잘 대표합니다. (`centroidOf` 주석)
+   *
+   * ⚠️ 서버로 나가는 것은 **여전히 임베딩 하나**입니다 — 스키마도 API 도 그대로입니다.
+   */
+  const capture = useGuidedCapture({
+    engine,
+    steps: REGISTER_STEPS,
+    onComplete: (embeddings) => registration.mutate(centroidOf(embeddings)),
+  });
 
-    setCaptureIssue(null);
-    setCapturing(true);
-    try {
-      const result = await engine.embed(video);
+  const busy = capture.capturing || registration.isPending;
+  const step = capture.checkStep(guide.faces);
 
-      if ('error' in result) {
-        setCaptureIssue(result.error);
-        return;
-      }
+  /* 🔴 촬영 버튼이 없습니다. 누르는 순간 손가락이 움직여 그 흔들림이 프레임에 남고,
+     버튼을 찾느라 시선도 정면에서 벗어납니다. 자세가 잡히면 스스로 찍힙니다.
+     `preparing` 동안은 겨누지 않습니다 — 다음 자세를 잡을 틈입니다. */
+  const shutter = useAutoShutter({
+    armed: Boolean(capture.session) && !capture.session?.preparing && !busy,
+    ready: guidePassed && step.ok,
+    onFire: () => {
+      const video = camera.videoRef.current;
+      if (video) void capture.capture(video);
+    },
+  });
 
-      // 캡처 시점에는 흔들림·밝기까지 함께 봅니다 (가이드 루프에서는 못 재는 값)
-      const issue = checkFaceQuality(result.faces, {
-        sharpness: result.sharpness,
-        brightness: result.brightness,
-      });
-      if (issue || !result.embedding) {
-        setCaptureIssue(issue?.message ?? '얼굴을 인식하지 못했어요. 다시 시도해 주세요.');
-        return;
-      }
-
-      registration.mutate(result.embedding);
-    } finally {
-      setCapturing(false);
-    }
-  };
-
+  /* 안내는 한 줄만. 급한 것부터 — 사고(에러) → 준비 안 됨 → 얼굴 품질 → 자세 지시 순입니다.
+     "얼굴이 작고 기울었고 어둡습니다" 처럼 한꺼번에 말하면 무엇부터 고칠지 알 수 없습니다. */
   const message =
-    captureIssue ??
+    capture.issue ??
     camera.error?.message ??
     (engine.state === 'failed' ? engine.error : null) ??
     (!camera.active ? null : !engineReady ? '얼굴 인식을 준비하고 있어요…' : null) ??
+    (capture.session?.preparing ? '자세를 바꿔주세요' : null) ??
     guide.issue?.message ??
-    (guidePassed ? FACE_GUIDE_READY : FACE_GUIDE_IDLE);
+    (capture.session ? (step.ok ? '좋아요, 그대로' : (step.hint ?? '지시대로 맞춰주세요')) : null) ??
+    FACE_GUIDE_IDLE;
 
-  const problem = Boolean(captureIssue || camera.error || engine.state === 'failed');
+  const problem = Boolean(capture.issue || camera.error || engine.state === 'failed');
 
   return (
     <>
@@ -128,6 +130,7 @@ export function FaceRegisterPage() {
           active={camera.active}
           faces={guide.faces}
           ready={guidePassed}
+          progress={busy ? 0 : shutter.progress}
           placeholder={camera.error ? undefined : '카메라를 켜고 얼굴을 화면 안에 맞춰주세요'}
         />
 
@@ -145,17 +148,42 @@ export function FaceRegisterPage() {
         </p>
 
         {camera.active ? (
-          <Button
-            variant="dark"
-            size="lg"
-            fullWidth
-            leftIcon={<Camera size={18} />}
-            loading={busy}
-            disabled={!guidePassed}
-            onClick={() => void handleCapture()}
-          >
-            {registration.isPending ? '등록하는 중' : capturing ? '얼굴을 확인하는 중' : '촬영하기'}
-          </Button>
+          capture.session ? (
+            /* 촬영 버튼이 없습니다 — 조건이 맞으면 스스로 찍습니다. 여기는 지금 몇 장째인지와
+               무엇을 해야 하는지만 알려줍니다. 진행은 미리보기 아래 선이 차오르는 것으로 보입니다. */
+            <div className="space-y-2 py-2 text-center">
+              <p className="text-ink text-base font-bold">{capture.session.prompt}</p>
+
+              {/* 숫자보다 점이 빠릅니다 — 몇 장 남았는지 세지 않고 눈으로 봅니다 */}
+              <div className="flex items-center justify-center gap-1.5" aria-hidden>
+                {Array.from({ length: capture.session.total }, (_, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      'size-1.5 rounded-full transition-colors',
+                      index < capture.session!.taken ? 'bg-accent-700' : 'bg-line',
+                    )}
+                  />
+                ))}
+              </div>
+
+              <p className="text-subtle text-xs tabular-nums">
+                {capture.session.taken} / {capture.session.total}장
+                {registration.isPending && ' · 등록하는 중…'}
+              </p>
+            </div>
+          ) : (
+            <Button
+              variant="dark"
+              size="lg"
+              fullWidth
+              loading={busy}
+              disabled={!engineReady}
+              onClick={capture.start}
+            >
+              {REGISTER_STEPS.length}장 촬영 시작
+            </Button>
+          )
         ) : (
           <Button
             variant="dark"

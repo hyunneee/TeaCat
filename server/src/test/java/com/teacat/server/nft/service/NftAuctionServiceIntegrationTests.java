@@ -328,6 +328,12 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(holdStatus("NFT_TRADE_BUYER", trade.tradeId())).isEqualTo("ACTIVE");
         assertThat(holdStatus("NFT_TRADE_SELLER", trade.tradeId())).isEqualTo("ACTIVE");
         assertThat(holdService.availableBalance(a)).isEqualTo(8_000L);
+        var sellerCard = nftService.getMyPhotocards(sellerId, null, null, 20).items().getFirst();
+        assertThat(sellerCard.listed()).isTrue();
+        assertThat(sellerCard.marketType().name()).isEqualTo("AUCTION");
+        assertThat(sellerCard.marketStatus().name()).isEqualTo("SETTLING");
+        assertThat(nftService.getPhotocard(photocardId, buyer).auction().status())
+                .isEqualTo(NftAuctionStatus.SETTLING);
         // 구매/판매 내역 API 가 경매 거래를 그대로 보여준다
         assertThat(nftService.getPurchaseHistory(buyer, null, 20).items()).isEmpty();
         assertThat(nftService.getSaleHistory(sellerId, null, 20).items()).isEmpty();
@@ -369,6 +375,52 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
         assertThat(second.tradeId()).isEqualTo(first.tradeId());
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM nft_photocard_trades WHERE auction_id = ?", Long.class, auctionId)).isEqualTo(1L);
+    }
+
+    @Test
+    void 서로_다른_구매자가_동시에_즉시구매해도_거래와_구매자_홀드는_하나만_생긴다() throws Exception {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        Long firstBuyer = insertFundedUser("a@test.com", "A", 10_000);
+        Long secondBuyer = insertFundedUser("b@test.com", "B", 10_000);
+        Long auctionId = insertAuction(insertPhotocardOwnedBy(sellerId), sellerId, 1_000, 5_000L,
+                "now() + interval '1 day'");
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Boolean>> futures = List.of(firstBuyer, secondBuyer).stream()
+                    .map(buyerId -> executor.submit(() -> {
+                        start.await();
+                        try {
+                            auctionService.buyNow(buyerId, auctionId, UUID.randomUUID().toString());
+                            return true;
+                        } catch (BusinessException e) {
+                            return false;
+                        }
+                    }))
+                    .toList();
+            start.countDown();
+
+            long successes = 0;
+            for (Future<Boolean> future : futures) {
+                if (future.get()) {
+                    successes++;
+                }
+            }
+
+            assertThat(successes).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM nft_photocard_trades WHERE auction_id = ?",
+                    Long.class, auctionId)).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM cat_money_holds WHERE ref_type = 'NFT_TRADE_BUYER' AND status = 'ACTIVE'",
+                    Long.class)).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT status::text FROM nft_auctions WHERE id = ?", String.class, auctionId))
+                    .isEqualTo("SETTLING");
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

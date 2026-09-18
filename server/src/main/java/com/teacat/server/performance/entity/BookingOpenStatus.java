@@ -24,8 +24,23 @@ public enum BookingOpenStatus {
      *
      * <p>{@link TicketingStatus#SCHEDULED}는 예매 오픈 전용 영속 상태가 아니라
      * 정해진 시각에 자동으로 열릴 회차를 뜻한다. 따라서 SCHEDULED와 OPEN 모두
-     * 오픈 시각이 지나면 실질 상태가 OPEN이다. SOLD_OUT과 CLOSED는 운영자가
-     * 지정하는 예외 상태라 시간보다 우선한다.
+     * 오픈 시각이 지나면 실질 상태가 OPEN이다.
+     *
+     * <h3>🔴 검사 순서가 곧 정책이다</h3>
+     * <ol>
+     *   <li><b>마감</b> — 판매를 닫았거나 공연이 지났으면 더 볼 것이 없다</li>
+     *   <li><b>아직 안 열림</b> — 티켓팅 시각 전이면 무조건 BEFORE</li>
+     *   <li><b>매진</b> — 열린 뒤에만 의미가 있다</li>
+     * </ol>
+     *
+     * <p>🔴 <b>2번이 3번보다 위에 있어야 한다.</b> 예전에는 매진을 먼저 봤는데,
+     * {@code performance_details.status} 의 SOLD_OUT 은 <b>운영자가 손으로 바꾸는 값</b>이라
+     * (좌석이 다 팔려도 자동으로 바뀌지 않는다 — {@link #soldOutIf} 주석) 한 번 켜 두면
+     * <b>티켓팅이 아직 열리지도 않은 회차가 계속 "매진" 으로 보였다</b> (QA).
+     * 홈 레일에서는 그 공연이 "예매중" 칸으로 올라와 진짜 예매중인 공연을 밀어내기까지 했다.
+     *
+     * <p>{@link #soldOutIf} 는 처음부터 이 규칙을 지키고 있었다(OPEN 일 때만 매진으로 바꾼다).
+     * 두 곳이 어긋나 있었던 것이고, 이제 같은 말을 한다.
      */
     public static BookingOpenStatus resolve(TicketingStatus ticketingStatus,
                                             LocalDateTime ticketingStartAt,
@@ -34,11 +49,11 @@ public enum BookingOpenStatus {
         if (ticketingStatus == TicketingStatus.CLOSED || !performanceDate.isAfter(now)) {
             return CLOSED;
         }
-        if (ticketingStatus == TicketingStatus.SOLD_OUT) {
-            return SOLDOUT;
-        }
         if (ticketingStartAt.isAfter(now)) {
             return BEFORE;
+        }
+        if (ticketingStatus == TicketingStatus.SOLD_OUT) {
+            return SOLDOUT;
         }
         return OPEN;
     }
