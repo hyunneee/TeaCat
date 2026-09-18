@@ -456,7 +456,7 @@ pipeline {
                     #    여기서 지우면 새 색이 뜨기도 전에 운영이 끊긴다 — 무중단이 목적인데
                     #    그 반대가 된다. 그 컨테이너는 전환이 끝난 5단계에서 지운다.
                     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" up -d --wait \
-                        postgres redis minio blockchain
+                        postgres redis rabbitmq minio blockchain
 
                     # ── 2. 유휴 색을 새 이미지로 ─────────────────────────────────
                     # 🔴 --force-recreate 가 필요하다. 이미지 태그가 teacat-server:prod 로
