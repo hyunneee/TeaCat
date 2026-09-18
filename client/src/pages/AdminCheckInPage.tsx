@@ -187,7 +187,27 @@ export function AdminCheckInPage() {
             {checkIn.step === 'done' && checkIn.result && (
               <>
                 <CheckInResultCard result={checkIn.result} />
-                <Button variant="dark" fullWidth leftIcon={<RotateCcw size={16} />} onClick={next}>
+
+                {/* 🔴 떨어졌을 때는 **다시 찍기가 먼저**입니다. 얼굴은 조명·각도에 따라
+                    점수가 흩어져서 본인인데 한 번 떨어지는 일이 정상적으로 일어납니다.
+                    QR 은 이미 확인됐으니 다시 찍지 않고 얼굴만 다시 받습니다.
+                    통과한 뒤에는 보여주지 않습니다 — 서버가 이미 입장 처리했습니다. */}
+                {!checkIn.result.match && (
+                  <Button
+                    variant="dark"
+                    fullWidth
+                    leftIcon={<RotateCcw size={16} />}
+                    onClick={checkIn.retryFace}
+                  >
+                    얼굴 다시 찍기
+                  </Button>
+                )}
+
+                <Button
+                  variant={checkIn.result.match ? 'dark' : 'ghost'}
+                  fullWidth
+                  onClick={next}
+                >
                   다음 사람
                 </Button>
               </>
