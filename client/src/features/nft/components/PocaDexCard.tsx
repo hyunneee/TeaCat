@@ -1,6 +1,7 @@
 import { HelpCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
+import cardBackUrl from '@/assets/poca/card-back.webp';
 import { PocaArt } from './PocaArt';
 import { PocaGridTile } from './PocaGridTile';
 import { pocaSeed } from '../model/nft.model';
@@ -99,12 +100,27 @@ export function PocaDexCard({ entry, onOpen }: Props) {
             className="size-full rounded-none"
           />
         ) : (
-          <div
-            role="img"
-            aria-label="아직 모으지 못한 카드"
-            className="text-ink-subtle flex size-full items-center justify-center"
-          >
-            <HelpCircle size={26} strokeWidth={1.5} />
+          /*
+           * 안 가진 칸 — **카드 뒷면**을 깔고 그 위에 물음표를 얹습니다.
+           *
+           * 빈 상자에 물음표만 두면 "아직 안 불러온 칸" 처럼 보입니다. 뒷면을 깔면
+           * 엎어 둔 카드가 되어, 모으면 뒤집힌다는 것이 그림만으로 전해집니다.
+           *
+           * 🔴 앞면(`imageUrl`)은 여전히 **요청하지 않습니다.** 뒷면은 모든 카드가
+           *    같은 그림이고 앱에 함께 묻혀 오는 파일이라, 아직 없는 카드 수십 장을
+           *    IPFS 게이트웨이에서 받아오는 것과는 다릅니다 — 새는 정보도 없습니다.
+           */
+          <div role="img" aria-label="아직 모으지 못한 카드" className="relative size-full">
+            <img src={cardBackUrl} alt="" draggable={false} className="size-full object-cover" />
+            {/* 뒷면 무늬 위에서도 물음표가 읽혀야 합니다 — 어두운 판을 한 겹 깔고 흰 선으로 */}
+            <span className="absolute inset-0 flex items-center justify-center">
+              {/* 🔴 여기에 backdrop-filter 를 쓰지 않습니다. 도감은 칸이 수십 개인 화면이고,
+                  backdrop-filter 는 칸마다 합성 레이어를 만듭니다 — 모달 깜빡임의 원인이
+                  그것이었습니다(Modal.tsx 주석). 불투명한 판 하나로 충분합니다. */}
+              <span className="flex size-9 items-center justify-center rounded-full bg-black/45 text-white">
+                <HelpCircle size={22} strokeWidth={2} />
+              </span>
+            </span>
           </div>
         )
       }
