@@ -10,6 +10,12 @@
 export { useCamera, type CameraError, type CameraErrorCode } from './hooks/useCamera';
 export { useFaceEngine, type EngineState } from './hooks/useFaceEngine';
 export { useFaceGuide } from './hooks/useFaceGuide';
+export { useAutoShutter, type AutoShutter } from './hooks/useAutoShutter';
+export {
+  useGuidedCapture,
+  type GuidedSession,
+  type StepCheck,
+} from './hooks/useGuidedCapture';
 export { useFaceRegistration } from './hooks/useFaceRegistration';
 export { useFaceRemoval } from './hooks/useFaceRemoval';
 
@@ -18,8 +24,16 @@ export { CameraStage } from './components/CameraStage';
 
 // Model
 export { faceApi } from './api/faceApi';
-export { checkFaceQuality, FACE_GUIDE_IDLE, FACE_GUIDE_READY } from './model/faceQuality';
-export { cosineSimilarity, SFACE_COSINE_THRESHOLD } from './model/embedding';
+export {
+  checkFaceQuality,
+  selectPrimaryFace,
+  readPose,
+  type FacePose,
+  FACE_GUIDE_IDLE,
+  FACE_GUIDE_READY,
+} from './model/faceQuality';
+export { cosineSimilarity, centroidOf, SFACE_COSINE_THRESHOLD } from './model/embedding';
+export { REGISTER_STEPS, type CaptureStep } from './model/captureSteps';
 export type {
   FaceEnrollRequest,
   DetectedFace,

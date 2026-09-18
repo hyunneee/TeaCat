@@ -23,6 +23,31 @@ export function l2Normalize(vector: Float32Array): Float32Array {
 }
 
 /**
+ * 여러 장에서 뽑은 임베딩의 **대표값** — L2 정규화된 평균.
+ *
+ * <p><b>사진을 겹치는 것이 아닙니다.</b> 128차원 구면 위에서 같은 사람의 여러 장은 한 덩어리로
+ * 뭉치는데, 그 평균은 덩어리의 한가운데라 <b>어느 한 장보다 그 사람을 더 잘 대표합니다.</b>
+ * 한 장만 등록하면 하필 그 한 장이 가장자리에 있었을 때 본인이 계속 거절당합니다.
+ *
+ * <p>🔴 <b>서로 다른 갈래를 섞으면 안 됩니다.</b> 안경 쓴 얼굴과 안 쓴 얼굴처럼 덩어리가
+ * 둘이면 평균이 그 사이로 가서 <b>양쪽 다 어중간해집니다.</b> 그래서 촬영 단계는 정면
+ * 범위 안의 변화(거리·표정·미세한 각도)만 담고, 안경을 벗으라는 지시는 두지 않습니다.
+ *
+ * @returns 빈 배열이면 길이 0 배열
+ */
+export function centroidOf(embeddings: readonly Float32Array[]): Float32Array {
+  const first = embeddings[0];
+  if (!first) return new Float32Array(0);
+
+  const sum = new Float32Array(first.length);
+  for (const embedding of embeddings) {
+    for (let i = 0; i < sum.length; i += 1) sum[i] = sum[i]! + (embedding[i] ?? 0);
+  }
+
+  return l2Normalize(sum);
+}
+
+/**
  * 정렬 기준점 (112×112).
  *
  * OpenCV `FaceRecognizerSF::alignCrop` 안의 `dst_points` 와 **같은 값**입니다
