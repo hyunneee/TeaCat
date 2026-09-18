@@ -16,7 +16,9 @@
     "typecheck": "tsc --noEmit",
     "build": "hardhat compile && tsc -p tsconfig.build.json",
     "clean": "hardhat clean",
-    "deploy:ssafy": "hardhat run scripts/deploy.ts --network ssafy"
+    "deploy:ssafy": "hardhat run scripts/deploy.ts --network ssafy",
+    "grant:localhost": "hardhat run scripts/grantRoles.ts --network localhost",
+    "grant:ssafy": "hardhat run scripts/grantRoles.ts --network ssafy"
   },
   "dependencies": {
     "@openzeppelin/contracts": "5.1.0"
