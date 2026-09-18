@@ -54,6 +54,9 @@ public abstract class PostgresIntegrationTest {
         registry.add("nft.photocard.issue.scheduler-enabled", () -> "false");
         // 뽑기 카드 재전송 스위퍼도 끈다. 전송은 테스트가 직접 검증한다
         registry.add("nft.photocard.draw.sweep-enabled", () -> "false");
+        // 지갑 발급 스위퍼도 끈다. 테스트에는 브로커가 없다 — 리스너도 붙이지 않는다
+        registry.add("wallet.provisioning.sweep-enabled", () -> "false");
+        registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
 
     @Autowired

@@ -327,6 +327,15 @@ blockchain:
     interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
     initial-delay: 20s
 
+wallet:
+  provisioning:
+    # 가입 뒤 이 시간이 지나도 PENDING 이면 스위퍼가 다시 큐에 보낸다. 정상은 1초 안에 끝난다
+    retry-after: 30s
+    # 스위퍼 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+    sweep-interval: PT30S
+    sweep-batch-size: 50
+    sweep-enabled: true
+
 banner:
   image:
     # 메인 배너는 가로로 넓은 한 장짜리라 포스터보다 넉넉히 잡는다.

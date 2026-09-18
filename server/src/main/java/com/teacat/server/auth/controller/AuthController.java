@@ -33,7 +33,7 @@ public class AuthController {
     private final AuthService authService;
     private final AuthCookieFactory authCookieFactory;
 
-    @Operation(summary = "회원가입", description = "회원 생성과 1,500 CAT 지급을 한 트랜잭션으로 처리합니다. (CAT 지급은 지갑 API 연동 후 추가)")
+    @Operation(summary = "회원가입", description = "회원을 만들고 지갑 발급을 큐에 요청합니다. 지갑과 1,500 CAT 은 보통 1초 안에 준비됩니다.")
     @PostMapping("/signup")
     public ResponseEntity<BaseResponse<SignupResponse>> signup(@Valid @RequestBody SignupRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
