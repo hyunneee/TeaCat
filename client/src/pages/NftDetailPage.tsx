@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Armchair, BadgeCheck, Coins, Gavel, Hand, TriangleAlert } from 'lucide-react';
+import { Armchair, BadgeCheck, Coins, Gavel, Hand, Layers, TriangleAlert } from 'lucide-react';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Badge, Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import { AuctionCountdown, AuctionCreateForm, useCreateAuction } from '@/features/auction';
@@ -11,17 +11,21 @@ import { ROUTES } from '@/shared/constants';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
+  PocaCopyList,
+  PocaCopyPicker,
   PocaLiveCard,
   PocaShowcase,
   PocaSpotlight,
   formatOrigin,
   isOwner,
   isSpecial,
+  sellableCopies,
   mintStatusLabel,
   photocardSource,
   pocaName,
   pocaSeed,
   useListPhotocard,
+  useMyDesignCopies,
   usePhotocardDetail,
   useRecordPhotocardView,
   usePurchasePhotocard,
@@ -52,10 +56,12 @@ export function NftDetailPage() {
   const navigate = useNavigate();
   const { open } = useModal();
   const { user } = useAuth();
-  const createAuction = useCreateAuction(photocardId);
 
   const { data: card, isPending, isError, error } = usePhotocardDetail(photocardId);
   useRecordPhotocardView(photocardId, !!card);
+  /* 같은 도안을 내가 몇 장 가졌나 — 도감이 한 칸으로 묶기 때문에 상세에서 펼쳐 줍니다.
+     designId 는 상세 응답에서 오므로 상세보다 한 박자 늦게 채워집니다. */
+  const { data: copies } = useMyDesignCopies(card?.designId);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();
@@ -68,7 +74,25 @@ export function NftDetailPage() {
   /* 판매 폼은 **누른 뒤에** 펼칩니다 — 내 카드를 보러 왔을 뿐인데 폼이 먼저 보이면
      이 화면이 "파는 화면" 으로 읽힙니다 */
   const [selling, setSelling] = useState(false);
+  /* 🔴 **어느 장을 파는가.** 같은 그림이어도 파는 것은 특정한 한 장이고, 사용자는
+     목록에서 본 다른 좌석·회차의 장을 팔 생각일 수 있습니다. null 이면 "지금 보는 장" 입니다. */
+  const [sellTargetId, setSellTargetId] = useState<number | null>(null);
   const sellFormRef = useRef<HTMLSpanElement>(null);
+
+  /*
+   * 🔴 팔 장을 **이른 반환보다 위에서** 정합니다. 바로 아래 `useCreateAuction` 이 그 값을
+   *    받아야 하는데 훅은 조건부 반환 뒤에 올 수 없습니다. 고정가와 경매가 서로 다른 장을
+   *    파는 사고를 막으려면 두 길이 **같은 값 하나**를 봐야 합니다.
+   */
+  const allCopies = copies ?? [];
+  const sellable = sellableCopies(allCopies);
+  /* 고르지 않았으면 지금 보고 있는 장. 그 장을 팔 수 없으면(이미 판매 중) 팔 수 있는 첫 장 */
+  const sellPhotocardId =
+    sellTargetId ??
+    (sellable.some((copy) => copy.photocardId === photocardId)
+      ? photocardId
+      : (sellable[0]?.photocardId ?? photocardId));
+  const createAuction = useCreateAuction(sellPhotocardId);
 
   /* 버튼은 화면 맨 아래에 있고 폼은 본문에 펼쳐집니다 —
      눌렀는데 아무 일도 안 일어난 것처럼 보이지 않게 폼으로 데려갑니다. */
@@ -104,6 +128,9 @@ export function NftDetailPage() {
   }
 
   const mine = isOwner(card, user?.nickname);
+  /* 내 카드가 아니면 보유 목록을 그리지 않습니다 — 남의 카드 화면에서 내 보유 장수를
+     꺼내 보일 자리가 아닙니다(목록 자체는 내 것만 옵니다) */
+  const myCopies = mine ? allCopies : [];
   const listing = card.listing ?? null;
   const auction = card.auction ?? null;
   const settling = listing?.status === 'SETTLING' || auction?.status === 'SETTLING';
@@ -114,6 +141,20 @@ export function NftDetailPage() {
   const mintLabel = mintStatusLabel(card.status);
   const canSubmitListing =
     card.status === 'MINTED' && Number(price) > 0 && description.length <= 500;
+
+  /*
+   * 판매 등록이 끝난 뒤.
+   *
+   * 폼을 접는 이유: 나중에 판매를 내렸을 때 폼이 펼쳐진 채로 되살아나지 않게.
+   * 🔴 **주소창의 장이 아닌 다른 장을 팔았으면 그 장으로 옮겨 줍니다.** 안 옮기면
+   *    "판매 등록했어요" 토스트만 뜨고 화면은 안 판 카드를 그대로 보여줘서, 방금 한 일이
+   *    실패한 것처럼 보입니다. 같은 그림이라 더 헷갈립니다.
+   */
+  const afterSell = (soldId: number) => {
+    setSelling(false);
+    setSellTargetId(null);
+    if (soldId !== photocardId) navigate(ROUTES.NFT_DETAIL(String(soldId)), { replace: true });
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -167,6 +208,16 @@ export function NftDetailPage() {
             <h1 className="text-2xl leading-snug font-extrabold">{pocaName(card.designName)}</h1>
             {/* 어느 공연에서 얻은 카드인지 — 이름만 있으면 어디서 온 카드인지 알 수 없습니다 */}
             <p className="text-subtle text-[0.9375rem]">{photocardSource(card.performanceTitle)}</p>
+
+            {/* 🔴 도감은 같은 도안을 한 칸으로 묶어 ×3 으로 보여줍니다. 상세에 들어오면
+                몇 장인지 알 수 없어서(QA 지적) 이름 바로 아래에 적습니다.
+                한 장일 때는 적지 않습니다 — "1장 보유" 는 아무것도 알려주지 않습니다. */}
+            {myCopies.length > 1 && (
+              <p className="text-ink-muted flex items-center gap-1.5 pt-0.5 text-sm font-semibold">
+                <Layers size={14} />
+                이 카드 {myCopies.length}장 보유
+              </p>
+            )}
           </div>
 
           {/* 나머지는 폼을 펼치면 감춥니다 — 가격·설명·출처를 그대로 둔 채 폼까지 얹으면
@@ -290,6 +341,26 @@ export function NftDetailPage() {
                   {mintLabel && <p className="text-subtle mt-1 text-sm">{mintLabel}</p>}
                 </div>
               </div>
+
+              {/*
+                여러 장 가졌을 때만 — 각 장이 **어디서 온 것**인지.
+                🔴 출처 블록 바로 아래입니다. 위에서 "이 카드는 어디서 왔나" 를 읽은 흐름
+                   그대로 "나머지 두 장은 어디서 왔나" 로 이어집니다.
+                ⚠️ 한 장뿐이면 위 출처 블록과 같은 말이 되므로 그리지 않습니다.
+              */}
+              {myCopies.length > 1 && (
+                <div className="surface-2 space-y-1 rounded-2xl p-4">
+                  <p className="text-subtle flex items-center gap-1.5 text-sm font-semibold">
+                    <Layers size={14} />
+                    내가 가진 {myCopies.length}장
+                  </p>
+                  <PocaCopyList
+                    copies={myCopies}
+                    currentPhotocardId={card.photocardId}
+                    onOpen={(id) => navigate(ROUTES.NFT_DETAIL(String(id)), { replace: true })}
+                  />
+                </div>
+              )}
             </>
           )}
 
@@ -300,6 +371,24 @@ export function NftDetailPage() {
             <Card className="space-y-3">
               <span ref={sellFormRef} aria-hidden className="block scroll-mt-24" />
               <p className="text-sm font-bold">판매 등록</p>
+
+              {/*
+                🔴 **어느 장을 팔지 먼저 고릅니다.** 같은 그림이어도 파는 것은 특정한 한 장이고,
+                   위 목록에서 다른 좌석·회차의 장을 보고 내려온 사람은 그 장을 팔 생각입니다.
+                   고르는 자리가 없으면 화면이 주소창의 장을 조용히 팔아 버립니다(QA 지적).
+                여러 장 가졌을 때만 띄웁니다 — 한 장뿐이면 고를 것이 없습니다.
+              */}
+              {sellable.length > 1 && (
+                <div className="space-y-2">
+                  <p className="text-subtle text-sm font-semibold">어느 장을 팔까요</p>
+                  <PocaCopyPicker
+                    copies={sellable}
+                    selectedPhotocardId={sellPhotocardId}
+                    onSelect={setSellTargetId}
+                  />
+                </div>
+              )}
+
               <Segmented options={SELL_MODES} value={sellMode} onChange={setSellMode} />
 
               {sellMode === 'AUCTION' ? (
@@ -310,10 +399,12 @@ export function NftDetailPage() {
                       /* 올린 뒤 "어디로 갔지" 를 찾게 하지 않습니다 —
                          만들어진 경매로 바로 보냅니다. 판매 등록 전 상세는 이미
                          유효한 단계가 아니므로 기록에서 교체해 뒤로가기로 되살리지 않습니다. */
-                      onSuccess: (created) =>
+                      onSuccess: (created) => {
+                        setSellTargetId(null);
                         navigate(ROUTES.AUCTION_DETAIL(String(created.auctionId)), {
                           replace: true,
-                        }),
+                        });
+                      },
                     })
                   }
                 />
@@ -359,13 +450,12 @@ export function NftDetailPage() {
                     onClick={() =>
                       list.mutate(
                         {
-                          photocardId: card.photocardId,
+                          /* 🔴 주소창의 장이 아니라 **고른 장**입니다 (sellPhotocardId 주석) */
+                          photocardId: sellPhotocardId,
                           price: Number(price),
                           description: description.trim() || undefined,
                         },
-                        /* 등록되면 폼을 접습니다 — 나중에 판매를 내렸을 때 폼이
-                           펼쳐진 채로 되살아나지 않게 */
-                        { onSuccess: () => setSelling(false) },
+                        { onSuccess: () => afterSell(sellPhotocardId) },
                       )
                     }
                   >

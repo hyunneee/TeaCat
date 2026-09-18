@@ -101,6 +101,28 @@ export function usePocaDex() {
   };
 }
 
+/**
+ * 내가 가진 **같은 도안** 카드 전부.
+ *
+ * 상세는 `photocardId` 로 열리는데, 도감은 같은 도안을 한 칸으로 묶어 `×3` 으로
+ * 보여줍니다. 그래서 상세가 "그 셋이 각각 어디서 온 것인가" 와 "어느 장을 팔 것인가" 를
+ * 이 훅에 묻습니다.
+ *
+ * 🔴 `designId` 는 상세 응답에서 옵니다. 상세가 오기 전에는 **부르지 않습니다** —
+ * `undefined` 로 부르면 `/by-design/undefined` 가 나갑니다.
+ *
+ * 무효화는 `invalidateTrade` 가 `nftKeys.all` 로 한 번에 걷습니다(키가 그 아래입니다) —
+ * 판매를 걸거나 내리면 이 목록의 판매 상태도 함께 갱신돼야 합니다.
+ */
+export function useMyDesignCopies(designId: number | undefined) {
+  return useQuery({
+    queryKey: nftKeys.myCopies(designId ?? 0),
+    queryFn: () => nftApi.myCopies(designId as number),
+    staleTime: STALE_TIME.SHORT,
+    enabled: Number.isInteger(designId) && (designId ?? 0) > 0,
+  });
+}
+
 export function usePhotocardDetail(photocardId: number) {
   return useQuery({
     queryKey: nftKeys.detail(photocardId),

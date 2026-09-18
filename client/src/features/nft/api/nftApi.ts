@@ -3,6 +3,7 @@ import type { CursorPage } from '@/shared/types';
 import type { NftSort } from '../model/nft.model';
 import type {
   MarketPhotocard,
+  MyDesignCopy,
   MyPhotocard,
   DrawPoolCard,
   PhotocardArt,
@@ -64,6 +65,13 @@ export const nftApi = {
   mine: (params: PageParams & { listed?: boolean }) =>
     http.get<CursorPage<MyPhotocard>>('/users/me/photocards', { params }),
 
+  /**
+   * 내가 가진 **같은 도안** 카드 전부. 페이지가 없습니다 — 상세가 "몇 장 가졌나" 를
+   * 한 번에 알아야 하고, 도안마다 발행 총량이 있어 수십 장이 될 수 없습니다.
+   */
+  myCopies: (designId: number) =>
+    http.get<MyDesignCopy[]>(`/users/me/photocards/by-design/${designId}`),
+
   purchases: (params: PageParams) =>
     http.get<CursorPage<PurchaseHistory>>('/users/me/photocards/purchases', { params }),
 
@@ -120,6 +128,7 @@ export const nftKeys = {
   arts: () => [...nftKeys.all, 'arts'] as const,
   drawPool: () => [...nftKeys.all, 'draw-pool'] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
+  myCopies: (designId: number) => [...nftKeys.all, 'my-copies', designId] as const,
   drawAvailability: () => [...nftKeys.all, 'draw-availability'] as const,
   purchases: () => [...nftKeys.all, 'purchases'] as const,
   sales: () => [...nftKeys.all, 'sales'] as const,

@@ -13,6 +13,11 @@ public record NftPhotocardDetailResponse(
         @Schema(description = "포토카드 ID", example = "501")
         Long photocardId,
 
+        /* 같은 도안을 몇 장 가졌는지 묻는 후속 조회(/users/me/photocards/by-design/{designId})의
+           열쇠다. 이름으로 물으면 운영자가 도안 이름을 바꾸는 순간 어긋난다. */
+        @Schema(description = "도안 ID. 내가 가진 같은 도안 카드를 물을 때 쓴다", example = "11")
+        Long designId,
+
         @Schema(description = "도안명")
         String designName,
 

@@ -73,7 +73,7 @@ public class NftMarketQueryRepository {
 
     public Optional<DetailRow> findPhotocardDetail(Long photocardId) {
         String sql = """
-                SELECT p.id AS photocard_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title,
                        -- 조회자가 소유자인지 판정해야 한다. 닉네임으로 비교하면 동명이인에서 깨진다
                        p.owner_id, owner.nickname AS owner_nickname,
@@ -104,6 +104,7 @@ public class NftMarketQueryRepository {
         List<DetailRow> rows = jdbcTemplate.query(sql, new MapSqlParameterSource("photocardId", photocardId),
                 (rs, rowNum) -> new DetailRow(
                         rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
                         rs.getString("design_name"),
                         rs.getString("image_url"),
                         rs.getString("performance_title"),
@@ -226,6 +227,62 @@ public class NftMarketQueryRepository {
                 rs.getString("group_name"),
                 rs.getString("grade") == null ? null : NftPhotocardGrade.valueOf(rs.getString("grade")),
                 (Long) rs.getObject("average_price")
+        ));
+    }
+
+    /**
+     * 한 사람이 가진 <b>같은 도안</b>의 카드 전부. 발행 순서(오래된 것부터)다.
+     *
+     * <p>🔴 커서 페이지가 없다. 같은 도안을 수십 장 가지는 일은 구조상 없고(도안마다 발행
+     * 총량이 정해져 있다), 상세 화면은 "이 도안을 내가 몇 장 가졌나" 를 <b>한 번에</b> 알아야
+     * 한다 — 첫 페이지만 세면 4번째 장부터 없는 것이 된다. 상한만 걸어 둔다.
+     *
+     * <p>🔴 {@code owner_id} 로 거른다. 도안 ID만으로 거르면 <b>남의 카드까지</b> 나온다.
+     *
+     * <p>좌석·회차는 포토카드의 티켓에서 가져온다. 도안의 공연명이 아니다 —
+     * {@link com.teacat.server.nft.dto.response.MyDesignPhotocardResponse} 주석 참고.
+     */
+    public List<DesignCopyRow> findMyPhotocardsOfDesign(Long userId, Long designId, int limit) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.created_at AS issued_at, p.status,
+                       pa.grade AS seat_grade, a.area_code, s.row_label, s.seat_number,
+                       pd.performance_num, pd.performance_date,
+                       CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
+                            WHEN au.id IS NOT NULL THEN 'AUCTION' END AS market_type,
+                       COALESCE(l.status::text, au.status::text) AS market_status
+                FROM nft_photocards p
+                -- 뽑기 카드는 티켓·좌석·회차가 없다. 내부 조인이면 행이 통째로 빠진다
+                LEFT JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN performance_details pd ON pd.id = t.performance_detail_id
+                LEFT JOIN areas a ON a.id = t.area_id
+                LEFT JOIN seats s ON s.id = t.seat_id
+                LEFT JOIN performance_areas pa
+                       ON pa.performance_general_id = pd.performance_general_id
+                      AND pa.area_id = t.area_id
+                LEFT JOIN nft_photocard_listings l
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_auctions au
+                       ON au.photocard_id = p.id AND au.status IN ('ACTIVE', 'SETTLING')
+                WHERE p.owner_id = :userId AND p.design_id = :designId
+                ORDER BY p.created_at, p.id
+                LIMIT :limit
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
+                .addValue("designId", designId)
+                .addValue("limit", limit);
+
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new DesignCopyRow(
+                rs.getLong("photocard_id"),
+                rs.getObject("issued_at", LocalDateTime.class),
+                NftMintStatus.valueOf(rs.getString("status")),
+                rs.getString("seat_grade"),
+                rs.getString("area_code"),
+                rs.getString("row_label"),
+                (Integer) rs.getObject("seat_number"),
+                (Integer) rs.getObject("performance_num"),
+                rs.getObject("performance_date", LocalDateTime.class),
+                rs.getString("market_type"),
+                rs.getString("market_status")
         ));
     }
 
@@ -628,7 +685,7 @@ public class NftMarketQueryRepository {
                             LocalDateTime listedAt, long viewCount) {
     }
 
-    public record DetailRow(Long photocardId, String designName, String imageUrl,
+    public record DetailRow(Long photocardId, Long designId, String designName, String imageUrl,
                             String performanceTitle, Long ownerId, String ownerNickname,
                             LocalDateTime issuedAt,
                             boolean hasTicket,
@@ -648,6 +705,13 @@ public class NftMarketQueryRepository {
                            String marketType, String marketStatus,
                            LocalDateTime createdAt,
                            String groupName, NftPhotocardGrade grade, Long averagePrice) {
+    }
+
+    /** 같은 도안 한 장. 좌석·회차는 뽑기 카드에서 전부 null 이다 */
+    public record DesignCopyRow(Long photocardId, LocalDateTime issuedAt, NftMintStatus status,
+                                String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
+                                Integer performanceNum, LocalDateTime performanceDate,
+                                String marketType, String marketStatus) {
     }
 
     public record CardTradeRow(Long tradeId, Long price, String sellerNickname,
