@@ -139,8 +139,8 @@ public class OauthService {
         // 일반 가입과 같다 (AuthService.signup 주석 참고)
         user.registerFace(Face.defaultFace());
 
-        // 일반 가입과 같다 — 지갑 발급이 실패하면 이 가입도 통째로 롤백된다
-        walletService.provision(user);
+        // 일반 가입과 같다 — 지갑은 커밋 뒤 큐에서 만든다
+        walletService.requestProvision(user);
 
         // 티켓은 한 번만 쓴다
         oauthSignupTicketRepository.delete(ticket);

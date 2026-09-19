@@ -6,6 +6,7 @@ import com.teacat.server.nft.dto.request.NftDesignAllocationRequest;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
 import com.teacat.server.nft.dto.request.NftMarketSort;
 import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
+import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
@@ -61,6 +62,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NftService {
+
+    /**
+     * 같은 도안을 한 번에 몇 장까지 돌려주나. 도안마다 발행 총량이 있어 현실적으로 닿지
+     * 않는 값이지만, 상한 없는 목록 조회를 남기지 않기 위해 걸어 둔다.
+     */
+    private static final int DESIGN_COPY_LIMIT = 100;
 
     private static final String MARKET_SCOPE_PREFIX = "market:";
     private static final String PURCHASE_SCOPE = "purchases";
@@ -148,9 +155,41 @@ public class NftService {
                         isOwner ? row.seatNumber() : null)
                 : null;
         return new NftPhotocardDetailResponse(
-                row.photocardId(), row.designName(), row.imageUrl(), row.performanceTitle(),
+                row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
                 row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
+    }
+
+    /**
+     * 내가 가진 <b>같은 도안</b>의 카드 전부. 상세 화면의 "총 3장" 목록과 판매할 장 고르기가 쓴다.
+     *
+     * <p>🔴 <b>도안 ID를 믿지 않는다.</b> 남의 도안 ID를 넣어도 {@code owner_id = :userId} 로
+     * 걸러 내 카드만 나온다 — 없으면 빈 목록이다. 404 로 되돌려 주면 "그 도안이 있는지"
+     * 를 훑을 수 있게 되므로 굳이 구분하지 않는다.
+     *
+     * <p>페이지가 없다. 같은 도안을 수십 장 가지는 일은 구조상 없고(도안마다 발행 총량이
+     * 정해져 있다), 상세는 "몇 장 가졌나" 를 <b>한 번에</b> 알아야 한다.
+     * 상한({@value #DESIGN_COPY_LIMIT})만 걸어 둔다.
+     */
+    @Transactional(readOnly = true)
+    public List<MyDesignPhotocardResponse> getMyPhotocardsOfDesign(Long userId, Long designId) {
+        return queryRepository.findMyPhotocardsOfDesign(userId, designId, DESIGN_COPY_LIMIT)
+                .stream()
+                .map(row -> new MyDesignPhotocardResponse(
+                        row.photocardId(),
+                        row.issuedAt(),
+                        /* 내 카드만 나오는 목록이라 좌석 열·번을 가리지 않는다.
+                           상세(getPhotocard)에서 가리는 것은 **남의 카드**를 볼 때의 이야기다. */
+                        row.areaCode() == null ? null : new NftPhotocardDetailResponse.Origin(
+                                row.seatGrade(), row.areaCode(), row.rowLabel(), row.seatNumber()),
+                        row.performanceNum(),
+                        row.performanceDate(),
+                        row.status(),
+                        row.marketType() == null ? null
+                                : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
+                        row.marketStatus() == null ? null
+                                : MyNftPhotocardResponse.MarketStatus.valueOf(row.marketStatus())))
+                .toList();
     }
 
     @Transactional

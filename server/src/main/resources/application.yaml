@@ -87,6 +87,17 @@ spring:
       port: 6379
       password: teacat_local_pw
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: teacat
+    password: teacat_local_pw
+    listener:
+      simple:
+        # 실패한 메시지는 재큐잉하지 않고 DLQ 로 보낸다. 재큐잉하면 블록체인 서비스가 죽어 있는 동안
+        # 같은 메시지가 즉시 되돌아와 초당 수십 번 돈다. 재시도 시점은 wallet.provisioning 스위퍼가 정한다
+        default-requeue-rejected: false
+
 jwt:
   secret: ${JWT_SECRET:teacat-local-dev-access-token-secret-key-change-me-32bytes-over}
   access-token-validity: 1h
@@ -371,6 +382,15 @@ blockchain:
   confirm-poll:
     interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
     initial-delay: 20s
+
+wallet:
+  provisioning:
+    # 가입 뒤 이 시간이 지나도 PENDING 이면 스위퍼가 다시 큐에 보낸다. 정상은 1초 안에 끝난다
+    retry-after: 30s
+    # 스위퍼 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+    sweep-interval: PT30S
+    sweep-batch-size: 50
+    sweep-enabled: true
 
 banner:
   image:

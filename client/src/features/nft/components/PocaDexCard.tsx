@@ -1,7 +1,9 @@
 import { HelpCircle } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
+import cardBackUrl from '@/assets/poca/card-back.webp';
 import { PocaArt } from './PocaArt';
+import { PocaGridTile } from './PocaGridTile';
 import { pocaSeed } from '../model/nft.model';
 import type { PocaDexEntry, PocaDexMarketState } from '../model/pocaDex.model';
 
@@ -11,18 +13,6 @@ interface Props {
   onOpen: (photocardId: number) => void;
 }
 
-/**
- * 도감 한 칸.
- *
- * ── 🔴 안 가진 칸은 **그림을 받지 않습니다** ──────────────────
- * 흐리게 처리해서 가릴 수도 있지만, 그러면 (1) 개발자도구로 흐림만 걷으면 그림이 그대로
- * 보이고 (2) 아직 없는 카드 수십 장의 그림을 IPFS 게이트웨이에서 **전부 받아옵니다.**
- * 도감은 안 가진 칸이 대부분인 화면이라 그 비용이 큽니다. 그래서 아예 요청하지 않고
- * 물음표만 그립니다 — 무엇이 남았는지는 세어 보면 알고, 무엇인지는 모아야 압니다.
- *
- * ⚠️ 대신 안 가진 칸은 **모양으로도 구분되지 않습니다.** 그게 도감의 재미이기도 하지만,
- * "어떤 카드가 남았는지 힌트라도" 라는 요구가 오면 이름만 여는 쪽부터 검토하세요.
- */
 /** 마켓 상태 → 점 색과 사람 말. 낱말은 `NftCard` 의 배지와 같습니다 */
 const MARKET_WORD: Record<PocaDexMarketState, string> = {
   LISTED: '판매 중',
@@ -81,67 +71,92 @@ function StateDot({
   );
 }
 
+/**
+ * 도감 한 칸.
+ *
+ * ── 🔴 안 가진 칸은 **그림을 받지 않습니다** ──────────────────
+ * 흐리게 처리해서 가릴 수도 있지만, 그러면 (1) 개발자도구로 흐림만 걷으면 그림이 그대로
+ * 보이고 (2) 아직 없는 카드 수십 장의 그림을 IPFS 게이트웨이에서 **전부 받아옵니다.**
+ * 도감은 안 가진 칸이 대부분인 화면이라 그 비용이 큽니다. 그래서 아예 요청하지 않고
+ * 물음표만 그립니다 — 무엇이 남았는지는 세어 보면 알고, 무엇인지는 모아야 압니다.
+ *
+ * ⚠️ 대신 안 가진 칸은 **모양으로도 구분되지 않습니다.** 그게 도감의 재미이기도 하지만,
+ * "어떤 카드가 남았는지 힌트라도" 라는 요구가 오면 이름만 여는 쪽부터 검토하세요.
+ *
+ * 껍데기(그림 상자 + 이름 띠)는 `PocaGridTile` 이 그립니다 — 카드팩 칸과 높이를
+ * 구조로 맞추기 위해서입니다(그 주석 참고).
+ */
 export function PocaDexCard({ entry, onOpen }: Props) {
   const owned = entry.count > 0;
 
-  const art = owned ? (
-    <PocaArt
-      seed={pocaSeed(entry.designId)}
-      imageUrl={entry.imageUrl}
-      alt={`${entry.name} 포토카드`}
-      className="shadow-card"
-    />
-  ) : (
-    /* 카드 자리를 그대로 차지합니다 — 비워 두면 격자가 무너져 "몇 칸 남았나" 가 안 보입니다 */
-    <div
-      role="img"
-      aria-label="아직 모으지 못한 카드"
-      className="surface-2 border-line text-ink-subtle flex aspect-[2/3] w-full items-center justify-center rounded-lg border border-dashed"
-    >
-      <HelpCircle size={26} strokeWidth={1.5} />
-    </div>
-  );
-
-  const content = (
-    <>
-      <div className="relative">
-        {art}
-
-        {/* 안 가진 칸에는 붙이지 않습니다 — 없는 카드의 "보관 중" 은 뜻이 없습니다 */}
-        {owned && (
-          <StateDot
-            count={entry.count}
-            marketCount={entry.marketCount}
-            marketState={entry.marketState}
+  const tile = (
+    <PocaGridTile
+      art={
+        owned ? (
+          <PocaArt
+            seed={pocaSeed(entry.designId)}
+            imageUrl={entry.imageUrl}
+            alt={`${entry.name} 포토카드`}
+            className="size-full rounded-none"
           />
-        )}
-
-        {/* 🔴 여러 장 가졌을 때만. ×1 은 아무것도 알려주지 않으면서 칸마다 배지를 붙입니다 */}
-        {entry.count > 1 && (
-          <Badge tone="brand" size="sm" className="absolute top-1 right-1">
-            ×{entry.count}
-          </Badge>
-        )}
-      </div>
-
-      <p
-        className={cn('mt-1.5 truncate text-center text-xs font-semibold', !owned && 'text-subtle')}
-      >
-        {owned ? entry.name : '???'}
-      </p>
-    </>
+        ) : (
+          /*
+           * 안 가진 칸 — **카드 뒷면**을 깔고 그 위에 물음표를 얹습니다.
+           *
+           * 빈 상자에 물음표만 두면 "아직 안 불러온 칸" 처럼 보입니다. 뒷면을 깔면
+           * 엎어 둔 카드가 되어, 모으면 뒤집힌다는 것이 그림만으로 전해집니다.
+           *
+           * 🔴 앞면(`imageUrl`)은 여전히 **요청하지 않습니다.** 뒷면은 모든 카드가
+           *    같은 그림이고 앱에 함께 묻혀 오는 파일이라, 아직 없는 카드 수십 장을
+           *    IPFS 게이트웨이에서 받아오는 것과는 다릅니다 — 새는 정보도 없습니다.
+           */
+          <div role="img" aria-label="아직 모으지 못한 카드" className="relative size-full">
+            <img src={cardBackUrl} alt="" draggable={false} className="size-full object-cover" />
+            {/* 뒷면 무늬 위에서도 물음표가 읽혀야 합니다 — 어두운 판을 한 겹 깔고 흰 선으로 */}
+            <span className="absolute inset-0 flex items-center justify-center">
+              {/* 🔴 여기에 backdrop-filter 를 쓰지 않습니다. 도감은 칸이 수십 개인 화면이고,
+                  backdrop-filter 는 칸마다 합성 레이어를 만듭니다 — 모달 깜빡임의 원인이
+                  그것이었습니다(Modal.tsx 주석). 불투명한 판 하나로 충분합니다. */}
+              <span className="flex size-9 items-center justify-center rounded-full bg-black/45 text-white">
+                <HelpCircle size={22} strokeWidth={2} />
+              </span>
+            </span>
+          </div>
+        )
+      }
+      overlay={
+        owned ? (
+          <>
+            <StateDot
+              count={entry.count}
+              marketCount={entry.marketCount}
+              marketState={entry.marketState}
+            />
+            {/* 🔴 여러 장 가졌을 때만. ×1 은 아무것도 알려주지 않으면서 칸마다 배지를 붙입니다 */}
+            {entry.count > 1 && (
+              <Badge tone="brand" size="sm" className="absolute top-1 right-1">
+                ×{entry.count}
+              </Badge>
+            )}
+          </>
+        ) : undefined
+      }
+      label={owned ? entry.name : '???'}
+      /* 소속은 가진 칸에만. 안 가진 칸에 적으면 "무엇인지는 모아야 안다" 가 깨집니다 */
+      caption={owned ? entry.group : undefined}
+    />
   );
 
   /* 누를 수 없는 것을 버튼으로 만들지 않습니다 — 눌러도 아무 일 없는 버튼은
      "고장난 화면" 으로 읽힙니다 (PocaShowcase 와 같은 규칙) */
   if (!owned || entry.photocardId === null) {
-    return <div className="w-full opacity-70">{content}</div>;
+    return <div className="w-full opacity-70">{tile}</div>;
   }
 
   const photocardId = entry.photocardId;
   return (
-    <button type="button" onClick={() => onOpen(photocardId)} className="w-full text-left">
-      {content}
+    <button type="button" onClick={() => onOpen(photocardId)} className="block w-full text-left">
+      {tile}
     </button>
   );
 }

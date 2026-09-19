@@ -5,6 +5,7 @@ import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
 import com.teacat.server.nft.dto.request.NftMarketSort;
+import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftDrawPoolCardResponse;
@@ -199,6 +200,29 @@ public class NftController {
             @RequestParam(defaultValue = "20") Integer size) {
         return ResponseEntity.ok(BaseResponse.success(
                 nftService.getMyPhotocards(authUser.id(), listed, cursor, size)));
+    }
+
+    @Operation(
+            summary = "내가 가진 같은 도안 포토카드 목록",
+            description = "인증 사용자가 소유한, 지정한 도안의 포토카드를 발행 순서로 모두 돌려줍니다.\n\n"
+                    + "도감은 같은 도안을 한 칸으로 묶어 `×3` 으로 보여주므로, 상세에서 "
+                    + "\"그 셋이 각각 어디서 온 것인가\" 와 \"어느 장을 팔 것인가\" 를 물을 곳이 필요합니다.\n\n"
+                    + "🔴 공연명으로는 갈리지 않습니다 — 공연명은 포토카드가 아니라 **도안**에 붙어 있어 "
+                    + "같은 도안 세 장은 전부 같은 공연명입니다. 실제로 갈리는 것은 회차와 좌석이고 "
+                    + "그건 포토카드의 티켓에 있습니다. 뽑기 카드는 티켓이 없어 둘 다 null 입니다.\n\n"
+                    + "🔴 남의 도안 ID를 넣어도 **내 카드만** 나옵니다(없으면 빈 목록). "
+                    + "404 로 되돌려 주면 도안의 존재 여부를 훑을 수 있게 됩니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    /* 🔴 경로를 `/photocards/**` 밖에 둡니다 — SecurityConfig 에서 그 아래 GET 이 permitAll 이라
+       비로그인 요청이 컨트롤러까지 들어오고 authUser 가 null 이라 401 이 아니라 500(NPE)이 됩니다.
+       `/users/me/**` 는 anyRequest().authenticated() 에 걸립니다. SecurityConfig 는 손대지 않았습니다. */
+    @GetMapping("/users/me/photocards/by-design/{designId}")
+    public ResponseEntity<BaseResponse<List<MyDesignPhotocardResponse>>> getMyPhotocardsOfDesign(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long designId) {
+        return ResponseEntity.ok(BaseResponse.success(
+                nftService.getMyPhotocardsOfDesign(authUser.id(), designId)));
     }
 
     @Operation(

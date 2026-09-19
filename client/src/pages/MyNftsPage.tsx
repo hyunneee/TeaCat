@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Input, Select } from '@/shared/components/ui';
+import { Button, Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import {
   DEX_ROLE_ALL,
   DEX_ROLE_OPTIONS,
@@ -40,14 +40,35 @@ export function MyNftsPage() {
   const { data: draw } = useDrawAvailability();
 
   const visible = filterPocaDex(entries, { keyword, role });
-  /* 진행도는 **거르기 전 전체** 기준입니다 — 필터를 걸 때마다 "12/40" 이 "2/3" 으로
-     바뀌면 얼마나 모았는지를 알 수 없습니다 */
-  const progress = dexProgress(entries);
+  /*
+   * 진행도는 **역할 드롭다운을 따라가고 검색어는 무시합니다.**
+   *
+   * 역할은 "코치를 몇 명 모았나" 라는 셈이 그대로 성립하는 묶음이라, 걸러도 분모가
+   * 뜻을 가집니다. 반면 검색어는 한 글자 칠 때마다 분모가 바뀌어서(21 → 7 → 2 → 1)
+   * 숫자가 튀는 것으로만 보입니다 — 무엇을 세는 중인지 알 수 없습니다.
+   */
+  const progress = dexProgress(filterPocaDex(entries, { role }));
   const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL;
 
   return (
     <>
-      <Header title="내 포토카드" />
+      {/* 포카 꾸미기(AI 스티커) 진입점은 이 버튼 하나입니다 (구현 계획 1-3).
+          `FEATURE.sticker` 가 꺼지면 버튼도 라우트도 없습니다. */}
+      <Header
+        title="내 포토카드"
+        right={
+          FEATURE.sticker ? (
+            <Button
+              variant="soft"
+              size="sm"
+              leftIcon={<Sparkles size={15} />}
+              onClick={() => navigate(ROUTES.STICKER_CREATE)}
+            >
+              포카 꾸미기
+            </Button>
+          ) : undefined
+        }
+      />
 
       <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
         {/* 🔴 검색창과 드롭다운을 **같은 높이의 한 벌**로 둡니다. 예전에는 Select 가

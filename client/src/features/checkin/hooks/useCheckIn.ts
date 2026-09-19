@@ -31,6 +31,18 @@ export interface CheckIn {
   scan: (source: CheckInSource) => void;
   /** 지금 찍은 얼굴로 대조합니다 */
   verify: (embedding: Float32Array) => void;
+  /**
+   * 같은 표로 얼굴만 다시 찍습니다.
+   *
+   * <p>🔴 <b>떨어졌을 때 다음 사람으로 넘기는 것 말고 길이 있어야 합니다.</b> 얼굴은
+   * 조명·각도·거리에 따라 점수가 흩어져서, 본인인데 한 번 떨어지는 일이 정상적으로
+   * 일어납니다. 되돌릴 방법이 없으면 직원이 QR 을 다시 찍게 하거나 — 더 나쁘게는
+   * 그냥 들여보내게 됩니다.
+   *
+   * <p>QR 은 이미 확인됐으므로 <b>다시 찍지 않습니다.</b> 표 정보를 그대로 두고 얼굴만
+   * 다시 받습니다.
+   */
+  retryFace: () => void;
   /** 다음 사람 — 처음으로 되돌립니다 */
   reset: () => void;
 }
@@ -89,6 +101,16 @@ export function useCheckIn(performanceDetailId: number | null): CheckIn {
     },
   });
 
+  /* 표는 그대로 두고 얼굴만 다시 받습니다 — QR 을 다시 찍게 하지 않습니다.
+     ⚠️ 통과한 뒤에는 부르지 마세요. 서버가 이미 입장 처리해서 두 번째 대조는
+        "이미 입장한 표" 로 거절됩니다. 화면이 떨어졌을 때만 이 버튼을 보여줍니다. */
+  const retryFace = useCallback(() => {
+    setResult(null);
+    setStep('face');
+    verifyMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutation 객체는 렌더마다 새로 만들어집니다
+  }, []);
+
   const reset = useCallback(() => {
     setStep('scan');
     setSource(null);
@@ -107,6 +129,7 @@ export function useCheckIn(performanceDetailId: number | null): CheckIn {
     verifying: verifyMutation.isPending,
     scan: scanMutation.mutate,
     verify: verifyMutation.mutate,
+    retryFace,
     reset,
   };
 }

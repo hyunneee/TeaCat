@@ -12,12 +12,15 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Set;
+
+import java.io.IOException;
 
 @RestControllerAdvice
 @Slf4j
@@ -114,6 +117,51 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 클라이언트가 먼저 끊었다 — Broken pipe / Connection reset.
+     *
+     * <p>티켓 오픈처럼 같은 화면을 연달아 새로 고치는 구간에서는 <b>정상적으로 생긴다</b>.
+     * 앞선 요청의 응답을 다 쓰기 전에 브라우저가 떠나면 소켓이 닫히고, 쓰던 중이던 Jackson 이
+     * {@link org.springframework.http.converter.HttpMessageNotWritableException} 으로 감싸
+     * 던져 아래 포괄 핸들러까지 내려온다.
+     *
+     * <p>🔴 이걸 포괄 핸들러에 맡기면 두 가지가 같이 망가진다.
+     *    <ul>
+     *    <li>{@code teacat.unexpected.error} 가 오른다 — <b>1건도 알림 대상</b>인 지표라
+     *        접속이 몰릴 때마다 울리고, 그 사이에 섞인 진짜 장애가 묻힌다.
+     *    <li>이미 닫힌 소켓에 500 본문을 또 쓰다가 같은 예외가 한 번 더 난다 (로그가 두 배가 된다).
+     *    </ul>
+     *
+     * <p>그래서 계측하지 않고, 스택 없이 debug 로만 남기고, 본문도 쓰지 않는다.
+     * {@code null} 을 돌려주면 Spring 이 "처리됨"으로 표시하고 아무것도 쓰지 않는다
+     * (HttpEntityMethodProcessor#handleReturnValue).
+     */
+    private boolean isClientDisconnected(Throwable e) {
+        for (Throwable cause = e; cause != null && cause != cause.getCause(); cause = cause.getCause()) {
+            if (cause instanceof AsyncRequestNotUsableException || isDisconnectIo(cause)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 끊긴 연결인지는 <b>메시지</b>로 본다.
+     *
+     * <p>톰캣의 {@code ClientAbortException} 을 직접 참조하지 않는다 — 서블릿 컨테이너 구현
+     * 클래스라 컨테이너를 바꾸면 컴파일이 깨진다. 끊긴 연결은 어느 컨테이너에서든
+     * 같은 OS 오류("Broken pipe", "Connection reset")를 달고 온다.
+     */
+    private boolean isDisconnectIo(Throwable cause) {
+        if (!(cause instanceof IOException)) {
+            return false;
+        }
+
+        String message = cause.getMessage();
+        return message != null
+                && (message.contains("Broken pipe") || message.contains("Connection reset"));
+    }
+
+    /**
      * 그런 경로가 없다 — 404.
      *
      * <p>🔴 이걸 포괄 핸들러에 맡기면 <b>500 이 나가고 Sentry 이슈가 열린다.</b> 인터넷에 열린
@@ -174,6 +222,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<?>> handleException(Exception e) {
+        if (isClientDisconnected(e)) {
+            log.debug("클라이언트가 응답을 받기 전에 연결을 끊었습니다: {}", e.getMessage());
+            return null;
+        }
+
         log.error("Unexpected error: ", e);
 
         meterRegistry.counter("teacat.unexpected.error",

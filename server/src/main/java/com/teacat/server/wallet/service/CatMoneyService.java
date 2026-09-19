@@ -55,6 +55,7 @@ public class CatMoneyService {
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyClient catMoneyClient;
     private final CatMoneyHoldRepository holdRepository;
+    private final WalletService walletService;
 
     /**
      * 화면에 보여줄 잔액.
@@ -209,10 +210,10 @@ public class CatMoneyService {
      */
     private WalletRef resolveWalletRef(Long userId) {
         WalletOwner owner = walletOwnerRepository.findByUserId(userId)
-                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+                .orElseThrow(() -> walletService.walletMissing(userId));
 
         Wallet wallet = walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
-                .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+                .orElseThrow(() -> walletService.walletMissing(userId));
 
         return new WalletRef(owner, wallet);
     }

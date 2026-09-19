@@ -56,6 +56,9 @@ public abstract class PostgresIntegrationTest {
         registry.add("nft.photocard.draw.sweep-enabled", () -> "false");
         // 이상거래 심사의 시한 자동 승인·기록 정리 스위퍼도 끈다. 승인·거절은 테스트가 직접 부른다
         registry.add("nft.trade.review.maintenance-enabled", () -> "false");
+        // 지갑 발급 스위퍼도 끈다. 테스트에는 브로커가 없다 — 리스너도 붙이지 않는다
+        registry.add("wallet.provisioning.sweep-enabled", () -> "false");
+        registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
 
     @Autowired

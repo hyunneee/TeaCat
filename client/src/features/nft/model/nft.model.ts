@@ -1,5 +1,6 @@
-import { parseServerTime } from '@/shared/lib';
+import { formatDate, parseServerTime } from '@/shared/lib';
 import type {
+  MyDesignCopy,
   MyPhotocard,
   PhotocardDetail,
   PhotocardMintStatus,
@@ -173,6 +174,39 @@ export function photocardMarketState(
   if (card.marketType === 'AUCTION') return 'AUCTION';
   if (card.marketType === 'FIXED_PRICE' || card.listed) return 'LISTED';
   return 'STORED';
+}
+
+/**
+ * 같은 도안 한 장이 "어디서 온 것" 인가 — 목록의 첫 줄.
+ *
+ * 🔴 공연명을 쓰지 않습니다. 공연명은 도안에 붙어 있어서 같은 도안 세 장이 전부 같습니다
+ * (서버 `MyDesignPhotocardResponse` 주석). 갈리는 것은 좌석이고, 없으면 뽑기 카드입니다.
+ */
+export function copyOriginLabel(copy: MyDesignCopy): string {
+  return copy.origin ? formatOrigin(copy.origin) : '이벤트 카드팩';
+}
+
+/**
+ * 둘째 줄 — 몇 회차의 공연이었나. 뽑기 카드는 회차가 없어 발행 시각으로 갈라 봅니다.
+ *
+ * 🔴 "공연 며칠" 이 아니라 **회차**까지 적습니다. 같은 공연을 이틀 본 사람에게는
+ * 날짜만으로도 갈리지만, 하루에 2회 공연을 본 사람은 날짜가 같습니다.
+ */
+export function copyWhenLabel(copy: MyDesignCopy): string {
+  if (copy.performanceNum !== null && copy.performanceDate !== null) {
+    return `${copy.performanceNum}회차 · ${formatDate(copy.performanceDate)}`;
+  }
+  return `${formatDate(copy.issuedAt)} 발행`;
+}
+
+/**
+ * 지금 팔 수 있는 장 — 발행이 끝났고(`MINTED`) 마켓에 나가 있지 않은 것.
+ *
+ * 🔴 이미 판매·경매 중인 장을 또 걸 수 없습니다. 목록에서 빼지 않으면 사용자가 고른 뒤
+ * 서버가 거절합니다 — 고를 수 없는 것은 애초에 보여주지 않는 편이 낫습니다.
+ */
+export function sellableCopies(copies: MyDesignCopy[]): MyDesignCopy[] {
+  return copies.filter((copy) => copy.status === 'MINTED' && !copy.marketType);
 }
 
 /** 발행이 끝나지 않은 카드에만 한 줄. MINTED 면 null (아무것도 안 보임) */

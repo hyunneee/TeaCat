@@ -48,6 +48,8 @@ const AuctionDetailPage = page(() => import('@/pages/AuctionDetailPage'), 'Aucti
 const MyAuctionsPage = page(() => import('@/pages/MyAuctionsPage'), 'MyAuctionsPage');
 const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
+const StickerCreatePage = page(() => import('@/pages/StickerCreatePage'), 'StickerCreatePage');
+const MyStickersPage = page(() => import('@/pages/MyStickersPage'), 'MyStickersPage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -207,6 +209,13 @@ const devRoutes: RouteObject[] = IS_DEV_BUILD
           createElement(page(() => import('@/pages/DevFacePage'), 'DevFacePage')),
         ),
       },
+      /* 포카 꾸미기 그림판을 로그인 없이 봅니다 — 백엔드가 안 닿는 곳에서 화면 작업용.
+         본 라우트(`STICKER_CREATE`)는 RequireAuth 안에 있고 그쪽이 진짜 길입니다. */
+      {
+        path: ROUTES.DEV_STICKER,
+        element: withBoundary(<StickerCreatePage />),
+      },
+      { path: ROUTES.DEV_MY_STICKERS, element: withBoundary(<MyStickersPage />) },
     ]
   : [];
 
@@ -382,6 +391,15 @@ const routes: RouteObject[] = [
             path: ROUTES.TICKET_DETAIL(':ticketId'),
             element: withMask(withBoundary(<TicketDetailPage />)),
           },
+          /* ── AI 스티커 (포카 꾸미기) ── `FEATURE.sticker` 가 꺼지면 길이 없습니다.
+             그리기 화면은 사람을 특정하는 값이 없어 `withMask` 를 붙이지 않습니다. */
+          ...(FEATURE.sticker
+            ? [
+                { path: ROUTES.STICKER_CREATE, element: withBoundary(<StickerCreatePage />) },
+                /* 내가 만든 것들 — 내 데이터라 withMask */
+                { path: ROUTES.MY_STICKERS, element: withMask(withBoundary(<MyStickersPage />)) },
+              ]
+            : []),
           { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
           { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
           { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
