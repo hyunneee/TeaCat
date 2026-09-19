@@ -1,5 +1,6 @@
 package com.teacat.server.nft.entity;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,6 +15,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -42,6 +45,14 @@ public class NftAuctionBid {
     @Column(name = "amount", nullable = false, updatable = false)
     private Long amount;
 
+    /** 입찰 요청을 보낸 단말. 이상거래 심사(판매자·입찰자 동일 단말)가 읽는다. 모르면 null */
+    @Column(name = "client_ip", length = 45, updatable = false)
+    private String clientIp;
+
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "user_agent_hash", length = 64, updatable = false)
+    private String userAgentHash;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -54,6 +65,15 @@ public class NftAuctionBid {
 
     public static NftAuctionBid place(NftAuction auction, User bidder, Long amount) {
         return new NftAuctionBid(auction, bidder, amount);
+    }
+
+    public static NftAuctionBid place(NftAuction auction, User bidder, Long amount, ClientRequest client) {
+        NftAuctionBid bid = new NftAuctionBid(auction, bidder, amount);
+        if (client != null) {
+            bid.clientIp = client.ip();
+            bid.userAgentHash = client.userAgentHash();
+        }
+        return bid;
     }
 
     public boolean isBy(Long userId) {

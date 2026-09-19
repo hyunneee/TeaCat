@@ -15,6 +15,7 @@ import com.teacat.server.auth.exception.AuthErrorCode;
 import com.teacat.server.auth.repository.OauthAccountRepository;
 import com.teacat.server.auth.repository.OauthSignupTicketRepository;
 import com.teacat.server.auth.repository.OauthStateRepository;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
@@ -66,6 +67,7 @@ public class OauthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenProvider refreshTokenProvider;
     private final WalletService walletService;
+    private final LoginEventRecorder loginEventRecorder;
 
     public Duration getSignupTicketValidity() {
         return SIGNUP_TICKET_TTL;
@@ -86,7 +88,7 @@ public class OauthService {
     }
 
     @Transactional
-    public OauthCallbackResult handleCallback(String code, String state) {
+    public OauthCallbackResult handleCallback(String code, String state, ClientRequest client) {
         requireConfigured();
 
         // state 는 우리가 시작한 인가인지 확인하는 일회용 값이다(CSRF 방지)
@@ -97,7 +99,11 @@ public class OauthService {
         OauthProfile profile = ssafyOauthClient.fetchProfile(ssafyOauthClient.exchangeCodeForToken(code));
 
         return findLinkedUser(profile)
-                .map(user -> OauthCallbackResult.loggedIn(issueTokens(user)))
+                .map(user -> {
+                    // 이상거래 심사(R8)용 단말 기록. 실패해도 로그인은 그대로 성공한다
+                    loginEventRecorder.record(user.getId(), client);
+                    return OauthCallbackResult.loggedIn(issueTokens(user));
+                })
                 .orElseGet(() -> OauthCallbackResult.signupRequired(issueSignupTicket(profile)));
     }
 

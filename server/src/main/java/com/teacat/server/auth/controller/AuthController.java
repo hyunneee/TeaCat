@@ -8,11 +8,13 @@ import com.teacat.server.auth.dto.response.SignupResponse;
 import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.dto.response.TokenResponse;
 import com.teacat.server.auth.security.AuthCookieFactory;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.auth.service.AuthService;
 import com.teacat.server.common.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -45,8 +47,9 @@ public class AuthController {
             description = "액세스 토큰과 내 정보는 응답 바디로, 리프레시 토큰은 httpOnly 쿠키로 내려갑니다."
     )
     @PostMapping("/login")
-    public ResponseEntity<BaseResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        LoginResult result = authService.login(request);
+    public ResponseEntity<BaseResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request,
+                                                             @Parameter(hidden = true) HttpServletRequest http) {
+        LoginResult result = authService.login(request, ClientRequest.from(http));
 
         return withRefreshTokenCookie(result.tokens())
                 .body(BaseResponse.success(LoginResponse.of(result.tokens(), result.user())));
