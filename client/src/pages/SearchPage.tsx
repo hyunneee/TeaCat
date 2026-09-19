@@ -7,7 +7,7 @@ import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { ConcertCard } from '@/features/concert';
 import { NftCard } from '@/features/nft';
-import { TrendingSearchInput } from '@/shared/search';
+import { TrendingSearchInput, SearchTrendList } from '@/shared/search';
 import { useUnifiedSearch } from '@/features/search';
 
 /** 결과를 몇 개까지 보여줄지. 더 보려면 각 탭으로 넘깁니다. */
@@ -20,12 +20,12 @@ const LIMIT = 6;
  * 사용자가 찾는 게 공연인지 포카인지 미리 정하게 하면,
  * 잘못 고른 사람은 "없다"고 판단하고 나갑니다. 둘 다 보여주고 고르게 합니다.
  *
- * 입력 중에는 서버를 호출하지 않고 제출(Enter/실시간 검색어 선택)할 때만 조회합니다.
+ * 입력 중에는 서버를 호출하지 않고 제출(Enter/인기 검색어 선택)할 때만 조회합니다.
  * 이 제출 한 건이 서버의 검색 통계 한 건과 정확히 대응합니다.
  */
 export function SearchPage() {
   const navigate = useNavigate();
-  /* 데스크톱 상단 검색창이 `?q=` 로 넘겨줍니다. 그 글자로 시작해야 두 번 치지 않습니다 */
+  /* 결과 URL로 진입한 경우 검색어를 복원합니다. */
   const [searchParams, setSearchParams] = useSearchParams();
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
   const query = searchParams.get('q')?.trim() ?? '';
@@ -40,7 +40,7 @@ export function SearchPage() {
     setSearchParams(next ? { q: next } : {}, { replace: true });
   };
 
-  /* 키워드가 없을 때는 조회 결과를 쓰지 않습니다 (전체 목록이 내려옵니다) */
+  /* 빈 검색어에서는 결과 API를 호출하지 않고 인기 검색어를 보여줍니다. */
   const concertHits = enabled ? (data?.concerts ?? []) : [];
   const pocaHits = enabled ? (data?.photocards ?? []) : [];
   const loading = enabled && isPending;
@@ -49,7 +49,7 @@ export function SearchPage() {
   return (
     /* 결과가 없을 때 안내를 **화면 한가운데**에 놓기 위해 세로 flex 로 짭니다.
        (본문이 flex-1 이어야 남은 높이 전체가 중앙 정렬의 기준이 됩니다) */
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col lg:min-h-[calc(100dvh-109px)]">
       <Header title="검색" showBack className="lg:hidden" />
 
       {/* 입력창은 **헤더 아래 한 줄을 통째로** 씁니다.
@@ -57,101 +57,92 @@ export function SearchPage() {
           다른 탭의 검색 바와 같은 자리·같은 규칙(`under-header`)이라
           탭을 옮겨 다녀도 검색창이 같은 높이에 있습니다. */}
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:hidden">
-        {/* 세 화면(검색·공연·포카)의 검색창은 **props 까지 같습니다.**
-            크기·톤·지우기 버튼이 화면마다 다르면 같은 기능이 다른 것처럼 보입니다.
-            글자 크기는 Input 이 정하니 여기서 덧붙이지 마세요. */}
-        <TrendingSearchInput
-          autoFocus
-          value={keyword}
-          onChange={setKeyword}
-          onSubmit={submit}
-        />
+        <TrendingSearchInput autoFocus value={keyword} onChange={setKeyword} onSubmit={submit} />
       </div>
 
       <div className="flex flex-1 flex-col lg:mx-auto lg:w-full lg:max-w-5xl lg:pt-8">
-      {!enabled ? (
-        <EmptyState
-          className="flex-1"
-          icon={Search}
-          title="무엇을 찾으세요?"
-          description="공연 이름이나 아티스트, 포토카드 이름으로 찾을 수 있어요."
-        />
-      ) : loading ? (
-        <Loading label="검색 중" className="flex-1" />
-      ) : empty ? (
-        <EmptyState
-          className="flex-1"
-          icon={Search}
-          title="검색 결과가 없어요"
-          description={`'${query}' 와 맞는 공연이나 포토카드를 찾지 못했어요.`}
-        />
-      ) : (
-        <div className="space-y-6 p-4 pt-2">
-          {concertHits.length > 0 && (
-            <section>
-              <SectionTitle
-                action={
-                  concertHits.length > LIMIT ? (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`${ROUTES.CONCERTS}?q=${encodeURIComponent(query)}`)}
-                      className="text-subtle hover:text-ink text-sm transition-colors"
-                    >
-                      전체 {concertHits.length}건
-                    </button>
-                  ) : undefined
-                }
-              >
-                공연
-              </SectionTitle>
-              <ul className="space-y-2">
-                {concertHits.slice(0, LIMIT).map((concert) => (
-                  <li key={concert.concertId}>
-                    <ConcertCard
-                      concert={concert}
-                      onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+        {!enabled ? (
+          <div className="lg:flex lg:flex-1 lg:items-center lg:justify-center lg:pb-8">
+            <SearchTrendList onSelect={submit} />
+          </div>
+        ) : loading ? (
+          <Loading label="검색 중" className="flex-1" />
+        ) : empty ? (
+          <EmptyState
+            className="flex-1"
+            icon={Search}
+            title="검색 결과가 없어요"
+            description={`'${query}' 와 맞는 공연이나 포토카드를 찾지 못했어요.`}
+          />
+        ) : (
+          <div className="space-y-6 p-4 pt-2">
+            {concertHits.length > 0 && (
+              <section>
+                <SectionTitle
+                  action={
+                    concertHits.length > LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`${ROUTES.CONCERTS}?q=${encodeURIComponent(query)}`)
+                        }
+                        className="text-subtle hover:text-ink text-sm transition-colors"
+                      >
+                        전체 {concertHits.length}건
+                      </button>
+                    ) : undefined
+                  }
+                >
+                  공연
+                </SectionTitle>
+                <ul className="space-y-2">
+                  {concertHits.slice(0, LIMIT).map((concert) => (
+                    <li key={concert.concertId}>
+                      <ConcertCard
+                        concert={concert}
+                        onClick={() => navigate(ROUTES.CONCERT_DETAIL(String(concert.concertId)))}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-          {pocaHits.length > 0 && (
-            <section>
-              <SectionTitle
-                action={
-                  pocaHits.length > LIMIT ? (
-                    <button
-                      type="button"
-                      onClick={() => navigate(ROUTES.NFT_MARKET)}
-                      className="text-subtle hover:text-ink text-sm transition-colors"
-                    >
-                      전체 {pocaHits.length}건
-                    </button>
-                  ) : undefined
-                }
-              >
-                포토카드
-              </SectionTitle>
-              <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
-                {pocaHits.slice(0, LIMIT).map((card) => (
-                  <li key={card.photocardId}>
-                    <NftCard
-                      photocardId={card.photocardId}
-                      designName={card.designName}
-                      imageUrl={card.imageUrl}
-                      performanceTitle={card.performanceTitle}
-                      price={card.price}
-                      onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      )}
+            {pocaHits.length > 0 && (
+              <section>
+                <SectionTitle
+                  action={
+                    pocaHits.length > LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(ROUTES.NFT_MARKET)}
+                        className="text-subtle hover:text-ink text-sm transition-colors"
+                      >
+                        전체 {pocaHits.length}건
+                      </button>
+                    ) : undefined
+                  }
+                >
+                  포토카드
+                </SectionTitle>
+                <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
+                  {pocaHits.slice(0, LIMIT).map((card) => (
+                    <li key={card.photocardId}>
+                      <NftCard
+                        photocardId={card.photocardId}
+                        designName={card.designName}
+                        imageUrl={card.imageUrl}
+                        performanceTitle={card.performanceTitle}
+                        price={card.price}
+                        onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
