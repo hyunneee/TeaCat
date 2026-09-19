@@ -15,10 +15,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.BDDMockito.willThrow;
 
 @ExtendWith(MockitoExtension.class)
@@ -114,8 +119,52 @@ class NftTradeSettlementProcessorTests {
             NftTradeChainStatus status, String catTx, String nftTx, String refundTx) {
         var buyer = new NftTradeSettlementWriter.WalletRef(1L, "buyer", 1);
         var seller = new NftTradeSettlementWriter.WalletRef(2L, "seller", 2);
+        return command(status, catTx, nftTx, refundTx, LocalDateTime.of(2026, 9, 18, 0, 0));
+    }
+
+    private NftTradeSettlementWriter.SettlementCommand command(
+            NftTradeChainStatus status, String catTx, String nftTx, String refundTx, LocalDateTime riskScreenedAt) {
+        var buyer = new NftTradeSettlementWriter.WalletRef(1L, "buyer", 1);
+        var seller = new NftTradeSettlementWriter.WalletRef(2L, "seller", 2);
         return new NftTradeSettlementWriter.SettlementCommand(
                 TRADE_ID, status, 0, 300, "9",
-                "cat-key", catTx, "nft-key", nftTx, "refund-key", refundTx, buyer, seller);
+                "cat-key", catTx, "nft-key", nftTx, "refund-key", refundTx, buyer, seller, riskScreenedAt);
+    }
+
+    @Test
+    void 심사_전_대기_거래는_먼저_심사하고_걸리면_체인에_보내지_않는다() {
+        given(writer.command(TRADE_ID)).willReturn(command(NftTradeChainStatus.PENDING, null, null, null, null));
+        given(writer.screen(TRADE_ID)).willReturn(true);
+
+        processor.process(TRADE_ID);
+
+        verify(writer).screen(TRADE_ID);
+        verifyNoInteractions(catMoneyClient);
+        verify(writer, never()).catSubmitted(eq(TRADE_ID), any());
+    }
+
+    @Test
+    void 심사를_통과한_대기_거래는_같은_주기에_캣머니를_보낸다() {
+        given(writer.command(TRADE_ID)).willReturn(command(NftTradeChainStatus.PENDING, null, null, null, null));
+        given(writer.screen(TRADE_ID)).willReturn(false);
+        given(catMoneyClient.transfer("cat-key", "buyer", 1, "seller", BigInteger.valueOf(300), "7"))
+                .willReturn(new CatMoneyWriteResult("PENDING", TX));
+
+        processor.process(TRADE_ID);
+
+        verify(writer).screen(TRADE_ID);
+        verify(writer).catSubmitted(TRADE_ID, TX);
+    }
+
+    @Test
+    void 이미_심사한_대기_거래는_다시_심사하지_않는다() {
+        given(writer.command(TRADE_ID)).willReturn(command(NftTradeChainStatus.PENDING, null, null, null));
+        given(catMoneyClient.transfer("cat-key", "buyer", 1, "seller", BigInteger.valueOf(300), "7"))
+                .willReturn(new CatMoneyWriteResult("PENDING", TX));
+
+        processor.process(TRADE_ID);
+
+        verify(writer, never()).screen(TRADE_ID);
+        verify(writer).catSubmitted(TRADE_ID, TX);
     }
 }

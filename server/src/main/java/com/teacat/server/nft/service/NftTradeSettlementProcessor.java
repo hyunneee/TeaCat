@@ -31,7 +31,13 @@ public class NftTradeSettlementProcessor {
         NftTradeSettlementWriter.SettlementCommand command = writer.command(tradeId);
         try {
             switch (command.status()) {
-                case PENDING -> submitCat(command);
+                case PENDING -> {
+                    // 체인에 나가기 전 이상거래 심사. 걸리면 RISK_REVIEW 로 멈추고 이번 주기는 여기서 끝난다
+                    if (command.needsRiskScreening() && writer.screen(command.tradeId())) {
+                        return;
+                    }
+                    submitCat(command);
+                }
                 case CAT_SUBMITTED -> confirmCat(command);
                 case CAT_CONFIRMED -> submitNft(command);
                 case NFT_SUBMITTED -> confirmNft(command);
