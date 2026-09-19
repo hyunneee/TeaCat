@@ -103,6 +103,9 @@ export const can = {
    */
   manageInquiries: (user: User | null): boolean => user?.role === 'ADMIN',
 
+  /** 이상거래 심사(승인·거절)와 전체 거래 내역. 서버 `/admin/nft/trade-reviews/**` 는 ADMIN 전용이다 */
+  reviewTrades: (user: User | null): boolean => user?.role === 'ADMIN',
+
   /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
   manageStadiumLayouts: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM'),
 };
