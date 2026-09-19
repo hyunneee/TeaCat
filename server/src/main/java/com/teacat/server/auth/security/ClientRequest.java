@@ -45,18 +45,26 @@ public record ClientRequest(String ip, String userAgentHash) {
         return ip != null || userAgentHash != null;
     }
 
+    /**
+     * 🔴 <b>X-Real-IP 를 먼저 본다.</b> nginx 가 {@code proxy_set_header X-Real-IP $remote_addr} 로 <b>항상 덮어쓰므로</b>
+     * 클라이언트가 위조할 수 없다. 반면 {@code X-Forwarded-For} 는 {@code $proxy_add_x_forwarded_for} 가
+     * <b>클라이언트가 보낸 값 뒤에 실제 IP 를 이어붙이는</b> 구조라, 맨 앞 값은 사용자가 마음대로 넣을 수 있다.
+     * 그 값을 믿으면 매 요청마다 다른 IP 를 위조해 동일 단말 규칙(R1)을 그냥 빠져나간다.
+     *
+     * <p>X-Forwarded-For 는 nginx 를 거치지 않는 경로(로컬 개발·시뮬레이터)에서만 폴백으로 쓴다.
+     */
     private static String resolveIp(HttpServletRequest request) {
+        String realIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(realIp)) {
+            return normalizeIp(realIp.trim());
+        }
         String forwarded = request.getHeader("X-Forwarded-For");
         if (StringUtils.hasText(forwarded)) {
-            // "client, proxy1, proxy2" — 맨 앞이 실제 클라이언트다
+            // "client, proxy1, proxy2" — 맨 앞이 클라이언트가 주장하는 주소다
             String first = forwarded.split(",")[0].trim();
             if (StringUtils.hasText(first)) {
                 return normalizeIp(first);
             }
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (StringUtils.hasText(realIp)) {
-            return normalizeIp(realIp.trim());
         }
         return normalizeIp(request.getRemoteAddr());
     }

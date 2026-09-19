@@ -218,7 +218,12 @@ sequenceDiagram
 
 | 컬럼 | 테이블 | 언제 | 비고 |
 |---|---|---|---|
-| `client_ip varchar(45)`, `user_agent_hash char(64)` | `nft_auction_bids` | 입찰 요청 | nginx 가 `X-Forwarded-For` · `X-Real-IP` 를 이미 넣는다(`docker/nginx/conf.d/dev.conf`). 전역 `ForwardedHeaderFilter` 대신 `auth/security/ClientRequest.from(request)` 가 헤더 첫 값을 직접 읽는다 — SecurityConfig 를 건드리지 않고, 시뮬레이터가 nginx 를 우회해 헤더로 단말을 지정할 수 있다. `inet` 대신 varchar 인 이유는 Hibernate `validate` 와 타입 매핑을 단순하게 두기 위해서다 |
+| `client_ip varchar(45)`, `user_agent_hash char(64)` | `nft_auction_bids` | 입찰 요청 | nginx 가 `X-Real-IP` · `X-Forwarded-For` 를 이미 넣는다(dev·prod 양쪽). 전역 `ForwardedHeaderFilter` 대신 `auth/security/ClientRequest.from(request)` 가 직접 읽는다 — SecurityConfig 를 건드리지 않고, 시뮬레이터가 nginx 를 우회해 헤더로 단말을 지정할 수 있다. `inet` 대신 varchar 인 이유는 Hibernate `validate` 와 타입 매핑을 단순하게 두기 위해서다 |
+
+> 🔴 **읽는 순서가 보안 문제다.** `X-Real-IP` 를 먼저 본다 — nginx 가 `$remote_addr` 로 **항상 덮어쓰므로** 위조할 수 없다.
+> `X-Forwarded-For` 는 `$proxy_add_x_forwarded_for` 가 **클라이언트가 보낸 값 뒤에** 실제 IP 를 이어붙이는 구조라,
+> 맨 앞 값은 사용자가 마음대로 넣을 수 있다. 그걸 믿으면 매 요청마다 다른 IP 를 위조해 R1 을 그냥 빠져나간다.
+> X-Forwarded-For 는 nginx 를 거치지 않는 경로(로컬·시뮬레이터)의 폴백으로만 쓴다.
 | 같음 | `nft_auctions`, `nft_photocard_listings` | 등록 요청 | 판매자 쪽 단말 |
 | 같음 | `nft_photocard_trades` | 즉시구매·고정가 구매 요청 | 구매자 쪽 단말. **자연 낙찰은 여기가 NULL** 이고 스크리너가 최고 입찰 행에서 읽는다 |
 | `risk_screened_at timestamp` | `nft_photocard_trades` | 심사 통과 시 | 프로세서가 "심사 했나" 를 이걸로 본다 |
