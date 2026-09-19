@@ -9,6 +9,7 @@ import {
   MessagesSquare,
   Images,
   ScanFace,
+  ShieldAlert,
   Sparkles,
   Music,
   Users,
@@ -120,6 +121,13 @@ const ADMIN_MENU: AdminMenuItem[] = [
     label: '문의 관리',
     icon: MessagesSquare,
     visible: can.manageInquiries,
+    matchNested: true,
+  },
+  {
+    to: ROUTES.ADMIN_TRADE_REVIEWS,
+    label: '거래 심사',
+    icon: ShieldAlert,
+    visible: can.reviewTrades,
     matchNested: true,
   },
 ];

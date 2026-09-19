@@ -30,7 +30,8 @@ public record NftPurchaseResponse(
                 trade.getPhotocard().getId(),
                 trade.getPrice(),
                 trade.getCompletedAt(),
-                trade.getChainStatus()
+                // 심사 보류는 사용자에게 정산 대기로만 보인다 (NftTradeStatusResponse 와 같은 이유)
+                NftTradeStatusResponse.publicStatus(trade)
         );
     }
 }

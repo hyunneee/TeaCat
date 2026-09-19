@@ -1,5 +1,6 @@
 package com.teacat.server.nft.entity;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.wallet.entity.CatMoneyHoldRefType;
 import jakarta.persistence.*;
@@ -19,6 +20,9 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class NftPhotocardTrade {
+    /** 이상거래 심사에서 관리자가 거절했을 때의 failure_code */
+    public static final String RISK_REJECTED = "RISK_REJECTED";
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -58,6 +62,14 @@ public class NftPhotocardTrade {
     @Column(name = "next_retry_at") private LocalDateTime nextRetryAt;
     @Column(name = "traded_at") private LocalDateTime tradedAt;
     @Column(name = "completed_at") private LocalDateTime completedAt;
+
+    /** 즉시구매·고정가 구매 요청의 단말. 자연 낙찰은 최고 입찰 행이 갖고 있어 여기는 null 이다 */
+    @Column(name = "client_ip", length = 45, updatable = false) private String clientIp;
+    @JdbcTypeCode(SqlTypes.CHAR) @Column(name = "user_agent_hash", length = 64, updatable = false)
+    private String userAgentHash;
+    /** 이상거래 심사를 통과(또는 관리자 승인)한 시각. null 이면 정산 프로세서가 체인 전송 전에 심사한다 */
+    @Column(name = "risk_screened_at") private LocalDateTime riskScreenedAt;
+
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false)
@@ -92,6 +104,15 @@ public class NftPhotocardTrade {
         this.refundOperationKey = "nft-trade:%d:refund".formatted(id);
     }
 
+    /** 구매 요청을 보낸 단말을 남긴다. 생성 직후 한 번만 부른다 */
+    public void recordClientRequest(ClientRequest client) {
+        if (client == null) {
+            return;
+        }
+        this.clientIp = client.ip();
+        this.userAgentHash = client.userAgentHash();
+    }
+
     public void catSubmitted(String txHash) { chainStatus = NftTradeChainStatus.CAT_SUBMITTED; settleTxHash = txHash; clearRetry(); }
     public void catConfirmed() { chainStatus = NftTradeChainStatus.CAT_CONFIRMED; clearRetry(); }
     public void nftSubmitted(String txHash) { chainStatus = NftTradeChainStatus.NFT_SUBMITTED; transferTxHash = txHash; clearRetry(); }
@@ -105,6 +126,30 @@ public class NftPhotocardTrade {
     public void retryCat(String code, LocalDateTime at) { chainStatus = NftTradeChainStatus.PENDING; settleTxHash = null; retryLater(code, at); }
     public void retryNft(String code, LocalDateTime at) { chainStatus = NftTradeChainStatus.CAT_CONFIRMED; transferTxHash = null; retryLater(code, at); }
     public void retryRefund(String code, LocalDateTime at) { chainStatus = NftTradeChainStatus.COMPENSATING; refundTxHash = null; retryLater(code, at); }
+
+    /**
+     * 이상거래 심사 통과 또는 관리자 승인. PENDING 으로 두고 심사 시각을 찍는다 — 정산 프로세서가 다시 심사하지 않고
+     * 바로 체인 전송으로 간다. RISK_REVIEW 에서 부르면 스케줄러가 다음 주기에 집는다.
+     */
+    public void clearRisk(LocalDateTime now) {
+        chainStatus = NftTradeChainStatus.PENDING;
+        riskScreenedAt = now;
+        nextRetryAt = null;
+    }
+
+    /** 이상거래 심사에 걸림. 체인에는 아무것도 나가지 않은 상태에서 멈춘다 */
+    public void holdForRiskReview() {
+        chainStatus = NftTradeChainStatus.RISK_REVIEW;
+        nextRetryAt = null;
+    }
+
+    /** 관리자가 심사에서 거절. 홀드 해제·출처 복구는 호출자(ReviewService)가 한다 */
+    public void rejectByRiskReview() {
+        fail(RISK_REJECTED);
+    }
+
+    public boolean isRiskScreened() { return riskScreenedAt != null; }
+    public boolean isUnderRiskReview() { return chainStatus == NftTradeChainStatus.RISK_REVIEW; }
 
     private void clearRetry() { retryCount = 0; nextRetryAt = null; }
     public boolean isParticipant(Long userId) { return buyer.getId().equals(userId) || seller.getId().equals(userId); }

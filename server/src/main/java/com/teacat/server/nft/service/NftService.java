@@ -1,5 +1,6 @@
 package com.teacat.server.nft.service;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftDesignAllocationRequest;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
@@ -212,6 +213,15 @@ public class NftService {
     public NftListingResponse registerListing(Long userId,
                                               Long photocardId,
                                               NftListingCreateRequest request) {
+        return registerListing(userId, photocardId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 등록 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftListingResponse registerListing(Long userId,
+                                              Long photocardId,
+                                              NftListingCreateRequest request,
+                                              ClientRequest client) {
         NftPhotocard photocard = getPhotocardForUpdate(photocardId);
         if (!photocard.isOwnedBy(userId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
@@ -229,11 +239,11 @@ public class NftService {
             throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
-        NftPhotocardListing listing = listingRepository.save(
-                NftPhotocardListing.create(
-                        photocard, photocard.getOwner(), request.price(),
-                        request.description() == null ? "" : request.description().trim()));
-        return NftListingResponse.from(listing);
+        NftPhotocardListing listing = NftPhotocardListing.create(
+                photocard, photocard.getOwner(), request.price(),
+                request.description() == null ? "" : request.description().trim());
+        listing.recordClientRequest(client);
+        return NftListingResponse.from(listingRepository.save(listing));
     }
 
     @Transactional
@@ -248,6 +258,13 @@ public class NftService {
 
     @Transactional
     public NftPurchaseResponse purchase(Long buyerId, Long photocardId, String idempotencyKeyHeader) {
+        return purchase(buyerId, photocardId, idempotencyKeyHeader, ClientRequest.unknown());
+    }
+
+    /** @param client 구매 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말, 계정 탈취)가 읽는다 */
+    @Transactional
+    public NftPurchaseResponse purchase(Long buyerId, Long photocardId, String idempotencyKeyHeader,
+                                        ClientRequest client) {
         UUID idempotencyKey = parseIdempotencyKey(idempotencyKeyHeader);
 
         // 같은 구매자의 중복 키 요청과, 추후 CAT 계정 차감을 직렬화하기 위한 임시 잠금이다.
@@ -281,8 +298,9 @@ public class NftService {
         User buyer = userRepository.findById(buyerId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.pendingListing(listing, buyer, idempotencyKey));
+        NftPhotocardTrade trade = NftPhotocardTrade.pendingListing(listing, buyer, idempotencyKey);
+        trade.recordClientRequest(client); // 단말 컬럼은 updatable=false 라 INSERT 전에 채운다
+        trade = tradeRepository.saveAndFlush(trade);
         trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.hold(buyerId, listing.getPrice(), CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.holdIncoming(listing.getSeller().getId(), listing.getPrice(),

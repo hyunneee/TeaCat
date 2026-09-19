@@ -195,6 +195,45 @@ nft:
     sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
     sweep-batch-size: 100
     sweep-enabled: true
+  trade:
+    review:
+      # 이상거래 심사 (server/AUCTION_FRAUD_DESIGN.md). 거래가 체인에 나가기 전에 규칙 R1~R8 을 돌려
+      #   걸리면 RISK_REVIEW 로 멈추고 관리자가 승인·거절한다. 기준값은 오탐을 보면서 재배포 없이 조인다.
+      # false 면 스크리너가 빈 결과를 돌려 정산이 예전과 똑같이 흐른다 — 문제 생겼을 때의 비상 스위치
+      enabled: ${NFT_TRADE_REVIEW_ENABLED:true}
+      # FLAG: 걸려도 정산은 그대로 가고 심사 행만 남긴다 — 지금 단계는 차단이 아니라 데이터 수집이다.
+      # HOLD: 체인 전송 전에 멈추고 관리자 승인·거절을 기다린다. 실사용자가 생기고 오탐률을 본 뒤에 올린다
+      mode: ${NFT_TRADE_REVIEW_MODE:FLAG}
+      # HOLD 모드에서 관리자가 이 시간 안에 결정하지 않으면 자동 승인. 사용자 돈이 영영 묶이는 쪽이 오탐보다 흔한 사고다
+      auto-approve-after: ${NFT_TRADE_REVIEW_AUTO_APPROVE_AFTER:PT72H}
+      # R3 반복 거래쌍·순환
+      pair-window: ${NFT_TRADE_REVIEW_PAIR_WINDOW:P30D}
+      pair-threshold: ${NFT_TRADE_REVIEW_PAIR_THRESHOLD:3}
+      # R4 가격 이상 — 같은 도안 최근 거래가 중앙값 대비 배율. 표본 부족이면 판단 안 함
+      price-window: ${NFT_TRADE_REVIEW_PRICE_WINDOW:P30D}
+      price-multiplier: ${NFT_TRADE_REVIEW_PRICE_MULTIPLIER:4.0}
+      price-min-samples: ${NFT_TRADE_REVIEW_PRICE_MIN_SAMPLES:3}
+      # R5 신규 계정 급행 — 가입 직후 + 첫 충전 직후 구매
+      new-account-age: ${NFT_TRADE_REVIEW_NEW_ACCOUNT_AGE:PT24H}
+      deposit-to-bid: ${NFT_TRADE_REVIEW_DEPOSIT_TO_BID:PT60M}
+      # R6 거래량 집중 — 최근 7일 거래 수가 이전 4주 주평균의 3배 이상이고 당사자가 절반 이상에 끼면
+      volume-window: ${NFT_TRADE_REVIEW_VOLUME_WINDOW:P7D}
+      volume-baseline-weeks: ${NFT_TRADE_REVIEW_VOLUME_BASELINE_WEEKS:4}
+      volume-multiplier: ${NFT_TRADE_REVIEW_VOLUME_MULTIPLIER:3.0}
+      volume-min-baseline: ${NFT_TRADE_REVIEW_VOLUME_MIN_BASELINE:3}
+      # R7 매집 — 이 거래로 도안 발행량의 30% 이상을 갖게 되거나 최근 도안 거래의 절반 이상을 사들였으면
+      hoard-share: ${NFT_TRADE_REVIEW_HOARD_SHARE:0.30}
+      hoard-buy-share: ${NFT_TRADE_REVIEW_HOARD_BUY_SHARE:0.50}
+      hoard-min-supply: ${NFT_TRADE_REVIEW_HOARD_MIN_SUPPLY:10}
+      # R8 계정 탈취 의심 — 처음 보는 단말에서 로그인한 직후 평소의 몇 배를 쓰면. 세 조건 AND
+      takeover-login-window: ${NFT_TRADE_REVIEW_TAKEOVER_LOGIN_WINDOW:P90D}
+      takeover-first-login-to-bid: ${NFT_TRADE_REVIEW_TAKEOVER_FIRST_LOGIN_TO_BID:PT30M}
+      takeover-spend-multiplier: ${NFT_TRADE_REVIEW_TAKEOVER_SPEND_MULTIPLIER:2.0}
+      # 로그인 단말 기록(user_login_events) 보관 기간. 심사 외 용도가 없어 오래 들고 있지 않는다
+      login-event-retention: ${NFT_TRADE_REVIEW_LOGIN_EVENT_RETENTION:P90D}
+      # 시한 자동 승인·기록 정리 스위퍼. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기
+      maintenance-interval: ${NFT_TRADE_REVIEW_MAINTENANCE_INTERVAL:PT10M}
+      maintenance-enabled: true
   design:
     # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
     #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.
