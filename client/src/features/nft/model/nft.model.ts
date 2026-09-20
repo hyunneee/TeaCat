@@ -6,6 +6,7 @@ import type {
   PhotocardMintStatus,
   PhotocardOrigin,
   PhotocardTrade,
+  PocaDrawStatus,
   PurchaseHistory,
   SaleHistory,
 } from './nft.types';
@@ -33,15 +34,11 @@ export function isListed(detail: PhotocardDetail): boolean {
 }
 
 /**
- * 내 포카인가 — **닉네임 비교**.
- *
- * 상세 응답에 소유자 id 가 없어 `ownerNickname` 으로 판정합니다.
- * 닉네임은 서버에서 유니크(`uq_users_nickname_active`)라 동작하지만,
- * 서버가 `viewer.isOwner` 를 주기 시작하면 **이 함수 하나만** 바꾸면 됩니다.
- * 화면은 이 함수만 부르고 닉네임을 직접 비교하지 않습니다.
+ * 내 포카인가. 서버가 인증 사용자 ID로 판정한 값을 사용한다.
+ * 두 번째 인자는 로그인 여부를 확인하는 기존 호출 계약이며 닉네임은 비교하지 않는다.
  */
 export function isOwner(detail: PhotocardDetail, viewerNickname: string | undefined): boolean {
-  return !!viewerNickname && detail.ownerNickname === viewerNickname;
+  return !!viewerNickname && detail.isMine === true;
 }
 
 /** 내가 이 포카를 살 수 있는가 */
@@ -90,12 +87,6 @@ export function pocaSeed(photocardId: number): string {
 }
 
 /**
- * 이 카드가 어디서 왔는가 — 목록·상세의 둘째 줄.
- *
- * 뽑기로 얻은 카드는 공연이 없어서 서버가 `performanceTitle` 을 null 로 줍니다.
- * 빈 줄로 두면 카드마다 높이가 달라지고 "왜 여긴 비었지" 가 남습니다.
- */
-/**
  * 서버가 도안 이름에 공연 제목을 붙여 둡니다 — `"김예린 · 아기숭이 콘서트"`.
  * 온체인 메타데이터에 박히는 이름이라 **거기서는 그래야 합니다**(같은 사람이라도 공연마다
  * 다른 카드라서 구분이 필요합니다). 화면에서는 앞의 이름만 씁니다 —
@@ -124,8 +115,22 @@ export function packOpenAtLabel(nextOpenAt: string): string {
   }).format(new Date(parseServerTime(nextOpenAt)));
 }
 
-export function photocardSource(performanceTitle: string | null): string {
-  return performanceTitle ?? '이벤트 카드팩';
+/**
+ * 이 카드가 어디서 왔는가 — 목록·상세의 둘째 줄.
+ *
+ * **공연명 → 이벤트 이름 → '이벤트 카드팩'** 순서입니다. 카드팩에서 나온 카드는 공연이
+ * 없어서 서버가 `performanceTitle` 을 null 로 주는데, 빈 줄로 두면 카드마다 높이가 달라지고
+ * "왜 여긴 비었지" 가 남습니다.
+ *
+ * 🔴 **이벤트 여부를 공연명이 null 인 것으로 판단하지 않습니다.** 어느 이벤트였는지는
+ * 서버가 팩의 출처로 판별해 `eventName` 으로 줍니다 — 화면은 받은 값만 씁니다.
+ * 이벤트가 아닌 팩(입장 기념)은 `eventName` 이 없어 마지막 문구로 떨어집니다.
+ */
+export function photocardSource(
+  performanceTitle: string | null,
+  eventName?: string | null,
+): string {
+  return performanceTitle ?? eventName ?? '이벤트 카드팩';
 }
 
 /** 'VIP석 A구역 3열 5번' / 스탠딩이면 'VIP석 A구역 스탠딩' */
@@ -215,3 +220,49 @@ export function mintStatusLabel(status: PhotocardMintStatus): string | null {
   if (status === 'FAILED') return '발행 실패';
   return '발행 처리 중';
 }
+
+/**
+ * 아직 못 여는 팩 중 **가장 이른 개봉 시각**.
+ *
+ * 🔴 팩 목록(`packs`)이 있으면 그걸 봅니다 — 팩마다 시각이 다르고, 서버가 준 `nextOpenAt` 도 결국
+ * 같은 값이지만 목록이 있으면 화면이 한 곳(이 함수)만 보게 됩니다. 옛 서버(목록 없음)면 `nextOpenAt` 으로
+ * 물러섭니다. 시각은 **계산값**이라 공연이 연기되면 바뀌므로 이 값을 저장해 두지 마세요.
+ */
+export function nextLockedOpenAt(status: PocaDrawStatus | undefined): string | null {
+  if (!status) return null;
+  if (!status.packs) return status.nextOpenAt;
+
+  const times = status.packs
+    .filter((pack) => !pack.openable && pack.openAt)
+    .map((pack) => pack.openAt as string)
+    .sort((a, b) => parseServerTime(a) - parseServerTime(b));
+  return times[0] ?? null;
+}
+
+/** 잠긴 팩을 **같은 개봉 시각끼리** 묶은 한 칸 */
+export interface LockedPackGroup {
+  openAt: string;
+  count: number;
+}
+
+/**
+ * 잠긴 팩을 개봉 시각별로 묶습니다 — 칸 하나가 "n개 · 9월 20일 19:50 열림" 이 됩니다.
+ *
+ * 🔴 **목록이 잘렸으면 묶지 않습니다(null).** 서버는 팩을 최대 50개까지만 주는데, 그때 묶으면
+ * 없는 팩이 생긴 것처럼(또는 있는 팩이 사라진 것처럼) 보입니다. 부르는 쪽이 옛 방식(`scheduled` 한 칸)
+ * 으로 물러서게 null 을 돌려줍니다.
+ */
+export function groupLockedPacks(status: PocaDrawStatus | undefined): LockedPackGroup[] | null {
+  if (!status?.packs) return null;
+  if (status.packs.length < status.remaining + status.scheduled) return null;
+
+  const groups = new Map<string, number>();
+  for (const pack of status.packs) {
+    if (pack.openable || !pack.openAt) continue;
+    groups.set(pack.openAt, (groups.get(pack.openAt) ?? 0) + 1);
+  }
+  return [...groups.entries()]
+    .map(([openAt, count]) => ({ openAt, count }))
+    .sort((a, b) => parseServerTime(a.openAt) - parseServerTime(b.openAt));
+}
+

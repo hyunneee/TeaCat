@@ -25,6 +25,11 @@ import java.math.BigDecimal;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Area {
 
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder;
+
+    public void changeDisplayOrder(int order) { this.displayOrder = order; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

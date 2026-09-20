@@ -1,5 +1,5 @@
-import type { DrawPoolCard, MyPhotocard, PocaGrade } from './nft.types';
-import { photocardMarketState } from './nft.model';
+import type { DrawPoolCard, MyPhotocard, MyPhotocardSummaryDesign, PocaGrade } from './nft.types';
+import { type photocardMarketState } from './nft.model';
 import { pocaRole, type PocaRole } from './pocaDraw.model';
 
 /**
@@ -62,7 +62,7 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
 ];
 
 /**
- * 전체 도안 + 내가 가진 카드 → 도감.
+ * 전체 도안 + 내 보유 요약 → 도감.
  *
  * 🔴 **도안 ID 로 맞춥니다.** 이름으로 맞추면 운영자가 도안 이름을 바꾸는 순간 보유 표시가
  * 통째로 어긋나고, 이름이 같은 다른 도안이 생기면 남의 칸이 채워집니다.
@@ -73,50 +73,16 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
  *
  * 순서는 **서버가 준 도안 순서 그대로**입니다 — 가진 것을 앞으로 당기면 카드를 얻을 때마다
  * 도감의 자리가 바뀌어서, 외워 둔 위치로 찾아가는 도감의 성질이 사라집니다.
+ *
+ * 개수·판매 상태·대표 카드는 **서버가 센 값**(`GET /users/me/photocards/summary`)을 그대로 씁니다.
+ * 예전에는 카드 목록을 끝까지 받아 여기서 세었는데, 그러려고 요청이 페이지 수만큼 나갔습니다.
+ * 판정 규칙(보관 카드를 대표로, 정산 > 경매 > 고정가)은 서버가 같은 규칙으로 옮겨 갔습니다.
  */
-export function buildPocaDex(pool: DrawPoolCard[], mine: MyPhotocard[]): PocaDexEntry[] {
-  interface Owned {
-    count: number;
-    marketCount: number;
-    marketState: PocaDexMarketState | null;
-    photocardId: number;
-    /** 대표로 고른 카드가 마켓에 나가 있는가 — 더 나은 대표로 바꿀 때만 씁니다 */
-    representativeOnMarket: boolean;
-  }
-  const owned = new Map<number, Owned>();
-
-  for (const card of mine) {
-    /* 🔴 판정을 여기서 다시 쓰지 않고 `photocardMarketState` 를 부릅니다 — 마켓 상태의
-       규칙(경매냐 고정가냐, 정산 중이냐)은 한 곳에만 있어야 합니다. */
-    const state = photocardMarketState(card);
-    const onMarket = state !== 'STORED';
-
-    const found = owned.get(card.designId);
-    if (!found) {
-      owned.set(card.designId, {
-        count: 1,
-        marketCount: onMarket ? 1 : 0,
-        marketState: onMarket ? state : null,
-        photocardId: card.photocardId,
-        representativeOnMarket: onMarket,
-      });
-      continue;
-    }
-
-    found.count += 1;
-    if (onMarket) {
-      found.marketCount += 1;
-      found.marketState ??= state;
-    }
-
-    /* 🔴 대표는 **보관 중인 카드를 먼저** 고릅니다. 세 장 중 한 장만 마켓에 올려 둔 사람이
-       칸을 눌렀을 때 판매 중인 카드의 상세로 떨어지면, 거기서 할 수 있는 일이 "판매 내리기"
-       뿐이라 남은 두 장을 보러 온 사람에게는 막힌 길입니다. */
-    if (found.representativeOnMarket && !onMarket) {
-      found.photocardId = card.photocardId;
-      found.representativeOnMarket = false;
-    }
-  }
+export function buildPocaDex(
+  pool: DrawPoolCard[],
+  mine: MyPhotocardSummaryDesign[],
+): PocaDexEntry[] {
+  const owned = new Map(mine.map((design) => [design.designId, design]));
 
   return pool.map((design) => {
     const has = owned.get(design.designId);
@@ -158,6 +124,22 @@ export function filterPocaDex(
     return (
       entry.name.toLowerCase().includes(keyword) ||
       (entry.group?.toLowerCase().includes(keyword) ?? false)
+    );
+  });
+}
+
+export function filterOwnedCards(
+  cards: MyPhotocard[],
+  filter: { keyword?: string; role?: DexRoleFilter },
+): MyPhotocard[] {
+  const keyword = filter.keyword?.trim().toLowerCase();
+  return cards.filter((card) => {
+    const role = card.group ? pocaRole(card.group, card.grade ?? undefined) : null;
+    if (filter.role && filter.role !== DEX_ROLE_ALL && role !== filter.role) return false;
+    return (
+      !keyword ||
+      card.designName.toLowerCase().includes(keyword) ||
+      (card.group?.toLowerCase().includes(keyword) ?? false)
     );
   });
 }

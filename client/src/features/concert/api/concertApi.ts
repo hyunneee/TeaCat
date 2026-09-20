@@ -15,8 +15,8 @@ export const concertApi = {
    * `past` 는 회차가 전부 지난 공연입니다. 두 목록은 겹치지 않아서
    * 탭으로 갈라 보여줍니다 (`ConcertListPage`).
    */
-  list: (keyword?: string, past = false) =>
-    http.get<ConcertListPage>('/concerts', { params: { keyword, past } }),
+  list: (keyword?: string, past = false, cursor?: number, size = 20) =>
+    http.get<ConcertListPage>('/concerts', { params: { keyword, past, cursor, size } }),
 
   /** 공연 상세 (API-202) */
   detail: (concertId: string) => http.get<ConcertDetail>(`/concerts/${concertId}`),

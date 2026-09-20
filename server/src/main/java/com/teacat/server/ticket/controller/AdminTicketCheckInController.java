@@ -1,5 +1,9 @@
 package com.teacat.server.ticket.controller;
 
+import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.performance.service.PerformanceOperatorAccess;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.ticket.dto.request.CheckInScanRequest;
 import com.teacat.server.ticket.dto.request.CheckInVerifyRequest;
@@ -18,17 +22,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 게이트 입장 확인 (ADMIN 전용).
+ * 게이트 입장 확인 (ADMIN 또는 담당 공연 기획자).
  *
- * <p>{@code /admin/**} 아래라 {@code SecurityConfig} 의 포괄 규칙이 ADMIN 으로 잠근다 —
- * 설정을 따로 손대지 않았다.
+ * <p>SecurityConfig에서 역할을 검사하고, 티켓 조회 전에 담당 공연의 회차인지 검사한다.
  */
-@Tag(name = "입장 확인", description = "공연장 게이트에서 QR + 얼굴로 본인을 확인하는 ADMIN API")
+@Tag(name = "입장 확인", description = "공연장 게이트에서 QR + 얼굴로 본인을 확인하는 운영 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/check-in")
 @RequiredArgsConstructor
 public class AdminTicketCheckInController {
+    private final PerformanceOperatorAccess access;
+
 
     private final TicketCheckInService checkInService;
 
@@ -48,7 +53,10 @@ public class AdminTicketCheckInController {
     )
     @PostMapping("/scan")
     public ResponseEntity<BaseResponse<CheckInTicketResponse>> scan(
+            @AuthenticationPrincipal AuthUser actor,
             @Valid @RequestBody CheckInScanRequest request) {
+        access.schedule(actor, request.performanceDetailId());
+
         return ResponseEntity.ok(BaseResponse.success(checkInService.scan(request)));
     }
 
@@ -69,7 +77,10 @@ public class AdminTicketCheckInController {
     )
     @PostMapping("/verify")
     public ResponseEntity<BaseResponse<CheckInResultResponse>> verify(
+            @AuthenticationPrincipal AuthUser actor,
             @Valid @RequestBody CheckInVerifyRequest request) {
+        access.schedule(actor, request.performanceDetailId());
+
         return ResponseEntity.ok(BaseResponse.success(checkInService.verify(request)));
     }
 }

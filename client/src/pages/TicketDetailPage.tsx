@@ -8,7 +8,7 @@ import {
   ScanFace,
   TriangleAlert,
 } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
+import { DetailHeader as Header } from '@/shared/components/layout';
 import { Badge, Button, Card } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
@@ -31,6 +31,10 @@ import {
 export function TicketDetailPage() {
   const navigate = useNavigate();
   const { ticketId = '' } = useParams();
+  const goBack = () => {
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate(ROUTES.MY_TICKETS, { replace: true });
+  };
   const { open } = useModal();
   const { user } = useAuth();
 
@@ -44,7 +48,7 @@ export function TicketDetailPage() {
   if (isError || !ticket) {
     return (
       <>
-        <Header title="티켓" showBack />
+        <Header title="티켓" showBack onBack={goBack} />
         <EmptyState icon={TriangleAlert} title="티켓을 불러오지 못했어요" />
       </>
     );
@@ -58,9 +62,9 @@ export function TicketDetailPage() {
 
   return (
     <>
-      <Header title="티켓 상세" showBack />
+      <Header title="티켓 상세" showBack onBack={goBack} />
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 p-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0 lg:px-0 lg:py-6">
         <Card className="ticket-notch space-y-5 py-6">
           <div className="space-y-1 text-center">
             <Badge tone={ticketTone(ticket)}>{ticketStatusLabel(ticket)}</Badge>
@@ -108,62 +112,64 @@ export function TicketDetailPage() {
           {nftLabel && <p className="text-subtle border-t pt-4 text-xs">NFT 티켓 {nftLabel}</p>}
         </Card>
 
-        {/* 🔴 입장 QR — 게이트가 이걸 찍고 **얼굴까지 맞아야** 입장 처리됩니다.
+        <div className="space-y-4">
+          {/* 🔴 입장 QR — 게이트가 이걸 찍고 **얼굴까지 맞아야** 입장 처리됩니다.
             담기는 값은 티켓 번호가 아니라 서버가 서명한 문자열입니다 (TicketQr 주석).
             얼굴이 없으면 게이트에서 대조가 성립하지 않으므로 미리 잠가서 알려줍니다. */}
-        {isUsable(ticket) && (
-          <Card className="flex flex-col items-center gap-3 py-6">
-            <TicketQr
-              payload={qr.data ?? null}
-              locked={needsFace}
-              lockMessage="얼굴 등록이 필요해요"
-            />
-            <p className="text-subtle text-center text-xs leading-relaxed">
-              공연장 입구에서 이 QR 을 보여주세요.
-              <br />
-              찍은 뒤 <b>얼굴 확인</b>까지 마쳐야 입장됩니다.
-            </p>
-          </Card>
-        )}
+          {isUsable(ticket) && (
+            <Card className="flex flex-col items-center gap-3 py-6">
+              <TicketQr
+                payload={qr.data ?? null}
+                locked={needsFace}
+                lockMessage="얼굴 등록이 필요해요"
+              />
+              <p className="text-subtle text-center text-xs leading-relaxed">
+                공연장 입구에서 이 QR 을 보여주세요.
+                <br />
+                찍은 뒤 <b>얼굴 확인</b>까지 마쳐야 입장됩니다.
+              </p>
+            </Card>
+          )}
 
-        {needsFace && (
-          <Button
-            variant="secondary"
-            fullWidth
-            leftIcon={<ScanFace size={16} />}
-            onClick={() => navigate(ROUTES.FACE_REGISTER)}
-          >
-            얼굴 등록하러 가기
-          </Button>
-        )}
+          {needsFace && (
+            <Button
+              variant="secondary"
+              fullWidth
+              leftIcon={<ScanFace size={16} />}
+              onClick={() => navigate(ROUTES.FACE_REGISTER)}
+            >
+              얼굴 등록하러 가기
+            </Button>
+          )}
 
-        <p className="text-subtle text-center text-xs leading-relaxed">
-          이 티켓은 양도할 수 없습니다.
-          <br />
-          취소하면 좌석은 추첨 대기자에게 배정됩니다.
-        </p>
+          <p className="text-subtle text-center text-xs leading-relaxed">
+            이 티켓은 양도할 수 없습니다.
+            <br />
+            취소하면 좌석은 추첨 대기자에게 배정됩니다.
+          </p>
 
-        {isCancelable(ticket) && orderId && (
-          <Button
-            variant="danger-ghost"
-            size="lg"
-            fullWidth
-            leftIcon={<Ban size={16} />}
-            loading={cancel.isPending}
-            onClick={() =>
-              open('common/confirm', {
-                title: '예매를 취소할까요?',
-                message:
-                  '취소 수수료가 발생할 수 있으며, 취소한 좌석은 추첨 대기자에게 배정됩니다.',
-                confirmText: '예매 취소',
-                danger: true,
-                onConfirm: () => cancel.mutate(orderId, { onSuccess: () => navigate(-1) }),
-              })
-            }
-          >
-            예매 취소
-          </Button>
-        )}
+          {isCancelable(ticket) && orderId && (
+            <Button
+              variant="danger-ghost"
+              size="lg"
+              fullWidth
+              leftIcon={<Ban size={16} />}
+              loading={cancel.isPending}
+              onClick={() =>
+                open('common/confirm', {
+                  title: '예매를 취소할까요?',
+                  message:
+                    '취소 수수료가 발생할 수 있으며, 취소한 좌석은 추첨 대기자에게 배정됩니다.',
+                  confirmText: '예매 취소',
+                  danger: true,
+                  onConfirm: () => cancel.mutate(orderId, { onSuccess: goBack }),
+                })
+              }
+            >
+              예매 취소
+            </Button>
+          )}
+        </div>
       </div>
     </>
   );

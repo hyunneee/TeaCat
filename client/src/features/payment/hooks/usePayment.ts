@@ -6,6 +6,7 @@ import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { trackGaEvent } from '@/shared/lib';
 import { useBookingStore } from '@/features/booking';
+import { nftKeys } from '@/features/nft';
 import { paymentApi } from '../api/paymentApi';
 import { requestPayment } from '../api/paymentGateway';
 import type { PayMethod, PaymentAuthResult } from '../model/payment.types';
@@ -46,6 +47,8 @@ export function useConfirmPayment() {
       void queryClient.invalidateQueries({ queryKey: ['booking'] });
       void queryClient.invalidateQueries({ queryKey: ['ticket'] });
       void queryClient.invalidateQueries({ queryKey: ['token'] });
+      /* 결제와 같은 트랜잭션에서 카드팩이 생깁니다. 안 갱신하면 30초 동안 옛 남은 수가 보입니다 */
+      void queryClient.invalidateQueries({ queryKey: nftKeys.drawAvailability() });
       navigate(ROUTES.BOOKING_DONE(String(order.ticketOrderId)), { replace: true });
     },
   });

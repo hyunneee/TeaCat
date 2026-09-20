@@ -1,8 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import {
   Armchair,
+  Activity,
   Building2,
   ChartLine,
+  ClipboardList,
   GalleryHorizontalEnd,
   Gift,
   LayoutDashboard,
@@ -48,6 +50,12 @@ interface AdminMenuItem {
 const ADMIN_MENU: AdminMenuItem[] = [
   { to: ROUTES.ADMIN, label: '대시보드', icon: LayoutDashboard },
   {
+    to: ROUTES.MONITORING,
+    label: '모니터링',
+    icon: Activity,
+    visible: can.viewMonitoring,
+  },
+  {
     to: ROUTES.ADMIN_ANALYTICS,
     label: '운영 통계',
     icon: ChartLine,
@@ -77,10 +85,18 @@ const ADMIN_MENU: AdminMenuItem[] = [
   },
   {
     to: ROUTES.ADMIN_USERS,
-    label: '유저 관리',
+    label: '회원 관리',
     icon: Users,
     visible: can.manageUsers,
     matchNested: true,
+  },
+  {
+    /* 입장 확인과 **나란한 메뉴**입니다. 공통 공연/회차 필터 아래의 하위 탭이 아니라,
+       각 화면이 자기 필터를 갖습니다 (ROUTES.ADMIN_SEAT_ATTENDEES 주석). */
+    to: ROUTES.ADMIN_SEAT_ATTENDEES,
+    label: '좌석·예매자',
+    icon: ClipboardList,
+    visible: can.viewSeatAttendees,
   },
   {
     to: ROUTES.ADMIN_CHECK_IN,
@@ -92,21 +108,21 @@ const ADMIN_MENU: AdminMenuItem[] = [
     to: ROUTES.ADMIN_POCA_TEMPLATES,
     label: '카드 그림 관리',
     icon: Images,
-    visible: can.accessAdmin,
+    visible: can.managePocaContent,
     matchNested: true,
   },
   {
     to: ROUTES.ADMIN_PACK_EVENTS,
     label: '카드팩 이벤트',
     icon: Gift,
-    visible: can.accessAdmin,
+    visible: can.managePocaContent,
     matchNested: true,
   },
   {
     to: ROUTES.ADMIN_POCA_DESIGNS,
     label: '이벤트 뽑기 풀',
     icon: Sparkles,
-    visible: can.accessAdmin,
+    visible: can.managePocaContent,
     matchNested: true,
   },
   {
@@ -132,6 +148,26 @@ const ADMIN_MENU: AdminMenuItem[] = [
   },
 ];
 
+const GROUPS = [
+  { label: '개요', paths: [ROUTES.ADMIN, ROUTES.ADMIN_ANALYTICS, ROUTES.MONITORING] },
+  { label: '회원·고객 지원', paths: [ROUTES.ADMIN_USERS, ROUTES.ADMIN_INQUIRIES] },
+  {
+    label: '공연 운영',
+    paths: [ROUTES.ADMIN_CONCERTS, ROUTES.ADMIN_SEAT_ATTENDEES, ROUTES.ADMIN_CHECK_IN],
+  },
+  { label: '공연장 관리', paths: [ROUTES.ADMIN_STADIUMS, ROUTES.ADMIN_STADIUM] },
+  { label: '서비스 콘텐츠', paths: [ROUTES.ADMIN_BANNERS] },
+  {
+    label: '포카 콘텐츠',
+    paths: [
+      ROUTES.ADMIN_POCA_TEMPLATES,
+      ROUTES.ADMIN_PACK_EVENTS,
+      ROUTES.ADMIN_POCA_DESIGNS,
+      ROUTES.ADMIN_TRADE_REVIEWS,
+    ],
+  },
+];
+
 export interface AdminSidebarProps {
   user: User | null;
   className?: string;
@@ -145,7 +181,7 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
       className={cn(
         /* 어두운 면은 70:25:5 의 25(구조)입니다. brand 는 채도 0 이라
            초록(강조 5%)을 잡아먹지 않습니다. 선택된 메뉴만 초록입니다. */
-        'bg-brand-900 flex w-60 shrink-0 flex-col gap-1 p-4 text-white',
+        'bg-brand-900 sticky top-0 flex h-dvh w-60 shrink-0 flex-col gap-1 overflow-y-auto p-4 text-white',
         className,
       )}
     >
@@ -154,26 +190,35 @@ export function AdminSidebar({ user, className }: AdminSidebarProps) {
         <span className="text-sm font-semibold tracking-tight">운영 콘솔</span>
       </div>
 
-      <nav className="flex flex-col gap-1">
-        {items.map(({ to, label, icon: Icon, matchNested }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={!matchNested}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors',
-                isActive
-                  ? // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
-                    'bg-accent-700 font-semibold text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white',
-              )
-            }
-          >
-            <Icon size={18} aria-hidden />
-            {label}
-          </NavLink>
-        ))}
+      <nav aria-label="운영 메뉴" className="flex flex-col gap-4">
+        {GROUPS.map((group) => {
+          const visible = items.filter((item) => group.paths.some((path) => path === item.to));
+          if (!visible.length) return null;
+          return (
+            <section key={group.label} aria-label={group.label}>
+              <h2 className="mb-1 px-3 text-xs font-semibold text-white/50">{group.label}</h2>
+              {visible.map(({ to, label, icon: Icon, matchNested }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={!matchNested}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                      isActive
+                        ? // "지금 선택된 것" — 강조색을 쓰는 세 자리 중 하나입니다 (DESIGN.md 1장)
+                          'bg-accent-700 font-semibold text-white'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white',
+                    )
+                  }
+                >
+                  <Icon size={18} aria-hidden />
+                  {label}
+                </NavLink>
+              ))}
+            </section>
+          );
+        })}
       </nav>
 
       {items.length === 1 && (

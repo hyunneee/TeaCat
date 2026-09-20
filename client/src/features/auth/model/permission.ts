@@ -8,6 +8,8 @@ import type { User, UserRole } from './auth.types';
  * 이 파일은 순수 함수만 있어서 테스트하기도 쉽습니다.
  */
 export const can = {
+  /** 포카 콘텐츠 관리 API는 ADMIN 전용이다. */
+  managePocaContent: (user: User | null): boolean => user?.role === 'ADMIN',
   /**
    * 티켓을 실제로 사용(입장)할 수 있는가 — 얼굴 등록 필수.
    *
@@ -27,11 +29,23 @@ export const can = {
   /**
    * 게이트 입장 확인 메뉴 (`/admin/check-in`).
    *
-   * 서버의 `/admin/check-in/**` 은 ADMIN 전용입니다 (`SecurityConfig` 의 포괄 규칙).
+   * ADMIN과 공연 기획자가 사용하며, 서버에서 담당 공연의 회차인지 검사합니다.
    * 🔴 얼굴을 닫아 둔 배포(`FEATURE.face === false`)에서는 **보이지 않습니다** —
    *    대조할 얼굴을 아무도 등록하지 않았으므로 검표를 할 수가 없습니다.
    */
-  checkIn: (user: User | null): boolean => FEATURE.face && user?.role === 'ADMIN',
+  checkIn: (user: User | null): boolean => FEATURE.face && hasRole(user, 'ADMIN', 'PERFORMANCE'),
+
+  /**
+   * 좌석·예매자 메뉴 (`/admin/seat-attendees`).
+   *
+   * 서버가 ADMIN 과 공연 기획자에게 열어 둔 조회입니다 (운영 좌석·명단 API).
+   * 역할과 별개로 **담당 공연인지**는 서버가 매 요청 검사하므로, 여기서 넓히면
+   * 메뉴는 보이는데 403(`PERFORMANCE_020`)이 납니다.
+   *
+   * 🔴 `checkIn` 과 달리 얼굴 기능을 보지 않습니다 — 좌석 현황과 명단은 카메라 없이
+   *    보는 화면이라 얼굴을 닫아 둔 배포에서도 쓸 수 있어야 합니다.
+   */
+  viewSeatAttendees: (user: User | null): boolean => hasRole(user, 'ADMIN', 'PERFORMANCE'),
 
   /**
    * 공연을 개설할 수 있는가 — 관리자와 공연 주최자.

@@ -7,6 +7,7 @@ import com.teacat.server.nft.dto.request.NftListingCreateRequest;
 import com.teacat.server.nft.dto.request.NftMarketSort;
 import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
+import com.teacat.server.nft.dto.response.MyNftPhotocardSummaryResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftDrawPoolCardResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
@@ -185,6 +186,27 @@ public class NftController {
             @RequestParam(defaultValue = "20") Integer size) {
         return ResponseEntity.ok(BaseResponse.success(
                 nftService.getSaleHistory(authUser.id(), cursor, size)));
+    }
+
+    @Operation(
+            summary = "내 NFT 포토카드 요약",
+            description = """
+                    도감이 필요로 하는 **도안별 보유 수·판매 상태**를 한 번에 돌려줍니다.
+
+                    도감은 "이 도안을 몇 장 가졌나" 만 알면 되는데, 그걸 알려고 카드 목록을 페이지마다
+                    끝까지 받아 오던 것을 이 응답 하나로 대신합니다. 카드 한 장 한 장이 필요한 화면은
+                    `GET /users/me/photocards` 를 그때 부르세요.
+
+                    `pendingCount` 가 0 이 아니면 발행 중이거나 정산 중인 카드가 있다는 뜻이라 화면이
+                    다시 물어볼 이유가 있고, 0 이면 없습니다.
+                    """
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    /* `/users/me/**` 라 anyRequest().authenticated() 에 걸립니다 (아래 by-design 과 같은 이유) */
+    @GetMapping("/users/me/photocards/summary")
+    public ResponseEntity<BaseResponse<MyNftPhotocardSummaryResponse>> getMyPhotocardSummary(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getMyPhotocardSummary(authUser.id())));
     }
 
     @Operation(

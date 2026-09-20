@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
+import { nftKeys } from '@/features/nft';
 import { tokenKeys } from '@/features/token';
 import { ticketApi, ticketKeys } from '../api/ticketApi';
 
@@ -53,6 +54,8 @@ export function useCancelTicket() {
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ticketKeys.all });
       void queryClient.invalidateQueries({ queryKey: tokenKeys.balance() });
+      /* 예매를 취소하면 안 쓴 카드팩도 함께 사라집니다 (서버 `deleteUnconsumed`) */
+      void queryClient.invalidateQueries({ queryKey: nftKeys.drawAvailability() });
       /* "환불됐다" 가 아니라 "환불이 시작됐다" 입니다. 카드 환불은 카드사 사정으로
          며칠 걸릴 수 있어서, 끝난 것처럼 쓰면 문의가 들어옵니다. */
       toast.success(`취소했어요. ${result.refundAmount.toLocaleString()}원 환불이 진행됩니다.`);

@@ -90,7 +90,8 @@ public class SeatMapService {
 
         List<PerformanceArea> targets = configured.stream()
                 .filter(pa -> areaId == null || pa.getArea().getId().equals(areaId))
-                .sorted(Comparator.comparing(pa -> pa.getArea().getId()))
+                .sorted(Comparator.comparingInt((PerformanceArea pa) -> pa.getArea().getDisplayOrder())
+                        .thenComparing(pa -> pa.getArea().getId()))
                 .toList();
 
         if (targets.isEmpty()) {

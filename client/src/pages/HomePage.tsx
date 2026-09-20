@@ -513,7 +513,7 @@ export function HomePage() {
                       photocardId={card.photocardId}
                       designName={card.designName}
                       imageUrl={card.imageUrl}
-                      performanceTitle={card.performanceTitle ?? '이벤트 포카'}
+                      performanceTitle={card.performanceTitle}
                       caption={`24시간 거래 ${card.tradeCount}건`}
                       onClick={() =>
                         navigate(

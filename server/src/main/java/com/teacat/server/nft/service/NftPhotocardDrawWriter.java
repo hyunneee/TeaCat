@@ -160,6 +160,34 @@ public class NftPhotocardDrawWriter {
                 packRepository.findNextOpenAt(userId, leadSeconds));
     }
 
+    /** 화면이 그릴 팩 목록의 상한. 그 너머는 전체 수(`counts`)만 알려 준다 */
+    private static final int PACK_LIST_LIMIT = 50;
+
+    /**
+     * 안 쓴 팩을 **팩마다** 돌려준다 — 개봉 시각은 저장값이 아니라 계산값이다
+     * ({@link NftPhotocardPackRepository#findUnconsumedPacks}).
+     */
+    @Transactional(readOnly = true)
+    public List<PackView> packs(Long userId) {
+        long leadSeconds = bookingPolicy.cancelDeadlineLead().toSeconds();
+        return packRepository.findUnconsumedPacks(userId, leadSeconds, PACK_LIST_LIMIT).stream()
+                .map(row -> new PackView(
+                        row.getPackId(),
+                        row.getSource(),
+                        /* 예매 팩은 공연명, 이벤트 팩은 이벤트 이름. 이벤트 행이 지워졌으면 일반 문구 */
+                        row.getPerformanceTitle() != null ? row.getPerformanceTitle()
+                                : "EVENT".equals(row.getSource())
+                                        ? (row.getEventName() != null ? row.getEventName() : "이벤트 카드팩")
+                                        : null,
+                        row.getOpenAt(),
+                        row.getOpenable()))
+                .toList();
+    }
+
+    /** 팩 한 개. 응답 DTO 와 같은 모양이지만 서비스 계층이 web DTO 를 알지 않게 따로 둔다 */
+    public record PackView(Long packId, String source, String title, LocalDateTime openAt, boolean openable) {
+    }
+
     private DrawOutcome replay(NftPhotocardPack pack) {
         NftPhotocard photocard = photocardRepository.findById(pack.getPhotocardId())
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_NOT_FOUND));

@@ -111,7 +111,7 @@ class AdminPerformanceServiceAreaTests {
         performanceArea = PerformanceArea.create(performance, area, "VIP", 88_000, 100, AreaType.SEATED);
 
         given(performanceGeneralRepository.findById(CONCERT_ID)).willReturn(Optional.of(performance));
-        given(areaRepository.findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(LAYOUT_ID))
+        given(areaRepository.findAllByStadiumLayoutIdOrderByDisplayOrderAscIdAsc(LAYOUT_ID))
                 .willReturn(List.of(area, standingArea));
         // 판매 방식 테스트는 다른 구역 구성으로 덮어씁니다
         lenient().when(performanceAreaRepository.findAllByPerformanceId(CONCERT_ID))

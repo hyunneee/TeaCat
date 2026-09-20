@@ -476,7 +476,11 @@ npm run typecheck && npm run lint
 넘치는 사용자는 `/booking/:scheduleId/waiting` 에서 순번을 보며 기다리고, 서버가 들여보내면 구역 선택으로 넘어갑니다.
 
 - 대기실은 **회차마다 관리자가 켭니다.** 꺼진 회차(기본)는 `status.enabled: false` 라 화면·가드가 전부 지금처럼 통과합니다.
-- 가드 순서는 `RequireFace → RequireCaptcha → RequireQueue`. 봇 확인을 통과한 사람만 대기열 자리를 잡습니다.
+- 좌석 선택 전 가드 순서는 `RequireFace → RequireBookingAccess → RequireCaptcha → RequireQueue`.
+  `RequireBookingAccess`는 봇 확인·대기실·구역·좌석 진입 때 서버 회차 상태를 새로 확인합니다.
+  종료/오픈 전/없는 회차 및 상태 조회 실패에서는 자식 화면을 열지 않습니다.
+  매진은 종료와 구분하고, 확인·결제·결제 결과·완료 및 취소표 대기는 이 가드 밖에 둡니다.
+  기존 선점/결제 정책은 변경하지 않습니다. 봇 확인을 통과한 사람만 대기열 자리를 잡습니다.
   🔴 대기실 화면은 `RequireQueue` **밖**에 둡니다 — 안에 두면 자기 자신으로 보내는 고리가 됩니다.
 - 진짜 방어선은 **서버 인터셉터**입니다. 좌석맵·선점 API 는 입장 표식이 없으면 `ERR_QUEUE_002`(428) 를 냅니다.
   `useQueueEviction` 이 TanStack Query 캐시 이벤트를 구독해 그 코드를 잡고 대기실로 되돌립니다 —
@@ -846,9 +850,13 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 - 사이드바의 어두운 면은 70:25:5 의 **25(구조)** 입니다. `brand` 는 채도 0 이라
   초록(강조 5%)을 잡아먹지 않습니다. **선택된 메뉴 하나만** 초록입니다.
 - 접근 권한은 `features/auth` 의 `can.accessAdmin`(콘솔 진입) /
-  `can.manageUsers`(회원 관리) / `can.checkIn`(게이트 입장 확인)에 있습니다. 🔴 서버 권한과 **같아야** 합니다 —
+  `can.manageUsers`(회원 관리) / `can.checkIn`(게이트 입장 확인) /
+  `can.viewSeatAttendees`(좌석·예매자)에 있습니다. 🔴 서버 권한과 **같아야** 합니다 —
   서버가 403 을 주는 메뉴를 보여주면 눌렀을 때 실패하는 화면이 됩니다.
-  지금 서버의 `/admin/**` 은 전부 ADMIN 전용입니다.
+  서버의 `/admin/**` 은 기본이 ADMIN 전용이고, **공연 관리·입장 확인·좌석·예매자**만
+  공연 기획자(PERFORMANCE)에게, 공연장·좌석 배치는 공연장 운영자(STADIUM)에게 열려 있습니다
+  (`server/.../SecurityConfig`). 역할이 맞아도 **담당 공연인지는 서버가 매 요청 검사**하므로
+  (`PERFORMANCE_020`), 화면은 담당 공연 목록에서만 고르게 만듭니다.
 
 ---
 

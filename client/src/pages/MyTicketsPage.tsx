@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Ticket } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
+import { TicketNavigation } from '@/shared/components/layout/TicketNavigation';
 import { Input, Segmented } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
@@ -16,7 +17,18 @@ type Tab = (typeof TABS)[number]['value'];
 
 export function MyTicketsPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('UPCOMING');
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = params.get('period') === 'past' ? 'PAST' : 'UPCOMING';
+  const setTab = (value: Tab) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value === 'PAST') next.set('period', 'past');
+        else next.delete('period');
+        return next;
+      },
+      { replace: true },
+    );
   const [keyword, setKeyword] = useState('');
   const { data: tickets, isPending } = useMyTickets();
 
@@ -44,6 +56,7 @@ export function MyTicketsPage() {
   return (
     <>
       <Header title="내 티켓" />
+      <TicketNavigation />
 
       {/* 티켓 카드는 가로로 길어서 넓은 화면에서 두 열로 접습니다.
           세그먼트는 폭을 따라 늘리지 않습니다 — 1024px 짜리 두 칸 알약은

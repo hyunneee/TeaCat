@@ -32,7 +32,7 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
                AND sl.is_default = true
              GROUP BY a.id, a.stadium_id, a.area_code, a.level_code, a.type, a.max_seat,
                       a.area_x, a.area_y, a.height, a.width
-             ORDER BY a.level_code, a.area_code, a.id
+             ORDER BY a.id
             """, nativeQuery = true)
     List<AreaStats> findAllWithStatsByStadiumId(Long stadiumId);
 
@@ -53,7 +53,7 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
              WHERE a.stadium_layout_id = :layoutId
              GROUP BY a.id, a.stadium_id, a.area_code, a.level_code, a.type, a.max_seat,
                       a.area_x, a.area_y, a.height, a.width
-             ORDER BY a.level_code, a.area_code, a.id
+             ORDER BY a.id
             """, nativeQuery = true)
     List<AreaStats> findAllWithStatsByLayoutId(Long layoutId);
 
@@ -99,7 +99,8 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
             """, nativeQuery = true)
     long sumStandingCapacityByLayoutId(Long layoutId);
 
-    List<Area> findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(Long layoutId);
+    @Query("SELECT a FROM Area a WHERE a.stadiumLayout.id = :layoutId ORDER BY a.displayOrder, a.id")
+    List<Area> findAllByStadiumLayoutIdOrderByDisplayOrderAscIdAsc(Long layoutId);
 
     @Modifying
     void deleteAllByStadiumLayoutId(Long layoutId);

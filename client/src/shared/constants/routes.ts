@@ -122,6 +122,13 @@ export const ROUTES = {
   ADMIN_USERS: '/admin/users',
   /** 게이트 입장 확인 — QR + 얼굴로 본인을 확인하고 입장 처리합니다 */
   ADMIN_CHECK_IN: '/admin/check-in',
+  /**
+   * 좌석·예매자 — 회차의 좌석 현황과 예매자 명단.
+   *
+   * 입장 확인과 **나란한 별도 메뉴**입니다. 공연·회차 필터는 각 화면 안에 있고 선택 상태도
+   * 따로 둡니다 — 공통 필터를 만들면 한쪽에서 바꾼 회차가 다른 쪽의 작업을 바꿔 놓습니다.
+   */
+  ADMIN_SEAT_ATTENDEES: '/admin/seat-attendees',
   /** 회원 상세 — 예매·포카를 탭으로 봅니다. 되돌릴 수 없는 동작도 여기에 모읍니다 */
   ADMIN_USER_DETAIL: (userId: string) => `/admin/users/${userId}`,
   MONITORING: '/admin/monitoring',

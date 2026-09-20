@@ -52,7 +52,7 @@ const stubs = {
   `,
   '@/shared/components/layout': `
     import {Outlet} from 'react-router-dom';
-    export const AppLayout = Outlet, PlainLayout = Outlet, SearchLayout = Outlet;
+    export const AppLayout = Outlet, PlainLayout = Outlet, SearchLayout = Outlet, DetailLayout = Outlet;
     export const Header = ({title}) => <h1>{title}</h1>;
   `,
   '@/shared/components/ui': 'export const Button = ({children, onClick}) => <button onClick={onClick}>{children}</button>;',

@@ -25,7 +25,8 @@ export interface MarketPhotocard {
   listingId: number;
   designName: string;
   imageUrl: string | null;
-  performanceTitle: string;
+  performanceTitle: string | null;
+  eventName?: string | null;
   /** 판매가(CAT) */
   price: number;
   sellerNickname: string;
@@ -87,6 +88,8 @@ export interface MyPhotocard extends PocaDesignInfo {
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */
   performanceTitle: string | null;
+  /** 이벤트 카드팩에서 나왔으면 그 이벤트 이름. 아니면 null (`photocardSource`) */
+  eventName?: string | null;
   status: PhotocardMintStatus;
   viewCount: number;
   /** 판매 등록 여부. 가격은 오지 않는다 (서버 미결) */
@@ -134,6 +137,7 @@ export interface PhotocardOrigin {
 
 /** 포카 상세 */
 export interface PhotocardDetail extends PocaDesignInfo {
+  isMine?: boolean;
   photocardId: number;
   /** 내가 가진 같은 도안 카드를 물을 때 쓰는 열쇠 (`nftApi.myCopies`) */
   designId: number;
@@ -141,6 +145,8 @@ export interface PhotocardDetail extends PocaDesignInfo {
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 */
   performanceTitle: string | null;
+  /** 이벤트 카드팩에서 나왔으면 그 이벤트 이름. 아니면 null (`photocardSource`) */
+  eventName?: string | null;
   ownerNickname: string;
   issuedAt: string;
   /** 🔴 뽑기로 얻은 카드는 **null** — 좌석에서 나온 것이 아닙니다 */
@@ -270,6 +276,51 @@ export interface PocaDrawStatus {
   scheduled: number;
   /** 가장 빨리 열리는 시각. 잠긴 팩이 없으면 null */
   nextOpenAt: string | null;
+  /**
+   * 안 쓴 카드팩 **한 개씩** — 열 수 있는 팩이 먼저, 그다음 개봉이 이른 순입니다.
+   * 서버는 최대 50개까지만 주므로 전체 수는 `remaining`·`scheduled` 가 답합니다.
+   * 옛 서버는 이 필드를 주지 않습니다.
+   */
+  packs?: PocaDrawPack[];
+}
+
+/**
+ * 카드팩 한 개.
+ *
+ * 🔴 `openAt` 은 **저장된 값이 아니라 서버가 계산한 값**입니다(회차의 공연 일시에서 뺍니다).
+ * 공연이 연기되면 이 값도 함께 밀리므로, 화면이 값을 오래 들고 있지 말고 응답을 새로 받으세요.
+ */
+export interface PocaDrawPack {
+  packId: number;
+  /** TICKET_PURCHASE 예매 · TICKET_ENTRY 입장 · EVENT 이벤트 */
+  source: string;
+  /** 어디서 받은 팩인지 — 예매 팩은 공연명, 이벤트 팩은 이벤트 이름. 알 수 없으면 null */
+  title: string | null;
+  /** 개봉 시각. 이벤트 팩처럼 언제든 열 수 있으면 null */
+  openAt: string | null;
+  /** 지금 열 수 있는가 — 서버가 DB 시계로 판정합니다 */
+  openable: boolean;
+}
+
+/** `GET /users/me/photocards/summary` — 도감이 필요로 하는 도안별 보유 요약 */
+export interface MyPhotocardSummary {
+  designs: MyPhotocardSummaryDesign[];
+  /**
+   * 발행 중이거나 정산 중인 카드 수. 0 이면 화면이 다시 물어볼 이유가 없습니다.
+   */
+  pendingCount: number;
+}
+
+export interface MyPhotocardSummaryDesign {
+  designId: number;
+  /** 가진 장수 */
+  count: number;
+  /** 그중 마켓에 나간 장수 (`count` 에서 빼지 않습니다) */
+  marketCount: number;
+  /** 마켓에 나간 것 중 대표 한 장의 상태. 없으면 null */
+  marketState: 'LISTED' | 'AUCTION' | 'SETTLING' | null;
+  /** 눌렀을 때 열 대표 카드 — 서버가 보관 중인 카드를 먼저 고릅니다 */
+  photocardId: number;
 }
 
 /** `POST /photocards/packs/claim` 응답 — 이벤트 팩 받기 */

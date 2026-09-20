@@ -95,38 +95,38 @@ export function AdminConcertEditPage() {
       </div>
 
       <Card>
-        <SectionTitle>회차</SectionTitle>
-        <div className="mt-3">
-          <Schedules concert={concert} />
-        </div>
+        <Management concert={concert} />
       </Card>
 
-      <Card>
-        <div className="flex items-center gap-2">
-          <Tag size={16} className="text-ink-subtle" aria-hidden />
-          <SectionTitle>구역 등급·가격</SectionTitle>
-        </div>
-        <p className="text-ink-subtle mt-1 text-xs">
-          가격이 없는 구역은 예매할 수 없어요. 팔 구역만 켜고 값을 채워 주세요.
-        </p>
-        <div className="mt-3">
-          <AreaPricing concert={concert} />
-        </div>
-      </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card className="min-w-0">
+          <SectionTitle>공연 정보</SectionTitle>
+          <div className="mt-3">
+            <EditForm concert={concert} stadiums={stadiums} />
+          </div>
+        </Card>
+        <div className="flex min-w-0 flex-col gap-4">
+          <Card>
+            <SectionTitle>회차</SectionTitle>
+            <div className="mt-3">
+              <Schedules concert={concert} />
+            </div>
+          </Card>
 
-      <Card className="max-w-3xl">
-        <SectionTitle>공연 정보</SectionTitle>
-        <div className="mt-3">
-          <EditForm concert={concert} stadiums={stadiums} />
+          <Card>
+            <div className="flex items-center gap-2">
+              <Tag size={16} className="text-ink-subtle" aria-hidden />
+              <SectionTitle>구역 등급·가격</SectionTitle>
+            </div>
+            <p className="text-ink-subtle mt-1 text-xs">
+              가격이 없는 구역은 예매할 수 없어요. 팔 구역만 켜고 값을 채워 주세요.
+            </p>
+            <div className="mt-3">
+              <AreaPricing concert={concert} />
+            </div>
+          </Card>
         </div>
-      </Card>
-
-      <Card>
-        <SectionTitle>공연 관리</SectionTitle>
-        <div className="mt-3">
-          <Management concert={concert} />
-        </div>
-      </Card>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { Activity } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
 import { EmptyState } from '@/shared/components/common';
 
 /**
@@ -9,7 +8,7 @@ import { EmptyState } from '@/shared/components/common';
 export function MonitoringPage() {
   return (
     <>
-      <Header title="운영 모니터링" showBack />
+      <h1 className="text-ink text-lg font-bold">운영 모니터링</h1>
       <EmptyState
         icon={Activity}
         title="모니터링 대시보드"

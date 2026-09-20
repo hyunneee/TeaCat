@@ -11,7 +11,22 @@ import { cn } from '@/shared/lib';
  *   - 모바일 브라우저의 주소창·제스처 바에 가려지며
  *   - safe-area 가 0 인 기기(안드로이드 등)에서는 그야말로 바닥에 붙습니다.
  */
-export function BottomBar({ children, className }: { children: ReactNode; className?: string }) {
+export function BottomBar({
+  children,
+  className,
+  inlineOnDesktop = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /**
+   * 데스크톱(lg 이상)에서는 고정을 풀고 **본문 안의 한 줄**로 둡니다.
+   *
+   * 2단 상세처럼 오른쪽 패널에 버튼이 이미 보이는 화면용입니다. 여기 없으면 화면마다
+   * `lg:static lg:mx-0 …` 를 손으로 적게 되고, 한쪽만 고치면 두 화면이 어긋납니다.
+   * 🔴 모바일 여백(아래)은 건드리지 않습니다 — 그게 이 컴포넌트가 지키는 값입니다.
+   */
+  inlineOnDesktop?: boolean;
+}) {
   return (
     <div
       className={cn(
@@ -20,6 +35,7 @@ export function BottomBar({ children, className }: { children: ReactNode; classN
         'surface border-line fixed inset-x-0 bottom-0 z-20 mx-auto app-shell border-t lg:max-w-3xl',
         // pb-safe 는 padding-bottom 을 덮어쓰므로 여백과 노치를 한 번에 계산합니다.
         'px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))]',
+        inlineOnDesktop && 'lg:static lg:mx-0 lg:max-w-none lg:border-0 lg:bg-transparent lg:p-0',
         className,
       )}
     >
@@ -28,7 +44,12 @@ export function BottomBar({ children, className }: { children: ReactNode; classN
   );
 }
 
-/** BottomBar 높이만큼 본문 아래 여백을 만듭니다. */
+/**
+ * BottomBar 높이만큼 본문 아래 여백을 만듭니다.
+ *
+ * ⚠️ 위 여백값과 한 쌍입니다. 바가 실제로 떠 있을 때만 넣으세요 —
+ * 바 없이 넣으면 화면 끝에 빈 띠가 남습니다.
+ */
 BottomBar.Spacer = function Spacer({ className }: { className?: string }) {
   return (
     <div aria-hidden className={cn('h-[calc(7.5rem+env(safe-area-inset-bottom))]', className)} />
