@@ -177,6 +177,12 @@ services:
       # 어느 배포에서 난 에러인지. 젠킨스가 커밋 해시를 넘기면 가장 좋다.
       SENTRY_RELEASE: ${SENTRY_RELEASE:-teacat-server@prod}
 
+      # AI 스티커 워커(GPU 노트북)가 /api/internal/ai-jobs/** 에 붙을 때 쓰는 키.
+      # 🔴 워커에 넣은 값과 같아야 한다. 비워 두면 그 엔드포인트가 전부 401 이고
+      #    낙서는 접수되지만 아무도 집어가지 않는다 — "비었으면 통과" 로 만들지 말 것.
+      # 🔴 `:-` 다. `:?` 로 하면 키를 안 넣은 환경에서 서버가 통째로 안 뜬다.
+      STICKER_INTERNAL_API_KEY: ${STICKER_INTERNAL_API_KEY:-}
+
       SPRING_DATASOURCE_URL: jdbc:postgresql://prod-postgres:5432/${POSTGRES_DB:-teacat}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-teacat}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}

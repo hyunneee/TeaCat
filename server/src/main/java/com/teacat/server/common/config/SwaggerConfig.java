@@ -159,4 +159,14 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".analytics")
                 .build();
     }
+
+    // /users/me/stickers 도 이 그룹이다. 그룹은 경로가 아니라 도메인 패키지로 나눈다
+    @Bean
+    public GroupedOpenApi stickerApi() {
+        return GroupedOpenApi.builder()
+                .group("12-sticker")
+                .displayName("AI 스티커")
+                .packagesToScan(BASE_PACKAGE + ".sticker")
+                .build();
+    }
 }

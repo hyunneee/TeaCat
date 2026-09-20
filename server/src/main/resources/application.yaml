@@ -364,3 +364,25 @@ analytics:
   # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 통계 마커만 안 쌓일 뿐 다른 기능에는 영향이 없다.
   #    "비었으면 통과" 로 만들지 말 것 — 운영에 키를 안 넣은 실수가 열린 API 가 된다.
   internal-api-key: ${ANALYTICS_INTERNAL_API_KEY:}
+
+sticker:
+  # 하루에 만들 수 있는 장수. 🔴 실패한 작업은 세지 않는다 (status <> FAILED) —
+  # 워커 장애로 사용자 몫이 깎이면 안 된다. 경계는 KST 자정이며 자바가 계산한다
+  # (DB 는 UTC, 앱은 Asia/Seoul 이라 now()::date 로 세면 매일 09시까지 어제 몫이 된다)
+  daily-limit: ${STICKER_DAILY_LIMIT:5}
+  # 워커(GPU 노트북)가 /internal/ai-jobs/** 를 부를 때 쓰는 키 (X-Internal-Api-Key).
+  # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 스티커 생성만 멈출 뿐 다른 기능에는 영향이 없다.
+  #    "비었으면 통과" 로 만들지 말 것 — /internal/** 은 스프링 시큐리티를 그냥 지나간다.
+  internal-api-key: ${STICKER_INTERNAL_API_KEY:}
+  # 디코드한 바이트 기준. base64 문자열 길이가 아니다
+  max-sketch-size: 2MB
+  max-result-size: 8MB
+  # 워커가 집어간 뒤 이만큼 소식이 없으면 죽은 것으로 보고 PENDING 으로 되돌린다
+  claim-timeout: PT5M
+  # 아무도 집어가지 않은 작업을 포기하는 시점. 워커가 아예 안 떠 있는 경우다 —
+  # 이게 없으면 화면이 영원히 "그리고 있어요" 에 멈춘다
+  pending-timeout: PT15M
+  max-retry: 3
+  # 스위퍼 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+  sweep-interval: PT1M
+  sweep-enabled: true
