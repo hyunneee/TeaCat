@@ -1,5 +1,9 @@
 package com.teacat.server.nft.controller;
 
+import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.performance.service.PerformanceOperatorAccess;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftPoolAddRequest;
 import com.teacat.server.nft.dto.response.NftPerformancePoolResponse;
@@ -19,19 +23,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "NFT 공연별 뽑기 풀", description = "공연에서 뽑힐 카드를 고르는 ADMIN API")
+@Tag(name = "NFT 공연별 뽑기 풀", description = "공연에서 뽑힐 카드를 고르는 ADMIN·담당 공연 기획자 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/performances/{performanceId}/draw-designs")
 @RequiredArgsConstructor
 public class NftPerformanceDrawDesignAdminController {
+    private final PerformanceOperatorAccess access;
+
 
     private final NftPhotocardPoolService poolService;
 
     @Operation(
             summary = "공연 뽑기 풀 조회",
             description = """
-                    ADMIN 전용 API입니다. 이 공연의 팩에서 뽑힐 도안들입니다.
+                    ADMIN 또는 담당 공연 기획자 API입니다. 이 공연의 팩에서 뽑힐 도안들입니다.
 
                     - 공연 전용 도안(자동 발급용, `drawPool: false`)은 **빠집니다.**
                     - 🔴 `seatCapacity`는 **전 회차 좌석 합계**(구역 정원 합 × 회차 수)입니다.
@@ -42,14 +48,17 @@ public class NftPerformanceDrawDesignAdminController {
     )
     @GetMapping
     public ResponseEntity<BaseResponse<NftPerformancePoolResponse>> findPool(
+            @AuthenticationPrincipal AuthUser actor,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long performanceId) {
+        access.performance(actor, performanceId);
+
         return ResponseEntity.ok(BaseResponse.success(poolService.findPerformancePool(performanceId)));
     }
 
     @Operation(
             summary = "공연 뽑기 풀에 카드 넣기",
             description = """
-                    ADMIN 전용 API입니다. 템플릿을 고르고 **수량을 적으면** 그 공연 전용 도안이
+                    ADMIN 또는 담당 공연 기획자 API입니다. 템플릿을 고르고 **수량을 적으면** 그 공연 전용 도안이
                     만들어지고 온체인에 등록됩니다.
 
                     🔴 **되돌릴 수 없습니다.** `totalSupply`가 온체인 `maxSupply`로 박히고,
@@ -70,8 +79,11 @@ public class NftPerformanceDrawDesignAdminController {
     )
     @PostMapping
     public ResponseEntity<BaseResponse<NftPerformancePoolResponse>> addToPool(
+            @AuthenticationPrincipal AuthUser actor,
             @Parameter(description = "공연 ID", example = "1") @PathVariable Long performanceId,
             @Valid @RequestBody NftPoolAddRequest request) {
+        access.performance(actor, performanceId);
+
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(
                 "공연 뽑기 풀에 넣었습니다.",
                 poolService.addToPerformance(performanceId, request)));

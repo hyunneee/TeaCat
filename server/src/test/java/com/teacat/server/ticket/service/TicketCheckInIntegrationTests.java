@@ -29,6 +29,22 @@ class TicketCheckInIntegrationTests extends PostgresIntegrationTest {
 
     private static final String MODEL = "yunet2023mar+sface2021dec-int8@1";
 
+    @Test void organizerCanOnlyScanAndVerifyOwnSchedule() throws Exception {
+        Long owner = insertUser("owner@test.com", "owner", "PERFORMANCE");
+        Fixture own = insertPerformanceFixture();
+        Fixture other = insertPerformanceFixture();
+        jdbcTemplate.update("UPDATE performance_general SET created_by = ? WHERE id = ?", owner, own.performanceId());
+        Long attendee = insertUser("attendee@test.com", "attendee");
+        Long ticket = insertTicketWithFace(attendee, own, personA(), MODEL);
+        String auth = "Bearer " + jwtTokenProvider.createAccessToken(owner, UserRole.PERFORMANCE);
+        mockMvc.perform(post("/admin/check-in/scan").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                .content(scanBody(qrSigner.sign(ticket), own.performanceDetailId()))).andExpect(status().isOk());
+        mockMvc.perform(post("/admin/check-in/scan").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                .content(scanBody(qrSigner.sign(ticket), other.performanceDetailId()))).andExpect(status().isForbidden());
+        mockMvc.perform(post("/admin/check-in/verify").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                .content(verifyBody(qrSigner.sign(ticket), other.performanceDetailId(), personA(), MODEL))).andExpect(status().isForbidden());
+    }
+
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtTokenProvider jwtTokenProvider;
     @Autowired private TicketQrSigner qrSigner;
