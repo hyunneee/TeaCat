@@ -123,6 +123,65 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         assertThat(drawService.status(userId).nextOpenAt()).isNotNull();
     }
 
+    @Test
+    void 상태_응답은_팩마다_개봉_시각과_열림_여부를_준다() {
+        Long userId = insertUser("perpack@test.com", "팩별");
+        insertWallet(userId);
+        insertEvent("PERPACK", "가을 이벤트", "NULL", "NULL", true);
+        insertPack(userId, "PERPACK");
+
+        Fixture soon = insertPerformanceFixture();
+        Fixture later = insertPerformanceFixture();
+        packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, insertTicket(userId, soon), soon.performanceDetailId()));
+        packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, insertTicket(userId, later), later.performanceDetailId()));
+        // 하나는 이미 열렸고(개봉 시각이 지남) 하나는 사흘 뒤 공연이다
+        setPerformanceDate(soon.performanceDetailId(), "now() + interval '1 minute'");
+        setPerformanceDate(later.performanceDetailId(), "now() + interval '3 day'");
+
+        var status = drawService.status(userId);
+
+        // 요약 필드는 그대로다 (구 클라이언트 호환)
+        assertThat(status.remaining()).isEqualTo(2);
+        assertThat(status.scheduled()).isEqualTo(1);
+        assertThat(status.nextOpenAt()).isNotNull();
+
+        assertThat(status.packs()).hasSize(3);
+        // 열 수 있는 것이 먼저(이벤트 팩은 시각이 없어 맨 앞), 그다음 개봉이 이른 순
+        assertThat(status.packs()).extracting(p -> p.openable()).containsExactly(true, true, false);
+
+        var event = status.packs().get(0);
+        assertThat(event.source()).isEqualTo("EVENT");
+        assertThat(event.title()).isEqualTo("가을 이벤트");
+        assertThat(event.openAt()).isNull();
+
+        var locked = status.packs().get(2);
+        assertThat(locked.source()).isEqualTo("TICKET_PURCHASE");
+        assertThat(locked.title()).isEqualTo("테스트 공연");
+        assertThat(locked.openable()).isFalse();
+        // 🔴 개봉 시각은 저장값이 아니라 계산값이다 — 잠긴 팩 중 가장 이른 시각이 nextOpenAt 과 같아야 한다
+        assertThat(locked.openAt()).isEqualTo(status.nextOpenAt());
+    }
+
+    @Test
+    void 공연을_미루면_팩의_개봉_시각도_함께_밀린다() {
+        Long userId = insertUser("postpone@test.com", "연기");
+        insertWallet(userId);
+        Fixture fixture = insertPerformanceFixture();
+        packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, insertTicket(userId, fixture), fixture.performanceDetailId()));
+
+        setPerformanceDate(fixture.performanceDetailId(), "now() + interval '1 day'");
+        var before = drawService.status(userId).packs().getFirst().openAt();
+
+        setPerformanceDate(fixture.performanceDetailId(), "now() + interval '2 day'");
+        var after = drawService.status(userId).packs().getFirst().openAt();
+
+        // 저장된 값이 있었다면 옛 시각에 머물렀을 것이다
+        assertThat(after).isAfter(before.plusHours(23));
+    }
+
     private void setPerformanceDate(Long detailId, String sqlExpression) {
         jdbcTemplate.update(
                 "UPDATE performance_details SET performance_date = %s WHERE id = ?"
@@ -191,6 +250,26 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         assertThatThrownBy(() -> writer.draw(userId, UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", NftErrorCode.PACK_NOT_AVAILABLE);
+    }
+
+    @Test
+    void lockedFirstPackDoesNotBlockLaterEventPack() {
+        Long userId = insertUser("mixed@test.com", "mixed");
+        insertWallet(userId);
+        Fixture fixture = insertPerformanceFixture();
+        Long ticketId = insertTicket(userId, fixture);
+        NftPhotocardPack locked = packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, ticketId, fixture.performanceDetailId()));
+        setPerformanceDate(fixture.performanceDetailId(), "now() + interval '3 day'");
+        insertPack(userId, "LATER_EVENT");
+        insertDrawPoolDesign("Event card", 100, "Group", "SPECIAL");
+
+        assertThat(drawService.status(userId).remaining()).isEqualTo(1);
+        assertThat(drawService.status(userId).scheduled()).isEqualTo(1);
+        assertThat(writer.draw(userId, UUID.randomUUID()).photocardId()).isNotNull();
+        assertThat(packRepository.findById(locked.getId()).orElseThrow().getConsumedAt()).isNull();
+        assertThat(drawService.status(userId).remaining()).isZero();
+        assertThat(drawService.status(userId).scheduled()).isEqualTo(1);
     }
 
     private void insertEvent(String code, String name, String startsAtSql, String endsAtSql,
