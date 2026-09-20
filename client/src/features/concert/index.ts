@@ -1,5 +1,6 @@
 export {
   useConcerts,
+  useConcertPage,
   useConcertDetail,
   useRecordConcertView,
   useSchedule,

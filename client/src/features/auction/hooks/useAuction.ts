@@ -15,6 +15,19 @@ import type { AuctionStatus } from '../model/auction.types';
 const PAGE_SIZE = 20;
 const LIST_POLL_MS = 5000;
 
+export function useAuctionPage(
+  params: { keyword?: string; sort: AuctionSort; cursor?: string },
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...auctionKeys.list(params.keyword, params.sort), 'page', params.cursor, 25],
+    queryFn: () => auctionApi.list({ ...params, size: 25 }),
+    enabled,
+    staleTime: STALE_TIME.SHORT,
+    refetchInterval: enabled ? LIST_POLL_MS : false,
+  });
+}
+
 /** 서버 커서 페이지 → 다음 pageParam. 마지막 페이지면 undefined (더 안 부름) */
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
   return last.hasNext && last.nextCursor ? last.nextCursor : undefined;

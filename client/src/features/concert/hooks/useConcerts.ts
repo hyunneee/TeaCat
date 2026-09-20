@@ -17,6 +17,14 @@ export function useConcerts(keyword?: string, past = false) {
   });
 }
 
+export function useConcertPage(keyword?: string, past = false, cursor?: number) {
+  return useQuery({
+    queryKey: [...concertKeys.list(keyword, past), 'page', cursor, 20],
+    queryFn: () => concertApi.list(keyword, past, cursor, 20),
+    staleTime: STALE_TIME.LONG,
+  });
+}
+
 export function useConcertDetail(concertId: string) {
   return useQuery({
     queryKey: concertKeys.detail(concertId),

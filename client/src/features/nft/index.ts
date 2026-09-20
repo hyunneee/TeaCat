@@ -1,5 +1,6 @@
 export {
   useNftMarket,
+  useNftMarketPage,
   usePhotocardArts,
   usePocaDex,
   usePhotocardDetail,

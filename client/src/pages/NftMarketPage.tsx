@@ -5,14 +5,15 @@ import { Header } from '@/shared/components/layout';
 import { Input, Segmented, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { useInfiniteScroll } from '@/shared/hooks';
+import { useCursorPagination } from '@/shared/hooks/useCursorPagination';
+import { CursorPagination } from '@/shared/components/common/CursorPagination';
 import { useAuth } from '@/features/auth';
-import { DEFAULT_SORT, NFT_SORTS, NftCard, useNftMarket, type NftSort } from '@/features/nft';
+import { DEFAULT_SORT, NFT_SORTS, NftCard, useNftMarketPage, type NftSort } from '@/features/nft';
 import {
   AUCTION_SORTS,
   AuctionCard,
+  useAuctionPage,
   DEFAULT_AUCTION_SORT,
-  useAuctions,
   type AuctionSort,
 } from '@/features/auction';
 import { useTokenBalance } from '@/features/token';
@@ -52,18 +53,21 @@ export function NftMarketPage() {
   const shopping = mode === 'SHOP';
   const bidding = mode === 'AUCTION';
 
-  const market = useNftMarket({ keyword: shopping ? trimmed : undefined, sort });
-  const auction = useAuctions({ keyword: bidding ? trimmed : undefined, sort: auctionSort });
+  const pagination = useCursorPagination<string>(
+    JSON.stringify([mode, trimmed, sort, auctionSort]),
+  );
+  const market = useNftMarketPage(
+    { keyword: trimmed || undefined, sort, cursor: pagination.cursor },
+    shopping,
+  );
+  const auction = useAuctionPage(
+    { keyword: trimmed || undefined, sort: auctionSort, cursor: pagination.cursor },
+    bidding,
+  );
   const { data: token } = useTokenBalance();
 
   const active = shopping ? market : auction;
-  const itemCount = shopping ? (market.data?.length ?? 0) : (auction.data?.length ?? 0);
-
-  const sentinel = useInfiniteScroll({
-    hasNext: !!active.hasNextPage,
-    isFetching: active.isFetchingNextPage,
-    onLoadMore: active.fetchNextPage,
-  });
+  const itemCount = active.data?.items.length ?? 0;
 
   const goPhotocard = (photocardId: number) => navigate(ROUTES.NFT_DETAIL(String(photocardId)));
 
@@ -140,7 +144,11 @@ export function NftMarketPage() {
 
       {/* ── 스크롤 영역 — 카드만 흐릅니다 ── */}
       <div className="px-4 pb-4 lg:px-0">
-        {active.isPending ? (
+        {active.isError ? (
+          <button type="button" onClick={() => void active.refetch()} className="mx-auto block p-4">
+            목록을 불러오지 못했어요. 다시 시도
+          </button>
+        ) : active.isPending ? (
           <Loading label={bidding ? '경매를 불러오는 중' : '포토카드를 불러오는 중'} />
         ) : itemCount === 0 ? (
           <EmptyState
@@ -163,7 +171,7 @@ export function NftMarketPage() {
         ) : (
           <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
             {shopping &&
-              (market.data ?? []).map((card) => (
+              (market.data?.items ?? []).map((card) => (
                 <li key={card.photocardId}>
                   <NftCard
                     photocardId={card.photocardId}
@@ -178,7 +186,7 @@ export function NftMarketPage() {
               ))}
 
             {bidding &&
-              (auction.data ?? []).map((item) => (
+              (auction.data?.items ?? []).map((item) => (
                 <li key={item.auctionId}>
                   <AuctionCard
                     photocardId={item.photocardId}
@@ -196,9 +204,15 @@ export function NftMarketPage() {
           </ul>
         )}
 
-        {/* 목록 끝 센티널 — 보이면 다음 페이지 */}
-        <div ref={sentinel} aria-hidden className="h-px" />
-        {active.isFetchingNextPage && <Loading label="더 불러오는 중" className="py-4" />}
+        <CursorPagination
+          page={pagination.page}
+          busy={active.isFetching}
+          hasNext={!!active.data?.hasNext && active.data.nextCursor != null}
+          onPrevious={pagination.previous}
+          onNext={() => {
+            if (active.data?.nextCursor != null) pagination.next(active.data.nextCursor);
+          }}
+        />
       </div>
     </>
   );

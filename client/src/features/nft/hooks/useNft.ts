@@ -14,6 +14,18 @@ import { buildPocaDex } from '../model/pocaDex.model';
 
 const PAGE_SIZE = 20;
 
+export function useNftMarketPage(
+  params: { keyword?: string; sort: NftSort; cursor?: string },
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...nftKeys.market(params.keyword, params.sort), 'page', params.cursor, 25],
+    queryFn: () => nftApi.market({ ...params, size: 25 }),
+    enabled,
+    staleTime: STALE_TIME.SHORT,
+  });
+}
+
 /**
  * 발행이 끝나기를 기다리는 동안 다시 물어보는 간격.
  *

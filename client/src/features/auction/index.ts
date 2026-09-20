@@ -7,6 +7,7 @@
  */
 export {
   useAuctions,
+  useAuctionPage,
   useAuctionDetail,
   useAuctionBids,
   usePlaceBid,
