@@ -275,6 +275,30 @@ export interface PocaDrawStatus {
   scheduled: number;
   /** 가장 빨리 열리는 시각. 잠긴 팩이 없으면 null */
   nextOpenAt: string | null;
+  /**
+   * 안 쓴 카드팩 **한 개씩** — 열 수 있는 팩이 먼저, 그다음 개봉이 이른 순입니다.
+   * 서버는 최대 50개까지만 주므로 전체 수는 `remaining`·`scheduled` 가 답합니다.
+   * 옛 서버는 이 필드를 주지 않습니다.
+   */
+  packs?: PocaDrawPack[];
+}
+
+/**
+ * 카드팩 한 개.
+ *
+ * 🔴 `openAt` 은 **저장된 값이 아니라 서버가 계산한 값**입니다(회차의 공연 일시에서 뺍니다).
+ * 공연이 연기되면 이 값도 함께 밀리므로, 화면이 값을 오래 들고 있지 말고 응답을 새로 받으세요.
+ */
+export interface PocaDrawPack {
+  packId: number;
+  /** TICKET_PURCHASE 예매 · TICKET_ENTRY 입장 · EVENT 이벤트 */
+  source: string;
+  /** 어디서 받은 팩인지 — 예매 팩은 공연명, 이벤트 팩은 이벤트 이름. 알 수 없으면 null */
+  title: string | null;
+  /** 개봉 시각. 이벤트 팩처럼 언제든 열 수 있으면 null */
+  openAt: string | null;
+  /** 지금 열 수 있는가 — 서버가 DB 시계로 판정합니다 */
+  openable: boolean;
 }
 
 /** `POST /photocards/packs/claim` 응답 — 이벤트 팩 받기 */

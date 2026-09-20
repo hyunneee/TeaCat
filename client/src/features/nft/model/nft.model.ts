@@ -6,6 +6,7 @@ import type {
   PhotocardMintStatus,
   PhotocardOrigin,
   PhotocardTrade,
+  PocaDrawStatus,
   PurchaseHistory,
   SaleHistory,
 } from './nft.types';
@@ -223,3 +224,49 @@ export function mintStatusLabel(status: PhotocardMintStatus): string | null {
   if (status === 'FAILED') return '발행 실패';
   return '발행 처리 중';
 }
+
+/**
+ * 아직 못 여는 팩 중 **가장 이른 개봉 시각**.
+ *
+ * 🔴 팩 목록(`packs`)이 있으면 그걸 봅니다 — 팩마다 시각이 다르고, 서버가 준 `nextOpenAt` 도 결국
+ * 같은 값이지만 목록이 있으면 화면이 한 곳(이 함수)만 보게 됩니다. 옛 서버(목록 없음)면 `nextOpenAt` 으로
+ * 물러섭니다. 시각은 **계산값**이라 공연이 연기되면 바뀌므로 이 값을 저장해 두지 마세요.
+ */
+export function nextLockedOpenAt(status: PocaDrawStatus | undefined): string | null {
+  if (!status) return null;
+  if (!status.packs) return status.nextOpenAt;
+
+  const times = status.packs
+    .filter((pack) => !pack.openable && pack.openAt)
+    .map((pack) => pack.openAt as string)
+    .sort((a, b) => parseServerTime(a) - parseServerTime(b));
+  return times[0] ?? null;
+}
+
+/** 잠긴 팩을 **같은 개봉 시각끼리** 묶은 한 칸 */
+export interface LockedPackGroup {
+  openAt: string;
+  count: number;
+}
+
+/**
+ * 잠긴 팩을 개봉 시각별로 묶습니다 — 칸 하나가 "n개 · 9월 20일 19:50 열림" 이 됩니다.
+ *
+ * 🔴 **목록이 잘렸으면 묶지 않습니다(null).** 서버는 팩을 최대 50개까지만 주는데, 그때 묶으면
+ * 없는 팩이 생긴 것처럼(또는 있는 팩이 사라진 것처럼) 보입니다. 부르는 쪽이 옛 방식(`scheduled` 한 칸)
+ * 으로 물러서게 null 을 돌려줍니다.
+ */
+export function groupLockedPacks(status: PocaDrawStatus | undefined): LockedPackGroup[] | null {
+  if (!status?.packs) return null;
+  if (status.packs.length < status.remaining + status.scheduled) return null;
+
+  const groups = new Map<string, number>();
+  for (const pack of status.packs) {
+    if (pack.openable || !pack.openAt) continue;
+    groups.set(pack.openAt, (groups.get(pack.openAt) ?? 0) + 1);
+  }
+  return [...groups.entries()]
+    .map(([openAt, count]) => ({ openAt, count }))
+    .sort((a, b) => parseServerTime(a.openAt) - parseServerTime(b.openAt));
+}
+

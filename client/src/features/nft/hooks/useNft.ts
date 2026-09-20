@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
-import { getViewSessionId } from '@/shared/lib';
+import { getViewSessionId, parseServerTime } from '@/shared/lib';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
 import { useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
-import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
+import { DEFAULT_SORT, mergeTrades, nextLockedOpenAt, type NftSort } from '../model/nft.model';
 import type { PhotocardDetail } from '../model/nft.types';
 import { buildPocaDex } from '../model/pocaDex.model';
 
@@ -22,6 +22,9 @@ const PAGE_SIZE = 20;
  * 잘못된 줄 압니다. 확정되면 스스로 멈춥니다(끝없이 폴링하지 않습니다).
  */
 const MINT_POLL_MS = 3000;
+
+/** `setTimeout` 이 견디는 최대 지연(2^31-1 ms ≈ 24.8일). 넘기면 즉시 실행됩니다 */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /** 서버 커서 페이지 → 다음 pageParam. 마지막 페이지면 undefined (더 안 부름) */
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
@@ -192,19 +195,47 @@ export function useClaimEventPack() {
 /**
  * 가진 카드팩 — 목록에 카드팩을 보여줄지, 몇 개인지 정할 때 씁니다.
  * 팩이 어떻게 늘어나는지는 서버가 정합니다. 화면은 남은 수만 봅니다.
+ *
+ * 🔴 **열리는 시각에 한 번** 다시 물어봅니다. 서버가 팩마다 개봉 시각(`packs[].openAt`)을 주므로
+ * 가장 이른 잠긴 팩의 시각까지 기다렸다가 그때 한 번만 요청합니다. 예전에는 남은 시간을 60초로
+ * 잘라 계속 물어봤는데, 열리기 전에는 매번 같은 답이었습니다.
+ *
+ * 🔴 **탭에 돌아왔을 때도 다시 받습니다**(`refetchOnWindowFocus`). 백그라운드에서는 타이머가 늦게
+ * 돌 수 있고, 앱 전체가 포커스 재조회를 끄고 있어서 이 쿼리만 켭니다 — 응답이 작고 개인 값입니다.
  */
 export function useDrawAvailability() {
   // 개인 데이터입니다 (useMyPhotocards 와 같은 이유로 막아둡니다).
   // 쓰는 화면은 로그인 뒤에만 열리지만, 세션 중에 토큰이 만료되면 비로그인 상태로 호출됩니다.
   const isLoggedIn = useIsLoggedIn();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: nftKeys.drawAvailability(),
     queryFn: nftApi.drawAvailability,
     /* 뽑고 나면 mutation 이 nftKeys.all 을 무효화해 곧바로 다시 물어봅니다 */
     staleTime: STALE_TIME.SHORT,
+    refetchOnWindowFocus: true,
     enabled: isLoggedIn,
   });
+
+  const { refetch, dataUpdatedAt } = query;
+  const nextOpenAt = nextLockedOpenAt(query.data);
+  useEffect(() => {
+    if (!nextOpenAt) return;
+
+    const delay = parseServerTime(nextOpenAt) - Date.now();
+    if (!Number.isFinite(delay)) return;
+    /* setTimeout 은 약 24.8일(2^31ms)을 넘으면 즉시 실행돼 버립니다 — 그보다 먼 팩은 기다리지 않습니다.
+       화면을 그만큼 오래 열어 두는 일은 없고, 다시 들어오면 새로 받습니다. */
+    if (delay > MAX_TIMER_MS) return;
+
+    /* 여유 250ms: 서버 시계보다 조금 늦게 물어야 "이미 열렸다" 는 답이 옵니다.
+       내 시계가 서버보다 빨라 이미 지났다고 나오면(delay ≤ 0) 5초 뒤에 다시 봅니다 —
+       재요청이 `dataUpdatedAt` 을 바꿔 이 effect 가 다시 돌므로, 서버가 열렸다고 답할 때까지만 반복됩니다. */
+    const timer = setTimeout(() => void refetch(), delay > 0 ? delay + 250 : 5000);
+    return () => clearTimeout(timer);
+  }, [nextOpenAt, dataUpdatedAt, refetch]);
+
+  return query;
 }
 
 export function useMyPhotocards() {
