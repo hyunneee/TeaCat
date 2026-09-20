@@ -5,7 +5,7 @@ import { STALE_TIME } from '@/shared/constants';
 import { getViewSessionId, parseServerTime } from '@/shared/lib';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
-import { useIsLoggedIn } from '@/features/auth';
+import { useAuth, useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
 import { DEFAULT_SORT, mergeTrades, nextLockedOpenAt, type NftSort } from '../model/nft.model';
@@ -72,12 +72,32 @@ export function usePhotocardArts() {
 }
 
 /**
+ * 내 포카 요약 — 도안별 보유 수·판매 상태.
+ *
+ * 카드 목록(`useMyPhotocards`)과 달리 **한 번의 요청**입니다. 도감이 필요한 것은 개수뿐이라
+ * 카드를 페이지마다 끝까지 받아 오던 것을 이걸로 대신합니다.
+ *
+ * 🔴 `pendingCount > 0` 일 때만 다시 물어봅니다 — 발행 중이거나 정산 중인 카드가 있어서 상태가
+ * 바뀔 것이 있을 때입니다. 0 이면 스스로 멈춥니다. 예전에는 카드 목록 전체를 3초마다 다시
+ * 받았습니다(이미 받은 페이지를 전부 다시).
+ */
+export function useMyPhotocardSummary() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useQuery({
+    queryKey: nftKeys.mySummary(),
+    queryFn: nftApi.mySummary,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    refetchInterval: (query) => ((query.state.data?.pendingCount ?? 0) > 0 ? MINT_POLL_MS : false),
+  });
+}
+
+/**
  * 도감 — 전체 도안 위에 내가 가진 것을 얹습니다.
  *
- * 🔴 **내 카드를 끝까지 받습니다.** 목록이 커서 페이지(20장)라, 첫 페이지만 보고 세면
- * 21번째부터 가진 카드가 도감에서 "아직 없음" 으로 보입니다. 다 받을 때까지는
- * `isPending` 을 유지해서 **모자란 장수를 잠깐이라도 보여주지 않습니다** —
- * 도감에서 "×2 였는데 ×1 이 됐다" 는 버그로 읽힙니다.
+ * 🔴 **카드 목록을 받지 않습니다.** 요약 한 번(`useMyPhotocardSummary`)과 도안 풀만 씁니다.
+ * "보유 카드만" 을 눌렀을 때 필요한 카드 한 장 한 장은 `useOwnedCards` 가 그때 받습니다.
  */
 export function usePocaDex() {
   const pool = useQuery({
@@ -85,22 +105,40 @@ export function usePocaDex() {
     queryFn: nftApi.drawPool,
     staleTime: STALE_TIME.LONG,
   });
-  const mine = useMyPhotocards();
-
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const summary = useMyPhotocardSummary();
 
   const entries = useMemo(
-    () => buildPocaDex(pool.data ?? [], mine.data ?? []),
-    [pool.data, mine.data],
+    () => buildPocaDex(pool.data ?? [], summary.data?.designs ?? []),
+    [pool.data, summary.data],
   );
 
   return {
     entries,
-    isPending: pool.isPending || mine.isPending || !!hasNextPage,
-    isError: pool.isError,
+    isPending: !pool.isError && !summary.isError && (pool.isPending || summary.isPending),
+    isError: pool.isError || summary.isError,
+  };
+}
+
+/**
+ * 내 카드 한 장 한 장 — **"보유 카드만" 을 켰을 때만** 받습니다.
+ *
+ * 목록이 커서 페이지(20장)라 끝까지 받아야 21번째부터 가진 카드가 빠지지 않습니다. 다 받을
+ * 때까지 `cardsPending` 을 유지해서 모자란 장수를 잠깐이라도 보여주지 않습니다.
+ *
+ * `enabled` 가 false 면 **아무 요청도 나가지 않습니다** — 도감만 보는 사람은 이 목록이 필요 없습니다.
+ */
+export function useOwnedCards(enabled: boolean) {
+  const mine = useMyPhotocards(enabled);
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
+  useEffect(() => {
+    if (enabled && hasNextPage && !isFetchingNextPage && !mine.isError) void fetchNextPage();
+  }, [enabled, hasNextPage, isFetchingNextPage, fetchNextPage, mine.isError]);
+
+  return {
+    cards: mine.data ?? [],
+    cardsPending: enabled && !mine.isError && (mine.isPending || !!hasNextPage),
+    cardsError: enabled && mine.isError,
   };
 }
 
@@ -118,17 +156,19 @@ export function usePocaDex() {
  * 판매를 걸거나 내리면 이 목록의 판매 상태도 함께 갱신돼야 합니다.
  */
 export function useMyDesignCopies(designId: number | undefined) {
+  const { user, isLoggedIn } = useAuth();
   return useQuery({
-    queryKey: nftKeys.myCopies(designId ?? 0),
+    queryKey: [...nftKeys.myCopies(designId ?? 0), isLoggedIn ? user?.userId : null],
     queryFn: () => nftApi.myCopies(designId as number),
     staleTime: STALE_TIME.SHORT,
-    enabled: Number.isInteger(designId) && (designId ?? 0) > 0,
+    enabled: isLoggedIn && !!user?.userId && Number.isInteger(designId) && (designId ?? 0) > 0,
   });
 }
 
 export function usePhotocardDetail(photocardId: number) {
+  const { user, isLoggedIn } = useAuth();
   return useQuery({
-    queryKey: nftKeys.detail(photocardId),
+    queryKey: [...nftKeys.detail(photocardId), isLoggedIn ? user?.userId : null],
     queryFn: () => nftApi.detail(photocardId),
     staleTime: STALE_TIME.SHORT,
     refetchInterval: (query) => {
@@ -149,7 +189,7 @@ export function useRecordPhotocardView(photocardId: number, enabled: boolean) {
   const record = useMutation({
     mutationFn: (id: number) => nftApi.recordView(id, getViewSessionId()),
     onSuccess: (result, id) => {
-      queryClient.setQueryData<PhotocardDetail>(nftKeys.detail(id), (current) =>
+      queryClient.setQueriesData<PhotocardDetail>({ queryKey: nftKeys.detail(id) }, (current) =>
         current ? { ...current, viewCount: result.viewCount } : current,
       );
     },
@@ -238,7 +278,7 @@ export function useDrawAvailability() {
   return query;
 }
 
-export function useMyPhotocards() {
+export function useMyPhotocards(enabled = true) {
   // 개인 데이터입니다. 마켓(공개 화면)에서도 쓰기 때문에
   // 비로그인 상태에서 호출되면 401 이 나므로 반드시 막아둡니다.
   const isLoggedIn = useIsLoggedIn();
@@ -249,7 +289,7 @@ export function useMyPhotocards() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && enabled,
     /* 민팅 또는 거래 정산이 끝날 때까지만 갱신합니다. 완료되면 스스로 멈춥니다. */
     refetchInterval: (query) =>
       query.state.data?.pages.some((page) =>

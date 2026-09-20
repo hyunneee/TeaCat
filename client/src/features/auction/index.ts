@@ -54,3 +54,6 @@ export type {
 } from './model/auction.types';
 
 export * from './model/auctionOptions.model';
+
+export { useAuctionTrade } from './hooks/useAuctionTrade';
+export { AuctionTradePanel } from './components/AuctionTradePanel';

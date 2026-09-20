@@ -3,7 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { wrapCreateBrowserRouter } from '@sentry/react';
 import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
-import { AppLayout, PlainLayout, SearchLayout } from '@/shared/components/layout';
+import { AppLayout, PlainLayout, SearchLayout, DetailLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireQueue, RequireRole } from './guards';
 import { RequireBookingAccess } from './RequireBookingAccess';
@@ -329,6 +329,7 @@ const routes: RouteObject[] = [
         children: [
           { path: ROUTES.MY, element: withMask(withBoundary(<MyPage />)) },
           { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
+          { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
         ],
       },
@@ -339,6 +340,38 @@ const routes: RouteObject[] = [
   {
     element: <SearchLayout />,
     children: [{ path: ROUTES.SEARCH, element: withBoundary(<SearchPage />) }],
+  },
+
+  {
+    element: <DetailLayout />,
+    children: [
+      { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
+      { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            path: ROUTES.TICKET_DETAIL(':ticketId'),
+            element: withMask(withBoundary(<TicketDetailPage />)),
+          },
+          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
+          { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
+          { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
+          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
+
+          { path: ROUTES.MY_INQUIRIES, element: withMask(withBoundary(<InquiryListPage />)) },
+          { path: ROUTES.MY_INQUIRY_NEW, element: withMask(withBoundary(<InquiryWritePage />)) },
+          {
+            path: '/my/inquiries/:inquiryId',
+            element: withMask(withBoundary(<InquiryDetailPage />)),
+          },
+          {
+            path: '/my/inquiries/:inquiryId/edit',
+            element: withMask(withBoundary(<InquiryWritePage />)),
+          },
+        ],
+      },
+    ],
   },
 
   /* ══ 전체화면 (하단 탭 없음) ═════════════════════════════ */
@@ -352,10 +385,6 @@ const routes: RouteObject[] = [
       /* SSAFY 로그인 복귀 지점. 아직 세션이 없는 상태로 들어오므로 가드 밖에 둡니다. */
       { path: ROUTES.OAUTH_CALLBACK, element: withMask(withBoundary(<OauthCallbackPage />)) },
       { path: ROUTES.OAUTH_SIGNUP, element: withMask(withBoundary(<OauthSignupPage />)) },
-      { path: ROUTES.NFT_DETAIL(':photocardId'), element: withBoundary(<NftDetailPage />) },
-      /* 경매 상세는 **가드 밖**입니다. 로그인해야 볼 수 있게 하면 경매가 열려 있는지조차
-         알 수 없습니다. 로그인 여부는 서버가 `viewer` 로 알려주고, 화면이 그에 맞춰 바뀝니다. */
-      { path: ROUTES.AUCTION_DETAIL(':auctionId'), element: withBoundary(<AuctionDetailPage />) },
 
       {
         element: <RequireAuth />,
@@ -380,10 +409,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
           { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
 
-          {
-            path: ROUTES.TICKET_DETAIL(':ticketId'),
-            element: withMask(withBoundary(<TicketDetailPage />)),
-          },
+
           /* ── AI 스티커 (포카 꾸미기) ── `FEATURE.sticker` 가 꺼지면 길이 없습니다.
              그리기 화면은 사람을 특정하는 값이 없어 `withMask` 를 붙이지 않습니다. */
           ...(FEATURE.sticker
@@ -393,11 +419,7 @@ const routes: RouteObject[] = [
                 { path: ROUTES.MY_STICKERS, element: withMask(withBoundary(<MyStickersPage />)) },
               ]
             : []),
-          { path: ROUTES.MY_NFT_TRADES, element: withBoundary(<NftTradesPage />) },
-          { path: ROUTES.MY_NFT_SALES, element: withMask(withBoundary(<NftSalesPage />)) },
-          { path: ROUTES.MY_AUCTIONS, element: withBoundary(<MyAuctionsPage />) },
-          { path: ROUTES.MY_BIDS, element: withBoundary(<MyBidsPage />) },
-          { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
+
           { path: ROUTES.SETTINGS, element: withMask(withBoundary(<SettingsPage />)) },
           {
             path: ROUTES.SETTINGS_PASSWORD,
@@ -410,16 +432,6 @@ const routes: RouteObject[] = [
           { path: ROUTES.SETTINGS_ABOUT, element: withBoundary(<AboutPage />) },
 
           /* 문의 — 목록·작성·상세. 로그인한 회원 본인 것만 봅니다 */
-          { path: ROUTES.MY_INQUIRIES, element: withMask(withBoundary(<InquiryListPage />)) },
-          { path: ROUTES.MY_INQUIRY_NEW, element: withMask(withBoundary(<InquiryWritePage />)) },
-          {
-            path: '/my/inquiries/:inquiryId',
-            element: withMask(withBoundary(<InquiryDetailPage />)),
-          },
-          {
-            path: '/my/inquiries/:inquiryId/edit',
-            element: withMask(withBoundary(<InquiryWritePage />)),
-          },
 
           /* 결제창(모바일 리디렉션)에서 돌아오는 곳.
              ⚠️ 일부러 RequireFace / RequireCaptcha **밖**에 둡니다.

@@ -34,15 +34,11 @@ export function isListed(detail: PhotocardDetail): boolean {
 }
 
 /**
- * 내 포카인가 — **닉네임 비교**.
- *
- * 상세 응답에 소유자 id 가 없어 `ownerNickname` 으로 판정합니다.
- * 닉네임은 서버에서 유니크(`uq_users_nickname_active`)라 동작하지만,
- * 서버가 `viewer.isOwner` 를 주기 시작하면 **이 함수 하나만** 바꾸면 됩니다.
- * 화면은 이 함수만 부르고 닉네임을 직접 비교하지 않습니다.
+ * 내 포카인가. 서버가 인증 사용자 ID로 판정한 값을 사용한다.
+ * 두 번째 인자는 로그인 여부를 확인하는 기존 호출 계약이며 닉네임은 비교하지 않는다.
  */
 export function isOwner(detail: PhotocardDetail, viewerNickname: string | undefined): boolean {
-  return !!viewerNickname && detail.ownerNickname === viewerNickname;
+  return !!viewerNickname && detail.isMine === true;
 }
 
 /** 내가 이 포카를 살 수 있는가 */

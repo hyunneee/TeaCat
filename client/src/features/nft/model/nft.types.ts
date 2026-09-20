@@ -137,6 +137,7 @@ export interface PhotocardOrigin {
 
 /** 포카 상세 */
 export interface PhotocardDetail extends PocaDesignInfo {
+  isMine?: boolean;
   photocardId: number;
   /** 내가 가진 같은 도안 카드를 물을 때 쓰는 열쇠 (`nftApi.myCopies`) */
   designId: number;
@@ -299,6 +300,27 @@ export interface PocaDrawPack {
   openAt: string | null;
   /** 지금 열 수 있는가 — 서버가 DB 시계로 판정합니다 */
   openable: boolean;
+}
+
+/** `GET /users/me/photocards/summary` — 도감이 필요로 하는 도안별 보유 요약 */
+export interface MyPhotocardSummary {
+  designs: MyPhotocardSummaryDesign[];
+  /**
+   * 발행 중이거나 정산 중인 카드 수. 0 이면 화면이 다시 물어볼 이유가 없습니다.
+   */
+  pendingCount: number;
+}
+
+export interface MyPhotocardSummaryDesign {
+  designId: number;
+  /** 가진 장수 */
+  count: number;
+  /** 그중 마켓에 나간 장수 (`count` 에서 빼지 않습니다) */
+  marketCount: number;
+  /** 마켓에 나간 것 중 대표 한 장의 상태. 없으면 null */
+  marketState: 'LISTED' | 'AUCTION' | 'SETTLING' | null;
+  /** 눌렀을 때 열 대표 카드 — 서버가 보관 중인 카드를 먼저 고릅니다 */
+  photocardId: number;
 }
 
 /** `POST /photocards/packs/claim` 응답 — 이벤트 팩 받기 */

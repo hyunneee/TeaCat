@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pencil, Trash2 } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
+import { DetailHeader as Header } from '@/shared/components/layout';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { Badge, Button, Card, SectionTitle } from '@/shared/components/ui';
 import { useModal } from '@/app/providers';
@@ -39,7 +39,7 @@ export function InquiryDetailPage() {
     <>
       <Header title="문의" showBack />
 
-      <div className="space-y-6 p-4">
+      <div className="mx-auto max-w-3xl space-y-6 p-4">
         <section className="space-y-3">
           <div className="flex items-center gap-2">
             <Badge tone="neutral">{TYPE_LABEL[inquiry.type]}</Badge>
@@ -51,14 +51,18 @@ export function InquiryDetailPage() {
             <p className="text-subtle mt-1 text-xs">{formatDateTime(inquiry.createdAt)}</p>
           </div>
 
-          <Card className="text-sm leading-relaxed break-words whitespace-pre-wrap">{inquiry.content}</Card>
+          <Card className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+            {inquiry.content}
+          </Card>
         </section>
 
         <section>
           <SectionTitle>답변</SectionTitle>
           {inquiry.answer ? (
             <Card className="space-y-2">
-              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{inquiry.answer}</p>
+              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                {inquiry.answer}
+              </p>
               <p className="text-subtle text-xs">
                 {inquiry.answeredByNickname}
                 {inquiry.answeredAt ? ` · ${formatDateTime(inquiry.answeredAt)}` : ''}
