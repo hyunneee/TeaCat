@@ -7,6 +7,7 @@ import com.teacat.server.nft.dto.request.NftMarketSort;
 import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
 import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
+import com.teacat.server.nft.dto.response.MyNftPhotocardSummaryResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
 import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
@@ -20,6 +21,7 @@ import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
 import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
+import com.teacat.server.nft.entity.NftMintStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardListing;
@@ -332,6 +334,66 @@ public class NftService {
                 .toList();
         return new NftCursorPageResponse<>(items,
                 nextTimeCursor(hasNext, SALE_SCOPE, pageRows), hasNext);
+    }
+
+    /**
+     * 내 포토카드 요약 — 도안별 보유 수와 판매 상태.
+     *
+     * <p>대표 카드 고르는 규칙은 화면이 갖고 있던 것을 그대로 옮겼다({@code buildPocaDex}).
+     * 카드는 최신순으로 오므로 <b>가장 최근 보관 중인 카드</b>가 대표가 되고, 보관 중인 카드가
+     * 없으면 가장 최근 카드다. 판매 상태는 마켓에 나간 것 중 가장 최근 한 장의 것이다.
+     */
+    public MyNftPhotocardSummaryResponse getMyPhotocardSummary(Long userId) {
+        List<NftMarketQueryRepository.OwnedStateRow> rows = queryRepository.findOwnedStates(userId);
+
+        Map<Long, DesignTally> byDesign = new LinkedHashMap<>();
+        long pending = 0;
+        for (NftMarketQueryRepository.OwnedStateRow row : rows) {
+            MyNftPhotocardSummaryResponse.MarketState state = marketStateOf(row);
+            if (row.status() == NftMintStatus.PENDING || "SETTLING".equals(row.marketStatus())) pending++;
+
+            DesignTally tally = byDesign.computeIfAbsent(row.designId(), id -> new DesignTally(row.photocardId(), state != null));
+            tally.count++;
+            if (state != null) {
+                tally.marketCount++;
+                if (tally.marketState == null) tally.marketState = state;
+            }
+            /* 대표는 보관 중인 카드를 먼저 — 세 장 중 한 장만 올려 둔 사람이 판매 중인 카드 상세로
+               떨어지면 거기서 할 일이 "판매 내리기" 뿐이라 남은 두 장을 보러 온 사람에게 막힌 길이다 */
+            if (tally.representativeOnMarket && state == null) {
+                tally.photocardId = row.photocardId();
+                tally.representativeOnMarket = false;
+            }
+        }
+
+        List<MyNftPhotocardSummaryResponse.Design> designs = byDesign.entrySet().stream()
+                .map(e -> new MyNftPhotocardSummaryResponse.Design(
+                        e.getKey(), e.getValue().count, e.getValue().marketCount,
+                        e.getValue().marketState, e.getValue().photocardId))
+                .toList();
+        return new MyNftPhotocardSummaryResponse(designs, pending);
+    }
+
+    /** 판매 상태 판정 — 화면의 `photocardMarketState` 와 같은 규칙이다 (정산 중 > 경매 > 고정가) */
+    private static MyNftPhotocardSummaryResponse.MarketState marketStateOf(
+            NftMarketQueryRepository.OwnedStateRow row) {
+        if ("SETTLING".equals(row.marketStatus())) return MyNftPhotocardSummaryResponse.MarketState.SETTLING;
+        if ("AUCTION".equals(row.marketType())) return MyNftPhotocardSummaryResponse.MarketState.AUCTION;
+        if ("FIXED_PRICE".equals(row.marketType())) return MyNftPhotocardSummaryResponse.MarketState.LISTED;
+        return null;
+    }
+
+    private static final class DesignTally {
+        int count;
+        int marketCount;
+        MyNftPhotocardSummaryResponse.MarketState marketState;
+        Long photocardId;
+        boolean representativeOnMarket;
+
+        DesignTally(Long photocardId, boolean onMarket) {
+            this.photocardId = photocardId;
+            this.representativeOnMarket = onMarket;
+        }
     }
 
     public NftCursorPageResponse<MyNftPhotocardResponse> getMyPhotocards(

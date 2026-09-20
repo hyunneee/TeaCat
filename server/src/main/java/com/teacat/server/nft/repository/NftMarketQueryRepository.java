@@ -723,6 +723,40 @@ public class NftMarketQueryRepository {
                                String counterpartyNickname, Long price, LocalDateTime tradedAt) {
     }
 
+    /**
+     * 내가 가진 카드의 **요약용 최소 열** — 도감이 "몇 장 · 어디에 나가 있나" 를 셀 때 쓴다.
+     *
+     * <p>{@link #findOwnedPhotocards} 와 달리 공연·도안 이름·평균가 서브쿼리를 읽지 않고 페이지도 없다.
+     * 도감이 필요한 것은 개수뿐인데 카드 목록을 20장씩 끝까지 받아 오던 것을 이 한 번으로 대신한다.
+     * 정렬은 목록과 같다(최신순) — 대표 카드를 고르는 규칙이 그 순서에 기대고 있다.
+     */
+    public List<OwnedStateRow> findOwnedStates(Long userId) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.design_id, p.status,
+                       CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
+                            WHEN a.id IS NOT NULL THEN 'AUCTION' END AS market_type,
+                       COALESCE(l.status::text, a.status::text) AS market_status
+                FROM nft_photocards p
+                LEFT JOIN nft_photocard_listings l
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_auctions a
+                       ON a.photocard_id = p.id AND a.status IN ('ACTIVE', 'SETTLING')
+                WHERE p.owner_id = :userId
+                ORDER BY p.created_at DESC, p.id DESC
+                """;
+        return jdbcTemplate.query(sql, new MapSqlParameterSource("userId", userId),
+                (rs, rowNum) -> new OwnedStateRow(
+                        rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
+                        NftMintStatus.valueOf(rs.getString("status")),
+                        rs.getString("market_type"),
+                        rs.getString("market_status")));
+    }
+
+    public record OwnedStateRow(Long photocardId, Long designId, NftMintStatus status,
+                                String marketType, String marketStatus) {
+    }
+
     public record OwnedRow(Long photocardId, Long designId, String designName, String imageUrl,
                            String performanceTitle, String eventName, NftMintStatus status, boolean listed,
                            String marketType, String marketStatus,

@@ -1552,6 +1552,60 @@ class NftServiceIntegrationTests {
                 .satisfies(error -> assertThat(((BusinessException) error).getErrorCode()).isEqualTo(expected));
     }
 
+    @Test
+    void 내_포토카드_요약은_도안별_보유_수와_판매_상태를_한_번에_준다() {
+        Long userId = insertUser("summary@test.com", "요약");
+        Long sellerCounterpart = insertUser("other@test.com", "남");
+        Fixture fixture = insertPerformanceFixture();
+        Long designId = insertDesign(fixture.performanceId(), "세 장짜리 도안", 10);
+        Long otherDesignId = insertDesign(fixture.performanceId(), "한 장짜리 도안", 10);
+
+        // 오래된 순: 보관 → 고정가 → 고정가(가장 최근). 카드마다 티켓이 따로 필요하다
+        Long stored = insertPhotocard(designId, insertTicket(userId, fixture), userId);
+        Long listedOld = insertPhotocard(designId, insertTicket(userId, fixture), userId);
+        Long listedNew = insertPhotocard(designId, insertTicket(userId, fixture), userId);
+        Long pending = insertPhotocard(otherDesignId, insertTicket(userId, fixture), userId);
+        // 남의 카드는 세지 않는다
+        insertPhotocard(designId, insertTicket(sellerCounterpart, fixture), sellerCounterpart);
+
+        // 이 클래스의 insertPhotocard 는 MINTED 로 넣는다. 발행 중인 카드 하나만 PENDING 으로 되돌린다
+        jdbcTemplate.update("UPDATE nft_photocards SET status = 'PENDING' WHERE id = ?", pending);
+        insertListing(listedOld, userId, 3_000L);
+        insertListing(listedNew, userId, 4_000L);
+
+        var summary = nftService.getMyPhotocardSummary(userId);
+
+        assertThat(summary.designs()).hasSize(2);
+        var three = summary.designs().stream()
+                .filter(d -> d.designId().equals(designId)).findFirst().orElseThrow();
+        assertThat(three.count()).isEqualTo(3);
+        // count 에서 빼지 않는다 — 마켓에 올려도 팔리기 전까지 내 것이다
+        assertThat(three.marketCount()).isEqualTo(2);
+        assertThat(three.marketState().name()).isEqualTo("LISTED");
+        // 🔴 대표는 보관 중인 카드다. 판매 중인 카드 상세로 떨어지면 남은 카드를 보러 온 사람에게 막힌 길이다
+        assertThat(three.photocardId()).isEqualTo(stored);
+
+        var one = summary.designs().stream()
+                .filter(d -> d.designId().equals(otherDesignId)).findFirst().orElseThrow();
+        assertThat(one.count()).isEqualTo(1);
+        assertThat(one.marketCount()).isZero();
+        assertThat(one.marketState()).isNull();
+        assertThat(one.photocardId()).isEqualTo(pending);
+
+        // 발행 중인 카드가 하나 있으므로 화면이 다시 물어볼 이유가 있다
+        assertThat(summary.pendingCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 카드가_없으면_요약은_비어_있고_다시_물어볼_이유도_없다() {
+        Long userId = insertUser("empty-summary@test.com", "빈요약");
+
+        var summary = nftService.getMyPhotocardSummary(userId);
+
+        assertThat(summary.designs()).isEmpty();
+        assertThat(summary.pendingCount()).isZero();
+    }
+
     private record Fixture(Long performanceId, Long performanceDetailId, Long areaId) {
     }
 }
