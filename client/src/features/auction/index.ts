@@ -17,6 +17,8 @@ export {
   useMyBids,
 } from './hooks/useAuction';
 export { AuctionCreateForm } from './components/AuctionCreateForm';
+export { BidDateFilters } from './components/BidDateFilters';
+export { useBidDateFilter } from './hooks/useBidDateFilter';
 export { BidModal, type BidModalProps } from './components/BidModal';
 export { AuctionCard } from './components/AuctionCard';
 export { AuctionCountdown } from './components/AuctionCountdown';
@@ -25,9 +27,6 @@ export { auctionApi, auctionKeys } from './api/auctionApi';
 export {
   AUCTION_SORTS,
   DEFAULT_AUCTION_SORT,
-  DURATION_OPTIONS,
-  DEFAULT_DURATION_HOURS,
-  type DurationOption,
   MY_BID_RESULT,
   MY_AUCTION_FILTERS,
   AUCTION_STATUS_LABEL,
@@ -53,3 +52,5 @@ export type {
   AuctionCreated,
   MyBid,
 } from './model/auction.types';
+
+export * from './model/auctionOptions.model';

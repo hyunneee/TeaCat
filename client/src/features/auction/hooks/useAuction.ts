@@ -1,3 +1,4 @@
+import { bidDateError, type BidDateFilter } from '../model/auctionOptions.model';
 import { useCallback } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
@@ -237,7 +238,7 @@ export function useCancelAuction(auctionId: number) {
  */
 export function useCreateAuction(photocardId: number) {
   return useMutation({
-    mutationFn: (body: { startPrice: number; buyNowPrice?: number; durationHours: number }) =>
+    mutationFn: (body: { startPrice: number; buyNowPrice?: number; durationMinutes: number }) =>
       auctionApi.create(photocardId, body),
     retry: false,
     onSuccess: () => {
@@ -275,16 +276,16 @@ export function useMyAuctions(status?: AuctionStatus) {
  * 여기서는 폴링하지 않습니다 — 목록에서 몇 초 늦어도 문제가 없고,
  * 밀렸는지 확인하러 들어가면 상세가 4초마다 갱신합니다.
  */
-export function useMyBids() {
+export function useMyBids(dates: BidDateFilter = {}) {
   const isLoggedIn = useIsLoggedIn();
 
   return useInfiniteQuery({
-    queryKey: auctionKeys.myBids(),
-    queryFn: ({ pageParam }) => auctionApi.myBids({ cursor: pageParam, size: PAGE_SIZE }),
+    queryKey: auctionKeys.myBids(dates),
+    queryFn: ({ pageParam }) => auctionApi.myBids({ ...dates, cursor: pageParam, size: PAGE_SIZE }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && !bidDateError(dates),
     select: (data) => data.pages.flatMap((page) => page.items),
   });
 }
