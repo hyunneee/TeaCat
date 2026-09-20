@@ -386,7 +386,7 @@ class NftServiceIntegrationTests {
      * 훑어서 "누가 어느 공연 어느 자리에 앉았는지" 를 통째로 긁을 수 있었다.
      */
     @Test
-    void 마켓에_없는_카드는_소유자만_볼_수_있다() {
+    void 마켓에_없는_카드는_소유자만_볼_수_있다() throws Exception {
         Long ownerId = insertUser("owner@test.com", "소유자");
         Long strangerId = insertUser("stranger@test.com", "타인");
         Fixture fixture = insertPerformanceFixture();
@@ -396,6 +396,11 @@ class NftServiceIntegrationTests {
 
         // 소유자는 본다 — 자기 좌석이므로 열·번호까지
         var mine = nftService.getPhotocard(photocardId, ownerId);
+        assertThat(mine.isMine()).isTrue();
+        mockMvc.perform(get("/photocards/{id}", photocardId)
+                        .header("Authorization", "Bearer " + jwtTokenProvider.createAccessToken(ownerId, UserRole.USER)))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.isMine").value(true));
         assertThat(mine.origin().rowLabel()).isEqualTo("3");
         assertThat(mine.origin().seatNumber()).isEqualTo(1);
 
@@ -422,6 +427,8 @@ class NftServiceIntegrationTests {
                 new NftListingCreateRequest(3_000L, "설명"));
 
         var seen = nftService.getPhotocard(photocardId, strangerId);
+        assertThat(seen.isMine()).isFalse();
+        assertThat(nftService.getPhotocard(photocardId, null).isMine()).isFalse();
 
         /* 마켓에 올라왔으니 카드 자체는 보여준다 — 구매자가 출처를 확인해야 한다.
            다만 **어느 자리였는지**까지 알려주면 판매 등록이 곧 좌석 공개가 된다.
@@ -433,6 +440,7 @@ class NftServiceIntegrationTests {
 
         // 주인에게는 그대로 다 보인다
         var owner = nftService.getPhotocard(photocardId, sellerId);
+        assertThat(owner.isMine()).isTrue();
         assertThat(owner.origin().rowLabel()).isEqualTo("3");
         assertThat(owner.origin().seatNumber()).isEqualTo(1);
     }
@@ -953,8 +961,8 @@ class NftServiceIntegrationTests {
                 "SELECT COALESCE(chain_token_id::text, id::text) FROM nft_photocard_designs WHERE id = ?",
                 String.class, designId));
         assertThat(items.getFirst().photocardId()).isEqualTo(
-                jdbcTemplate.queryForObject("SELECT id FROM nft_photocards", Long.class));
-        assertThat(items.getFirst().designDbId()).isEqualTo(designId);
+                jdbcTemplate.queryForObject("SELECT id::text FROM nft_photocards", String.class));
+        assertThat(items.getFirst().designDbId()).isEqualTo(designId.toString());
         assertThat(items.getFirst().to()).isEqualTo("0x" + String.format("%040x", userId));
     }
 

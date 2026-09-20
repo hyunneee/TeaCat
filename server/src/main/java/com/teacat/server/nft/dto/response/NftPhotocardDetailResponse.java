@@ -58,7 +58,10 @@ public record NftPhotocardDetailResponse(
         Long averagePrice,
 
         @Schema(description = "상세 조회 수", example = "42")
-        long viewCount
+        long viewCount,
+
+        @Schema(description = "인증된 조회자가 현재 소유자인지")
+        boolean isMine
 ) {
 
     public record Auction(

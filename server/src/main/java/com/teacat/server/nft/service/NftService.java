@@ -156,7 +156,7 @@ public class NftService {
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
-                row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
+                row.groupName(), row.grade(), row.averagePrice(), row.viewCount(), isOwner);
     }
 
     /**
