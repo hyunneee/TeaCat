@@ -127,6 +127,10 @@ public class SecurityConfig {
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         .requestMatchers("/admin/performances/*/draw-designs", "/admin/check-in/**")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        // 운영 콘솔의 좌석·예매자 조회. 🔴 역할만 보는 이 줄로는 "남의 공연" 을 막지
+                        // 못한다 — 담당 공연·회차·티켓의 연결은 PerformanceOperationsService 가 검사한다.
+                        .requestMatchers(HttpMethod.GET, "/admin/performances/*/schedules/*/operations/**")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
                         // 공연 관리(등록·수정·회차·구역·이미지)는 공연 주최자(PERFORMANCE)도 쓴다.
                         // 등록자 본인 것만 다룰 수 있는 건 서비스가 따로 검사한다(PERFORMANCE_020).
