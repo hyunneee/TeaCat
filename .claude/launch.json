@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "client", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "blockchain",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "blockchain", "run", "dev"],
+      "port": 4000
     }
   ]
 }

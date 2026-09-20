@@ -6,6 +6,7 @@ import com.teacat.server.auth.dto.response.LoginResult;
 import com.teacat.server.auth.dto.response.SignupResponse;
 import com.teacat.server.auth.dto.response.TokenPair;
 import com.teacat.server.auth.exception.AuthErrorCode;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.auth.security.JwtTokenProvider;
 import com.teacat.server.auth.security.RefreshTokenProvider;
 import com.teacat.server.common.exception.BusinessException;
@@ -31,6 +32,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenProvider refreshTokenProvider;
     private final WalletService walletService;
+    private final LoginEventRecorder loginEventRecorder;
 
     /**
      * 회원가입 (API-101).
@@ -71,7 +73,7 @@ public class AuthService {
      *
      * 이메일이 없는 경우와 비밀번호가 틀린 경우를 구분해서 알려주지 않는다(계정 존재 여부 노출 방지).
      */
-    public LoginResult login(LoginRequest request) {
+    public LoginResult login(LoginRequest request, ClientRequest client) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.LOGIN_FAILED));
 
@@ -80,6 +82,8 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.LOGIN_FAILED);
         }
 
+        // 이상거래 심사(R8)용 단말 기록. 실패해도 로그인은 그대로 성공한다
+        loginEventRecorder.record(user.getId(), client);
         return new LoginResult(issueTokens(user), MyInfoResponse.from(user));
     }
 

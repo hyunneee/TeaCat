@@ -1,6 +1,7 @@
 package com.teacat.server.nft.service;
 
 import com.teacat.server.common.config.NftAuctionProperties;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
 import com.teacat.server.nft.dto.request.NftAuctionSort;
@@ -83,6 +84,13 @@ public class NftAuctionService {
      */
     @Transactional
     public NftAuctionResponse createAuction(Long sellerId, Long photocardId, NftAuctionCreateRequest request) {
+        return createAuction(sellerId, photocardId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 등록 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftAuctionResponse createAuction(Long sellerId, Long photocardId, NftAuctionCreateRequest request,
+                                            ClientRequest client) {
         if (request.buyNowPrice() != null && request.buyNowPrice() <= request.startPrice()) {
             throw new BusinessException(NftErrorCode.INVALID_BUY_NOW_PRICE);
         }
@@ -109,10 +117,11 @@ public class NftAuctionService {
         }
 
         // 마감 시각은 DB 시계로 잡는다. 마감 판정(ends_at <= now())과 같은 시계여야 한다
-        NftAuction auction = auctionRepository.save(NftAuction.create(
+        NftAuction auction = NftAuction.create(
                 photocard, photocard.getOwner(), request.startPrice(), request.buyNowPrice(),
-                queryRepository.currentTime().plus(duration)));
-        return NftAuctionResponse.from(auction);
+                queryRepository.currentTime().plus(duration));
+        auction.recordClientRequest(client);
+        return NftAuctionResponse.from(auctionRepository.save(auction));
     }
 
     /**
@@ -143,12 +152,18 @@ public class NftAuctionService {
      */
     @Transactional
     public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request) {
+        return placeBid(bidderId, auctionId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 입찰 요청을 보낸 단말. 이상거래 심사(판매자·입찰자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request, ClientRequest client) {
         NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
         validateBiddable(auction, bidderId, request.amount());
 
         User bidder = getUser(bidderId);
-        NftAuctionBid bid = bidRepository.save(NftAuctionBid.place(auction, bidder, request.amount()));
+        NftAuctionBid bid = bidRepository.save(NftAuctionBid.place(auction, bidder, request.amount(), client));
         holdService.hold(bidderId, request.amount(), CatMoneyHoldRefType.AUCTION_BID, bid.getId());
 
         NftAuctionBid previousTop = auction.getTopBid();
@@ -190,6 +205,13 @@ public class NftAuctionService {
      */
     @Transactional
     public NftPurchaseResponse buyNow(Long buyerId, Long auctionId, String idempotencyKeyHeader) {
+        return buyNow(buyerId, auctionId, idempotencyKeyHeader, ClientRequest.unknown());
+    }
+
+    /** @param client 구매 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말, 계정 탈취)가 읽는다 */
+    @Transactional
+    public NftPurchaseResponse buyNow(Long buyerId, Long auctionId, String idempotencyKeyHeader,
+                                      ClientRequest client) {
         UUID idempotencyKey = NftRequestSupport.parseIdempotencyKey(idempotencyKeyHeader);
         NftPhotocardTrade existing = tradeRepository.findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey)
                 .orElse(null);
@@ -223,8 +245,9 @@ public class NftAuctionService {
         User buyer = getUser(buyerId);
         Long price = auction.getBuyNowPrice();
 
-        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.pendingAuction(auction, buyer, price, idempotencyKey));
+        NftPhotocardTrade trade = NftPhotocardTrade.pendingAuction(auction, buyer, price, idempotencyKey);
+        trade.recordClientRequest(client); // 단말 컬럼은 updatable=false 라 INSERT 전에 채운다
+        trade = tradeRepository.saveAndFlush(trade);
         trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.hold(buyerId, price, CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.holdIncoming(auction.getSeller().getId(), price,

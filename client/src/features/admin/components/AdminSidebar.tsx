@@ -11,6 +11,7 @@ import {
   MessagesSquare,
   Images,
   ScanFace,
+  ShieldAlert,
   Sparkles,
   Music,
   Users,
@@ -138,6 +139,13 @@ const ADMIN_MENU: AdminMenuItem[] = [
     visible: can.manageInquiries,
     matchNested: true,
   },
+  {
+    to: ROUTES.ADMIN_TRADE_REVIEWS,
+    label: '거래 심사',
+    icon: ShieldAlert,
+    visible: can.reviewTrades,
+    matchNested: true,
+  },
 ];
 
 const GROUPS = [
@@ -151,7 +159,12 @@ const GROUPS = [
   { label: '서비스 콘텐츠', paths: [ROUTES.ADMIN_BANNERS] },
   {
     label: '포카 콘텐츠',
-    paths: [ROUTES.ADMIN_POCA_TEMPLATES, ROUTES.ADMIN_PACK_EVENTS, ROUTES.ADMIN_POCA_DESIGNS],
+    paths: [
+      ROUTES.ADMIN_POCA_TEMPLATES,
+      ROUTES.ADMIN_PACK_EVENTS,
+      ROUTES.ADMIN_POCA_DESIGNS,
+      ROUTES.ADMIN_TRADE_REVIEWS,
+    ],
   },
 ];
 

@@ -1,6 +1,7 @@
 package com.teacat.server.nft.controller;
 
 import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
 import com.teacat.server.nft.dto.request.NftMarketSort;
@@ -27,6 +28,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -106,9 +108,11 @@ public class NftController {
     public ResponseEntity<BaseResponse<NftListingResponse>> registerListing(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
-            @Valid @RequestBody NftListingCreateRequest request) {
+            @Valid @RequestBody NftListingCreateRequest request,
+            @Parameter(hidden = true) HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(nftService.registerListing(authUser.id(), photocardId, request)));
+                .body(BaseResponse.success(nftService.registerListing(
+                        authUser.id(), photocardId, request, ClientRequest.from(http))));
     }
 
     @Operation(
@@ -141,9 +145,10 @@ public class NftController {
     public ResponseEntity<BaseResponse<NftPurchaseResponse>> purchase(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
-            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(hidden = true) HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(BaseResponse.success(
-                nftService.purchase(authUser.id(), photocardId, idempotencyKey)));
+                nftService.purchase(authUser.id(), photocardId, idempotencyKey, ClientRequest.from(http))));
     }
 
     @Operation(summary = "NFT 거래 정산 상태 조회")

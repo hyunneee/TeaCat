@@ -50,6 +50,7 @@ for(const role of ['ADMIN','PERFORMANCE','STADIUM']){
   const html=module.exports.render(role);
   assert(html.includes('운영 메뉴'),role+' navigation');
   assert(html.includes('href="/admin/poca-templates"')===(role==='ADMIN'),role+' poca permission');
+  assert(html.includes('href="/admin/trade-reviews"')===(role==='ADMIN'),role+' trade review permission');
   assert(html.includes('href="/admin/monitoring"')===(role==='ADMIN'),role+' monitoring permission');
   assert(html.includes('href="/admin/concerts"')===(role!=='STADIUM'),role+' concerts permission');
   assert(html.includes('href="/admin/stadiums"')===(role!=='PERFORMANCE'),role+' stadium permission');
