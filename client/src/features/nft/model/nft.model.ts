@@ -90,12 +90,6 @@ export function pocaSeed(photocardId: number): string {
 }
 
 /**
- * 이 카드가 어디서 왔는가 — 목록·상세의 둘째 줄.
- *
- * 뽑기로 얻은 카드는 공연이 없어서 서버가 `performanceTitle` 을 null 로 줍니다.
- * 빈 줄로 두면 카드마다 높이가 달라지고 "왜 여긴 비었지" 가 남습니다.
- */
-/**
  * 서버가 도안 이름에 공연 제목을 붙여 둡니다 — `"김예린 · 아기숭이 콘서트"`.
  * 온체인 메타데이터에 박히는 이름이라 **거기서는 그래야 합니다**(같은 사람이라도 공연마다
  * 다른 카드라서 구분이 필요합니다). 화면에서는 앞의 이름만 씁니다 —
@@ -124,8 +118,22 @@ export function packOpenAtLabel(nextOpenAt: string): string {
   }).format(new Date(parseServerTime(nextOpenAt)));
 }
 
-export function photocardSource(performanceTitle: string | null): string {
-  return performanceTitle ?? '이벤트 카드팩';
+/**
+ * 이 카드가 어디서 왔는가 — 목록·상세의 둘째 줄.
+ *
+ * **공연명 → 이벤트 이름 → '이벤트 카드팩'** 순서입니다. 카드팩에서 나온 카드는 공연이
+ * 없어서 서버가 `performanceTitle` 을 null 로 주는데, 빈 줄로 두면 카드마다 높이가 달라지고
+ * "왜 여긴 비었지" 가 남습니다.
+ *
+ * 🔴 **이벤트 여부를 공연명이 null 인 것으로 판단하지 않습니다.** 어느 이벤트였는지는
+ * 서버가 팩의 출처로 판별해 `eventName` 으로 줍니다 — 화면은 받은 값만 씁니다.
+ * 이벤트가 아닌 팩(입장 기념)은 `eventName` 이 없어 마지막 문구로 떨어집니다.
+ */
+export function photocardSource(
+  performanceTitle: string | null,
+  eventName?: string | null,
+): string {
+  return performanceTitle ?? eventName ?? '이벤트 카드팩';
 }
 
 /** 'VIP석 A구역 3열 5번' / 스탠딩이면 'VIP석 A구역 스탠딩' */

@@ -1,13 +1,15 @@
 import { motion } from 'motion/react';
 import { Badge } from '@/shared/components/ui';
 import { PocaArt } from './PocaArt';
-import { pocaName, pocaSeed } from '../model/nft.model';
+import { photocardSource, pocaName, pocaSeed } from '../model/nft.model';
 
 interface Props {
   photocardId: number;
   designName: string;
   imageUrl: string | null;
-  performanceTitle: string;
+  performanceTitle: string | null;
+  /** 이벤트 카드팩에서 나온 카드의 이벤트 이름. 공연명이 없을 때 둘째 줄에 씁니다 */
+  eventName?: string | null;
   /** 판매가(CAT). 없으면 `caption` 을 셋째 줄에 보인다 */
   price?: number | null;
   /** 가격이 없을 때 셋째 줄 — '보관 중' · '판매 중' 등 */
@@ -37,6 +39,7 @@ export function NftCard({
   designName,
   imageUrl,
   performanceTitle,
+  eventName,
   price,
   caption,
   count,
@@ -87,7 +90,12 @@ export function NftCard({
           <p className="line-clamp-2 text-[0.9375rem] leading-snug font-semibold">
             {pocaName(designName)}
           </p>
-          <p className="text-subtle mt-1 truncate text-[0.8125rem]">{performanceTitle}</p>
+          {/* 🔴 공연명이 없는 카드(카드팩)에도 **줄 하나는 남깁니다.** 조건부로 지우면
+              격자에서 그 카드만 아래 칸이 짧아져 가격 줄의 높이가 어긋납니다.
+              문구 순서는 `photocardSource` 한곳에 있습니다 — 화면마다 다르게 적지 마세요. */}
+          <p className="text-subtle mt-1 min-h-5 truncate text-[0.8125rem]">
+            {photocardSource(performanceTitle, eventName)}
+          </p>
 
           {price !== null && price !== undefined ? (
             <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[1.0625rem] leading-none font-extrabold tabular-nums">

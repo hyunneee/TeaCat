@@ -30,11 +30,19 @@ public class NftMarketQueryRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id AS photocard_id, l.id AS listing_id, d.name AS design_name,
                        d.image_url, pg.title AS performance_title, l.price,
+                       -- 🔴 이벤트 여부는 **팩의 출처**로 판별한다. 공연명이 null 이라는 이유만으로
+                       --    이벤트 카드팩이라고 단정하면, 입장 기념 팩(TICKET_ENTRY)에서 나온 카드까지
+                       --    없는 이벤트 이름을 달게 된다. 이벤트 행이 지워졌을 때만 일반 문구로 떨어진다.
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
                        seller.nickname AS seller_nickname, l.listed_at, p.view_count
                 FROM nft_photocard_listings l
                 JOIN nft_photocards p ON p.id = l.photocard_id
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 JOIN users seller ON seller.id = l.seller_id
                 WHERE l.status = 'ACTIVE'
                 """);
@@ -64,6 +72,7 @@ public class NftMarketQueryRepository {
                 rs.getString("design_name"),
                 rs.getString("image_url"),
                 rs.getString("performance_title"),
+                rs.getString("event_name"),
                 rs.getLong("price"),
                 rs.getString("seller_nickname"),
                 rs.getObject("listed_at", LocalDateTime.class),
@@ -75,6 +84,9 @@ public class NftMarketQueryRepository {
         String sql = """
                 SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title,
+                       -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
                        -- 조회자가 소유자인지 판정해야 한다. 닉네임으로 비교하면 동명이인에서 깨진다
                        p.owner_id, owner.nickname AS owner_nickname,
                        p.created_at AS issued_at, t.id AS ticket_id, pa.grade AS seat_grade, a.area_code,
@@ -99,6 +111,9 @@ public class NftMarketQueryRepository {
                        ON pa.performance_general_id = pg.id AND pa.area_id = t.area_id
                 LEFT JOIN nft_photocard_listings l
                        ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 WHERE p.id = :photocardId
                 """;
         List<DetailRow> rows = jdbcTemplate.query(sql, new MapSqlParameterSource("photocardId", photocardId),
@@ -108,6 +123,7 @@ public class NftMarketQueryRepository {
                         rs.getString("design_name"),
                         rs.getString("image_url"),
                         rs.getString("performance_title"),
+                        rs.getString("event_name"),
                         rs.getLong("owner_id"),
                         rs.getString("owner_nickname"),
                         rs.getObject("issued_at", LocalDateTime.class),
@@ -184,6 +200,9 @@ public class NftMarketQueryRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title, p.status, p.created_at,
+                       -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
                        CASE WHEN l.id IS NOT NULL OR a.id IS NOT NULL THEN true ELSE false END AS listed,
                        CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
                             WHEN a.id IS NOT NULL THEN 'AUCTION' END AS market_type,
@@ -201,6 +220,9 @@ public class NftMarketQueryRepository {
                        ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
                 LEFT JOIN nft_auctions a
                        ON a.photocard_id = p.id AND a.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 WHERE p.owner_id = :userId
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
@@ -219,6 +241,7 @@ public class NftMarketQueryRepository {
                 rs.getString("design_name"),
                 rs.getString("image_url"),
                 rs.getString("performance_title"),
+                rs.getString("event_name"),
                 NftMintStatus.valueOf(rs.getString("status")),
                 rs.getBoolean("listed"),
                 rs.getString("market_type"),
@@ -681,12 +704,12 @@ public class NftMarketQueryRepository {
     }
 
     public record MarketRow(Long photocardId, Long listingId, String designName, String imageUrl,
-                            String performanceTitle, Long price, String sellerNickname,
+                            String performanceTitle, String eventName, Long price, String sellerNickname,
                             LocalDateTime listedAt, long viewCount) {
     }
 
     public record DetailRow(Long photocardId, Long designId, String designName, String imageUrl,
-                            String performanceTitle, Long ownerId, String ownerNickname,
+                            String performanceTitle, String eventName, Long ownerId, String ownerNickname,
                             LocalDateTime issuedAt,
                             boolean hasTicket,
                             String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
@@ -701,7 +724,7 @@ public class NftMarketQueryRepository {
     }
 
     public record OwnedRow(Long photocardId, Long designId, String designName, String imageUrl,
-                           String performanceTitle, NftMintStatus status, boolean listed,
+                           String performanceTitle, String eventName, NftMintStatus status, boolean listed,
                            String marketType, String marketStatus,
                            LocalDateTime createdAt,
                            String groupName, NftPhotocardGrade grade, Long averagePrice) {

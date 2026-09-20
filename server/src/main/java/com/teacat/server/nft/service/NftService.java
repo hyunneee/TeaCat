@@ -102,7 +102,7 @@ public class NftService {
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.price(), row.sellerNickname(), row.viewCount()))
+                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(), row.viewCount()))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -155,7 +155,7 @@ public class NftService {
                 : null;
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
+                row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
                 row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
     }
 
@@ -345,7 +345,7 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.status(), row.listed(),
+                        row.performanceTitle(), row.eventName(), row.status(), row.listed(),
                         row.marketType() == null ? null
                                 : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
                         row.marketStatus() == null ? null

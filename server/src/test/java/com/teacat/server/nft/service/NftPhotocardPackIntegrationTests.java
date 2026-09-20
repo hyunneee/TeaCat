@@ -45,6 +45,10 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
     @Autowired
     private NftPhotocardDrawService drawService;
 
+    /** 뽑은 카드가 어느 이벤트에서 나왔는지는 조회 쪽(상세·내 포카)이 보여준다 */
+    @Autowired
+    private NftService nftService;
+
     @Autowired
     private NftPhotocardPackEventRepository eventRepository;
 
@@ -195,6 +199,35 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
                 INSERT INTO nft_photocard_pack_events (code, name, starts_at, ends_at, active)
                 VALUES (?, ?, %s, %s, ?)
                 """.formatted(startsAtSql, endsAtSql), code, name, active);
+    }
+
+    @Test
+    void 이벤트_팩에서_나온_카드는_이벤트_이름을_함께_준다() {
+        Long userId = insertUser("eventname@test.com", "이름");
+        insertWallet(userId);
+        insertEvent("AUTUMN", "추석 특별 카드팩", "NULL", "NULL", true);
+        insertPack(userId, "AUTUMN");
+        insertDrawPoolDesign("김예린", 100, "서울 5반", "SPECIAL");
+
+        Long photocardId = writer.draw(userId, UUID.randomUUID()).photocardId();
+
+        /* 카드팩 카드는 공연이 없어 화면의 둘째 줄이 빈다. 어느 이벤트에서 나왔는지를 함께 준다 */
+        var fromPack = nftService.getPhotocard(photocardId, userId);
+        assertThat(fromPack.performanceTitle()).isNull();
+        assertThat(fromPack.eventName()).isEqualTo("추석 특별 카드팩");
+
+        assertThat(nftService.getMyPhotocards(userId, null, null, null).items())
+                .singleElement()
+                .satisfies(card -> {
+                    assertThat(card.performanceTitle()).isNull();
+                    assertThat(card.eventName()).isEqualTo("추석 특별 카드팩");
+                });
+
+        /* 🔴 공연 좌석에서 나온 카드에는 이벤트 이름이 붙지 않는다 — 판별 기준은 팩의 출처이고
+              "공연명이 null 이다" 가 아니다 (NftMarketQueryRepository 주석) */
+        var fromSeat = nftService.getPhotocard(insertPhotocardOwnedBy(userId), userId);
+        assertThat(fromSeat.performanceTitle()).isEqualTo("테스트 공연");
+        assertThat(fromSeat.eventName()).isNull();
     }
 
     @Test

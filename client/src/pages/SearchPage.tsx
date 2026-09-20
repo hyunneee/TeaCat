@@ -125,7 +125,7 @@ export function SearchPage() {
                 >
                   포토카드
                 </SectionTitle>
-                <ul className="grid grid-cols-2 gap-x-3 gap-y-6">
+                <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
                   {pocaHits.slice(0, LIMIT).map((card) => (
                     <li key={card.photocardId}>
                       <NftCard

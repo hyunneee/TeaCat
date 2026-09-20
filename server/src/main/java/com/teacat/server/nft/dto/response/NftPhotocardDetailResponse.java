@@ -24,8 +24,11 @@ public record NftPhotocardDetailResponse(
         @Schema(description = "이미지 URL")
         String imageUrl,
 
-        @Schema(description = "공연명. 뽑기 카드는 null")
+        @Schema(description = "공연명. 카드팩에서 나온 카드는 null")
         String performanceTitle,
+
+        @Schema(description = "획득한 이벤트 이름. 이벤트 카드팩이 아니면 null", example = "오픈 기념 카드팩")
+        String eventName,
 
         @Schema(description = "현재 소유자 닉네임")
         String ownerNickname,

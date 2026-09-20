@@ -25,7 +25,8 @@ export interface MarketPhotocard {
   listingId: number;
   designName: string;
   imageUrl: string | null;
-  performanceTitle: string;
+  performanceTitle: string | null;
+  eventName?: string | null;
   /** 판매가(CAT) */
   price: number;
   sellerNickname: string;
@@ -87,6 +88,8 @@ export interface MyPhotocard extends PocaDesignInfo {
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 — 공연에서 나온 카드가 아닙니다 */
   performanceTitle: string | null;
+  /** 이벤트 카드팩에서 나왔으면 그 이벤트 이름. 아니면 null (`photocardSource`) */
+  eventName?: string | null;
   status: PhotocardMintStatus;
   viewCount: number;
   /** 판매 등록 여부. 가격은 오지 않는다 (서버 미결) */
@@ -141,6 +144,8 @@ export interface PhotocardDetail extends PocaDesignInfo {
   imageUrl: string | null;
   /** 🔴 뽑기로 얻은 카드는 **null** 입니다 */
   performanceTitle: string | null;
+  /** 이벤트 카드팩에서 나왔으면 그 이벤트 이름. 아니면 null (`photocardSource`) */
+  eventName?: string | null;
   ownerNickname: string;
   issuedAt: string;
   /** 🔴 뽑기로 얻은 카드는 **null** — 좌석에서 나온 것이 아닙니다 */

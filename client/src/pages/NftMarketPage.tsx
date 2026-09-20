@@ -170,6 +170,7 @@ export function NftMarketPage() {
                     designName={card.designName}
                     imageUrl={card.imageUrl}
                     performanceTitle={card.performanceTitle}
+                    eventName={card.eventName}
                     price={card.price}
                     onClick={() => goPhotocard(card.photocardId)}
                   />
