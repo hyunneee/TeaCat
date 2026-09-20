@@ -84,6 +84,10 @@ const AdminLayout = page(() => import('@/features/admin'), 'AdminLayout');
 const AdminDashboardPage = page(() => import('@/pages/AdminDashboardPage'), 'AdminDashboardPage');
 const AdminUsersPage = page(() => import('@/pages/AdminUsersPage'), 'AdminUsersPage');
 const AdminCheckInPage = page(() => import('@/pages/AdminCheckInPage'), 'AdminCheckInPage');
+const AdminSeatAttendeesPage = page(
+  () => import('@/pages/AdminSeatAttendeesPage'),
+  'AdminSeatAttendeesPage',
+);
 const AdminUserDetailPage = page(
   () => import('@/pages/AdminUserDetailPage'),
   'AdminUserDetailPage',
@@ -260,6 +264,12 @@ const routes: RouteObject[] = [
                 children: [
                   { path: ROUTES.ADMIN_CONCERTS, element: withBoundary(<AdminConcertsPage />) },
                   { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
+                  {
+                    /* 예매자 이름·연락처가 뜨는 화면입니다. 마스킹은 위 AdminLayout 의
+                       `withMask` 가 이미 덮습니다 — 행동 분석에 명단이 수집되지 않게. */
+                    path: ROUTES.ADMIN_SEAT_ATTENDEES,
+                    element: withBoundary(<AdminSeatAttendeesPage />),
+                  },
                   {
                     path: ROUTES.ADMIN_CONCERT_DRAW_POOL(':concertId'),
                     element: withBoundary(<AdminPerformanceDrawPoolPage />),

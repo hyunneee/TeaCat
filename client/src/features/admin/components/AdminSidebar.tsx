@@ -4,6 +4,7 @@ import {
   Activity,
   Building2,
   ChartLine,
+  ClipboardList,
   GalleryHorizontalEnd,
   Gift,
   LayoutDashboard,
@@ -89,6 +90,14 @@ const ADMIN_MENU: AdminMenuItem[] = [
     matchNested: true,
   },
   {
+    /* 입장 확인과 **나란한 메뉴**입니다. 공통 공연/회차 필터 아래의 하위 탭이 아니라,
+       각 화면이 자기 필터를 갖습니다 (ROUTES.ADMIN_SEAT_ATTENDEES 주석). */
+    to: ROUTES.ADMIN_SEAT_ATTENDEES,
+    label: '좌석·예매자',
+    icon: ClipboardList,
+    visible: can.viewSeatAttendees,
+  },
+  {
     to: ROUTES.ADMIN_CHECK_IN,
     label: '입장 확인',
     icon: ScanFace,
@@ -136,7 +145,7 @@ const GROUPS = [
   { label: '회원·고객 지원', paths: [ROUTES.ADMIN_USERS, ROUTES.ADMIN_INQUIRIES] },
   {
     label: '공연 운영',
-    paths: [ROUTES.ADMIN_CONCERTS, ROUTES.ADMIN_CHECK_IN],
+    paths: [ROUTES.ADMIN_CONCERTS, ROUTES.ADMIN_SEAT_ATTENDEES, ROUTES.ADMIN_CHECK_IN],
   },
   { label: '공연장 관리', paths: [ROUTES.ADMIN_STADIUMS, ROUTES.ADMIN_STADIUM] },
   { label: '서비스 콘텐츠', paths: [ROUTES.ADMIN_BANNERS] },

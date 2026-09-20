@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Camera, Hash, RotateCcw, ScanLine } from 'lucide-react';
 import { Button, Card, Input, Select } from '@/shared/components/ui';
 import { CameraStage } from '@/features/face';
@@ -24,8 +25,12 @@ import {
  * 판정을 받을 뿐입니다 — 티켓에 베껴 둔 얼굴은 여기로 내려오지 않습니다 (CLAUDE.md 7장).
  */
 export function AdminCheckInPage() {
-  const [concertId, setConcertId] = useState('');
-  const [scheduleId, setScheduleId] = useState('');
+  /* 좌석·예매자 화면에서 넘어왔으면 그 회차로 시작합니다 — 같은 공연·회차를 두 번 고르게 하면
+     게이트에서 줄이 선 채로 고르는 일이 됩니다. 🔴 두 화면의 필터는 **공유하지 않습니다**;
+     이렇게 **명시적으로 건네받을** 때만 이어집니다 (ROUTES.ADMIN_SEAT_ATTENDEES 주석). */
+  const handoff = useLocation().state as { concertId?: string; scheduleId?: string } | null;
+  const [concertId, setConcertId] = useState(handoff?.concertId ?? '');
+  const [scheduleId, setScheduleId] = useState(handoff?.scheduleId ?? '');
   const [manualId, setManualId] = useState('');
 
   const { concerts } = useManagedConcerts();

@@ -36,6 +36,18 @@ export const can = {
   checkIn: (user: User | null): boolean => FEATURE.face && hasRole(user, 'ADMIN', 'PERFORMANCE'),
 
   /**
+   * 좌석·예매자 메뉴 (`/admin/seat-attendees`).
+   *
+   * 서버가 ADMIN 과 공연 기획자에게 열어 둔 조회입니다 (운영 좌석·명단 API).
+   * 역할과 별개로 **담당 공연인지**는 서버가 매 요청 검사하므로, 여기서 넓히면
+   * 메뉴는 보이는데 403(`PERFORMANCE_020`)이 납니다.
+   *
+   * 🔴 `checkIn` 과 달리 얼굴 기능을 보지 않습니다 — 좌석 현황과 명단은 카메라 없이
+   *    보는 화면이라 얼굴을 닫아 둔 배포에서도 쓸 수 있어야 합니다.
+   */
+  viewSeatAttendees: (user: User | null): boolean => hasRole(user, 'ADMIN', 'PERFORMANCE'),
+
+  /**
    * 공연을 개설할 수 있는가 — 관리자와 공연 주최자.
    *
    * 서버의 공연 관리 API(`/admin/concerts/**` 등)가 허용하는 역할과 **같아야** 합니다 (`SecurityConfig`).
