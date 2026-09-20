@@ -259,6 +259,11 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN', 'PERFORMANCE']} />,
                 children: [
                   { path: ROUTES.ADMIN_CONCERTS, element: withBoundary(<AdminConcertsPage />) },
+                  { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
+                  {
+                    path: ROUTES.ADMIN_CONCERT_DRAW_POOL(':concertId'),
+                    element: withBoundary(<AdminPerformanceDrawPoolPage />),
+                  },
                   {
                     /* 정적 경로가 `:concertId` 보다 먼저 와야 'new' 를 ID 로 읽지 않는다 */
                     path: ROUTES.ADMIN_CONCERT_CREATE,
@@ -276,7 +281,8 @@ const routes: RouteObject[] = [
                 element: <RequireRole roles={['ADMIN']} />,
                 children: [
                   { path: ROUTES.ADMIN_USERS, element: withBoundary(<AdminUsersPage />) },
-                  { path: ROUTES.ADMIN_CHECK_IN, element: withBoundary(<AdminCheckInPage />) },
+                  { path: ROUTES.MONITORING, element: withBoundary(<MonitoringPage />) },
+
                   {
                     /* 개인정보 마스킹은 위 AdminLayout 의 withMask 가 이미 덮습니다 */
                     path: ROUTES.ADMIN_USER_DETAIL(':userId'),
@@ -296,10 +302,7 @@ const routes: RouteObject[] = [
                     path: ROUTES.ADMIN_POCA_DESIGNS,
                     element: withBoundary(<AdminPocaDesignsPage />),
                   },
-                  {
-                    path: ROUTES.ADMIN_CONCERT_DRAW_POOL(':concertId'),
-                    element: withBoundary(<AdminPerformanceDrawPoolPage />),
-                  },
+
                   { path: ROUTES.ADMIN_ANALYTICS, element: withBoundary(<AdminAnalyticsPage />) },
                 ],
               },
@@ -517,10 +520,7 @@ const routes: RouteObject[] = [
           },
 
           /* ── 운영 ── */
-          {
-            element: <RequireRole roles={['ADMIN']} />,
-            children: [{ path: ROUTES.MONITORING, element: withBoundary(<MonitoringPage />) }],
-          },
+
         ],
       },
 

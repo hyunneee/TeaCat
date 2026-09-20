@@ -96,22 +96,30 @@ export function useCreateConcert(redirect?: ConcertRedirect) {
 
       const targets = filledPhotocardDesigns(designs);
       let failed = 0;
+      let designError: string | null = null;
 
       for (const [index, design] of targets.entries()) {
         setDesignProgress({ done: index, total: targets.length });
         try {
           await organizerApi.createPhotocardDesign(concertId, design);
-        } catch {
+        } catch (error) {
           // 한 장이 실패해도 나머지는 계속 올린다. 어차피 개별 요청이라 서로 영향이 없다
           failed += 1;
+          designError ??= error instanceof Error ? error.message : '등록 요청을 처리하지 못했어요.';
         }
       }
 
       setDesignProgress(null);
-      return { concertId, areaError, designTotal: targets.length, designFailed: failed };
+      return {
+        concertId,
+        areaError,
+        designTotal: targets.length,
+        designFailed: failed,
+        designError,
+      };
     },
     retry: false,
-    onSuccess: ({ concertId, areaError, designTotal, designFailed }) => {
+    onSuccess: ({ concertId, areaError, designTotal, designFailed, designError }) => {
       void queryClient.invalidateQueries({ queryKey: concertKeys.all });
       const id = String(concertId);
 
@@ -128,7 +136,9 @@ export function useCreateConcert(redirect?: ConcertRedirect) {
       }
 
       if (designFailed > 0) {
-        toast.error(`공연은 등록됐지만 포토카드 도안 ${designFailed}장을 올리지 못했어요.`);
+        toast.error(
+          `공연은 등록됐지만 포토카드 도안 ${designFailed}장을 올리지 못했어요. ${designError ?? ''}`,
+        );
       } else if (designTotal > 0) {
         // 등록 요청까지만 끝난 상태다. 체인 확정은 서버 감시가 30~40초 뒤에 채운다
         toast.success(`공연과 포토카드 도안 ${designTotal}장을 등록했어요.`);
@@ -178,7 +188,13 @@ export function useUpdateConcert(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ form, original }: { form: ConcertCreateForm; original: ConcertDetail }) => {
+    mutationFn: async ({
+      form,
+      original,
+    }: {
+      form: ConcertCreateForm;
+      original: ConcertDetail;
+    }) => {
       const body: ConcertUpdateRequest = toConcertUpdateRequest(form, original);
 
       /* uploadImage 가 줄이기 → URL 발급 → PUT 을 한 번에 합니다 (organizerApi 주석) */

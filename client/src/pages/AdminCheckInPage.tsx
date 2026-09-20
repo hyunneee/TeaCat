@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Camera, Hash, RotateCcw, ScanLine } from 'lucide-react';
 import { Button, Card, Input, Select } from '@/shared/components/ui';
 import { CameraStage } from '@/features/face';
-import { useConcertDetail, useConcerts } from '@/features/concert';
+import { useManagedConcerts, useMyConcert } from '@/features/organizer';
 import {
   CheckInResultCard,
   CheckInTicketCard,
@@ -28,8 +28,8 @@ export function AdminCheckInPage() {
   const [scheduleId, setScheduleId] = useState('');
   const [manualId, setManualId] = useState('');
 
-  const { data: concerts } = useConcerts();
-  const { data: concert } = useConcertDetail(concertId);
+  const { concerts } = useManagedConcerts();
+  const { data: concert } = useMyConcert(concertId);
 
   const performanceDetailId = scheduleId ? Number(scheduleId) : null;
   const checkIn = useCheckIn(performanceDetailId);

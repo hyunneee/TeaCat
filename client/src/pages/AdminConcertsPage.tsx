@@ -54,6 +54,7 @@ export function AdminConcertsPage() {
         leftIcon={<Search size={17} />}
         type="search"
         tone="contrast"
+        className="max-w-md"
       />
 
       {isPending ? (
@@ -101,7 +102,7 @@ function ConcertRow({
   onDrawPool: () => void;
 }) {
   return (
-    <Card className="flex items-center gap-4">
+    <Card className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-4 lg:grid-cols-[3.5rem_minmax(0,1fr)_auto]">
       {/* 포스터가 없는 공연도 있습니다. 빈 칸을 두면 줄마다 높이가 달라집니다 */}
       {concert.posterUrl ? (
         <img
@@ -132,30 +133,32 @@ function ConcertRow({
         </p>
       </div>
 
-      <Badge tone={concert.status === 'UPCOMING' ? 'accent' : 'quiet'}>
-        {STATUS_LABEL[concert.status]}
-      </Badge>
+      <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 lg:col-span-1">
+        <Badge tone={concert.status === 'UPCOMING' ? 'accent' : 'quiet'}>
+          {STATUS_LABEL[concert.status]}
+        </Badge>
 
-      <Button variant="soft" size="md" leftIcon={<Pencil size={15} />} onClick={onEdit}>
-        관리
-      </Button>
-
-      {/* 🔴 이 공연에 카드를 넣지 않으면 관객이 카드팩을 열어도 받지 못합니다 */}
-      <Button variant="soft" size="md" leftIcon={<Sparkles size={15} />} onClick={onDrawPool}>
-        뽑기 카드
-      </Button>
-
-      {/* 공개 상세는 비공개 공연이 404 라 링크를 걸지 않습니다 */}
-      {!concert.hidden && (
-        <Button
-          variant="ghost"
-          size="md"
-          leftIcon={<Eye size={15} />}
-          onClick={() => window.open(ROUTES.CONCERT_DETAIL(String(concert.concertId)), '_blank')}
-        >
-          보기
+        <Button variant="soft" size="md" leftIcon={<Pencil size={15} />} onClick={onEdit}>
+          관리
         </Button>
-      )}
+
+        {/* 🔴 이 공연에 카드를 넣지 않으면 관객이 카드팩을 열어도 받지 못합니다 */}
+        <Button variant="soft" size="md" leftIcon={<Sparkles size={15} />} onClick={onDrawPool}>
+          뽑기 카드
+        </Button>
+
+        {/* 공개 상세는 비공개 공연이 404 라 링크를 걸지 않습니다 */}
+        {!concert.hidden && (
+          <Button
+            variant="ghost"
+            size="md"
+            leftIcon={<Eye size={15} />}
+            onClick={() => window.open(`${ROUTES.CONCERT_DETAIL(String(concert.concertId))}?preview=1`, '_blank', 'noopener,noreferrer')}
+          >
+            보기
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }
