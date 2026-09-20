@@ -161,7 +161,7 @@ export function NftMarketPage() {
             }
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-6 lg:grid-cols-4 lg:gap-x-4">
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
             {shopping &&
               (market.data ?? []).map((card) => (
                 <li key={card.photocardId}>

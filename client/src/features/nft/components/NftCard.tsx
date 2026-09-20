@@ -90,9 +90,9 @@ export function NftCard({
           <p className="text-subtle mt-1 truncate text-[0.8125rem]">{performanceTitle}</p>
 
           {price !== null && price !== undefined ? (
-            <p className="mt-1.5 text-[1.0625rem] leading-none font-extrabold tabular-nums">
-              {price.toLocaleString()}
-              <span className="text-ink-muted ml-1 text-xs font-semibold">캣머니</span>
+            <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1 gap-y-1 text-[1.0625rem] leading-none font-extrabold tabular-nums">
+              <span className="min-w-0 break-all">{price.toLocaleString()}</span>
+              <span className="text-ink-muted text-xs font-semibold">캣머니</span>
             </p>
           ) : (
             caption && <p className="text-subtle mt-1.5 text-[0.8125rem]">{caption}</p>

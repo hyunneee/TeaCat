@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sparkles } from 'lucide-react';
+import { Search, Sparkles, Check } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
@@ -32,6 +32,7 @@ export function MyNftsPage() {
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
   const [role, setRole] = useState<DexRoleFilter>(DEX_ROLE_ALL);
+  const [ownedOnly, setOwnedOnly] = useState(false);
 
   const { entries, isPending, isError } = usePocaDex();
 
@@ -39,7 +40,8 @@ export function MyNftsPage() {
      눌러도 실패하는 칸이 됩니다. 응답 전에는 보여주지 않습니다(깜빡임 방지). */
   const { data: draw } = useDrawAvailability();
 
-  const visible = filterPocaDex(entries, { keyword, role });
+  const filtered = filterPocaDex(entries, { keyword, role });
+  const visible = ownedOnly ? filtered.filter((entry) => entry.count > 0) : filtered;
   /*
    * 진행도는 **역할 드롭다운을 따라가고 검색어는 무시합니다.**
    *
@@ -48,7 +50,7 @@ export function MyNftsPage() {
    * 숫자가 튀는 것으로만 보입니다 — 무엇을 세는 중인지 알 수 없습니다.
    */
   const progress = dexProgress(filterPocaDex(entries, { role }));
-  const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL;
+  const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL || ownedOnly;
 
   return (
     <>
@@ -70,13 +72,19 @@ export function MyNftsPage() {
         }
       />
 
-      <div className="p-4 lg:mx-auto lg:max-w-3xl lg:px-0 lg:pt-4">
-        {/* 🔴 검색창과 드롭다운을 **같은 높이의 한 벌**로 둡니다. 예전에는 Select 가
-            글자 버튼(약 28px)이라 48px 입력 옆에서 위아래가 안 맞고, 입력이 `flex-1` 도
-            아니어서 오른쪽에 빈 자리가 남았습니다 (QA: "한쪽으로 쏠리고 여백도 있다").
-            입력이 남은 폭을 다 먹고, 드롭다운은 글자가 잘리지 않을 만큼만 차지합니다. */}
-        <div className="mb-4 flex items-center gap-2">
-          <div className="min-w-0 flex-1">
+      <div className="px-4 pt-2 pb-4 lg:px-0 lg:pt-3">
+        {/* 모든 화면에서 왼쪽 역할 필터·오른쪽 검색 순서를 유지한다. */}
+        <div className="mb-4 flex items-center gap-2 lg:gap-3">
+          <Select
+            label="역할"
+            variant="field"
+            align="left"
+            options={DEX_ROLE_OPTIONS}
+            value={role}
+            onChange={setRole}
+            className="w-28 shrink-0"
+          />
+          <div className="min-w-0 flex-1 lg:ml-auto lg:w-full lg:max-w-xs lg:flex-none">
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -87,14 +95,6 @@ export function MyNftsPage() {
               tone="contrast"
             />
           </div>
-          <Select
-            label="역할"
-            variant="field"
-            options={DEX_ROLE_OPTIONS}
-            value={role}
-            onChange={setRole}
-            className="w-28 shrink-0"
-          />
         </div>
 
         {isPending ? (
@@ -109,12 +109,30 @@ export function MyNftsPage() {
         ) : (
           <>
             {/* 얼마나 모았는지가 이 화면의 첫 문장입니다 */}
-            <p className="text-muted mb-3 text-sm">
-              <span className="text-ink font-bold tabular-nums">{progress.owned}</span>
-              <span className="tabular-nums"> / {progress.total}</span> 장 모았어요
-            </p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="text-muted">
+                <span className="text-ink font-bold tabular-nums">{progress.owned}</span>
+                <span className="tabular-nums"> / {progress.total}</span> 장 모았어요
+              </p>
+              <label className="ml-auto flex min-h-8 cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  checked={ownedOnly}
+                  onChange={(event) => setOwnedOnly(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="text-ink-muted peer-checked:text-accent-800 peer-focus-visible:outline-brand-900 flex items-center gap-1.5 rounded-lg px-1 py-1 transition-colors peer-checked:font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
+                  <Check
+                    size={15}
+                    aria-hidden="true"
+                    className={`shrink-0 transition-colors ${ownedOnly ? 'text-accent-800' : 'text-ink-subtle'}`}
+                  />
+                  보유 카드만
+                </span>
+              </label>
+            </div>
 
-            <ul className="grid grid-cols-3 gap-3 lg:grid-cols-5 lg:gap-4">
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
               {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다.
                   🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다. 한 칸으로 합치면
                   "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보입니다.
@@ -148,7 +166,11 @@ export function MyNftsPage() {
               <EmptyState
                 icon={Search}
                 title="찾는 카드가 없어요"
-                description="다른 이름이나 역할로 찾아보세요."
+                description={
+                  ownedOnly
+                    ? '보유 카드만 선택을 해제하거나 다른 이름·역할로 찾아보세요.'
+                    : '다른 이름이나 역할로 찾아보세요.'
+                }
               />
             )}
           </>
