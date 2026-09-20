@@ -70,6 +70,7 @@ interface StadiumEditorState {
   splitArea: (areaId: string, selection: LayoutRect) => void;
   updateLabelingRule: (areaId: string, values: Partial<DraftLabelingRule>) => void;
   removeArea: (areaId: string) => void;
+  moveArea: (areaId: string, direction: -1 | 1) => void;
 
   acceptCandidates: (areaId: string, candidateIds: string[]) => void;
   removeCandidates: (areaId: string, candidateIds: string[]) => void;
@@ -406,6 +407,23 @@ export const useStadiumEditorStore = create<StadiumEditorState>((set) => ({
       ),
     })),
 
+  moveArea: (areaId, direction) =>
+    set((state) => {
+      const areas = [...state.areas];
+      const index = areas.findIndex((area) => area.clientId === areaId);
+      const selected = areas[index];
+      if (!selected) return {};
+      const sameSheet = areas
+        .map((area, i) => (area.sourceSheet === selected.sourceSheet ? i : -1))
+        .filter((i) => i >= 0);
+      const target = sameSheet[sameSheet.indexOf(index) + direction];
+      if (target === undefined) return {};
+      const neighbor = areas[target];
+      if (!neighbor) return {};
+      areas[index] = neighbor;
+      areas[target] = selected;
+      return { areas };
+    }),
   removeArea: (areaId) =>
     set((state) => {
       const removedArea = state.areas.find((area) => area.clientId === areaId);

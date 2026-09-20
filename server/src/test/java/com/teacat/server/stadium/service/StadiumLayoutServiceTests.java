@@ -43,6 +43,22 @@ class StadiumLayoutServiceTests {
 
     private static final AuthUser ADMIN = new AuthUser(1L, UserRole.ADMIN);
 
+    @Test void requestAreaOrderIsStoredInsteadOfAlphabeticalOrder() {
+        Stadium stadium = Stadium.create("Venue", "Seoul", null, 100, null);
+        when(stadiumRepository.findById(1L)).thenReturn(Optional.of(stadium));
+        when(layoutRepository.saveAndFlush(any(StadiumLayout.class))).thenAnswer(i -> i.getArgument(0));
+        when(areaRepository.saveAndFlush(any(Area.class))).thenAnswer(i -> i.getArgument(0));
+        var base = request(StadiumLayoutSaveMode.DRAFT, 10);
+        var areas = List.of("front", "middle", "back").stream().map(code -> new LayoutImportAreaRequest(
+                code, "1F", "1F", AreaType.STANDING, 10, base.areas().getFirst().bounds(), List.of(), List.of(), null)).toList();
+        stadiumLayoutService.createFromExcel(1L, ADMIN, new StadiumLayoutCreateRequest(null, "Ordered", false,
+                StadiumLayoutSaveMode.DRAFT, "1F", 100, 100, areas, List.of()));
+        var captor = ArgumentCaptor.forClass(Area.class);
+        org.mockito.Mockito.verify(areaRepository, org.mockito.Mockito.times(3)).saveAndFlush(captor.capture());
+        assertThat(captor.getAllValues()).extracting(Area::getAreaCode).containsExactly("front", "middle", "back");
+        assertThat(captor.getAllValues()).extracting(Area::getDisplayOrder).containsExactly(0, 1, 2);
+    }
+
     @Mock
     private StadiumRepository stadiumRepository;
     @Mock
