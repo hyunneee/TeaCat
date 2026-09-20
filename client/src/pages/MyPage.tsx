@@ -165,7 +165,7 @@ export function MyPage() {
         )}
 
         <section>
-          <SectionTitle>내 활동</SectionTitle>
+          <SectionTitle>티켓</SectionTitle>
           <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<Ticket size={18} />}
@@ -177,6 +177,12 @@ export function MyPage() {
               title="취소표 대기 내역"
               onClick={() => navigate(ROUTES.MY_RESALE)}
             />
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>포카 활동</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<Sparkles size={18} />}
               title="내 포토카드"
@@ -202,6 +208,12 @@ export function MyPage() {
               title="내 판매 내역"
               onClick={() => navigate(ROUTES.MY_NFT_SALES)}
             />
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>고객 지원</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<MessageSquare size={18} />}
               title="문의하기"
