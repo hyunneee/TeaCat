@@ -6,6 +6,7 @@ export {
   useStartBooking,
 } from './hooks/useConcerts';
 export { ConcertCard } from './components/ConcertCard';
+export { useBookingAccess } from './hooks/useBookingAccess';
 export { ScheduleList } from './components/ScheduleList';
 export { concertApi, concertKeys } from './api/concertApi';
 export { isBookable, canWaitlist, scheduleStatusLabel, scheduleTone } from './model/schedule.model';

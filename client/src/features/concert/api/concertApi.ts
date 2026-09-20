@@ -27,7 +27,8 @@ export const concertApi = {
     }),
 
   /** 회차 단건 (API-203) */
-  schedule: (scheduleId: string) => http.get<ScheduleDetail>(`/schedules/${scheduleId}`),
+  schedule: (scheduleId: string, signal?: AbortSignal) =>
+    http.get<ScheduleDetail>(`/schedules/${scheduleId}`, { signal }),
 
   /**
    * 예매 오픈 여부 (API-206) — 예매 버튼을 누른 순간 확인합니다.
