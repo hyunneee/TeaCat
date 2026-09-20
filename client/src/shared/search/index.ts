@@ -1,2 +1,3 @@
-export { TrendingSearchInput } from './trendingSearch';
-export type { SearchTrendItem, SearchTrends } from './trendingSearch';
+export { TrendingSearchInput, SearchEntryButton, SearchTrendList } from './trendingSearch';
+export { useSearchTrends } from './useSearchTrends';
+export type { SearchTrendItem, SearchTrends } from './useSearchTrends';
