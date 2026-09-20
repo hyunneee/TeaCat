@@ -62,7 +62,6 @@ public class NftAuctionService {
     private static final String AUCTION_SCOPE_PREFIX = "auction:";
     private static final String BIDS_SCOPE = "auction-bids";
     private static final String MY_AUCTIONS_SCOPE = "my-auctions";
-    private static final String MY_BIDS_SCOPE = "my-bids";
 
     private final NftAuctionRepository auctionRepository;
     private final NftAuctionBidRepository bidRepository;
@@ -87,7 +86,7 @@ public class NftAuctionService {
         if (request.buyNowPrice() != null && request.buyNowPrice() <= request.startPrice()) {
             throw new BusinessException(NftErrorCode.INVALID_BUY_NOW_PRICE);
         }
-        Duration duration = Duration.ofHours(request.durationHours());
+        Duration duration = request.resolveDuration();
         if (!properties.isDurationAllowed(duration)) {
             throw new BusinessException(NftErrorCode.INVALID_AUCTION_DURATION);
         }
@@ -317,15 +316,22 @@ public class NftAuctionService {
     }
 
     public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize) {
+        return getMyBids(userId, cursor, requestedSize, null, null);
+    }
+
+    public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize,
+                                                          String from, String to) {
+        BidDateRange range = BidDateRange.parse(from, to);
         int size = NftRequestSupport.validateSize(requestedSize);
-        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, MY_BIDS_SCOPE);
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, range.cursorScope());
         Long cursorLastBidId = decoded.present() ? parseLong(decoded.value()) : null;
 
-        List<NftAuctionQueryRepository.MyBidRow> rows = queryRepository.findMyBids(userId, cursorLastBidId, size + 1);
+        List<NftAuctionQueryRepository.MyBidRow> rows = queryRepository.findMyBids(userId, cursorLastBidId, size + 1,
+                range.from(), range.toExclusive());
         boolean hasNext = rows.size() > size;
         List<NftAuctionQueryRepository.MyBidRow> page = takePage(rows, size);
         String nextCursor = hasNext
-                ? cursorCodec.encode(MY_BIDS_SCOPE, page.getLast().lastBidId().toString(), page.getLast().auctionId())
+                ? cursorCodec.encode(range.cursorScope(), page.getLast().lastBidId().toString(), page.getLast().auctionId())
                 : null;
         return new NftCursorPageResponse<>(page.stream().map(r -> toMyBid(userId, r)).toList(), nextCursor, hasNext);
     }
@@ -344,7 +350,7 @@ public class NftAuctionService {
             result = userId.equals(row.winnerId()) ? MyNftBidResponse.Result.WON : MyNftBidResponse.Result.LOST;
         }
         return new MyNftBidResponse(row.auctionId(), row.photocardId(), row.designName(), row.imageUrl(),
-                row.myHighestBid(), row.currentPrice(), isTop, row.status(), row.endsAt(), result);
+                row.myHighestBid(), row.currentPrice(), isTop, row.status(), row.endsAt(), result, row.lastBidAt());
     }
 
     private String auctionCursor(NftAuctionSort sort, NftAuctionQueryRepository.AuctionRow row) {

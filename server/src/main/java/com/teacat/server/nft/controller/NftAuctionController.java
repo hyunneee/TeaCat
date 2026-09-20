@@ -179,7 +179,9 @@ public class NftAuctionController {
     public ResponseEntity<BaseResponse<NftCursorPageResponse<MyNftBidResponse>>> getMyBids(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") Integer size) {
-        return ResponseEntity.ok(BaseResponse.success(auctionService.getMyBids(authUser.id(), cursor, size)));
+            @RequestParam(defaultValue = "20") Integer size,
+            @Parameter(description = "입찰 시작일 YYYY-MM-DD (Asia/Seoul, to와 함께 전달)") @RequestParam(required = false) String from,
+            @Parameter(description = "입찰 종료일 YYYY-MM-DD (해당 일 포함)") @RequestParam(required = false) String to) {
+        return ResponseEntity.ok(BaseResponse.success(auctionService.getMyBids(authUser.id(), cursor, size, from, to)));
     }
 }
