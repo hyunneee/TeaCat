@@ -121,6 +121,10 @@ public class SecurityConfig {
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
                         .requestMatchers(HttpMethod.GET, "/admin/photocard-templates", "/admin/photocard-designs", "/admin/photocard-designs/{designId:[0-9]+}")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        // 공연 기획자도 공연 등록·풀 관리 중 새 카드 그림을 올릴 수 있다.
+                        // 감추기(PATCH)는 전역 목록을 바꾸므로 아래 ADMIN 포괄 규칙에 그대로 둔다.
+                        .requestMatchers(HttpMethod.POST, "/admin/photocard-templates")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         .requestMatchers(HttpMethod.POST, "/admin/photocard-designs", "/admin/photocard-designs/*/chain-registration")
                         .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         .requestMatchers(HttpMethod.PATCH, "/admin/photocard-designs/*/draw-pool")
