@@ -22,12 +22,23 @@ import type { AdminTrade } from '../model/adminTradeReview.types';
 export interface AdminTradeTableProps {
   trades: AdminTrade[];
   isLoading: boolean;
+  /** 🔴 실패를 빈 목록으로 그리면 "거래가 없다" 로 읽힙니다. 실제로 그 오해가 한 번 났습니다 */
+  isError?: boolean;
   onOpenReview: (reviewId: number) => void;
 }
 
 const HEADERS = ['상태', '카드', '경로', '판매자 → 구매자', '금액', '성립 시각', '완료 시각', '심사'] as const;
 
-export function AdminTradeTable({ trades, isLoading, onOpenReview }: AdminTradeTableProps) {
+export function AdminTradeTable({ trades, isLoading, isError, onOpenReview }: AdminTradeTableProps) {
+  if (isError) {
+    return (
+      <EmptyState
+        title="거래 내역을 불러오지 못했어요"
+        description="잠시 후 다시 시도해 주세요. 계속 실패하면 서버 로그를 확인해야 해요."
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2 p-4">
