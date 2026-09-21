@@ -16,7 +16,19 @@ export function useResaleSections(scheduleId: string) {
 }
 
 /**
+ * 대기 중일 때 다시 물어보는 주기.
+ *
+ * 추첨은 취소표가 나오는 순간 서버가 돌리고 약 15초면 끝납니다(다음 블록 10초 + 스위퍼).
+ * 그 결과가 화면에 나타나는 속도는 **이 값이 정합니다** — 예전에는 폴링이 없어서, 대기 화면을
+ * 열어 둔 채로는 당첨돼도 화면이 그대로였습니다.
+ */
+const WAITING_POLL_MS = 5_000;
+
+/**
  * 내 대기 내역.
+ *
+ * 대기 중(WAITING)인 건이 있으면 **스스로 다시 물어봅니다.** 추첨은 사용자가 아무것도 누르지 않는
+ * 사이에 끝나므로, 폴링이 없으면 당첨된 줄 모르고 화면을 떠납니다. 대기 중인 건이 없으면 멈춥니다.
  *
  * `options` 는 알림 감시(ResaleWinNotifier)처럼 **화면 없이 폴링**해야 하는
  * 쪽을 위한 것입니다. 화면에서는 그냥 인자 없이 부르세요.
@@ -30,7 +42,10 @@ export function useMyResaleEntries(options?: {
     queryFn: () => resaleApi.myEntries(),
     staleTime: STALE_TIME.SHORT,
     enabled: options?.enabled ?? true,
-    refetchInterval: options?.refetchInterval ?? false,
+    refetchInterval:
+      options?.refetchInterval ??
+      ((query) =>
+        query.state.data?.some((entry) => entry.status === 'WAITING') ? WAITING_POLL_MS : false),
   });
 }
 

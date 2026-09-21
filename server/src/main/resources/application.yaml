@@ -156,6 +156,12 @@ booking:
     batch-size: 50
     # 커밋을 못 보냈거나(PENDING) 보냈는데 체인에 없는(OPEN·exists=false) 추첨을 다시 보내기까지 기다리는 시간
     open-retry-after: ${BOOKING_RESALE_OPEN_RETRY_AFTER:PT2M}
+    # 이 시간이 지나도 커밋이 체인에 안 나가면 ERROR 로 알린다 (Sentry).
+    #   🔴 좌석은 풀지 않는다 — 취소표는 대기자의 것이고, 일반 판매로 돌리면 새로고침하던 사람이
+    #      가져간다. 이 기능이 막으려던 바로 그 일이다. 알리기만 하고 재시도를 계속한다.
+    #   막히는 원인은 대개 체인 설정이다: DRAW_SEED_SECRET 없음 · VerifiableDraw 미배포 ·
+    #   오퍼레이터 지갑에 OPERATOR_ROLE 없음 (grantRoles.ts 로 부여).
+    stuck-alert-after: ${BOOKING_RESALE_STUCK_ALERT_AFTER:PT10M}
     # 커밋 뒤 이 시간이 지나도 난수가 없으면 그 키는 죽은 것으로 보고 새 키로 다시 연다.
     #   블록해시 창(256블록 ≈ 42분)보다 길어야 한다
     reveal-timeout: ${BOOKING_RESALE_REVEAL_TIMEOUT:PT50M}
