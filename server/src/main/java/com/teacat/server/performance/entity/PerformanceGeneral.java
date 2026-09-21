@@ -103,6 +103,18 @@ public class PerformanceGeneral {
     @Column(name = "created_by")
     private Long createdById;
 
+    /**
+     * 공연 상세의 <b>바로가기</b> 버튼이 갈 곳. 없으면 버튼 자체가 없다.
+     *
+     * <p>서비스 내 경로(`/nft/draw`)이거나 외부 주소(`https://…`)다. 규칙은
+     * {@code ConcertCreateRequest} 의 {@code @Pattern} 하나가 지킨다.
+     *
+     * <p>예매 조건이 아니라서 <b>티켓팅이 시작된 뒤에도 고칠 수 있다</b> — 공연장·티켓팅
+     * 시각처럼 예매자가 보고 결정한 값이 아니다.
+     */
+    @Column(name = "link_url", length = 500)
+    private String linkUrl;
+
     private PerformanceGeneral(Stadium stadium, StadiumLayout stadiumLayout,
                                String title, LocalDateTime ticketingStartAt,
                                LocalDate visibleFrom, String posterImageKey, String detailImageKey,
@@ -173,6 +185,20 @@ public class PerformanceGeneral {
         if (visibleFrom != null) {
             this.visibleFrom = visibleFrom;
         }
+    }
+
+    /**
+     * 바로가기 주소를 붙이거나 뗀다.
+     *
+     * <p>🔴 <b>빈 문자열은 "떼기" 다.</b> 수정 요청은 "안 보낸 필드(null)는 그대로" 규칙이라,
+     * 빈 문자열까지 무시하면 <b>한 번 붙인 바로가기를 영영 못 뗀다.</b> 그래서 null 과
+     * 빈 문자열을 다르게 읽는다.
+     */
+    public void changeLinkUrl(String linkUrl) {
+        if (linkUrl == null) {
+            return;
+        }
+        this.linkUrl = linkUrl.isBlank() ? null : linkUrl;
     }
 
     /** 이미지 교체 (API-262). null 인 쪽은 그대로 둔다 */

@@ -38,7 +38,8 @@ public record BannerResponse(
                 example = "30")
         Integer imageFocusY,
 
-        @Schema(description = "누르면 이동할 서비스 내 경로. 없으면 null", example = "/nft")
+        @Schema(description = "누르면 갈 곳. 서비스 내 경로('/' 로 시작) 또는 외부 주소(http/https). 없으면 null",
+                example = "/nft")
         String linkPath,
 
         @Schema(description = "연결된 공연 ID. 공연 배너가 아니면 null", example = "3")

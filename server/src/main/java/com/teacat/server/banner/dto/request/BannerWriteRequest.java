@@ -62,11 +62,22 @@ public record BannerWriteRequest(
         Long performanceId,
 
         @Schema(description = """
-                누르면 이동할 우리 서비스 안의 경로 (IMAGE 일 때만, 비우면 이동 없음).
-                외부 주소는 넣을 수 없습니다.
+                누르면 이동할 곳 (IMAGE 일 때만, 비우면 이동 없음).
+
+                - 서비스 내 경로: `/nft/draw` — 같은 탭에서 이동합니다
+                - 외부 주소: `https://example.com/event` — 새 탭으로 엽니다
+
+                `javascript:` · `data:` 같은 다른 스킴과 `//evil.com`(슬래시 둘)은 거절합니다.
                 """, example = "/nft")
-        @Pattern(regexp = "^/(?!/).*$", message = "'/' 로 시작하는 서비스 내 경로만 넣을 수 있습니다.")
-        @Size(max = 255, message = "경로가 너무 깁니다.")
+        /*
+         * 🔴 이 식은 client 의 shared/lib/link.ts 와 **같아야 한다.** 한쪽만 고치면
+         *    화면은 통과시키는데 서버가 400 을 내거나 그 반대가 된다.
+         *    `//evil.com` 은 경로처럼 보이지만 바깥으로 나간다 — 슬래시 하나로 시작하는
+         *    것만 내부 경로로 인정한다.
+         */
+        @Pattern(regexp = "^(/(?!/)\\S*|https?://\\S+)$",
+                message = "'/' 로 시작하는 서비스 내 경로이거나 http(s) 로 시작하는 주소여야 합니다.")
+        @Size(max = 500, message = "주소가 너무 깁니다.")
         String linkPath,
 
         @Schema(description = "노출 여부", example = "true")

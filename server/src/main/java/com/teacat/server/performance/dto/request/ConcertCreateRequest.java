@@ -3,6 +3,7 @@ package com.teacat.server.performance.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,6 +44,27 @@ public record ConcertCreateRequest(
         @Schema(description = "목록 노출 시작일", example = "2026-09-20")
         @NotNull(message = "노출 시작일을 입력해 주세요.")
         LocalDate visibleFrom,
+
+        /*
+         * 공연 상세에서 오른쪽 아래에 뜨는 버튼 하나. 공식 사이트·아티스트 채널처럼 우리가
+         * 담지 않는 정보로 보낸다. 비우면 버튼 자체가 없다.
+         *
+         * 🔴 이 식은 client 의 shared/lib/link.ts · BannerWriteRequest 와 **같아야 한다.**
+         *    `javascript:` · `data:` 는 그대로 href 에 실리면 우리 페이지 안에서 코드가 돌고,
+         *    `//evil.com` 은 경로처럼 보이지만 바깥으로 나간다.
+         */
+        @Schema(description = """
+                공연 상세의 '바로가기' 버튼이 갈 곳 (선택).
+
+                - 서비스 내 경로: `/nft/draw` — 같은 탭에서 이동합니다
+                - 외부 주소: `https://example.com` — 새 탭으로 엽니다
+
+                비우면 버튼이 뜨지 않습니다.
+                """, example = "https://example.com/artist")
+        @Pattern(regexp = "^(/(?!/)\\S*|https?://\\S+)$",
+                message = "'/' 로 시작하는 서비스 내 경로이거나 http(s) 로 시작하는 주소여야 합니다.")
+        @Size(max = 500, message = "주소가 너무 깁니다.")
+        String linkUrl,
 
         @Schema(description = "포스터 이미지 (jpg/png/webp/gif, 5MB 이하)")
         MultipartFile poster,

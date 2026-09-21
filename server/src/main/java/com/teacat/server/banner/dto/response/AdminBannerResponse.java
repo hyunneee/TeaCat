@@ -43,7 +43,7 @@ public record AdminBannerResponse(
         @Schema(description = "연결된 공연 제목. 이미지 배너면 null")
         String performanceTitle,
 
-        @Schema(description = "누르면 이동할 경로. 없으면 null", example = "/nft")
+        @Schema(description = "누르면 갈 곳. 서비스 내 경로 또는 외부 주소(http/https). 없으면 null", example = "/nft")
         String linkPath,
 
         @Schema(description = "노출 순서 (작을수록 앞)", example = "0")

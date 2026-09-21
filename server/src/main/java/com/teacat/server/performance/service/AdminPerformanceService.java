@@ -113,6 +113,8 @@ public class AdminPerformanceService {
                         posterKey,
                         detailImageKey,
                         userId));
+        // 바로가기는 예매 조건이 아니라 생성 뒤에 따로 얹는다 (수정 경로와 같은 메서드를 쓴다)
+        performance.changeLinkUrl(request.linkUrl());
 
         // 회차 번호는 일시 순으로 1 부터. 관리자가 순서를 섞어 보내도 1회차가 가장 빠른 공연이다
         List<PerformanceDetail> details = new ArrayList<>();
@@ -177,6 +179,9 @@ public class AdminPerformanceService {
         }
 
         performance.update(request.title(), stadium, request.ticketingStartAt(), request.visibleFrom());
+        /* 바로가기는 티켓팅이 시작된 뒤에도 고칠 수 있다 — 예매자가 보고 결정한 값이 아니다.
+           빈 문자열이 오면 뗀다 (changeLinkUrl 주석) */
+        performance.changeLinkUrl(request.linkUrl());
         if (defaultLayout != null) {
             performance.updateLayout(defaultLayout, java.util.List.of(), java.util.List.of());
         }

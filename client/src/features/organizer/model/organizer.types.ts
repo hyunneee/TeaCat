@@ -1,3 +1,4 @@
+import { isValidLink } from '@/shared/lib';
 import type { ConcertDetail } from '@/features/concert';
 
 /**
@@ -86,6 +87,8 @@ export interface ConcertUpdateRequest {
   visibleFrom?: string;
   posterImageKey?: string;
   detailImageKey?: string;
+  /** 바로가기 주소. **빈 문자열은 "떼기"** 입니다 — 안 보내면(undefined) 그대로 둡니다 */
+  linkUrl?: string;
 }
 
 /** 공연 등록·수정 폼. 입력 요소의 값이라 전부 문자열이고, 파일만 File 입니다 */
@@ -107,6 +110,11 @@ export interface ConcertCreateForm {
   poster: File | null;
   detailImage: File | null;
   /**
+   * 공연 상세의 "바로가기" 버튼이 갈 곳. 비어 있으면 버튼이 없습니다.
+   * 서비스 내 경로(`/nft/draw`) 또는 외부 주소(`https://…`) 입니다 (`shared/lib/link`).
+   */
+  linkUrl: string;
+  /**
    * 함께 등록할 회차의 공연 일시 (`datetime-local` 값). 등록에서만 쓰고, 서버가 일시 순으로 번호를 붙입니다.
    * 수정에서는 비어 있습니다 — 회차 편집은 회차 API(265~267) 의 일이라 이 폼이 다루지 않습니다.
    */
@@ -126,6 +134,7 @@ export const EMPTY_CONCERT_CREATE: ConcertCreateForm = {
   visibleFrom: '',
   poster: null,
   detailImage: null,
+  linkUrl: '',
   // 회차 한 줄을 미리 열어둡니다. 회차 없는 공연은 예매할 게 없어서, 빈 목록으로 시작하면 빠뜨리기 쉽습니다
   performanceDates: [''],
 };
@@ -139,6 +148,9 @@ export const POSTER_MAX_BYTES = 5 * 1024 * 1024;
 export const DETAIL_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 
 export const TITLE_MAX_LENGTH = 200;
+
+/** 바로가기 주소 길이 상한. 서버 @Size 와 같은 값입니다 */
+export const LINK_MAX_LENGTH = 500;
 
 function imageError(file: File | null, maxBytes: number): string | undefined {
   if (!file) return undefined;
@@ -305,6 +317,12 @@ export function validateConcertCreate(
 
   if (!form.ticketingStartAt) errors.ticketingStartAt = '티켓팅 오픈 시각을 입력해 주세요.';
 
+  /* 바로가기는 선택이라 비어 있으면 검사하지 않습니다. 적었다면 형태만 봅니다 —
+     `javascript:` 같은 주소는 서버도 거절하지만(400), 여기서 먼저 말해 주는 편이 낫습니다 */
+  if (!isValidLink(form.linkUrl)) {
+    errors.linkUrl = "'/' 로 시작하는 서비스 내 경로이거나 http(s) 로 시작하는 주소여야 해요.";
+  }
+
   if (!form.visibleFrom) {
     errors.visibleFrom = '노출 시작일을 입력해 주세요.';
   } else if (form.ticketingStartAt && form.visibleFrom > form.ticketingStartAt.slice(0, 10)) {
@@ -362,6 +380,9 @@ export function toConcertCreateFormData(form: ConcertCreateForm): FormData {
   if (form.stadiumLayoutId) body.append('stadiumLayoutId', form.stadiumLayoutId);
   body.append('ticketingStartAt', toServerDateTime(form.ticketingStartAt));
   body.append('visibleFrom', form.visibleFrom);
+  /* 비어 있으면 아예 빼지 않고 빈 문자열을 보내면 @Pattern 이 400 을 냅니다 (등록 요청은 빈 문자열을
+     허용하지 않습니다 — 처음부터 없는 것과 "떼기" 를 구분할 이유가 없어서입니다) */
+  if (form.linkUrl.trim()) body.append('linkUrl', form.linkUrl.trim());
   if (form.poster) body.append('poster', form.poster);
   if (form.detailImage) body.append('detailImage', form.detailImage);
   // 같은 키를 반복하면 서버가 List 로 받습니다
@@ -382,6 +403,7 @@ export function concertToForm(concert: ConcertDetail): ConcertCreateForm {
     visibleFrom: concert.visibleFrom,
     poster: null,
     detailImage: null,
+    linkUrl: concert.linkUrl ?? '',
     performanceDates: [],
   };
 }
@@ -420,6 +442,9 @@ export function toConcertUpdateRequest(
     body.ticketingStartAt = toServerDateTime(form.ticketingStartAt);
   }
   if (form.visibleFrom !== base.visibleFrom) body.visibleFrom = form.visibleFrom;
+  /* 🔴 빈 문자열을 그대로 보냅니다 — 그게 "바로가기 떼기" 입니다. undefined 로 바꾸면
+     한 번 붙인 바로가기를 영영 못 뗍니다 (서버 changeLinkUrl 주석) */
+  if (form.linkUrl.trim() !== base.linkUrl) body.linkUrl = form.linkUrl.trim();
 
   return body;
 }
