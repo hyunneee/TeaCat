@@ -38,7 +38,8 @@ public class SecurityConfig {
             "/auth/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            "/search"
     };
 
     /** GET 만 인증 없이 열어두는 경로 */
@@ -52,7 +53,9 @@ public class SecurityConfig {
             "/areas/**",
             "/performances/**",
             // 홈 상단 슬라이드. 비로그인도 첫 화면을 봐야 한다
-            "/banners"
+            "/banners",
+            "/rankings/**",
+            "/search/trends"
     };
 
     private static final long CORS_PREFLIGHT_MAX_AGE_SECONDS = 3600L;
@@ -107,6 +110,7 @@ public class SecurityConfig {
                         .requestMatchers("/internal/**").permitAll()
                         // 공연 조회는 비로그인도 볼 수 있어야 한다 (API-201, API-202)
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/concerts/*/views", "/photocards/*/views").permitAll()
                         // 🔴 /photocards/** 보다 **먼저** 와야 한다. 남은 카드팩 수는 "내" 것이라
                         //    아래 permitAll 에 걸리면 인증 없이 컨트롤러까지 들어가고,
                         //    @AuthenticationPrincipal 이 null 이라 NPE(500)가 난다 — 401 이 아니라.
@@ -115,6 +119,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/nft-market/photocards", "/photocards/**",
                                 "/nft-market/auctions", "/auctions/**").permitAll()
                         // 좁은 규칙이 먼저다. 아래 /admin/** 이 위에 오면 이 줄에는 도달하지 못한다
+                        .requestMatchers(HttpMethod.GET, "/admin/photocard-templates", "/admin/photocard-designs", "/admin/photocard-designs/{designId:[0-9]+}")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        .requestMatchers(HttpMethod.POST, "/admin/photocard-designs", "/admin/photocard-designs/*/chain-registration")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        .requestMatchers(HttpMethod.PATCH, "/admin/photocard-designs/*/draw-pool")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        .requestMatchers("/admin/performances/*/draw-designs", "/admin/check-in/**")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
+                        // 운영 콘솔의 좌석·예매자 조회. 🔴 역할만 보는 이 줄로는 "남의 공연" 을 막지
+                        // 못한다 — 담당 공연·회차·티켓의 연결은 PerformanceOperationsService 가 검사한다.
+                        .requestMatchers(HttpMethod.GET, "/admin/performances/*/schedules/*/operations/**")
+                        .hasAnyRole(UserRole.ADMIN.name(), UserRole.PERFORMANCE.name())
                         .requestMatchers("/admin/performances/*/photocards/issue").hasRole(UserRole.ADMIN.name())
                         // 공연 관리(등록·수정·회차·구역·이미지)는 공연 주최자(PERFORMANCE)도 쓴다.
                         // 등록자 본인 것만 다룰 수 있는 건 서비스가 따로 검사한다(PERFORMANCE_020).

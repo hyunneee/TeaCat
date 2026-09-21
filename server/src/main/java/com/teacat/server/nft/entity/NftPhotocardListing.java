@@ -1,5 +1,6 @@
 package com.teacat.server.nft.entity;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -57,6 +58,14 @@ public class NftPhotocardListing {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    /** 등록 요청을 보낸 판매자 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다. 모르면 null */
+    @Column(name = "client_ip", length = 45, updatable = false)
+    private String clientIp;
+
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "user_agent_hash", length = 64, updatable = false)
+    private String userAgentHash;
+
     private NftPhotocardListing(NftPhotocard photocard, User seller, Long price, String description) {
         this.photocard = photocard;
         this.seller = seller;
@@ -69,6 +78,15 @@ public class NftPhotocardListing {
         return new NftPhotocardListing(photocard, seller, price, description);
     }
 
+    /** 등록 요청을 보낸 단말을 남긴다. 생성 직후 한 번만 부른다 */
+    public void recordClientRequest(ClientRequest client) {
+        if (client == null) {
+            return;
+        }
+        this.clientIp = client.ip();
+        this.userAgentHash = client.userAgentHash();
+    }
+
     public void cancel(LocalDateTime now) {
         this.status = NftListingStatus.CANCELLED;
         this.closedAt = now;
@@ -77,6 +95,15 @@ public class NftPhotocardListing {
     public void sold(LocalDateTime now) {
         this.status = NftListingStatus.SOLD;
         this.closedAt = now;
+    }
+
+    public void startSettlement() {
+        this.status = NftListingStatus.SETTLING;
+    }
+
+    public void reopen() {
+        this.status = NftListingStatus.ACTIVE;
+        this.closedAt = null;
     }
 
     public boolean isActive() {

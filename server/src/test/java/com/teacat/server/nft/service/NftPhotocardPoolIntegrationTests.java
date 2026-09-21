@@ -53,6 +53,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
 
+    @Test void organizerPoolAccessIsScopedToOwnPerformance() throws Exception {
+        Long owner = insertUser("pool-owner@test.com", "poolowner", "PERFORMANCE");
+        Fixture own = insertPerformanceFixture();
+        Fixture other = insertPerformanceFixture();
+        jdbcTemplate.update("UPDATE performance_general SET created_by = ? WHERE id = ?", owner, own.performanceId());
+        String auth = "Bearer " + jwtTokenProvider.createAccessToken(owner, UserRole.PERFORMANCE);
+        mockMvc.perform(get("/admin/photocard-templates").header("Authorization", auth)).andExpect(status().isOk());
+        mockMvc.perform(get("/admin/performances/" + own.performanceId() + "/draw-designs").header("Authorization", auth)).andExpect(status().isOk());
+        mockMvc.perform(get("/admin/performances/" + other.performanceId() + "/draw-designs").header("Authorization", auth)).andExpect(status().isForbidden());
+        Long template = insertTemplate("Scope", "Group", "COMMON");
+        Long foreign = insertPoolDesign(other.performanceId(), template, 10);
+        mockMvc.perform(post("/admin/photocard-designs/" + foreign + "/chain-registration").header("Authorization", auth)).andExpect(status().isForbidden());
+        mockMvc.perform(patch("/admin/photocard-designs/" + foreign + "/draw-pool").header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"drawPool\":false}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/admin/photocard-designs/event-pool").header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"items\":[{\"templateId\":"+template+",\"totalSupply\":10}]}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/admin/performances/" + other.performanceId() + "/draw-designs").header("Authorization", auth)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"items\":[{\"templateId\":"+template+",\"totalSupply\":10}]}")).andExpect(status().isForbidden());
+        verifyNoInteractions(ipfsPinService, chainClient);
+    }
+
     @Autowired
     private NftPhotocardTemplateRepository templateRepository;
 
@@ -406,7 +427,7 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         verify(ipfsPinService, never()).pinImage(any());
         // 메타데이터는 새로 핀했고 온체인 등록이 나갔다
         verify(ipfsPinService).pinJson(anyString(), any());
-        verify(chainClient).registerDesign(anyLong(), eq(20), anyString());
+        verify(chainClient).registerDesign(anyLong(), any(), eq(20), anyString());
     }
 
     @Test
@@ -778,7 +799,7 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         willReturn("bafyMETA_NEW").given(ipfsPinService).pinJson(anyString(), any());
         willReturn(new PhotocardDesignRegisterResult(
                 "PENDING", "0x" + "1".repeat(64), null, null, null))
-                .given(chainClient).registerDesign(anyLong(), anyInt(), anyString());
+                .given(chainClient).registerDesign(anyLong(), any(), anyInt(), anyString());
         willReturn("0xcontract").given(chainClient).photocardContractAddress();
     }
 

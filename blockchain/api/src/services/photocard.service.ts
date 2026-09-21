@@ -1,6 +1,7 @@
 import {
   balanceOf,
   getDesign,
+  findPhotocardIssuance,
   isIssued,
   isIssuePaused,
   issueBatch,
@@ -12,11 +13,19 @@ import {
   transferAs,
   type IssueItem,
 } from '../chain/contracts/photocardNft';
+import { hashOf } from '../chain/hash';
+import { env } from '../config';
+import {
+  markIssueResults,
+  resolveLegacyDesignTokenId,
+  resolveLegacyIssueIdentity,
+} from '../db/photocardRepo';
 import { deriveUserAddress } from '../chain/keys/hdWallet';
 import { normalizeAddress } from '../chain/address';
 import { errors } from '../shared/errors';
 import { logger, short } from '../shared/logger';
 import { watchIssueBatch } from './photocardConfirm.service';
+import { verifyHistoricalIssue, type ExpectedIssue, type IssueOutcome } from './photocardIssueEvidence';
 
 /**
  * 포토카드 유스케이스. (PHOTOCARD_PLAN.md 3장)
@@ -41,6 +50,14 @@ export interface IssueBatchResult {
   count: number;
 }
 
+interface ResolvedIssueBatchResult {
+  status: 'RESOLVED';
+  txHash: null;
+  count: 0;
+}
+
+type IssueBatchExecutionResult = IssueBatchResult | ResolvedIssueBatchResult;
+
 export interface PhotocardLookupResult {
   issued: boolean;
 }
@@ -57,6 +74,8 @@ export interface IssueRequestItem {
   photocardKey: string;
   designId: string;
   to: string;
+  photocardId?: string;
+  designDbId?: string;
 }
 
 export interface PhotocardTransferResult {
@@ -80,11 +99,17 @@ function requireDeployed(): void {
  * 안전한 이유입니다. 첫 장이 나간 뒤에는 값이 달라도 바꿀 수 없어 `DESIGN_FROZEN` 입니다.
  */
 export async function registerPhotocardDesign(
-  designId: bigint,
+  designDbId: bigint,
+  requestedTokenId: bigint | undefined,
   maxSupply: bigint,
   metadataCid: string,
 ): Promise<DesignRegisterResult> {
   requireDeployed();
+
+  const legacyTokenId = requestedTokenId === undefined
+    ? await resolveLegacyDesignTokenId(designDbId.toString())
+    : null;
+  const designId = requestedTokenId ?? BigInt(legacyTokenId ?? designDbId.toString());
 
   const metadataUri = metadataUriOf(metadataCid);
   const design = await getDesign(designId);
@@ -139,7 +164,7 @@ export async function registerPhotocardDesign(
  * 주의: 사전 확인은 **확정된 상태만** 봅니다. 확정 전 중복 요청은 둘 다 통과하지만
  *       **카드는 안전합니다** — 컨트랙트가 이미 발행된 키를 건너뜁니다.
  */
-export async function issuePhotocards(items: IssueRequestItem[]): Promise<IssueBatchResult> {
+export async function issuePhotocards(items: IssueRequestItem[]): Promise<IssueBatchExecutionResult> {
   requireDeployed();
 
   if (items.length === 0) throw errors.badRequest('items 가 비어 있습니다');
@@ -152,32 +177,67 @@ export async function issuePhotocards(items: IssueRequestItem[]): Promise<IssueB
     );
   }
 
-  const prepared: IssueItem[] = items.map((item) => {
+  const prepared: IssueItem[] = await Promise.all(items.map(async (item) => {
     /* 정규식은 모양만 봅니다. 체크섬이 틀린 주소를 그대로 넘기면 ethers 가 던지고
        500 이 됩니다 — 잘못된 건 입력이므로 여기서 400 으로 돌려보냅니다. */
     const to = normalizeAddress(item.to);
     if (to === null) throw errors.invalidAddress('to', item.to);
-    return { photocardKey: item.photocardKey, designId: BigInt(item.designId), to };
-  });
+    let photocardKey = item.photocardKey;
+    let tokenId = item.designId;
+    if (item.photocardId === undefined || item.designDbId === undefined) {
+      const legacy = await resolveLegacyIssueIdentity(item.photocardKey, item.designId);
+      if (legacy !== null) {
+        photocardKey = legacy.photocardKey;
+        tokenId = legacy.tokenId;
+      }
+    }
+    return { photocardKey, designId: BigInt(tokenId), to };
+  }));
 
   if (await isIssuePaused()) throw errors.contractPaused('포토카드 발행');
 
-  await assertCapacity(prepared);
+  const sendable: IssueItem[] = [];
+  const preflightOutcomes: IssueOutcome[] = [];
+  for (const item of prepared) {
+    if (!(await isIssued(item.photocardKey))) {
+      sendable.push(item);
+      continue;
+    }
+    const expected: ExpectedIssue = {
+      photocardKey: item.photocardKey,
+      keyHash: hashOf(item.photocardKey),
+      tokenId: item.designId.toString(),
+      to: item.to,
+    };
+    preflightOutcomes.push(await verifyHistoricalIssue(expected, findPhotocardIssuance));
+  }
 
-  const txHash = await issueBatch(prepared);
-  logger.info(`포토카드 발행 ${prepared.length}건 tx=${short(txHash)}`);
+  if (preflightOutcomes.length > 0) {
+    const address = photocardNftAddress();
+    await markIssueResults(preflightOutcomes, null, env.CHAIN_ID, address ?? undefined);
+  }
+
+  if (sendable.length === 0) {
+    return { status: 'RESOLVED', txHash: null, count: 0 };
+  }
+
+  await assertCapacity(sendable);
+
+  const txHash = await issueBatch(sendable);
+  logger.info(`포토카드 발행 ${sendable.length}건 tx=${short(txHash)}`);
 
   /* 확정 감시에 올리고 DB 를 `MINTING` 으로 옮깁니다. Spring 은 txHash 를 폴링하지
      않고 자기 행의 status 가 바뀌는 걸로 압니다. (DESIGN.md 1장 예외) */
   await watchIssueBatch(
-    prepared.map((item) => ({
+    sendable.map((item) => ({
       photocardKey: item.photocardKey,
       tokenId: item.designId.toString(),
+      to: item.to,
     })),
     txHash,
   );
 
-  return { status: 'PENDING', txHash, count: prepared.length };
+  return { status: 'PENDING', txHash, count: sendable.length };
 }
 
 /**

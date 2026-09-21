@@ -28,6 +28,16 @@ public record BannerResponse(
         @Schema(description = "배너 이미지 주소. 공연 배너면 그 공연의 포스터다. 없으면 null")
         String imageUrl,
 
+        @Schema(description = """
+                그림에서 보여줄 한 점의 가로 위치(%). 0 이 왼쪽 끝, 50 이 가운데, 100 이 오른쪽 끝.
+                화면이 `object-position: <x>% <y>%` 로 옮긴다
+                """, example = "50")
+        Integer imageFocusX,
+
+        @Schema(description = "그림에서 보여줄 한 점의 세로 위치(%). 0 이 위쪽 끝, 100 이 아래쪽 끝",
+                example = "30")
+        Integer imageFocusY,
+
         @Schema(description = "누르면 이동할 서비스 내 경로. 없으면 null", example = "/nft")
         String linkPath,
 
@@ -42,6 +52,8 @@ public record BannerResponse(
                 banner.getSubtitle(),
                 banner.getLabel(),
                 imageUrl,
+                banner.getImageFocus().getX(),
+                banner.getImageFocus().getY(),
                 banner.getLinkPath(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getId()
         );

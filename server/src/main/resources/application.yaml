@@ -87,6 +87,17 @@ spring:
       port: 6379
       password: teacat_local_pw
 
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: teacat
+    password: teacat_local_pw
+    listener:
+      simple:
+        # 실패한 메시지는 재큐잉하지 않고 DLQ 로 보낸다. 재큐잉하면 블록체인 서비스가 죽어 있는 동안
+        # 같은 메시지가 즉시 되돌아와 초당 수십 번 돈다. 재시도 시점은 wallet.provisioning 스위퍼가 정한다
+        default-requeue-rejected: false
+
 jwt:
   secret: ${JWT_SECRET:teacat-local-dev-access-token-secret-key-change-me-32bytes-over}
   access-token-validity: 1h
@@ -103,6 +114,18 @@ booking:
   hold:
     # 좌석 선점 유효 시간. 이 시간이 지나면 선점이 만료되어 다른 사용자가 잡을 수 있다
     duration: ${BOOKING_HOLD_DURATION:10m}
+  seat-map:
+    cache:
+      # 좌석맵 응답을 이 시간만큼 재사용한다. 폴링 주기(3초)보다 **짧아야** 의미가 있다 —
+      #   3초를 넘기면 사용자가 보는 정보가 지금보다 낡아진다.
+      #   0 으로 두지 말 것. 캐시를 끄려는 것이면 코드를 되돌리는 게 맞다
+      #   (Caffeine 은 0 을 "즉시 만료" 로 받아 매 요청 미스 + 락 비용만 남는다).
+      # 🔴 무효화는 하지 않는다. 선점마다 지우면 오픈 피크에 효과가 170배 깎인다
+      #    (SeatMapCacheRepository 주석 참고).
+      ttl: ${BOOKING_SEAT_MAP_CACHE_TTL:1s}
+      # 캐시할 (회차 × 구역) 조합의 상한. 좌석 1만 석 스냅샷이 1~2MB 라 상한이 없으면
+      #   힙을 먹는다. 넘치면 오래된 것이 밀려나 미스가 늘 뿐 오답이 나오지는 않는다.
+      max-entries: ${BOOKING_SEAT_MAP_CACHE_MAX_ENTRIES:200}
   seat-generation:
     # 티켓 오픈 시각이 지난 회차의 누락 좌석을 멱등하게 생성한다.
     enabled: ${BOOKING_SEAT_GENERATION_ENABLED:true}
@@ -120,6 +143,39 @@ booking:
     #   🔴 카드팩 개봉 시각도 같은 값을 읽는다. 둘이 어긋나면 그 차이만큼
     #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
     cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
+  # 취소표 추첨 (resale). 결제 완료된 예매가 취소될 때 그 구역에 대기자가 있으면 좌석을 풀지 않고
+  # 온체인 추첨(VerifiableDraw)을 연다. 당첨자는 결제 기한이 있는 선점(HELD)을 받는다.
+  resale:
+    # 당첨자가 결제를 마쳐야 하는 시간. 프론트 RESALE_PAYMENT_HOURS(12) 와 맞춘다
+    payment-window: ${BOOKING_RESALE_PAYMENT_WINDOW:PT12H}
+    # 추첨 스위퍼 — 난수 확인·당첨자 이양·기한 만료·대기 정리. @Scheduled 가 읽으므로 ISO-8601
+    #   난수는 커밋 다음 블록(약 10초)에 확정되고 스위퍼가 그걸 집어 당첨자를 정한다.
+    #   이 주기가 곧 "취소 뒤 당첨 알림까지" 의 지연에 더해지는 시간이다 — 짧게 둔다
+    sweep-enabled: ${BOOKING_RESALE_SWEEP_ENABLED:true}
+    sweep-interval: ${BOOKING_RESALE_SWEEP_INTERVAL:PT5S}
+    batch-size: 50
+    # 커밋을 못 보냈거나(PENDING) 보냈는데 체인에 없는(OPEN·exists=false) 추첨을 다시 보내기까지 기다리는 시간
+    open-retry-after: ${BOOKING_RESALE_OPEN_RETRY_AFTER:PT2M}
+    # 커밋 뒤 이 시간이 지나도 난수가 없으면 그 키는 죽은 것으로 보고 새 키로 다시 연다.
+    #   블록해시 창(256블록 ≈ 42분)보다 길어야 한다
+    reveal-timeout: ${BOOKING_RESALE_REVEAL_TIMEOUT:PT50M}
+
+# 가상 대기실 (server/QUEUE_DESIGN.md). 회차마다 관리자 API 로 켜고 끈다 — 기본은 전부 꺼져 있다.
+queue:
+  # 좌석 페이지 동시 사용자 정원. 부하테스트로 잰 값이라 코드가 아니라 여기 둔다.
+  #   2026-09-17 재측정: dev-server(CPU 1.5코어 · 좌석맵 1초 캐시)가 5,000명까지 처리했다.
+  #   서버를 늘리거나 캐시가 바뀌면 다시 재서 이 값만 바꾼다. 회차별 예외는 관리자 API 의 override.
+  capacity: ${QUEUE_CAPACITY:5000}
+  # 한 틱(admit-interval)에 들여보내는 최대 인원. 정원이 5,000 비어 있어도 한 번에 5,000명을
+  #   넣으면 좌석맵 첫 로드가 한꺼번에 몰린다. 200 이면 25초에 걸쳐 완만하게 찬다
+  max-per-tick: ${QUEUE_MAX_PER_TICK:200}
+  # 입장 후 무활동 이탈. 좌석·선점 API 를 부를 때마다 이만큼 연장된다.
+  #   좌석 고르다 잠깐 자리를 비우는 정도는 봐주고, 탭을 닫고 떠난 사람은 이 시간 뒤 빠진다
+  ttl: ${QUEUE_TTL:10m}
+  # 입장 관리자 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+  admit-interval: ${QUEUE_ADMIT_INTERVAL:PT1S}
+  # 입장 관리자 켬/끔. 테스트에서 끄고 runOnce 를 직접 부른다
+  admitter-enabled: true
 
 payment:
   toss:
@@ -147,7 +203,7 @@ payment:
 nft:
   auction:
     # 판매자가 고를 수 있는 경매 진행 시간 범위
-    min-duration: ${NFT_AUCTION_MIN_DURATION:1h}
+    min-duration: ${NFT_AUCTION_MIN_DURATION:30m}
     max-duration: ${NFT_AUCTION_MAX_DURATION:7d}
     # 만료 경매를 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
     # 경매 상세 조회도 만료를 확인해 닫으므로 이 값이 커도 사용자는 마감 직후 결과를 본다.
@@ -155,6 +211,45 @@ nft:
     sweep-interval: ${NFT_AUCTION_SWEEP_INTERVAL:PT10S}
     sweep-batch-size: 100
     sweep-enabled: true
+  trade:
+    review:
+      # 이상거래 심사 (server/AUCTION_FRAUD_DESIGN.md). 거래가 체인에 나가기 전에 규칙 R1~R8 을 돌려
+      #   걸리면 RISK_REVIEW 로 멈추고 관리자가 승인·거절한다. 기준값은 오탐을 보면서 재배포 없이 조인다.
+      # false 면 스크리너가 빈 결과를 돌려 정산이 예전과 똑같이 흐른다 — 문제 생겼을 때의 비상 스위치
+      enabled: ${NFT_TRADE_REVIEW_ENABLED:true}
+      # FLAG: 걸려도 정산은 그대로 가고 심사 행만 남긴다 — 지금 단계는 차단이 아니라 데이터 수집이다.
+      # HOLD: 체인 전송 전에 멈추고 관리자 승인·거절을 기다린다. 실사용자가 생기고 오탐률을 본 뒤에 올린다
+      mode: ${NFT_TRADE_REVIEW_MODE:FLAG}
+      # HOLD 모드에서 관리자가 이 시간 안에 결정하지 않으면 자동 승인. 사용자 돈이 영영 묶이는 쪽이 오탐보다 흔한 사고다
+      auto-approve-after: ${NFT_TRADE_REVIEW_AUTO_APPROVE_AFTER:PT72H}
+      # R3 반복 거래쌍·순환
+      pair-window: ${NFT_TRADE_REVIEW_PAIR_WINDOW:P30D}
+      pair-threshold: ${NFT_TRADE_REVIEW_PAIR_THRESHOLD:3}
+      # R4 가격 이상 — 같은 도안 최근 거래가 중앙값 대비 배율. 표본 부족이면 판단 안 함
+      price-window: ${NFT_TRADE_REVIEW_PRICE_WINDOW:P30D}
+      price-multiplier: ${NFT_TRADE_REVIEW_PRICE_MULTIPLIER:4.0}
+      price-min-samples: ${NFT_TRADE_REVIEW_PRICE_MIN_SAMPLES:3}
+      # R5 신규 계정 급행 — 가입 직후 + 첫 충전 직후 구매
+      new-account-age: ${NFT_TRADE_REVIEW_NEW_ACCOUNT_AGE:PT24H}
+      deposit-to-bid: ${NFT_TRADE_REVIEW_DEPOSIT_TO_BID:PT60M}
+      # R6 거래량 집중 — 최근 7일 거래 수가 이전 4주 주평균의 3배 이상이고 당사자가 절반 이상에 끼면
+      volume-window: ${NFT_TRADE_REVIEW_VOLUME_WINDOW:P7D}
+      volume-baseline-weeks: ${NFT_TRADE_REVIEW_VOLUME_BASELINE_WEEKS:4}
+      volume-multiplier: ${NFT_TRADE_REVIEW_VOLUME_MULTIPLIER:3.0}
+      volume-min-baseline: ${NFT_TRADE_REVIEW_VOLUME_MIN_BASELINE:3}
+      # R7 매집 — 이 거래로 도안 발행량의 30% 이상을 갖게 되거나 최근 도안 거래의 절반 이상을 사들였으면
+      hoard-share: ${NFT_TRADE_REVIEW_HOARD_SHARE:0.30}
+      hoard-buy-share: ${NFT_TRADE_REVIEW_HOARD_BUY_SHARE:0.50}
+      hoard-min-supply: ${NFT_TRADE_REVIEW_HOARD_MIN_SUPPLY:10}
+      # R8 계정 탈취 의심 — 처음 보는 단말에서 로그인한 직후 평소의 몇 배를 쓰면. 세 조건 AND
+      takeover-login-window: ${NFT_TRADE_REVIEW_TAKEOVER_LOGIN_WINDOW:P90D}
+      takeover-first-login-to-bid: ${NFT_TRADE_REVIEW_TAKEOVER_FIRST_LOGIN_TO_BID:PT30M}
+      takeover-spend-multiplier: ${NFT_TRADE_REVIEW_TAKEOVER_SPEND_MULTIPLIER:2.0}
+      # 로그인 단말 기록(user_login_events) 보관 기간. 심사 외 용도가 없어 오래 들고 있지 않는다
+      login-event-retention: ${NFT_TRADE_REVIEW_LOGIN_EVENT_RETENTION:P90D}
+      # 시한 자동 승인·기록 정리 스위퍼. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기
+      maintenance-interval: ${NFT_TRADE_REVIEW_MAINTENANCE_INTERVAL:PT10M}
+      maintenance-enabled: true
   design:
     # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
     #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.
@@ -303,6 +398,15 @@ blockchain:
   confirm-poll:
     interval: ${CHAIN_CONFIRM_POLL_INTERVAL:10s}
     initial-delay: 20s
+
+wallet:
+  provisioning:
+    # 가입 뒤 이 시간이 지나도 PENDING 이면 스위퍼가 다시 큐에 보낸다. 정상은 1초 안에 끝난다
+    retry-after: 30s
+    # 스위퍼 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다
+    sweep-interval: PT30S
+    sweep-batch-size: 50
+    sweep-enabled: true
 
 banner:
   image:

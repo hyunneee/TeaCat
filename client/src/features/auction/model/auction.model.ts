@@ -27,19 +27,6 @@ export const DEFAULT_AUCTION_SORT: AuctionSort = 'ENDING_SOON';
  * 값이 문자열인 이유 — 공용 `Select` 가 문자열 값만 받습니다.
  * 요청에 실을 때 `Number()` 로 되돌립니다.
  */
-export const DURATION_OPTIONS = [
-  { value: '6', label: '6시간' },
-  { value: '12', label: '12시간' },
-  { value: '24', label: '1일' },
-  { value: '48', label: '2일' },
-  { value: '72', label: '3일' },
-  { value: '168', label: '7일' },
-] as const;
-
-export type DurationOption = (typeof DURATION_OPTIONS)[number]['value'];
-
-export const DEFAULT_DURATION_HOURS: DurationOption = '48';
-
 /** 마감까지 남은 밀리초. 0 이면 이미 지났습니다 */
 export function msUntilEnd(endsAt: string): number {
   return Math.max(0, parseServerTime(endsAt) - Date.now());
@@ -79,6 +66,7 @@ export function formatTimeLeft(totalSeconds: number): string {
  */
 export function formatBidTime(value: string): string {
   return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
@@ -120,6 +108,9 @@ export function canCancel(auction: AuctionDetail): boolean {
 
 /** 종료된 경매의 결과 한 줄. 진행 중이면 null */
 export function auctionResultText(auction: AuctionDetail): string | null {
+  if (auction.status === 'SETTLING') {
+    return `정산 중 · ${auction.winnerNickname ?? '낙찰자 확인 중'} · 온체인 이전을 확인하고 있어요`;
+  }
   if (auction.status === 'SOLD') {
     const price = auction.finalPrice ?? auction.currentPrice;
     return `낙찰 · ${auction.winnerNickname ?? '알 수 없음'} · ${price.toLocaleString()}캣머니`;
@@ -146,15 +137,20 @@ export type MyAuctionFilter = (typeof MY_AUCTION_FILTERS)[number]['value'];
 /** 경매 상태를 화면에 쓰는 말로. 진행 중은 카운트다운이 대신하므로 뱃지를 달지 않습니다 */
 export const AUCTION_STATUS_LABEL: Record<AuctionStatus, string> = {
   ACTIVE: '진행 중',
+  SETTLING: '정산 중',
   SOLD: '낙찰',
   EXPIRED: '유찰',
   CANCELLED: '취소함',
 };
 
 /** 내 입찰 결과 뱃지 문구와 톤. 붉은색은 쓰지 않습니다 — 되돌릴 수 없는 동작이 아닙니다 */
-export const MY_BID_RESULT: Record<MyBidResult, { label: string; tone: 'neutral' | 'success' | 'warning' }> = {
+export const MY_BID_RESULT: Record<
+  MyBidResult,
+  { label: string; tone: 'neutral' | 'success' | 'warning' }
+> = {
   BIDDING: { label: '입찰 중', tone: 'neutral' },
   OUTBID: { label: '밀림', tone: 'warning' },
+  SETTLING: { label: '정산 중', tone: 'neutral' },
   WON: { label: '낙찰', tone: 'success' },
   LOST: { label: '패찰', tone: 'neutral' },
 };

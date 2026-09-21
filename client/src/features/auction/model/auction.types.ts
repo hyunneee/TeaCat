@@ -9,10 +9,10 @@
  * 걸려 있어 안쪽 필드는 `null` 로 내려옵니다.
  */
 
-export type AuctionStatus = 'ACTIVE' | 'SOLD' | 'EXPIRED' | 'CANCELLED';
+export type AuctionStatus = 'ACTIVE' | 'SETTLING' | 'SOLD' | 'EXPIRED' | 'CANCELLED';
 
 /** 내가 입찰한 경매 한 건의 내 관점 결과 */
-export type MyBidResult = 'BIDDING' | 'OUTBID' | 'WON' | 'LOST';
+export type MyBidResult = 'BIDDING' | 'OUTBID' | 'SETTLING' | 'WON' | 'LOST';
 
 /** 경매 목록 항목 (`GET /nft-market/auctions`, `GET /users/me/auctions`) */
 export interface AuctionSummary {
@@ -107,4 +107,5 @@ export interface MyBid {
   status: AuctionStatus;
   endsAt: string;
   result: MyBidResult;
+  lastBidAt: string;
 }

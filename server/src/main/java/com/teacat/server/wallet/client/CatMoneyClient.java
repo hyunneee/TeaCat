@@ -25,6 +25,7 @@ public class CatMoneyClient {
     private static final String BALANCE_PATH = "/internal/tokens/catmoney/balance";
     private static final String MINT_PATH = "/internal/tokens/catmoney/mint";
     private static final String BURN_PATH = "/internal/tokens/catmoney/burn";
+    private static final String TRANSFER_PATH = "/internal/tokens/catmoney/transfer";
     private static final String TX_PATH = "/internal/tx/";
     private static final String ADDRESS_PARAM = "address";
 
@@ -80,6 +81,20 @@ public class CatMoneyClient {
 
         return blockchainRestClient.post(
                 BURN_PATH, body, CatMoneyWriteResult.class, WalletErrorCode.BURN_FAILED);
+    }
+
+    /** 포카 마켓 정산용 유저 간 전송. 같은 operationKey 재요청은 체인에서 멱등 처리된다. */
+    public CatMoneyWriteResult transfer(String operationKey, String from, int derivationIndex,
+            String to, BigInteger amount, String tradeId) {
+        Map<String, Object> body = Map.of(
+                "operationKey", operationKey,
+                "from", from,
+                "derivationIndex", derivationIndex,
+                "to", to,
+                "amount", amount.toString(),
+                "tradeId", tradeId);
+        return blockchainRestClient.post(
+                TRANSFER_PATH, body, CatMoneyWriteResult.class, WalletErrorCode.TRANSFER_FAILED);
     }
 
     /**

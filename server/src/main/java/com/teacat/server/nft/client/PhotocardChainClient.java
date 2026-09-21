@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +28,7 @@ public class PhotocardChainClient {
 
     private static final String DESIGN_PATH = "/internal/photocards/designs";
     private static final String ISSUE_PATH = "/internal/photocards/issue";
+    private static final String TRANSFER_PATH = "/internal/photocards/transfer";
     private static final String TX_PATH = "/internal/tx/";
     private static final String HEALTH_PATH = "/health";
     private static final String PHOTOCARD_CONTRACT = "PhotocardNFT";
@@ -38,14 +40,17 @@ public class PhotocardChainClient {
      *
      * <p><b>발행보다 먼저다.</b> 등록되지 않은 도안이 발행 배치에 섞이면 배치 전체가 revert 된다.
      *
-     * @param designId    {@code nft_photocard_designs.id}. 이 값이 그대로 온체인 tokenId 다
+     * @param designId    {@code nft_photocard_designs.id}. 블루그린 호환을 위한 관계형 ID다
+     * @param tokenId     실제 ERC-1155 tokenId
      * @param metadataCid <b>메타데이터 JSON</b> 의 CID. 이미지 CID 를 보내면 지갑이 JSON 대신
      *                    이미지 바이트를 파싱하려 들어 카드가 깨져 보인다
      */
-    public PhotocardDesignRegisterResult registerDesign(Long designId, int maxSupply, String metadataCid) {
+    public PhotocardDesignRegisterResult registerDesign(Long designId, BigDecimal tokenId,
+                                                         int maxSupply, String metadataCid) {
         Map<String, Object> body = Map.of(
                 // bigint 라 JSON number 로 주고받으면 큰 값에서 정밀도가 깨진다. 문자열로 보낸다
                 "designId", designId.toString(),
+                "tokenId", tokenId.toPlainString(),
                 "maxSupply", Integer.toString(maxSupply),
                 "metadataCid", metadataCid);
 
@@ -70,15 +75,30 @@ public class PhotocardChainClient {
                 NftErrorCode.PHOTOCARD_MINT_FAILED);
     }
 
+    public PhotocardTransferResult transfer(String operationKey, String from, int derivationIndex,
+            String to, String tokenId, String tradeId) {
+        Map<String, Object> body = Map.of(
+                "operationKey", operationKey,
+                "from", from,
+                "derivationIndex", derivationIndex,
+                "to", to,
+                "designId", tokenId,
+                "amount", "1",
+                "tradeId", tradeId);
+        return blockchainRestClient.post(
+                TRANSFER_PATH, body, PhotocardTransferResult.class, NftErrorCode.PHOTOCARD_TRANSFER_FAILED);
+    }
+
     /**
      * 발행 요청 한 줄.
      *
-     * @param photocardKey {@code nft_photocards.id}. <b>이 값 하나가 한 티켓에 카드 두 장이
+     * @param photocardKey {@code nft_photocards.issue_key}. <b>이 값 하나가 카드 중복 발행을
      *                     나가는 것을 막는다</b> — 해시가 체인에 영구히 남으므로 비밀값을 넣으면 안 된다
-     * @param designId     {@code nft_photocard_designs.id}. 그대로 온체인 tokenId다
+     * @param designId     실제 ERC-1155 tokenId
      * @param to           받는 지갑 주소
      */
-    public record IssueItem(String photocardKey, String designId, String to) {
+    public record IssueItem(String photocardKey, String designId, String to,
+                            String photocardId, String designDbId) {
     }
 
     /**

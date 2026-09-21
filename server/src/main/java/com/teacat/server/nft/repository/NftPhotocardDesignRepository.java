@@ -33,6 +33,22 @@ public interface NftPhotocardDesignRepository extends JpaRepository<NftPhotocard
     /** 이벤트 팩이 뽑는 풀 목록. 공연별 도안은 빠진다 */
     List<NftPhotocardDesign> findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc();
 
+    /**
+     * 도감이 보는 목록 — 위와 같지만 <b>온체인 등록이 끝난 것만</b>.
+     *
+     * <p>🔴 <b>뽑기 후보 조건과 같아야 한다</b>({@link #pickDrawCandidateForUpdate} 의
+     * {@code chain_status = 'REGISTERED'}). 미등록 도안은 뽑기가 고르지 않으므로, 도감에
+     * 실으면 <b>영영 채워지지 않는 칸</b>이 된다 — 사용자는 이유도 모르고 계속 뽑는다.
+     *
+     * <p>어드민 목록({@link #findAllByDrawPoolTrueAndPerformanceIdIsNullOrderByIdAsc})은
+     * 일부러 미등록까지 보여준다. 운영자는 "등록이 어디까지 갔나" 를 봐야 하기 때문이다.
+     * 두 목록의 용도가 달라서 메서드도 둘이다.
+     *
+     * <p>부분 인덱스({@code idx_nft_photocard_designs_draw_pool})가 정확히 이 조건이다.
+     */
+    List<NftPhotocardDesign> findAllByDrawPoolTrueAndPerformanceIdIsNullAndChainStatusOrderByIdAsc(
+            NftDesignChainStatus chainStatus);
+
     /* 2026-09-11: findAllByPerformanceIdAndDrawPoolFalseOrderByIdAsc 로 대체했다.
        호출부가 둘이었고(어드민 목록 · 회차 발급 배정) 둘 다 뽑기 풀 도안이 섞이면 안 된다.
        발급에 섞이면 티켓 보유자에게 직접 발급되어 그 공연 팩에서 뽑을 카드가 사라진다.

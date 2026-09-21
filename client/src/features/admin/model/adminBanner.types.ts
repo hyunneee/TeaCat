@@ -11,6 +11,9 @@ export interface AdminBanner {
   /** 미리보기용. 공연 배너면 그 공연 포스터입니다 */
   imageUrl: string | null;
   imageKey: string | null;
+  /** 틀에 안 맞는 그림에서 어디를 남길지 (%). 타입과 무관하게 옵니다 */
+  imageFocusX: number;
+  imageFocusY: number;
   performanceId: number | null;
   performanceTitle: string | null;
   linkPath: string | null;
@@ -27,6 +30,9 @@ export interface AdminBannerWriteRequest {
   label: string | null;
   /** IMAGE 일 때 필수 */
   imageKey: string | null;
+  /** 그림에서 보여줄 한 점 (%). **타입과 무관합니다** — 공연 포스터도 같은 틀에 담깁니다 */
+  imageFocusX: number;
+  imageFocusY: number;
   /** PERFORMANCE 일 때 필수 */
   performanceId: number | null;
   /** IMAGE 일 때만. 비우면 눌러도 이동하지 않습니다 */

@@ -1,6 +1,7 @@
 package com.teacat.server.nft.service;
 
 import com.teacat.server.common.config.NftAuctionProperties;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
 import com.teacat.server.nft.dto.request.NftAuctionSort;
@@ -62,7 +63,6 @@ public class NftAuctionService {
     private static final String AUCTION_SCOPE_PREFIX = "auction:";
     private static final String BIDS_SCOPE = "auction-bids";
     private static final String MY_AUCTIONS_SCOPE = "my-auctions";
-    private static final String MY_BIDS_SCOPE = "my-bids";
 
     private final NftAuctionRepository auctionRepository;
     private final NftAuctionBidRepository bidRepository;
@@ -84,10 +84,17 @@ public class NftAuctionService {
      */
     @Transactional
     public NftAuctionResponse createAuction(Long sellerId, Long photocardId, NftAuctionCreateRequest request) {
+        return createAuction(sellerId, photocardId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 등록 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftAuctionResponse createAuction(Long sellerId, Long photocardId, NftAuctionCreateRequest request,
+                                            ClientRequest client) {
         if (request.buyNowPrice() != null && request.buyNowPrice() <= request.startPrice()) {
             throw new BusinessException(NftErrorCode.INVALID_BUY_NOW_PRICE);
         }
-        Duration duration = Duration.ofHours(request.durationHours());
+        Duration duration = request.resolveDuration();
         if (!properties.isDurationAllowed(duration)) {
             throw new BusinessException(NftErrorCode.INVALID_AUCTION_DURATION);
         }
@@ -97,18 +104,24 @@ public class NftAuctionService {
         if (!photocard.isOwnedBy(sellerId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
         }
-        if (listingRepository.existsByPhotocardIdAndStatus(photocardId, NftListingStatus.ACTIVE)) {
+        if (!photocard.isMinted()) {
+            throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_MINTED);
+        }
+        if (listingRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftListingStatus.ACTIVE, NftListingStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_ALREADY_LISTED);
         }
-        if (auctionRepository.existsByPhotocardIdAndStatus(photocardId, NftAuctionStatus.ACTIVE)) {
+        if (auctionRepository.existsByPhotocardIdAndStatusIn(
+                photocardId, List.of(NftAuctionStatus.ACTIVE, NftAuctionStatus.SETTLING))) {
             throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
         // 마감 시각은 DB 시계로 잡는다. 마감 판정(ends_at <= now())과 같은 시계여야 한다
-        NftAuction auction = auctionRepository.save(NftAuction.create(
+        NftAuction auction = NftAuction.create(
                 photocard, photocard.getOwner(), request.startPrice(), request.buyNowPrice(),
-                queryRepository.currentTime().plus(duration)));
-        return NftAuctionResponse.from(auction);
+                queryRepository.currentTime().plus(duration));
+        auction.recordClientRequest(client);
+        return NftAuctionResponse.from(auctionRepository.save(auction));
     }
 
     /**
@@ -139,12 +152,18 @@ public class NftAuctionService {
      */
     @Transactional
     public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request) {
+        return placeBid(bidderId, auctionId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 입찰 요청을 보낸 단말. 이상거래 심사(판매자·입찰자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftBidResponse placeBid(Long bidderId, Long auctionId, NftBidRequest request, ClientRequest client) {
         NftAuction auction = auctionRepository.findByIdForUpdate(auctionId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.AUCTION_NOT_FOUND));
         validateBiddable(auction, bidderId, request.amount());
 
         User bidder = getUser(bidderId);
-        NftAuctionBid bid = bidRepository.save(NftAuctionBid.place(auction, bidder, request.amount()));
+        NftAuctionBid bid = bidRepository.save(NftAuctionBid.place(auction, bidder, request.amount(), client));
         holdService.hold(bidderId, request.amount(), CatMoneyHoldRefType.AUCTION_BID, bid.getId());
 
         NftAuctionBid previousTop = auction.getTopBid();
@@ -186,6 +205,13 @@ public class NftAuctionService {
      */
     @Transactional
     public NftPurchaseResponse buyNow(Long buyerId, Long auctionId, String idempotencyKeyHeader) {
+        return buyNow(buyerId, auctionId, idempotencyKeyHeader, ClientRequest.unknown());
+    }
+
+    /** @param client 구매 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말, 계정 탈취)가 읽는다 */
+    @Transactional
+    public NftPurchaseResponse buyNow(Long buyerId, Long auctionId, String idempotencyKeyHeader,
+                                      ClientRequest client) {
         UUID idempotencyKey = NftRequestSupport.parseIdempotencyKey(idempotencyKeyHeader);
         NftPhotocardTrade existing = tradeRepository.findByBuyerIdAndIdempotencyKey(buyerId, idempotencyKey)
                 .orElse(null);
@@ -219,16 +245,14 @@ public class NftAuctionService {
         User buyer = getUser(buyerId);
         Long price = auction.getBuyNowPrice();
 
-        holdService.hold(buyerId, price, CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
-        holdService.capture(CatMoneyHoldRefType.AUCTION_BUY_NOW, auctionId);
-        if (auction.hasBids()) {
-            holdService.release(CatMoneyHoldRefType.AUCTION_BID, auction.getTopBid().getId());
-        }
-
-        photocard.transferTo(buyer);
-        auction.soldTo(buyer, price, LocalDateTime.now());
-        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.fromAuction(auction, buyer, price, idempotencyKey));
+        NftPhotocardTrade trade = NftPhotocardTrade.pendingAuction(auction, buyer, price, idempotencyKey);
+        trade.recordClientRequest(client); // 단말 컬럼은 updatable=false 라 INSERT 전에 채운다
+        trade = tradeRepository.saveAndFlush(trade);
+        trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.hold(buyerId, price, CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
+        holdService.holdIncoming(auction.getSeller().getId(), price,
+                CatMoneyHoldRefType.NFT_TRADE_SELLER, trade.getId());
+        auction.startSettlement(buyer, price, LocalDateTime.now());
         return NftPurchaseResponse.from(trade);
     }
 
@@ -315,15 +339,22 @@ public class NftAuctionService {
     }
 
     public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize) {
+        return getMyBids(userId, cursor, requestedSize, null, null);
+    }
+
+    public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize,
+                                                          String from, String to) {
+        BidDateRange range = BidDateRange.parse(from, to);
         int size = NftRequestSupport.validateSize(requestedSize);
-        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, MY_BIDS_SCOPE);
+        NftCursorCodec.Cursor decoded = cursorCodec.decode(cursor, range.cursorScope());
         Long cursorLastBidId = decoded.present() ? parseLong(decoded.value()) : null;
 
-        List<NftAuctionQueryRepository.MyBidRow> rows = queryRepository.findMyBids(userId, cursorLastBidId, size + 1);
+        List<NftAuctionQueryRepository.MyBidRow> rows = queryRepository.findMyBids(userId, cursorLastBidId, size + 1,
+                range.from(), range.toExclusive());
         boolean hasNext = rows.size() > size;
         List<NftAuctionQueryRepository.MyBidRow> page = takePage(rows, size);
         String nextCursor = hasNext
-                ? cursorCodec.encode(MY_BIDS_SCOPE, page.getLast().lastBidId().toString(), page.getLast().auctionId())
+                ? cursorCodec.encode(range.cursorScope(), page.getLast().lastBidId().toString(), page.getLast().auctionId())
                 : null;
         return new NftCursorPageResponse<>(page.stream().map(r -> toMyBid(userId, r)).toList(), nextCursor, hasNext);
     }
@@ -333,12 +364,16 @@ public class NftAuctionService {
         MyNftBidResponse.Result result;
         if (row.status() == NftAuctionStatus.ACTIVE) {
             result = isTop ? MyNftBidResponse.Result.BIDDING : MyNftBidResponse.Result.OUTBID;
+        } else if (row.status() == NftAuctionStatus.SETTLING) {
+            result = userId.equals(row.winnerId())
+                    ? MyNftBidResponse.Result.SETTLING
+                    : MyNftBidResponse.Result.LOST;
         } else {
             // 입찰이 있으면 취소·유찰이 불가능하므로 종료된 경매는 SOLD 다
             result = userId.equals(row.winnerId()) ? MyNftBidResponse.Result.WON : MyNftBidResponse.Result.LOST;
         }
         return new MyNftBidResponse(row.auctionId(), row.photocardId(), row.designName(), row.imageUrl(),
-                row.myHighestBid(), row.currentPrice(), isTop, row.status(), row.endsAt(), result);
+                row.myHighestBid(), row.currentPrice(), isTop, row.status(), row.endsAt(), result, row.lastBidAt());
     }
 
     private String auctionCursor(NftAuctionSort sort, NftAuctionQueryRepository.AuctionRow row) {

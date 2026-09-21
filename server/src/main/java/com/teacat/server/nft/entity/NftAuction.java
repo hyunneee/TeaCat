@@ -1,5 +1,6 @@
 package com.teacat.server.nft.entity;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,7 +26,7 @@ import java.time.LocalDateTime;
 /**
  * 공개 오름 입찰 경매.
  *
- * 상태 전이는 ACTIVE → SOLD | EXPIRED | CANCELLED 한 번뿐이다. 시간 판정(마감 여부)은 여기서 하지 않는다 —
+ * 상태 전이는 ACTIVE → SETTLING → SOLD 또는 ACTIVE → EXPIRED | CANCELLED 다. 시간 판정은 여기서 하지 않는다 —
  * 서비스가 DB 시계로 판정한다. 이 클래스는 상태와 불변식만 지킨다.
  */
 @Entity
@@ -86,6 +87,14 @@ public class NftAuction {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    /** 등록 요청을 보낸 판매자 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다. 모르면 null */
+    @Column(name = "client_ip", length = 45, updatable = false)
+    private String clientIp;
+
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "user_agent_hash", length = 64, updatable = false)
+    private String userAgentHash;
+
     private NftAuction(NftPhotocard photocard, User seller, Long startPrice, Long buyNowPrice, LocalDateTime endsAt) {
         this.photocard = photocard;
         this.seller = seller;
@@ -116,9 +125,44 @@ public class NftAuction {
         this.closedAt = now;
     }
 
+    public void startSettlement(User winner, Long price, LocalDateTime now) {
+        this.status = NftAuctionStatus.SETTLING;
+        this.winner = winner;
+        this.currentPrice = price;
+        this.closedAt = now;
+    }
+
+    public void reopen() {
+        this.status = NftAuctionStatus.ACTIVE;
+        this.winner = null;
+        this.currentPrice = topBid == null ? startPrice : topBid.getAmount();
+        this.closedAt = null;
+    }
+
+    /** 등록 요청을 보낸 단말을 남긴다. 생성 직후 한 번만 부른다 */
+    public void recordClientRequest(ClientRequest client) {
+        if (client == null) {
+            return;
+        }
+        this.clientIp = client.ip();
+        this.userAgentHash = client.userAgentHash();
+    }
+
     /** 유찰 */
     public void expire(LocalDateTime now) {
         this.status = NftAuctionStatus.EXPIRED;
+        this.closedAt = now;
+    }
+
+    /**
+     * 정산 시작(SETTLING) 뒤 이상거래 심사에서 거절돼 낙찰을 무효로 한다. 입찰 홀드는 풀리므로 유찰과 같은 끝이다.
+     * {@link #expire} 와 달리 winner 를 지운다 — DB 제약 {@code chk_nft_auctions_winner} 는
+     * SOLD·SETTLING 이 아닌 상태에 winner 가 남는 것을 허용하지 않는다.
+     */
+    public void voidSettlement(LocalDateTime now) {
+        this.status = NftAuctionStatus.EXPIRED;
+        this.winner = null;
+        this.currentPrice = topBid == null ? startPrice : topBid.getAmount();
         this.closedAt = now;
     }
 

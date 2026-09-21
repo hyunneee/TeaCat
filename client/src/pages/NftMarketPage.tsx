@@ -1,61 +1,36 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Coins, Gavel, Images, Search, Sparkles } from 'lucide-react';
+import { Coins, Gavel, Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Input, Segmented, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { useInfiniteScroll } from '@/shared/hooks';
-import { cn } from '@/shared/lib';
+import { useCursorPagination } from '@/shared/hooks/useCursorPagination';
+import { CursorPagination } from '@/shared/components/common/CursorPagination';
 import { useAuth } from '@/features/auth';
-import {
-  DEFAULT_SORT,
-  NFT_SORTS,
-  NftCard,
-  photocardSource,
-  useMyPhotocards,
-  useNftMarket,
-  type NftSort,
-} from '@/features/nft';
+import { DEFAULT_SORT, NFT_SORTS, NftCard, useNftMarketPage, type NftSort } from '@/features/nft';
 import {
   AUCTION_SORTS,
   AuctionCard,
+  useAuctionPage,
   DEFAULT_AUCTION_SORT,
-  useAuctions,
   type AuctionSort,
 } from '@/features/auction';
 import { useTokenBalance } from '@/features/token';
 
-/** 마켓에서 보는 방향 — 사는 쪽인가, 파는 쪽인가 */
-type Side = 'BUY' | 'SELL';
+/** 거래 방식 — 정해진 가격의 상점 또는 실시간 입찰 경매 */
+type MarketMode = 'SHOP' | 'AUCTION';
 
-const SIDES = [
-  { value: 'BUY', label: '구매' },
-  { value: 'SELL', label: '판매' },
-] as const satisfies readonly { value: Side; label: string }[];
-
-/** 사는 방법 — 정해진 값에 바로 사거나(상점), 값을 겨뤄 사거나(경매) */
-type BuyMode = 'SHOP' | 'AUCTION';
-
-const BUY_MODES = [
+const MARKET_MODES = [
   { value: 'SHOP', label: '상점' },
   { value: 'AUCTION', label: '경매' },
-] as const satisfies readonly { value: BuyMode; label: string }[];
+] as const satisfies readonly { value: MarketMode; label: string }[];
 
 /**
  * 포토카드 마켓.
  *
  * ── 화면 순서 ─────────────────────────────────────────────
- *   구매/판매 → 검색 → 상점·경매 / 잔액 / 정렬 → 2열 그리드
- *
- * ── 층이 둘인 이유 ────────────────────────────────────────
- * 알약(Segmented)은 **구매 · 판매** 두 칸 그대로입니다.
- * 상점과 경매는 둘 다 "남의 카드를 사는 방법" 이고 판매는 "내 카드 목록" 이라,
- * 셋을 한 줄에 놓으면 성격이 다른 것이 같은 층으로 읽힙니다.
- *
- * 두 번째 층은 **글자 탭**입니다. 알약 아래 알약을 쌓으면 둘이 서로 경쟁해서
- * 어느 쪽이 지금 화면을 정하는지 알 수 없습니다. 선택된 쪽만 진하게 둡니다.
- * 줄 수는 세 줄 그대로라 카드가 아래로 밀리지 않습니다.
+ *   상점/경매 → 검색 → 잔액 / 정렬 → 2열 그리드
  *
  * 검색어는 상점·경매가 **공유**합니다. 상점에서 찾던 카드를 경매에서
  * 다시 찾을 때 같은 말을 두 번 치게 하지 않습니다.
@@ -66,8 +41,7 @@ const BUY_MODES = [
 export function NftMarketPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [side, setSide] = useState<Side>('BUY');
-  const [mode, setMode] = useState<BuyMode>(() =>
+  const [mode, setMode] = useState<MarketMode>(() =>
     searchParams.get('mode') === 'auction' ? 'AUCTION' : 'SHOP',
   );
   const [keyword, setKeyword] = useState('');
@@ -76,39 +50,24 @@ export function NftMarketPage() {
   const { isLoggedIn } = useAuth();
 
   const trimmed = keyword.trim();
-  const buying = side === 'BUY';
-  const shopping = buying && mode === 'SHOP';
-  const bidding = buying && mode === 'AUCTION';
+  const shopping = mode === 'SHOP';
+  const bidding = mode === 'AUCTION';
 
-  const market = useNftMarket({ keyword: shopping ? trimmed : undefined, sort });
-  const auction = useAuctions({ keyword: bidding ? trimmed : undefined, sort: auctionSort });
-  const mine = useMyPhotocards();
+  const pagination = useCursorPagination<string>(
+    JSON.stringify([mode, trimmed, sort, auctionSort]),
+  );
+  const market = useNftMarketPage(
+    { keyword: trimmed || undefined, sort, cursor: pagination.cursor },
+    shopping,
+  );
+  const auction = useAuctionPage(
+    { keyword: trimmed || undefined, sort: auctionSort, cursor: pagination.cursor },
+    bidding,
+  );
   const { data: token } = useTokenBalance();
 
-  /* 내 카드는 받아온 만큼 화면에서 거릅니다 — 개수가 적어 서버를 또 부를 일이 아닙니다. */
-  const myFiltered = useMemo(() => {
-    const list = mine.data ?? [];
-    if (!trimmed) return list;
-    const needle = trimmed.toLowerCase();
-    return list.filter(
-      (card) =>
-        card.designName.toLowerCase().includes(needle) ||
-        (card.performanceTitle ?? '').toLowerCase().includes(needle),
-    );
-  }, [mine.data, trimmed]);
-
-  const active = shopping ? market : bidding ? auction : mine;
-  const itemCount = shopping
-    ? (market.data?.length ?? 0)
-    : bidding
-      ? (auction.data?.length ?? 0)
-      : myFiltered.length;
-
-  const sentinel = useInfiniteScroll({
-    hasNext: !!active.hasNextPage,
-    isFetching: active.isFetchingNextPage,
-    onLoadMore: active.fetchNextPage,
-  });
+  const active = shopping ? market : auction;
+  const itemCount = active.data?.items.length ?? 0;
 
   const goPhotocard = (photocardId: number) => navigate(ROUTES.NFT_DETAIL(String(photocardId)));
 
@@ -122,14 +81,14 @@ export function NftMarketPage() {
           면이 불투명해야 카드가 뒤로 지나가는 게 보이지 않습니다. */}
       <div className="bg-canvas under-header sticky z-10 px-4 pt-2 pb-3 lg:px-0 lg:pt-3">
         {/* 공연·내 티켓과 같은 배치입니다. 폰에서는 검색이 먼저, 넓은 화면에서는
-            구매/판매가 왼쪽·검색이 오른쪽에 한 줄로 놓입니다. */}
+            상점/경매가 왼쪽·검색이 오른쪽에 한 줄로 놓입니다. */}
         <div className="lg:flex lg:items-center lg:gap-3">
           <div className="lg:order-2 lg:ml-auto lg:w-full lg:max-w-xs">
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onClear={() => setKeyword('')}
-              placeholder={buying ? '도안명, 공연명으로 검색' : '내 포카 검색'}
+              placeholder="도안명, 공연명으로 검색"
               leftIcon={<Search size={17} />}
               type="search"
               tone="contrast"
@@ -137,41 +96,16 @@ export function NftMarketPage() {
           </div>
 
           <Segmented
-            options={SIDES}
-            value={side}
-            onChange={setSide}
+            options={MARKET_MODES}
+            value={mode}
+            onChange={setMode}
             className="mt-2 lg:order-1 lg:mt-0 lg:w-72 lg:shrink-0"
           />
         </div>
 
-        {/* 상점·경매 / 잔액 / 정렬을 **한 줄**에 둡니다.
+        {/* 잔액 / 정렬을 **한 줄**에 둡니다.
             줄이 늘어날수록 카드가 아래로 밀리고, 마켓에서 보고 싶은 건 카드입니다. */}
-        <div className="mt-3 flex items-center justify-between gap-2">
-          {buying ? (
-            <div className="flex shrink-0 items-center gap-3">
-              {BUY_MODES.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => setMode(item.value)}
-                  className={cn(
-                    'text-sm transition-colors',
-                    /* 밑줄이나 테두리를 두지 않습니다 — 목록에 선을 긋지 않는 것과 같은 이유입니다.
-                       위계는 굵기와 밝기로만 만듭니다. */
-                    mode === item.value ? 'text-ink font-extrabold' : 'text-subtle font-medium',
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <span className="text-subtle flex shrink-0 items-center gap-1.5 text-sm font-medium">
-              <Images size={15} />
-              <span className="tabular-nums">{myFiltered.length}</span>장
-            </span>
-          )}
-
+        <div className="mt-3 flex items-center justify-end gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {isLoggedIn && (
               <button
@@ -185,8 +119,7 @@ export function NftMarketPage() {
               </button>
             )}
 
-            {/* 정렬 기준이 상점과 경매가 다릅니다 — 경매에서 중요한 건 마감 시각입니다.
-                판매 탭에는 정렬이 없습니다. 내 카드는 몇 장뿐이라 정렬할 게 없습니다. */}
+            {/* 정렬 기준이 상점과 경매가 다릅니다 — 경매에서 중요한 건 마감 시각입니다. */}
             {shopping && (
               <Select
                 label="정렬"
@@ -211,7 +144,11 @@ export function NftMarketPage() {
 
       {/* ── 스크롤 영역 — 카드만 흐릅니다 ── */}
       <div className="px-4 pb-4 lg:px-0">
-        {active.isPending ? (
+        {active.isError ? (
+          <button type="button" onClick={() => void active.refetch()} className="mx-auto block p-4">
+            목록을 불러오지 못했어요. 다시 시도
+          </button>
+        ) : active.isPending ? (
           <Loading label={bidding ? '경매를 불러오는 중' : '포토카드를 불러오는 중'} />
         ) : itemCount === 0 ? (
           <EmptyState
@@ -221,30 +158,27 @@ export function NftMarketPage() {
                 ? '검색 결과가 없어요'
                 : bidding
                   ? '진행 중인 경매가 없어요'
-                  : shopping
-                    ? '판매 중인 포토카드가 없어요'
-                    : '보유한 포토카드가 없어요'
+                  : '판매 중인 포토카드가 없어요'
             }
             description={
               trimmed
                 ? '다른 키워드로 찾아보세요.'
                 : bidding
                   ? '가진 포카를 경매로 올려 보세요.'
-                  : shopping
-                    ? '곧 새 카드가 올라옵니다.'
-                    : '공연을 관람하면 좌석에서 포토카드가 발행돼요.'
+                  : '곧 새 카드가 올라옵니다.'
             }
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-6 lg:grid-cols-4 lg:gap-x-4">
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
             {shopping &&
-              (market.data ?? []).map((card) => (
+              (market.data?.items ?? []).map((card) => (
                 <li key={card.photocardId}>
                   <NftCard
                     photocardId={card.photocardId}
                     designName={card.designName}
                     imageUrl={card.imageUrl}
                     performanceTitle={card.performanceTitle}
+                    eventName={card.eventName}
                     price={card.price}
                     onClick={() => goPhotocard(card.photocardId)}
                   />
@@ -252,7 +186,7 @@ export function NftMarketPage() {
               ))}
 
             {bidding &&
-              (auction.data ?? []).map((item) => (
+              (auction.data?.items ?? []).map((item) => (
                 <li key={item.auctionId}>
                   <AuctionCard
                     photocardId={item.photocardId}
@@ -267,27 +201,18 @@ export function NftMarketPage() {
                   />
                 </li>
               ))}
-
-            {!buying &&
-              myFiltered.map((card) => (
-                <li key={card.photocardId}>
-                  {/* 내 카드에는 가격 대신 판매 상태가 뜹니다 (서버가 내 목록엔 가격을 주지 않습니다) */}
-                  <NftCard
-                    photocardId={card.photocardId}
-                    designName={card.designName}
-                    imageUrl={card.imageUrl}
-                    performanceTitle={photocardSource(card.performanceTitle)}
-                    state={card.listed ? 'LISTED' : 'STORED'}
-                    onClick={() => goPhotocard(card.photocardId)}
-                  />
-                </li>
-              ))}
           </ul>
         )}
 
-        {/* 목록 끝 센티널 — 보이면 다음 페이지 */}
-        <div ref={sentinel} aria-hidden className="h-px" />
-        {active.isFetchingNextPage && <Loading label="더 불러오는 중" className="py-4" />}
+        <CursorPagination
+          page={pagination.page}
+          busy={active.isFetching}
+          hasNext={!!active.data?.hasNext && active.data.nextCursor != null}
+          onPrevious={pagination.previous}
+          onNext={() => {
+            if (active.data?.nextCursor != null) pagination.next(active.data.nextCursor);
+          }}
+        />
       </div>
     </>
   );

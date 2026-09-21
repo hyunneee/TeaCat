@@ -1,6 +1,8 @@
 import { useState, type ChangeEvent } from 'react';
 import {
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   CheckCircle2,
   FileSpreadsheet,
   LayoutGrid,
@@ -435,6 +437,7 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
     areas,
     selectedAreaId,
     selectArea,
+    moveArea,
     updateArea,
     updateAreaBounds,
     autoFitAreaBounds,
@@ -778,7 +781,7 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
               <p className="text-subtle text-sm">캔버스에 드래그해서 구역을 추가하세요.</p>
             ) : (
               <ul className="space-y-1.5">
-                {areasForSheet.map((area) => (
+                {areasForSheet.map((area, index) => (
                   <li key={area.clientId}>
                     <button
                       type="button"
@@ -799,6 +802,28 @@ function AreaEditorStep({ controller }: { controller: StadiumEditorController })
                           : `좌석 ${acceptedSeatCount(area)}석`}
                       </span>
                     </button>
+                    <div className="flex justify-end gap-2 py-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === 0}
+                        onClick={() => moveArea(area.clientId, -1)}
+                        aria-label={`${area.areaCode} 구역 위로`}
+                        title="위로 이동"
+                      >
+                        <ArrowUp size={16} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={index === areasForSheet.length - 1}
+                        onClick={() => moveArea(area.clientId, 1)}
+                        aria-label={`${area.areaCode} 구역 아래로`}
+                        title="아래로 이동"
+                      >
+                        <ArrowDown size={16} />
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -1099,9 +1124,7 @@ function AreaDetailPanel({
                   min={1}
                   value={rowStartNumber}
                   onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    onRowStartNumberChange(
-                      Math.max(1, Math.trunc(Number(event.target.value) || 1)),
-                    )
+                    onRowStartNumberChange(Math.max(1, Math.trunc(Number(event.target.value) || 1)))
                   }
                 />
                 <Button variant="soft" size="sm" fullWidth onClick={onBeginRowRenumber}>

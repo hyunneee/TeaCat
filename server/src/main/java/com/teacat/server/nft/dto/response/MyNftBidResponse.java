@@ -16,7 +16,8 @@ public record MyNftBidResponse(
         @Schema(description = "내가 현재 최고 입찰자인지", example = "false") boolean isTopBidder,
         @Schema(description = "경매 상태", example = "ACTIVE") NftAuctionStatus status,
         @Schema(description = "마감 시각") LocalDateTime endsAt,
-        @Schema(description = "내 관점의 결과", example = "OUTBID") Result result
+        @Schema(description = "내 관점의 결과", example = "OUTBID") Result result,
+        @Schema(description = "선택 기간 안의 마지막 입찰 시각 (Asia/Seoul)") LocalDateTime lastBidAt
 ) {
 
     public enum Result {
@@ -24,6 +25,8 @@ public record MyNftBidResponse(
         BIDDING,
         /** 진행 중, 밀림 */
         OUTBID,
+        /** 낙찰됐지만 온체인 정산이 아직 끝나지 않음 */
+        SETTLING,
         WON,
         LOST
     }

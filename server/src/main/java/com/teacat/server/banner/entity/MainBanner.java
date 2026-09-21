@@ -2,6 +2,7 @@ package com.teacat.server.banner.entity;
 
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -63,6 +64,14 @@ public class MainBanner {
     @Column(name = "image_key", length = 255)
     private String imageKey;
 
+    /**
+     * 그림에서 <b>보여줄 한 점</b>. 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면 나머지가 잘린다.
+     *
+     * 타입과 무관하게 채운다 — 공연 배너의 3:4 포스터가 가장 많이 잘린다.
+     */
+    @Embedded
+    private MainBannerImageFocus imageFocus;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "performance_general_id")
     private PerformanceGeneral performance;
@@ -85,13 +94,14 @@ public class MainBanner {
     private LocalDateTime updatedAt;
 
     private MainBanner(MainBannerType type, String title, String subtitle, String label,
-                       String imageKey, PerformanceGeneral performance, String linkPath,
-                       int sortOrder, boolean active) {
+                       String imageKey, MainBannerImageFocus imageFocus, PerformanceGeneral performance,
+                       String linkPath, int sortOrder, boolean active) {
         this.type = type;
         this.title = title;
         this.subtitle = subtitle;
         this.label = label;
         this.imageKey = imageKey;
+        this.imageFocus = imageFocus;
         this.performance = performance;
         this.linkPath = linkPath;
         this.sortOrder = sortOrder;
@@ -100,16 +110,18 @@ public class MainBanner {
 
     /** 이미지를 직접 올려 만드는 슬라이드 */
     public static MainBanner ofImage(String title, String subtitle, String label,
-                                     String imageKey, String linkPath, int sortOrder, boolean active) {
+                                     String imageKey, MainBannerImageFocus imageFocus,
+                                     String linkPath, int sortOrder, boolean active) {
         return new MainBanner(MainBannerType.IMAGE, title, subtitle, label,
-                imageKey, null, linkPath, sortOrder, active);
+                imageKey, imageFocus, null, linkPath, sortOrder, active);
     }
 
     /** 공연을 지정해 만드는 슬라이드. 이미지·링크는 그 공연을 따라간다 */
     public static MainBanner ofPerformance(String title, String subtitle, String label,
-                                           PerformanceGeneral performance, int sortOrder, boolean active) {
+                                           MainBannerImageFocus imageFocus, PerformanceGeneral performance,
+                                           int sortOrder, boolean active) {
         return new MainBanner(MainBannerType.PERFORMANCE, title, subtitle, label,
-                null, performance, null, sortOrder, active);
+                null, imageFocus, performance, null, sortOrder, active);
     }
 
     /** 문구는 타입과 무관하게 고칠 수 있다 */
@@ -117,6 +129,11 @@ public class MainBanner {
         this.title = title;
         this.subtitle = subtitle;
         this.label = label;
+    }
+
+    /** 크롭 위치도 타입과 무관하다 — 직접 올린 그림이든 공연 포스터든 같은 틀에 담긴다 */
+    public void changeImageFocus(MainBannerImageFocus imageFocus) {
+        this.imageFocus = imageFocus;
     }
 
     /** IMAGE 로 바꾸거나, IMAGE 인 채로 이미지·링크를 고친다 */

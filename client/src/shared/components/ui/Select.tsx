@@ -16,8 +16,27 @@ export interface SelectProps<T extends string> {
   label: string;
   /** 목록을 오른쪽 끝에 맞출지 (오른쪽에 붙은 정렬 버튼) */
   align?: 'left' | 'right';
+  /**
+   * 버튼 모양. 변형이 필요하면 아래 VARIANT 테이블에 한 줄만 추가하세요.
+   *   text  — 기본. 글자 크기 그대로인 **글자 버튼** (정렬처럼 곁들이는 자리)
+   *   field — `Input` 과 **같은 높이의 박스** (검색창과 한 줄에 나란히 놓을 때)
+   */
+  variant?: SelectVariant;
   className?: string;
 }
+
+export type SelectVariant = 'text' | 'field';
+
+/**
+ * 🔴 `field` 는 `Input` 의 `contrast` 톤과 **같은 값**을 씁니다 — 높이(h-12) · 곡률(rounded-xl) ·
+ * 면 · 그림자. 한 줄에 나란히 놓였을 때 둘이 한 벌로 보여야 하므로, 한쪽만 고치지 마세요.
+ * (글자 버튼을 48px 입력 옆에 두면 높이가 안 맞아 한쪽으로 쏠려 보입니다 — QA)
+ */
+const VARIANT: Record<SelectVariant, string> = {
+  text: 'text-ink-muted hover:text-ink gap-1 rounded-lg py-1',
+  field:
+    'surface text-ink w-full justify-between gap-1.5 rounded-xl px-3.5 h-12 shadow-[0_2px_6px_oklch(0_0_0/0.10)]',
+};
 
 /**
  * 값 하나를 고르는 드롭다운. (정렬, 필터)
@@ -36,6 +55,7 @@ export function Select<T extends string>({
   onChange,
   label,
   align = 'right',
+  variant = 'text',
   className,
 }: SelectProps<T>) {
   const [open, setOpen] = useState(false);
@@ -72,8 +92,8 @@ export function Select<T extends string>({
         aria-label={label}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          'text-ink-muted hover:text-ink flex items-center gap-1 rounded-lg py-1 text-sm font-medium',
-          'transition-colors',
+          'flex items-center text-sm font-medium transition-colors',
+          VARIANT[variant],
           open && 'text-ink',
         )}
       >

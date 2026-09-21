@@ -31,6 +31,12 @@ public record AdminBannerResponse(
         @Schema(description = "업로드한 이미지 key. 공연 배너면 null")
         String imageKey,
 
+        @Schema(description = "그림에서 보여줄 한 점의 가로 위치(%). 0 이 왼쪽 끝, 100 이 오른쪽 끝", example = "50")
+        Integer imageFocusX,
+
+        @Schema(description = "그림에서 보여줄 한 점의 세로 위치(%). 0 이 위쪽 끝, 100 이 아래쪽 끝", example = "30")
+        Integer imageFocusY,
+
         @Schema(description = "연결된 공연 ID. 이미지 배너면 null", example = "3")
         Long performanceId,
 
@@ -59,6 +65,8 @@ public record AdminBannerResponse(
                 banner.getLabel(),
                 imageUrl,
                 banner.getImageKey(),
+                banner.getImageFocus().getX(),
+                banner.getImageFocus().getY(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getId(),
                 banner.getPerformance() == null ? null : banner.getPerformance().getTitle(),
                 banner.getLinkPath(),

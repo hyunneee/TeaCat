@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 
 /**
@@ -18,8 +18,11 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 export function useScrollTop() {
   const { pathname } = useLocation();
   const navigationType = useNavigationType();
+  const previousPath = useRef<string | null>(null);
 
   useEffect(() => {
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
     if (navigationType === 'POP') return;
     /* 부드러운 스크롤을 쓰지 않습니다 — 새 화면이 이미 페이드로 들어오는 중이라
        거기에 스크롤 애니메이션이 겹치면 화면이 두 번 움직이는 것처럼 보입니다. */

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, ConfirmModal, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
+import { objectPositionOf } from '@/features/banner';
 import {
   AdminBannerFormModal,
   useAdminBanners,
@@ -101,9 +102,12 @@ export function AdminBannersPage() {
                 </div>
 
                 {banner.imageUrl ? (
+                  /* 홈과 **같은 부분**을 보여줍니다. 목록만 가운데로 자르면 골라 둔
+                     크롭이 맞는지 여기서는 확인할 수 없습니다 */
                   <img
                     src={banner.imageUrl}
                     alt=""
+                    style={{ objectPosition: objectPositionOf(banner.imageFocusX, banner.imageFocusY) }}
                     className="h-16 w-24 shrink-0 rounded-lg object-cover"
                   />
                 ) : (
@@ -151,6 +155,10 @@ export function AdminBannersPage() {
                           subtitle: banner.subtitle,
                           label: banner.label,
                           imageKey: banner.imageKey,
+                          /* 🔴 노출만 끄고 켜는 자리지만 **전체를 다시 보내는 API** 라,
+                             빠뜨리면 맞춰 둔 크롭 위치가 가운데로 되돌아갑니다 */
+                          imageFocusX: banner.imageFocusX,
+                          imageFocusY: banner.imageFocusY,
                           performanceId: banner.performanceId,
                           linkPath: banner.linkPath,
                           active: !banner.active,

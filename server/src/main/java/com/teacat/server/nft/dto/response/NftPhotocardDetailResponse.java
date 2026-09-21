@@ -1,6 +1,8 @@
 package com.teacat.server.nft.dto.response;
 
 import com.teacat.server.nft.entity.NftMintStatus;
+import com.teacat.server.nft.entity.NftAuctionStatus;
+import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocardGrade;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -11,14 +13,22 @@ public record NftPhotocardDetailResponse(
         @Schema(description = "포토카드 ID", example = "501")
         Long photocardId,
 
+        /* 같은 도안을 몇 장 가졌는지 묻는 후속 조회(/users/me/photocards/by-design/{designId})의
+           열쇠다. 이름으로 물으면 운영자가 도안 이름을 바꾸는 순간 어긋난다. */
+        @Schema(description = "도안 ID. 내가 가진 같은 도안 카드를 물을 때 쓴다", example = "11")
+        Long designId,
+
         @Schema(description = "도안명")
         String designName,
 
         @Schema(description = "이미지 URL")
         String imageUrl,
 
-        @Schema(description = "공연명. 뽑기 카드는 null")
+        @Schema(description = "공연명. 카드팩에서 나온 카드는 null")
         String performanceTitle,
+
+        @Schema(description = "획득한 이벤트 이름. 이벤트 카드팩이 아니면 null", example = "오픈 기념 카드팩")
+        String eventName,
 
         @Schema(description = "현재 소유자 닉네임")
         String ownerNickname,
@@ -45,11 +55,18 @@ public record NftPhotocardDetailResponse(
         NftPhotocardGrade grade,
 
         @Schema(description = "같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null", example = "1500")
-        Long averagePrice
+        Long averagePrice,
+
+        @Schema(description = "상세 조회 수", example = "42")
+        long viewCount,
+
+        @Schema(description = "인증된 조회자가 현재 소유자인지")
+        boolean isMine
 ) {
 
     public record Auction(
             @Schema(description = "경매 ID", example = "12") Long auctionId,
+            @Schema(description = "경매 상태", example = "SETTLING") NftAuctionStatus status,
             @Schema(description = "현재가(CAT)", example = "1800") Long currentPrice,
             @Schema(description = "즉시구매가(CAT). 없으면 생략", example = "5000") Long buyNowPrice,
             @Schema(description = "입찰 수", example = "4") int bidCount,
@@ -59,6 +76,7 @@ public record NftPhotocardDetailResponse(
 
     public record Listing(
             @Schema(description = "판매 등록 ID") Long listingId,
+            @Schema(description = "판매 상태", example = "SETTLING") NftListingStatus status,
             @Schema(description = "판매가(CAT)") Long price,
             @Schema(description = "판매자 설명") String sellerDescription,
             @Schema(description = "판매 등록 시각") LocalDateTime listedAt

@@ -4,6 +4,7 @@ import com.teacat.server.payment.client.TossPaymentException;
 import com.teacat.server.payment.client.TossPaymentResult;
 import com.teacat.server.payment.client.TossPaymentsClient;
 import com.teacat.server.payment.dto.response.TicketOrderResponse;
+import com.teacat.server.resale.service.ResaleDrawService;
 import com.teacat.server.ticket.service.TicketBurnService;
 import com.teacat.server.wallet.entity.CatTransaction;
 import com.teacat.server.wallet.entity.CatTxReason;
@@ -45,13 +46,19 @@ public class TicketCancelService {
     private final TossPaymentsClient tossPaymentsClient;
     private final CatMoneyService catMoneyService;
     private final TicketBurnService ticketBurnService;
+    private final ResaleDrawService resaleDrawService;
 
-    /** 예매를 취소하고 환불을 시작한다 */
+    /** 예매를 취소하고 환불을 시작한다. 구역에 취소표 대기자가 있으면 좌석은 풀지 않고 추첨을 연다 */
     public TicketOrderResponse cancel(Long userId, Long ticketOrderId) {
         TicketCancelRecorder.Invalidated invalidated =
                 recorder.invalidate(ticketOrderId, userId, LocalDateTime.now());
 
         // 여기부터는 실패해도 취소를 되돌리지 않는다. 배치가 이어받는다
+        if (invalidated.seatDrawId() != null) {
+            // 구역에 대기자가 있어 좌석을 풀지 않았다. 지금 바로 온체인 추첨을 연다 (커밋).
+            // 난수는 다음 블록(약 10초)에 확정되고, 당첨자 선정과 알림은 스위퍼가 이어받는다
+            resaleDrawService.open(invalidated.seatDrawId());
+        }
         cancelCard(ticketOrderId);
         refundToken(ticketOrderId);
         ticketBurnService.requestBurn(invalidated.ticketId());

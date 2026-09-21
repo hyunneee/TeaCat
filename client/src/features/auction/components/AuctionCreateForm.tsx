@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Coins, Zap } from 'lucide-react';
 import { Button, Input, Select } from '@/shared/components/ui';
+import { AuctionDurationPicker } from './AuctionDurationPicker';
 import {
-  DEFAULT_DURATION_HOURS,
+  DEFAULT_DURATION_MINUTES,
   DURATION_OPTIONS,
+  resolveDurationMinutes,
   type DurationOption,
-} from '../model/auction.model';
+} from '../model/auctionOptions.model';
 
 interface Props {
-  onSubmit: (values: { startPrice: number; buyNowPrice?: number; durationHours: number }) => void;
+  onSubmit: (values: { startPrice: number; buyNowPrice?: number; durationMinutes: number }) => void;
   isPending?: boolean;
 }
 
@@ -25,7 +27,18 @@ interface Props {
 export function AuctionCreateForm({ onSubmit, isPending }: Props) {
   const [startPrice, setStartPrice] = useState('');
   const [buyNowPrice, setBuyNowPrice] = useState('');
-  const [durationHours, setDurationHours] = useState<DurationOption>(DEFAULT_DURATION_HOURS);
+  const [duration, setDuration] = useState<DurationOption>(DEFAULT_DURATION_MINUTES);
+  const [customMinutes, setCustomMinutes] = useState(60);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const durationMinutes = resolveDurationMinutes(
+    duration,
+    String(Math.floor(customMinutes / 60)),
+    String(customMinutes % 60),
+  );
 
   const start = Number(startPrice);
   const buyNow = Number(buyNowPrice);
@@ -36,7 +49,8 @@ export function AuctionCreateForm({ onSubmit, isPending }: Props) {
       ? '즉시구매가는 시작가보다 높아야 해요.'
       : null;
 
-  const canSubmit = start > 0 && !buyNowError && (!hasBuyNow || buyNow > 0);
+  const canSubmit =
+    start > 0 && !buyNowError && (!hasBuyNow || buyNow > 0) && durationMinutes !== null;
 
   const onlyDigits = (value: string) => value.replace(/\D/g, '').slice(0, 9);
 
@@ -71,23 +85,47 @@ export function AuctionCreateForm({ onSubmit, isPending }: Props) {
         <Select
           label="진행 시간"
           options={DURATION_OPTIONS}
-          value={durationHours}
-          onChange={setDurationHours}
+          value={duration}
+          onChange={setDuration}
           className="shrink-0"
         />
       </div>
 
+      {duration === 'custom' && (
+        <AuctionDurationPicker value={customMinutes} onChange={setCustomMinutes} />
+      )}
+      {durationMinutes === null ? (
+        <p role="alert" className="text-danger text-xs">
+          진행 시간을 30분에서 7일 사이로 선택해 주세요.
+        </p>
+      ) : (
+        <p className="text-subtle text-xs">
+          예상 종료:{' '}
+          {new Intl.DateTimeFormat('ko-KR', {
+            timeZone: 'Asia/Seoul',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(now + durationMinutes * 60000)}{' '}
+          (한국 시간)
+          <br />
+          경매가 등록되는 시점에 따라 실제 종료 시각은 조금 달라질 수 있어요.
+        </p>
+      )}
+
       <Button
         fullWidth
-        disabled={!canSubmit}
+        disabled={!canSubmit || isPending}
         loading={isPending}
-        onClick={() =>
+        onClick={() => {
+          if (!canSubmit || durationMinutes === null || isPending) return;
           onSubmit({
             startPrice: start,
             buyNowPrice: hasBuyNow ? buyNow : undefined,
-            durationHours: Number(durationHours),
-          })
-        }
+            durationMinutes,
+          });
+        }}
       >
         경매 시작하기
       </Button>

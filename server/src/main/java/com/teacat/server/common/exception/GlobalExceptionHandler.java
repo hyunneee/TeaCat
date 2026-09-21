@@ -4,13 +4,23 @@ import com.teacat.server.common.response.BaseResponse;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.Set;
+
+import java.io.IOException;
 
 @RestControllerAdvice
 @Slf4j
@@ -107,6 +117,104 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 클라이언트가 먼저 끊었다 — Broken pipe / Connection reset.
+     *
+     * <p>티켓 오픈처럼 같은 화면을 연달아 새로 고치는 구간에서는 <b>정상적으로 생긴다</b>.
+     * 앞선 요청의 응답을 다 쓰기 전에 브라우저가 떠나면 소켓이 닫히고, 쓰던 중이던 Jackson 이
+     * {@link org.springframework.http.converter.HttpMessageNotWritableException} 으로 감싸
+     * 던져 아래 포괄 핸들러까지 내려온다.
+     *
+     * <p>🔴 이걸 포괄 핸들러에 맡기면 두 가지가 같이 망가진다.
+     *    <ul>
+     *    <li>{@code teacat.unexpected.error} 가 오른다 — <b>1건도 알림 대상</b>인 지표라
+     *        접속이 몰릴 때마다 울리고, 그 사이에 섞인 진짜 장애가 묻힌다.
+     *    <li>이미 닫힌 소켓에 500 본문을 또 쓰다가 같은 예외가 한 번 더 난다 (로그가 두 배가 된다).
+     *    </ul>
+     *
+     * <p>그래서 계측하지 않고, 스택 없이 debug 로만 남기고, 본문도 쓰지 않는다.
+     * {@code null} 을 돌려주면 Spring 이 "처리됨"으로 표시하고 아무것도 쓰지 않는다
+     * (HttpEntityMethodProcessor#handleReturnValue).
+     */
+    private boolean isClientDisconnected(Throwable e) {
+        for (Throwable cause = e; cause != null && cause != cause.getCause(); cause = cause.getCause()) {
+            if (cause instanceof AsyncRequestNotUsableException || isDisconnectIo(cause)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 끊긴 연결인지는 <b>메시지</b>로 본다.
+     *
+     * <p>톰캣의 {@code ClientAbortException} 을 직접 참조하지 않는다 — 서블릿 컨테이너 구현
+     * 클래스라 컨테이너를 바꾸면 컴파일이 깨진다. 끊긴 연결은 어느 컨테이너에서든
+     * 같은 OS 오류("Broken pipe", "Connection reset")를 달고 온다.
+     */
+    private boolean isDisconnectIo(Throwable cause) {
+        if (!(cause instanceof IOException)) {
+            return false;
+        }
+
+        String message = cause.getMessage();
+        return message != null
+                && (message.contains("Broken pipe") || message.contains("Connection reset"));
+    }
+
+    /**
+     * 그런 경로가 없다 — 404.
+     *
+     * <p>🔴 이걸 포괄 핸들러에 맡기면 <b>500 이 나가고 Sentry 이슈가 열린다.</b> 인터넷에 열린
+     *    서버는 {@code /.env}, {@code /wp-login.php} 같은 스캔을 하루에도 수백 번 받는다.
+     *    그 전부가 "예상 못 한 예외" 로 집계되면 {@code teacat.unexpected.error} 카운터가
+     *    쓸모없어진다 — 1건도 알림 대상인 지표인데 봇 소리에 묻힌다.
+     *    프론트에 남은 옛 링크·오타 하나도 같은 이유로 장애 알림이 됐다.
+     *
+     * <p>두 예외를 같이 잡는다. 스프링은 남는 경로를 정적 리소스 핸들러에 맡기므로 보통
+     * {@link NoResourceFoundException} 이 오지만, 설정에 따라 {@link NoHandlerFoundException}
+     * 이 오는 경로도 있다. 둘은 공통 조상이 없어서 한 클래스로는 못 잡는다.
+     *
+     * <p>로그는 {@code warn} 이다 — {@code error} 는 그대로 Sentry 로 나간다(CLAUDE.md 9장).
+     * 경로만 남기고 쿼리스트링은 붙이지 않는다. 스캔 주소에는 토큰·이메일이 실려 오기도 한다.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<BaseResponse<Void>> handleNotFound(Exception e) {
+        log.warn("존재하지 않는 경로 요청: {}", requestPathOf(e));
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(BaseResponse.fail("요청한 경로를 찾을 수 없습니다."));
+    }
+
+    /**
+     * 경로는 맞지만 메서드가 다르다 — 405. (예: {@code POST /auth/login} 을 GET 으로 부름)
+     *
+     * <p>404 와 같은 이유로 여기서 잡는다. 포괄 핸들러에 맡기면 500 이 나가고, 이건
+     * <b>클라이언트가 고쳐야 하는 요청</b>이라 재시도로는 절대 풀리지 않는다.
+     *
+     * <p>{@code Allow} 헤더를 붙인다 — 스펙이 405 에 요구하는 헤더이고, 무엇으로 다시
+     * 불러야 하는지 알 수 있는 유일한 단서다.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
+        log.warn("허용되지 않은 메서드: {}", e.getMethod());
+
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        Set<HttpMethod> allowed = e.getSupportedHttpMethods();
+        if (allowed != null && !allowed.isEmpty()) {
+            response.allow(allowed.toArray(HttpMethod[]::new));
+        }
+
+        return response.body(BaseResponse.fail("허용되지 않은 요청 방식입니다."));
+    }
+
+    /** 두 404 예외는 공통 조상이 없어서 경로를 꺼내는 방법도 갈린다 */
+    private static String requestPathOf(Exception e) {
+        if (e instanceof NoResourceFoundException resource) return resource.getResourcePath();
+        if (e instanceof NoHandlerFoundException handler) return handler.getRequestURL();
+        return "(알 수 없음)";
+    }
+
+    /**
      * 예상 못 한 예외. 이건 <b>전부 진짜 장애</b>라 위와 달리 1건도 알림 대상이다.
      *
      * <p>태그로 예외 클래스명만 쓴다. 메시지를 태그에 넣으면 사용자 입력이 섞여 들어와
@@ -114,6 +222,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<BaseResponse<?>> handleException(Exception e) {
+        if (isClientDisconnected(e)) {
+            log.debug("클라이언트가 응답을 받기 전에 연결을 끊었습니다: {}", e.getMessage());
+            return null;
+        }
+
         log.error("Unexpected error: ", e);
 
         meterRegistry.counter("teacat.unexpected.error",

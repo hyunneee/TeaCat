@@ -70,6 +70,40 @@ export { AdminUserTradeTables } from './components/AdminUserTradeTables';
 export { AdminInquiryTable } from './components/AdminInquiryTable';
 export { AdminInquiryAnswerModal } from './components/AdminInquiryAnswerModal';
 
+// 이상거래 심사 · 거래 내역 (server/AUCTION_FRAUD_DESIGN.md)
+export {
+  useAdminTradeReviews,
+  useAdminTrades,
+  useAdminTradeReview,
+  useAdminTradeReviewStats,
+  useApproveTradeReview,
+  useRejectTradeReview,
+} from './hooks/useAdminTradeReviews';
+export { AdminTradeReviewTable } from './components/AdminTradeReviewTable';
+export { AdminTradeTable } from './components/AdminTradeTable';
+export { AdminTradeReviewDetailModal } from './components/AdminTradeReviewDetailModal';
+export { adminTradeReviewApi, adminTradeReviewKeys } from './api/adminTradeReviewApi';
+export {
+  RULE_LABEL,
+  SEVERITY_LABEL,
+  CHAIN_STATUS_LABEL,
+  TRADE_FILTER_OPTIONS,
+  ruleLabel,
+} from './model/adminTradeReview.model';
+export type {
+  AdminTrade,
+  AdminTradePage,
+  ReviewListStatus,
+  ReviewSeverity,
+  TradeChainStatus,
+  TradeFilter,
+  TradeReviewDetail,
+  TradeReviewPage,
+  TradeReviewStats,
+  TradeReviewSummary,
+  TradeRiskSignal,
+} from './model/adminTradeReview.types';
+
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
 export { AdminPocaTemplateFormModal } from './components/AdminPocaTemplateFormModal';

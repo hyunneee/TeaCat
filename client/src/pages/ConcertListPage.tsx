@@ -5,7 +5,9 @@ import { Header } from '@/shared/components/layout';
 import { Input, Segmented } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
-import { ConcertCard, useConcerts } from '@/features/concert';
+import { ConcertCard, useConcertPage } from '@/features/concert';
+import { useCursorPagination } from '@/shared/hooks/useCursorPagination';
+import { CursorPagination } from '@/shared/components/common/CursorPagination';
 
 /**
  * 공연 목록 (관람객 화면).
@@ -34,7 +36,13 @@ export function ConcertListPage() {
   const [keyword, setKeyword] = useState(() => searchParams.get('q') ?? '');
   const [tab, setTab] = useState<Tab>('UPCOMING');
 
-  const { data: concerts, isPending } = useConcerts(keyword || undefined, tab === 'PAST');
+  const pagination = useCursorPagination<number>(JSON.stringify([keyword, tab]));
+  const { data, isPending, isFetching, isError, refetch } = useConcertPage(
+    keyword || undefined,
+    tab === 'PAST',
+    pagination.cursor,
+  );
+  const concerts = data?.concerts;
 
   return (
     <>
@@ -75,7 +83,11 @@ export function ConcertListPage() {
         />
       </div>
 
-      {isPending ? (
+      {isError ? (
+        <button type="button" onClick={() => void refetch()} className="mx-auto block p-4">
+          목록을 불러오지 못했어요. 다시 시도
+        </button>
+      ) : isPending ? (
         <Loading label="공연 목록을 불러오는 중" />
       ) : !concerts || concerts.length === 0 ? (
         <EmptyState
@@ -117,6 +129,15 @@ export function ConcertListPage() {
           ))}
         </ul>
       )}
+      <CursorPagination
+        page={pagination.page}
+        busy={isFetching}
+        hasNext={!!data?.hasNext && data.nextCursor != null}
+        onPrevious={pagination.previous}
+        onNext={() => {
+          if (data?.nextCursor != null) pagination.next(data.nextCursor);
+        }}
+      />
     </>
   );
 }

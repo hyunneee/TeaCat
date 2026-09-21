@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useReducedMotion } from '@/shared/hooks';
 import { cn } from '@/shared/lib';
+import { objectPositionOf } from '../model/bannerFocus';
 import type { Banner } from '../model/banner.types';
 
 interface Props {
@@ -26,6 +27,7 @@ const SWIPE_THRESHOLD = 40;
  * ── 폭에 따라 두 가지로 보입니다 ───────────────────────────
  *   ~64rem   화면 폭을 꽉 쓰는 **4:3** 한 장. 옆 배너는 안 보입니다.
  *   64rem~   본문 폭의 **2:1** 한 장이 가운데, 앞뒤 배너가 좌우에 살짝 걸침.
+ *            걸치는 앞뒤 배너는 **조금 작게**(85%) 그려 가운데와 층을 만듭니다.
  *
  * 폰의 4:3 을 그대로 넓은 화면에 쓰면 배너 하나가 700px 넘는 벽이 되어
  * 첫 화면에 배너밖에 안 보입니다. 그래서 가로로 긴 히어로로 바꿉니다.
@@ -251,10 +253,16 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                        거기서 둥글게 할 수 없습니다). `overflow-hidden` 이라 그림과
                        안쪽 덮개도 같은 모양으로 잘립니다. */
                     'lg:aspect-[2/1] lg:overflow-hidden lg:p-8',
+                    /* 🔴 **옆 배너는 줄여서 뒤로 물립니다** (아래 `lg:scale-*`).
+                       칸 폭은 그대로 두고 그린 것만 줄입니다 — 칸을 좁히면 미는 거리가
+                       `자리 × 100%` 로 안 떨어져서 넘길 때마다 어긋납니다.
+                       트랙과 **같은 500ms** 라 줄고 커지는 것이 미는 동작과 함께 끝납니다.
+                       (전환을 줄이는 설정에서는 크기만 바뀌고 애니메이션은 없습니다) */
+                    !reduced && 'transition-transform duration-500 ease-out',
                     /* 🔴 **가운데 장만 아래가 각집니다.** 바로 밑에 바로가기 면이 이어
                        붙어 한 덩어리가 되기 때문입니다. 좌우에 걸친 장은 밑에 아무것도
                        없으므로 네 귀퉁이가 다 둥글어야 떠 있는 카드로 읽힙니다. */
-                    active ? 'lg:rounded-t-2xl' : 'lg:rounded-2xl',
+                    active ? 'lg:rounded-t-2xl' : 'lg:scale-[0.85] lg:rounded-2xl',
                   )}
                 >
                   {/* 🔴 배경(`background-image`)이 아니라 `<img>` 입니다. 이유가 둘입니다.
@@ -275,6 +283,10 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                       fetchPriority={cellIndex === (looped ? 1 : 0) ? 'high' : 'auto'}
                       decoding="async"
                       draggable={false}
+                      /* 그림 비율이 틀과 다르면 여기서 잘립니다. 어디를 남길지는 관리자가
+                         배너마다 골라 둔 값입니다 — 기본(가운데)이 늘 맞지는 않습니다.
+                         (공연 배너의 3:4 포스터를 2:1 로 자를 때가 가장 심합니다) */
+                      style={{ objectPosition: objectPositionOf(banner.imageFocusX, banner.imageFocusY) }}
                       className="absolute inset-0 size-full object-cover"
                     />
                   )}

@@ -1,5 +1,9 @@
 package com.teacat.server.nft.controller;
 
+import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.performance.service.PerformanceOperatorAccess;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftDesignDrawPoolRequest;
 import com.teacat.server.nft.dto.request.NftPhotocardDesignCreateRequest;
@@ -36,6 +40,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Validated
 public class NftPhotocardDesignAdminController {
+    private final PerformanceOperatorAccess access;
+
 
     private final NftPhotocardDesignService designService;
     private final NftPhotocardPoolService poolService;
@@ -43,7 +49,7 @@ public class NftPhotocardDesignAdminController {
     @Operation(
             summary = "포토카드 도안 등록",
             description = """
-                    ADMIN 전용 API입니다. 이미지와 메타데이터 JSON을 IPFS에 핀하고, 도안을 저장한 뒤 온체인에 등록합니다.
+                    ADMIN 또는 담당 공연 기획자 API입니다. 이미지와 메타데이터 JSON을 IPFS에 핀하고, 도안을 저장한 뒤 온체인에 등록합니다.
 
                     한정 수량(`totalSupply`)과 메타데이터 CID는 **첫 장이 발급되는 순간 온체인에서 동결**되어 아무도 바꿀 수 없습니다.
                     한 장도 발급되지 않았다면 같은 도안 ID로 다시 등록해 값을 고칠 수 있습니다.
@@ -54,7 +60,10 @@ public class NftPhotocardDesignAdminController {
     )
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<BaseResponse<NftPhotocardDesignResponse>> create(
+            @AuthenticationPrincipal AuthUser actor,
             @Valid @ModelAttribute NftPhotocardDesignCreateRequest request) {
+        access.performance(actor, request.performanceId());
+
         return ResponseEntity.status(HttpStatus.CREATED).body(BaseResponse.success(
                 "포토카드 도안이 등록되었습니다.",
                 designService.create(request)));
@@ -63,7 +72,7 @@ public class NftPhotocardDesignAdminController {
     @Operation(
             summary = "도안 온체인 등록 재시도",
             description = """
-                    ADMIN 전용 API입니다. IPFS 핀은 끝났는데 온체인 등록이 안 된 도안(`PENDING`, `FAILED`)을 다시 등록합니다.
+                    ADMIN 또는 담당 공연 기획자 API입니다. IPFS 핀은 끝났는데 온체인 등록이 안 된 도안(`PENDING`, `FAILED`)을 다시 등록합니다.
                     등록은 멱등이라 여러 번 보내도 안전하며, 이미 같은 값으로 등록돼 있으면 새 트랜잭션 없이 확정 처리됩니다.
 
                     `force=true`는 확정 대기 중(`REGISTERING`)인 도안도 다시 보냅니다. 확정 감시가 멈춰 도안이 계속
@@ -72,17 +81,23 @@ public class NftPhotocardDesignAdminController {
     )
     @PostMapping("/{designId}/chain-registration")
     public ResponseEntity<BaseResponse<NftPhotocardDesignResponse>> retryRegistration(
+            @AuthenticationPrincipal AuthUser actor,
             @PathVariable @Positive Long designId,
             @RequestParam(defaultValue = "false") boolean force) {
+        access.design(actor, designId);
+
         return ResponseEntity.ok(BaseResponse.success(
                 "도안 등록 요청을 보냈습니다.",
                 designService.retryRegistration(designId, force)));
     }
 
-    @Operation(summary = "도안 단건 조회", description = "ADMIN 전용 API입니다. IPFS CID와 온체인 등록 상태를 함께 내려줍니다.")
+    @Operation(summary = "도안 단건 조회", description = "ADMIN 또는 담당 공연 기획자 API입니다. IPFS CID와 온체인 등록 상태를 함께 내려줍니다.")
     @GetMapping("/{designId}")
     public ResponseEntity<BaseResponse<NftPhotocardDesignResponse>> get(
+            @AuthenticationPrincipal AuthUser actor,
             @PathVariable @Positive Long designId) {
+        access.design(actor, designId);
+
         return ResponseEntity.ok(BaseResponse.success(designService.get(designId)));
     }
 
@@ -93,10 +108,13 @@ public class NftPhotocardDesignAdminController {
         return ResponseEntity.ok(BaseResponse.success(designService.getDrawPool()));
     }
 
-    @Operation(summary = "공연의 도안 목록 조회", description = "ADMIN 전용 API입니다. 발급 전에 도안이 전부 등록됐는지 확인하는 용도입니다.")
+    @Operation(summary = "공연의 도안 목록 조회", description = "ADMIN 또는 담당 공연 기획자 API입니다. 발급 전에 도안이 전부 등록됐는지 확인하는 용도입니다.")
     @GetMapping
     public ResponseEntity<BaseResponse<List<NftPhotocardDesignResponse>>> getByPerformance(
+            @AuthenticationPrincipal AuthUser actor,
             @RequestParam @Positive Long performanceId) {
+        access.performance(actor, performanceId);
+
         return ResponseEntity.ok(BaseResponse.success(designService.getByPerformance(performanceId)));
     }
 
@@ -124,7 +142,7 @@ public class NftPhotocardDesignAdminController {
     @Operation(
             summary = "도안을 뽑기 풀에서 빼기 / 다시 넣기",
             description = """
-                    ADMIN 전용 API입니다. **삭제가 아닙니다** — 온체인 등록은 되돌릴 수 없고 이미
+                    ADMIN 또는 담당 공연 기획자 API입니다. **삭제가 아닙니다** — 온체인 등록은 되돌릴 수 없고 이미
                     발행된 카드도 사라지지 않습니다. 앞으로 뽑히지 않게 되는 것뿐입니다.
 
                     수량이 남았는데 더 안 나가게 하려면 이걸 쓰세요. 온체인 `maxSupply`는 줄일 수
@@ -139,8 +157,11 @@ public class NftPhotocardDesignAdminController {
     )
     @PatchMapping("/{designId}/draw-pool")
     public ResponseEntity<BaseResponse<NftPhotocardDesignResponse>> changeDrawPool(
+            @AuthenticationPrincipal AuthUser actor,
             @PathVariable @Positive Long designId,
             @Valid @RequestBody NftDesignDrawPoolRequest request) {
+        access.design(actor, designId);
+
         return ResponseEntity.ok(BaseResponse.success(
                 poolService.changeDrawPool(designId, request.drawPool())));
     }

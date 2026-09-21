@@ -1,6 +1,7 @@
 package com.teacat.server.nft.controller;
 
 import com.teacat.server.auth.security.AuthUser;
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftAuctionCreateRequest;
 import com.teacat.server.nft.dto.request.NftAuctionSort;
@@ -20,6 +21,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -98,9 +100,11 @@ public class NftAuctionController {
     public ResponseEntity<BaseResponse<NftAuctionResponse>> createAuction(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId,
-            @Valid @RequestBody NftAuctionCreateRequest request) {
+            @Valid @RequestBody NftAuctionCreateRequest request,
+            @Parameter(hidden = true) HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(auctionService.createAuction(authUser.id(), photocardId, request)));
+                .body(BaseResponse.success(auctionService.createAuction(
+                        authUser.id(), photocardId, request, ClientRequest.from(http))));
     }
 
     @Operation(
@@ -127,9 +131,11 @@ public class NftAuctionController {
     public ResponseEntity<BaseResponse<NftBidResponse>> placeBid(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long auctionId,
-            @Valid @RequestBody NftBidRequest request) {
+            @Valid @RequestBody NftBidRequest request,
+            @Parameter(hidden = true) HttpServletRequest http) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(auctionService.placeBid(authUser.id(), auctionId, request)));
+                .body(BaseResponse.success(auctionService.placeBid(
+                        authUser.id(), auctionId, request, ClientRequest.from(http))));
     }
 
     @Operation(
@@ -149,9 +155,10 @@ public class NftAuctionController {
     public ResponseEntity<BaseResponse<NftPurchaseResponse>> buyNow(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long auctionId,
-            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
-        return ResponseEntity.ok(BaseResponse.success(
-                auctionService.buyNow(authUser.id(), auctionId, idempotencyKey)));
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(hidden = true) HttpServletRequest http) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(BaseResponse.success(
+                auctionService.buyNow(authUser.id(), auctionId, idempotencyKey, ClientRequest.from(http))));
     }
 
     @Operation(
@@ -179,7 +186,9 @@ public class NftAuctionController {
     public ResponseEntity<BaseResponse<NftCursorPageResponse<MyNftBidResponse>>> getMyBids(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @RequestParam(required = false) String cursor,
-            @RequestParam(defaultValue = "20") Integer size) {
-        return ResponseEntity.ok(BaseResponse.success(auctionService.getMyBids(authUser.id(), cursor, size)));
+            @RequestParam(defaultValue = "20") Integer size,
+            @Parameter(description = "입찰 시작일 YYYY-MM-DD (Asia/Seoul, to와 함께 전달)") @RequestParam(required = false) String from,
+            @Parameter(description = "입찰 종료일 YYYY-MM-DD (해당 일 포함)") @RequestParam(required = false) String to) {
+        return ResponseEntity.ok(BaseResponse.success(auctionService.getMyBids(authUser.id(), cursor, size, from, to)));
     }
 }

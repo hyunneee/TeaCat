@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -34,8 +35,14 @@ public class NftPhotocardDrawService {
 
     public NftPhotocardDrawStatusResponse status(Long userId) {
         NftPhotocardDrawWriter.PackCounts counts = writer.counts(userId);
+        /* 개수는 `counts` 가, 팩별 개봉 시각은 `packs` 가 답한다. 두 조회 사이에 팩이 열려도
+           다음 조회가 바로잡으므로 한 트랜잭션으로 묶지 않는다 — 화면은 `packs` 의 `openable` 로 그린다. */
+        List<NftPhotocardDrawStatusResponse.Pack> packs = writer.packs(userId).stream()
+                .map(pack -> new NftPhotocardDrawStatusResponse.Pack(
+                        pack.packId(), pack.source(), pack.title(), pack.openAt(), pack.openable()))
+                .toList();
         return new NftPhotocardDrawStatusResponse(
-                counts.openable() > 0, counts.openable(), counts.scheduled(), counts.nextOpenAt());
+                counts.openable() > 0, counts.openable(), counts.scheduled(), counts.nextOpenAt(), packs);
     }
 
     public NftPhotocardDrawResponse draw(Long userId, String idempotencyKeyHeader) {
@@ -51,7 +58,8 @@ public class NftPhotocardDrawService {
 
         if (!outcome.replayed()) {
             try {
-                minter.mintDrawn(outcome.photocardId(), outcome.designId(), outcome.walletAddress());
+                minter.mintDrawn(outcome.photocardId(), outcome.issueKey(), outcome.designId(),
+                        outcome.chainTokenId(), outcome.walletAddress());
             } catch (RuntimeException e) {
                 log.error("뽑기 카드는 만들었지만 체인 발행 요청에 실패했습니다. 스위퍼가 재시도합니다 photocardId={}",
                         outcome.photocardId(), e);

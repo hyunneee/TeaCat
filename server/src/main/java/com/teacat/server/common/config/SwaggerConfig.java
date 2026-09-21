@@ -143,11 +143,47 @@ public class SwaggerConfig {
     }
 
     @Bean
+    public GroupedOpenApi queueApi() {
+        return GroupedOpenApi.builder()
+                .group("11-queue")
+                .displayName("가상 대기실")
+                .packagesToScan(BASE_PACKAGE + ".queue")
+                .build();
+    }
+
+    @Bean
     public GroupedOpenApi analyticsApi() {
         return GroupedOpenApi.builder()
                 .group("10-analytics")
                 .displayName("운영 통계")
                 .packagesToScan(BASE_PACKAGE + ".analytics")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi resaleApi() {
+        return GroupedOpenApi.builder()
+                .group("12-resale")
+                .displayName("취소표 대기")
+                .packagesToScan(BASE_PACKAGE + ".resale")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi notificationApi() {
+        return GroupedOpenApi.builder()
+                .group("13-notification")
+                .displayName("알림")
+                .packagesToScan(BASE_PACKAGE + ".notification")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi rewardApi() {
+        return GroupedOpenApi.builder()
+                .group("14-reward")
+                .displayName("캣머니 보상")
+                .packagesToScan(BASE_PACKAGE + ".reward")
                 .build();
     }
 }

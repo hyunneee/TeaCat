@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Receipt } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
+import { DetailHeader as Header } from '@/shared/components/layout';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useInfiniteScroll } from '@/shared/hooks';
@@ -50,9 +50,9 @@ export function NftTradesPage() {
                 <button
                   type="button"
                   onClick={() => navigate(ROUTES.NFT_DETAIL(String(trade.photocardId)))}
-                  className="surface shadow-list hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors"
+                  className="surface shadow-list hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors lg:gap-5 lg:p-5"
                 >
-                  <div className="w-12 shrink-0">
+                  <div className="w-12 shrink-0 lg:w-16">
                     <PocaArt
                       seed={pocaSeed(trade.photocardId)}
                       imageUrl={trade.imageUrl}
@@ -60,15 +60,19 @@ export function NftTradesPage() {
                     />
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-subtle text-xs">{formatDate(trade.tradedAt)}</p>
-                    <p className="mt-0.5 truncate font-bold">{trade.designName}</p>
+                  <div className="min-w-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-8 lg:gap-y-2">
+                    <p className="text-subtle text-xs lg:col-start-2 lg:row-start-1 lg:text-right">
+                      {formatDate(trade.tradedAt)}
+                    </p>
+                    <p className="mt-0.5 truncate font-bold lg:col-start-1 lg:row-start-1 lg:text-lg">
+                      {trade.designName}
+                    </p>
                     {/* 서버 이력에는 공연명이 없습니다. 그 자리에 거래 상대를 둡니다. */}
                     <p className="text-subtle truncate text-xs">
                       {bought ? '판매자' : '구매자'} {trade.counterpartyNickname}
                     </p>
 
-                    <p className="mt-1 text-sm">
+                    <p className="mt-1 text-sm lg:col-start-2 lg:row-start-2 lg:text-right">
                       <span className="text-muted">{bought ? '구매' : '판매'} </span>
                       {/* 나간 돈과 들어온 돈은 **부호**로 구분합니다.
                           색을 쓰지 않아도 −/+ 로 방향이 읽힙니다. */}

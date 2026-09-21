@@ -8,6 +8,8 @@ import type { User, UserRole } from './auth.types';
  * 이 파일은 순수 함수만 있어서 테스트하기도 쉽습니다.
  */
 export const can = {
+  /** 포카 콘텐츠 관리 API는 ADMIN 전용이다. */
+  managePocaContent: (user: User | null): boolean => user?.role === 'ADMIN',
   /**
    * 티켓을 실제로 사용(입장)할 수 있는가 — 얼굴 등록 필수.
    *
@@ -24,7 +26,26 @@ export const can = {
    * `useTicket` 과 **반대로** 움직입니다 — 닫아 둔 배포에서는 항상 false 입니다.
    * 저쪽은 "막지 마라", 이쪽은 "보여주지 마라" 라서 한 함수로 묶을 수 없습니다.
    */
-  verifyFace: (user: User | null): boolean => FEATURE.face && !!user?.faceRegistered,
+  /**
+   * 게이트 입장 확인 메뉴 (`/admin/check-in`).
+   *
+   * ADMIN과 공연 기획자가 사용하며, 서버에서 담당 공연의 회차인지 검사합니다.
+   * 🔴 얼굴을 닫아 둔 배포(`FEATURE.face === false`)에서는 **보이지 않습니다** —
+   *    대조할 얼굴을 아무도 등록하지 않았으므로 검표를 할 수가 없습니다.
+   */
+  checkIn: (user: User | null): boolean => FEATURE.face && hasRole(user, 'ADMIN', 'PERFORMANCE'),
+
+  /**
+   * 좌석·예매자 메뉴 (`/admin/seat-attendees`).
+   *
+   * 서버가 ADMIN 과 공연 기획자에게 열어 둔 조회입니다 (운영 좌석·명단 API).
+   * 역할과 별개로 **담당 공연인지**는 서버가 매 요청 검사하므로, 여기서 넓히면
+   * 메뉴는 보이는데 403(`PERFORMANCE_020`)이 납니다.
+   *
+   * 🔴 `checkIn` 과 달리 얼굴 기능을 보지 않습니다 — 좌석 현황과 명단은 카메라 없이
+   *    보는 화면이라 얼굴을 닫아 둔 배포에서도 쓸 수 있어야 합니다.
+   */
+  viewSeatAttendees: (user: User | null): boolean => hasRole(user, 'ADMIN', 'PERFORMANCE'),
 
   /**
    * 공연을 개설할 수 있는가 — 관리자와 공연 주최자.
@@ -65,8 +86,7 @@ export const can = {
    * 일반 회원(USER)과 비로그인은 못 들어옵니다. 운영 역할 셋은 들어오고,
    * 안에서 무엇이 보이는지는 아래 메뉴별 권한이 각각 정합니다.
    */
-  accessAdmin: (user: User | null): boolean =>
-    hasRole(user, 'ADMIN', 'STADIUM', 'PERFORMANCE'),
+  accessAdmin: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM', 'PERFORMANCE'),
 
   /**
    * 회원 관리 메뉴.
@@ -97,9 +117,11 @@ export const can = {
    */
   manageInquiries: (user: User | null): boolean => user?.role === 'ADMIN',
 
+  /** 이상거래 심사(승인·거절)와 전체 거래 내역. 서버 `/admin/nft/trade-reviews/**` 는 ADMIN 전용이다 */
+  reviewTrades: (user: User | null): boolean => user?.role === 'ADMIN',
+
   /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
-  manageStadiumLayouts: (user: User | null): boolean =>
-    hasRole(user, 'ADMIN', 'STADIUM'),
+  manageStadiumLayouts: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM'),
 };
 
 export function hasRole(user: User | null, ...roles: UserRole[]): boolean {

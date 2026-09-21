@@ -39,6 +39,40 @@ import static org.mockito.Mockito.verifyNoInteractions;
  */
 class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest {
 
+    @Autowired
+    private org.springframework.test.web.servlet.MockMvc mockMvc;
+
+    @Autowired
+    private com.teacat.server.auth.security.JwtTokenProvider jwtTokenProvider;
+
+    @Test
+    void organizerRegistrationReachesChainOnlyForOwnPerformance() throws Exception {
+        Long owner = insertUser("design-owner@test.com", "design-owner", "PERFORMANCE");
+        jdbcTemplate.update("UPDATE performance_general SET created_by = ? WHERE id = ?", owner, performanceId);
+        Long other = insertPerformanceFixture().performanceId();
+        String auth = "Bearer " + jwtTokenProvider.createAccessToken(owner,
+                com.teacat.server.user.entity.UserRole.PERFORMANCE);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .multipart("/admin/photocard-designs")
+                .file((MockMultipartFile) image()).param("performanceId", other.toString())
+                .param("name", "Other card").param("totalSupply", "100")
+                .header("Authorization", auth))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+        verifyNoInteractions(ipfsPinService, chainClient);
+
+        givenChainAccepts("PENDING");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .multipart("/admin/photocard-designs")
+                .file((MockMultipartFile) image()).param("performanceId", performanceId.toString())
+                .param("name", "Own card").param("totalSupply", "100")
+                .header("Authorization", auth))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isCreated())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.data.chainStatus").value("REGISTERING"));
+        verify(chainClient).registerDesign(any(), any(), eq(100), eq(METADATA_CID));
+    }
+
     private static final String IMAGE_CID = "bafyIMAGE";
     private static final String METADATA_CID = "bafyMETADATA";
     private static final String GATEWAY_URL = "https://gateway.pinata.cloud/ipfs/" + IMAGE_CID;
@@ -94,7 +128,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
         willReturn(new PhotocardDesignRegisterResult(
                 status, "PENDING".equals(status) ? TX_HASH : null,
                 "1", "100", "ipfs://" + METADATA_CID))
-                .given(chainClient).registerDesign(any(), anyInt(), eq(METADATA_CID));
+                .given(chainClient).registerDesign(any(), any(), anyInt(), eq(METADATA_CID));
     }
 
     @Test
@@ -144,7 +178,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     @Test
     void 온체인_등록이_실패해도_도안은_남고_재시도로_살아난다() {
         willThrow(new BusinessException(NftErrorCode.DESIGN_REGISTRATION_FAILED))
-                .given(chainClient).registerDesign(any(), anyInt(), any());
+                .given(chainClient).registerDesign(any(), any(), anyInt(), any());
 
         NftPhotocardDesignResponse created = designService.create(request());
 

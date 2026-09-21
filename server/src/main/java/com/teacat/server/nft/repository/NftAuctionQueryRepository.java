@@ -58,7 +58,8 @@ public class NftAuctionQueryRepository {
      * ::timestamp 로 세션 타임존 기준 naive 값으로 받아 ends_at(timestamp) 과 같은 타입을 맞춘다.
      */
     public LocalDateTime currentTime() {
-        return jdbcTemplate.queryForObject("SELECT now()::timestamp", new MapSqlParameterSource(), LocalDateTime.class);
+        // now()는 트랜잭션 시작 시각이다. 행 잠금 대기 중 마감된 요청도 거절해야 한다.
+        return jdbcTemplate.queryForObject("SELECT clock_timestamp()::timestamp", new MapSqlParameterSource(), LocalDateTime.class);
     }
 
     /**
@@ -192,21 +193,36 @@ public class NftAuctionQueryRepository {
      *
      * @param cursorLastBidId 직전 페이지 마지막 항목의 lastBidId. 첫 페이지면 null
      */
-    public List<MyBidRow> findMyBids(Long userId, Long cursorLastBidId, int limit) {
+    public List<MyBidRow> findMyBids(Long userId, Long cursorLastBidId, int limit,
+                                   LocalDateTime from, LocalDateTime toExclusive) {
+        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId).addValue("limit", limit);
         StringBuilder sql = new StringBuilder("""
+                WITH period_bids AS (
+                    SELECT auction_id, MAX(id) AS last_bid_id
+                      FROM nft_auction_bids WHERE bidder_id = :userId
+                """);
+        if (from != null) {
+            sql.append(" AND created_at >= :from AND created_at < :toExclusive");
+            params.addValue("from", from).addValue("toExclusive", toExclusive);
+        }
+        sql.append("""
+                    GROUP BY auction_id
+                )
                 SELECT a.id AS auction_id, p.id AS photocard_id, d.name AS design_name, d.image_url,
-                       mb.my_highest, mb.last_bid_id, a.current_price, tb.bidder_id AS top_bidder_id,
+                       history.my_highest, mb.last_bid_id, lb.created_at AS last_bid_at,
+                       a.current_price, tb.bidder_id AS top_bidder_id,
                        a.status::text AS status, a.ends_at, a.winner_id
-                  FROM (SELECT auction_id, MAX(amount) AS my_highest, MAX(id) AS last_bid_id
-                          FROM nft_auction_bids
-                         WHERE bidder_id = :userId
-                         GROUP BY auction_id) mb
+                  FROM period_bids mb
+                  JOIN nft_auction_bids lb ON lb.id = mb.last_bid_id
+                  JOIN LATERAL (
+                      SELECT MAX(amount) AS my_highest FROM nft_auction_bids
+                       WHERE bidder_id = :userId AND auction_id = mb.auction_id
+                  ) history ON true
                   JOIN nft_auctions a ON a.id = mb.auction_id
                   JOIN nft_photocards p ON p.id = a.photocard_id
                   JOIN nft_photocard_designs d ON d.id = p.design_id
                   LEFT JOIN nft_auction_bids tb ON tb.id = a.top_bid_id
                 """);
-        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId).addValue("limit", limit);
         if (cursorLastBidId != null) {
             sql.append(" WHERE mb.last_bid_id < :cursorLastBidId");
             params.addValue("cursorLastBidId", cursorLastBidId);
@@ -223,20 +239,22 @@ public class NftAuctionQueryRepository {
                 (Long) rs.getObject("top_bidder_id"),
                 NftAuctionStatus.valueOf(rs.getString("status")),
                 rs.getObject("ends_at", LocalDateTime.class),
-                (Long) rs.getObject("winner_id")
+                (Long) rs.getObject("winner_id"),
+                rs.getObject("last_bid_at", LocalDateTime.class)
         ));
     }
 
-    /** 포토카드 상세에 붙일 진행 중 경매 요약 */
+    /** 포토카드 상세에 붙일 진행 중 또는 온체인 정산 중인 경매 요약 */
     public Optional<AuctionSummaryRow> findActiveAuctionSummary(Long photocardId) {
         String sql = """
-                SELECT id, current_price, buy_now_price, bid_count, ends_at
+                SELECT id, status::text, current_price, buy_now_price, bid_count, ends_at
                   FROM nft_auctions
-                 WHERE photocard_id = :photocardId AND status = 'ACTIVE'
+                 WHERE photocard_id = :photocardId AND status IN ('ACTIVE', 'SETTLING')
                 """;
         return jdbcTemplate.query(sql, new MapSqlParameterSource("photocardId", photocardId),
                 (rs, rowNum) -> new AuctionSummaryRow(
                         rs.getLong("id"),
+                        NftAuctionStatus.valueOf(rs.getString("status")),
                         rs.getLong("current_price"),
                         (Long) rs.getObject("buy_now_price"),
                         rs.getInt("bid_count"),
@@ -266,10 +284,11 @@ public class NftAuctionQueryRepository {
 
     public record MyBidRow(Long auctionId, Long photocardId, String designName, String imageUrl,
                            Long myHighestBid, Long lastBidId, Long currentPrice, Long topBidderId,
-                           NftAuctionStatus status, LocalDateTime endsAt, Long winnerId) {
+                           NftAuctionStatus status, LocalDateTime endsAt, Long winnerId, LocalDateTime lastBidAt) {
     }
 
-    public record AuctionSummaryRow(Long auctionId, Long currentPrice, Long buyNowPrice, int bidCount,
+    public record AuctionSummaryRow(Long auctionId, NftAuctionStatus status,
+                                    Long currentPrice, Long buyNowPrice, int bidCount,
                                     LocalDateTime endsAt) {
     }
 }

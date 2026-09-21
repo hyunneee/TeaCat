@@ -1,4 +1,6 @@
+import type { BidDateFilter } from '../model/auctionOptions.model';
 import { http } from '@/shared/api';
+import type { PurchaseResult } from '@/features/nft';
 import type { CursorPage } from '@/shared/types';
 import type { AuctionSort } from '../model/auction.model';
 import type {
@@ -15,7 +17,6 @@ interface PageParams {
   cursor?: string;
   size?: number;
 }
-
 /**
  * 서버 `NftAuctionController` 경로 그대로. 베이스 `/api` 는 http 가 붙입니다.
  * 응답이 목업인지 실서버인지 이 파일은 모릅니다.
@@ -38,7 +39,7 @@ export const auctionApi = {
   /** 경매 등록. 포카 한 장은 고정가와 경매 중 하나에만 올라갑니다 */
   create: (
     photocardId: number,
-    body: { startPrice: number; buyNowPrice?: number; durationHours: number },
+    body: { startPrice: number; buyNowPrice?: number; durationMinutes: number },
   ) => http.post<AuctionCreated>(`/photocards/${photocardId}/auction`, body),
 
   /** 판매자 취소. 입찰이 하나라도 있으면 서버가 거절합니다 */
@@ -54,16 +55,13 @@ export const auctionApi = {
 
   /** 즉시구매. `Idempotency-Key`(UUID) 필수 — 부르는 쪽이 만들어 넘깁니다 */
   buyNow: (auctionId: number, idempotencyKey: string) =>
-    http.post<{ tradeId: number; photocardId: number; price: number; tradedAt: string }>(
-      `/auctions/${auctionId}/buy-now`,
-      undefined,
-      { idempotencyKey },
-    ),
+    http.post<PurchaseResult>(`/auctions/${auctionId}/buy-now`, undefined, { idempotencyKey }),
 
   myAuctions: (params: PageParams & { status?: AuctionStatus }) =>
     http.get<CursorPage<AuctionSummary>>('/users/me/auctions', { params }),
 
-  myBids: (params: PageParams) => http.get<CursorPage<MyBid>>('/users/me/bids', { params }),
+  myBids: (params: PageParams & BidDateFilter) =>
+    http.get<CursorPage<MyBid>>('/users/me/bids', { params }),
 };
 
 export const auctionKeys = {
@@ -73,5 +71,6 @@ export const auctionKeys = {
   detail: (auctionId: number) => [...auctionKeys.all, 'detail', auctionId] as const,
   bids: (auctionId: number) => [...auctionKeys.all, 'bids', auctionId] as const,
   mine: (status?: AuctionStatus) => [...auctionKeys.all, 'mine', status ?? ''] as const,
-  myBids: () => [...auctionKeys.all, 'my-bids'] as const,
+  myBids: (dates: BidDateFilter = {}) =>
+    [...auctionKeys.all, 'my-bids', dates.from ?? '', dates.to ?? ''] as const,
 };

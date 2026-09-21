@@ -16,6 +16,7 @@ public interface PerformanceAreaRepository
             SELECT pa FROM PerformanceArea pa
             JOIN FETCH pa.area
             WHERE pa.id.performanceGeneralId = :performanceId
+            ORDER BY pa.area.displayOrder, pa.area.id
             """)
     List<PerformanceArea> findAllByPerformanceId(@Param("performanceId") Long performanceId);
 

@@ -24,8 +24,11 @@ export async function setupMocks() {
     // 구역·좌석·선점(/schedules/*/seats, /performance-details/*/hold)도 실서버입니다
     //   -> handlers/booking.ts 는 삭제했습니다. 결제도 실서버로 나갑니다.
     // 내 티켓(/users/me/tickets)·예매 취소도 실서버입니다 -> handlers/ticket.ts 삭제
-    import('./handlers/resale'),
+    // 취소표(/schedules/*/resale*, /me/resale, /resale/*)도 실서버입니다 -> handlers/resale.ts 삭제
+    //   🔴 목업이 남아 있으면 실서버 회차 ID 로 구역을 찾지 못해 구역 목록이 비어 보입니다 (2026-09-21 dev)
     import('./handlers/appInfo'),
+    // AI 스티커 — 서버가 아직 없습니다. 계약은 features/sticker/model/sticker.types.ts 가 기준
+    import('./handlers/sticker'),
   ]);
 
   // 등록 안 된 경로는 원래 어댑터(실제 네트워크)로 폴백시킵니다.

@@ -2,7 +2,8 @@
 export type ResaleStatus =
   | 'WAITING' // 추첨 대기 중
   | 'WON' // 당첨 — 기한 내 결제해야 함
-  | 'LOST' // 미당첨
+  | 'PURCHASED' // 당첨 좌석을 결제해 티켓을 받음
+  | 'LOST' // 미당첨 — 회차의 취소 마감이 지나 더 이상 취소표가 나올 수 없음
   | 'EXPIRED'; // 당첨됐지만 기한 초과
 
 export interface ResaleSection {
@@ -33,11 +34,13 @@ export interface ResaleEntry {
   artist: string;
   posterSeed: string;
   startAt: string;
-}
 
-export interface DrawResult extends ResaleEntry {
-  /** NRF 가 만들어낸 검증 가능한 난수 */
-  randomness: string;
+  /** 당첨 좌석. 당첨 전이면 null. 좌석은 이미 내 선점(HELD)으로 잡혀 있어 예매 확인 화면으로 바로 간다 */
+  seatId?: string | null;
+  /** 당첨을 결정한 온체인 추첨 키. 탐색기에서 DrawOpened/DrawRevealed 이벤트를 찾는 열쇠 */
+  drawKey?: string | null;
+  /** 체인에서 확정된 난수. 참가자 목록과 함께 순위를 누구나 다시 계산할 수 있다 */
+  randomness?: string | null;
 }
 
 export interface ApplyResaleRequest {

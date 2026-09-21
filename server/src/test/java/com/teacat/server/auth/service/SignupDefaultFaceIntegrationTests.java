@@ -26,12 +26,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * 가입하면 얼굴 자리가 채워진다 — 등록을 안 해도 예매까지 갈 수 있어야 한다.
  *
- * <p>🔴 <b>가입 경로를 실제로 태우는 것이 요점이다.</b> 얼굴을 넣는 자리가
- * {@code walletService.provision} 과 <b>같은 트랜잭션</b>이라, 지갑 발급이 실패하면 얼굴도
- * 함께 롤백된다. 서비스 메서드만 따로 부르면 그 관계가 검증되지 않는다.
+ * <p>🔴 <b>가입 경로를 실제로 태우는 것이 요점이다.</b> 얼굴을 넣는 자리가 회원 생성과
+ * <b>같은 트랜잭션</b>이라, 서비스 메서드만 따로 부르면 그 관계가 검증되지 않는다.
  *
- * <p>지갑은 체인 서비스를 부르므로 스텁으로 바꾼다. 로컬·CI 에는 체인이 없어서
- * 실제로는 {@code WALLET_002} 로 가입 자체가 롤백된다.
+ * <p>지갑은 가입 트랜잭션 밖(큐)에서 만들어지므로 이 테스트는 체인을 부르지 않는다.
+ * 그쪽은 {@code WalletProvisioningIntegrationTests} 가 본다.
  *
  * <p>확인은 {@code users.face_id} 와 {@code faces.model_version} 을 <b>직접</b> 읽는다.
  * 엔티티의 {@code getFace()} 는 지연 로딩이라 트랜잭션 밖에서 터지고, 무엇보다

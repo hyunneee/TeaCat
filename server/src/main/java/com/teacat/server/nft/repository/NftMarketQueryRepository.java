@@ -2,6 +2,7 @@ package com.teacat.server.nft.repository;
 
 import com.teacat.server.nft.dto.request.NftMarketSort;
 import com.teacat.server.nft.entity.NftMintStatus;
+import com.teacat.server.nft.entity.NftListingStatus;
 import com.teacat.server.nft.entity.NftPhotocardGrade;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -9,8 +10,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -27,11 +30,19 @@ public class NftMarketQueryRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id AS photocard_id, l.id AS listing_id, d.name AS design_name,
                        d.image_url, pg.title AS performance_title, l.price,
-                       seller.nickname AS seller_nickname, l.listed_at
+                       -- 🔴 이벤트 여부는 **팩의 출처**로 판별한다. 공연명이 null 이라는 이유만으로
+                       --    이벤트 카드팩이라고 단정하면, 입장 기념 팩(TICKET_ENTRY)에서 나온 카드까지
+                       --    없는 이벤트 이름을 달게 된다. 이벤트 행이 지워졌을 때만 일반 문구로 떨어진다.
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
+                       seller.nickname AS seller_nickname, l.listed_at, p.view_count
                 FROM nft_photocard_listings l
                 JOIN nft_photocards p ON p.id = l.photocard_id
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 JOIN users seller ON seller.id = l.seller_id
                 WHERE l.status = 'ACTIVE'
                 """);
@@ -50,6 +61,7 @@ public class NftMarketQueryRepository {
             case RECENT -> " ORDER BY l.listed_at DESC, l.id DESC";
             case PRICE_ASC -> " ORDER BY l.price ASC, l.id ASC";
             case PRICE_DESC -> " ORDER BY l.price DESC, l.id DESC";
+            case VIEW_DESC -> " ORDER BY p.view_count DESC, l.id DESC";
         });
         sql.append(" LIMIT :limit");
         params.addValue("limit", limit);
@@ -60,26 +72,33 @@ public class NftMarketQueryRepository {
                 rs.getString("design_name"),
                 rs.getString("image_url"),
                 rs.getString("performance_title"),
+                rs.getString("event_name"),
                 rs.getLong("price"),
                 rs.getString("seller_nickname"),
-                rs.getObject("listed_at", LocalDateTime.class)
+                rs.getObject("listed_at", LocalDateTime.class),
+                rs.getLong("view_count")
         ));
     }
 
     public Optional<DetailRow> findPhotocardDetail(Long photocardId) {
         String sql = """
-                SELECT p.id AS photocard_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title,
+                       -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
                        -- 조회자가 소유자인지 판정해야 한다. 닉네임으로 비교하면 동명이인에서 깨진다
                        p.owner_id, owner.nickname AS owner_nickname,
                        p.created_at AS issued_at, t.id AS ticket_id, pa.grade AS seat_grade, a.area_code,
                        s.row_label, s.seat_number, p.status, l.id AS listing_id,
+                       l.status::text AS listing_status,
                        l.price, l.description AS seller_description, l.listed_at,
-                       d.group_name, d.grade::text AS grade,
+                       d.group_name, d.grade::text AS grade, p.view_count,
                        (SELECT round(avg(tr.price))::bigint
                           FROM nft_photocard_trades tr
                           JOIN nft_photocards pc ON pc.id = tr.photocard_id
-                         WHERE pc.design_id = d.id) AS average_price
+                         WHERE pc.design_id = d.id
+                           AND tr.chain_status = 'COMPLETED') AS average_price
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
@@ -91,15 +110,20 @@ public class NftMarketQueryRepository {
                 LEFT JOIN performance_areas pa
                        ON pa.performance_general_id = pg.id AND pa.area_id = t.area_id
                 LEFT JOIN nft_photocard_listings l
-                       ON l.photocard_id = p.id AND l.status = 'ACTIVE'
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 WHERE p.id = :photocardId
                 """;
         List<DetailRow> rows = jdbcTemplate.query(sql, new MapSqlParameterSource("photocardId", photocardId),
                 (rs, rowNum) -> new DetailRow(
                         rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
                         rs.getString("design_name"),
                         rs.getString("image_url"),
                         rs.getString("performance_title"),
+                        rs.getString("event_name"),
                         rs.getLong("owner_id"),
                         rs.getString("owner_nickname"),
                         rs.getObject("issued_at", LocalDateTime.class),
@@ -110,14 +134,48 @@ public class NftMarketQueryRepository {
                         (Integer) rs.getObject("seat_number"),
                         NftMintStatus.valueOf(rs.getString("status")),
                         (Long) rs.getObject("listing_id"),
+                        rs.getString("listing_status") == null
+                                ? null : NftListingStatus.valueOf(rs.getString("listing_status")),
                         (Long) rs.getObject("price"),
                         rs.getString("seller_description"),
                         rs.getObject("listed_at", LocalDateTime.class),
                         rs.getString("group_name"),
                         rs.getString("grade") == null ? null : NftPhotocardGrade.valueOf(rs.getString("grade")),
-                        (Long) rs.getObject("average_price")
+                        (Long) rs.getObject("average_price"),
+                        rs.getLong("view_count")
                 ));
         return rows.stream().findFirst();
+    }
+
+    /**
+     * A view event and the denormalized counter move in the same statement. Concurrent requests for the
+     * same session/bucket can insert at most one event because of uq_nft_photocard_views_bucket.
+     */
+    public ViewCountRow recordPhotocardView(Long photocardId, UUID sessionId, LocalDateTime bucketStartedAt) {
+        String sql = """
+                WITH inserted AS (
+                    INSERT INTO nft_photocard_views
+                           (photocard_id, session_id, bucket_started_at)
+                    VALUES (:photocardId, :sessionId, :bucketStartedAt)
+                    ON CONFLICT (photocard_id, session_id, bucket_started_at) DO NOTHING
+                    RETURNING photocard_id
+                ), updated AS (
+                    UPDATE nft_photocards p
+                       SET view_count = p.view_count + 1
+                      FROM inserted i
+                     WHERE p.id = i.photocard_id
+                    RETURNING p.view_count
+                )
+                SELECT p.view_count, EXISTS (SELECT 1 FROM updated) AS counted
+                  FROM nft_photocards p
+                 WHERE p.id = :photocardId
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("photocardId", photocardId)
+                .addValue("sessionId", sessionId)
+                .addValue("bucketStartedAt", bucketStartedAt);
+        return jdbcTemplate.queryForObject(sql, params,
+                (rs, rowNum) -> new ViewCountRow(rs.getLong("view_count"), rs.getBoolean("counted")));
     }
 
     public List<UserTradeRow> findPurchaseHistory(Long userId,
@@ -140,24 +198,38 @@ public class NftMarketQueryRepository {
                                               Long cursorId,
                                               int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT p.id AS photocard_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title, p.status, p.created_at,
-                       CASE WHEN l.id IS NULL THEN false ELSE true END AS listed,
+                       -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
+                       CASE WHEN pack.source = 'EVENT'
+                            THEN COALESCE(pack_event.name, '이벤트 카드팩') END AS event_name,
+                       CASE WHEN l.id IS NOT NULL OR a.id IS NOT NULL THEN true ELSE false END AS listed,
+                       CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
+                            WHEN a.id IS NOT NULL THEN 'AUCTION' END AS market_type,
+                       COALESCE(l.status::text, a.status::text) AS market_status,
                        d.group_name, d.grade::text AS grade,
                        (SELECT round(avg(tr.price))::bigint
                           FROM nft_photocard_trades tr
                           JOIN nft_photocards pc ON pc.id = tr.photocard_id
-                         WHERE pc.design_id = d.id) AS average_price
+                         WHERE pc.design_id = d.id
+                           AND tr.chain_status = 'COMPLETED') AS average_price
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
                 LEFT JOIN nft_photocard_listings l
-                       ON l.photocard_id = p.id AND l.status = 'ACTIVE'
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_auctions a
+                       ON a.photocard_id = p.id AND a.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_photocard_packs pack ON pack.photocard_id = p.id
+                LEFT JOIN nft_photocard_pack_events pack_event
+                       ON pack.source = 'EVENT' AND pack_event.code = pack.source_ref
                 WHERE p.owner_id = :userId
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
         if (listed != null) {
-            sql.append(listed ? " AND l.id IS NOT NULL" : " AND l.id IS NULL");
+            sql.append(listed
+                    ? " AND (l.id IS NOT NULL OR a.id IS NOT NULL)"
+                    : " AND l.id IS NULL AND a.id IS NULL");
         }
         appendTimeCursor(sql, params, "p.created_at", "p.id", cursorAt, cursorId);
         sql.append(" ORDER BY p.created_at DESC, p.id DESC LIMIT :limit");
@@ -165,15 +237,75 @@ public class NftMarketQueryRepository {
 
         return jdbcTemplate.query(sql.toString(), params, (rs, rowNum) -> new OwnedRow(
                 rs.getLong("photocard_id"),
+                rs.getLong("design_id"),
                 rs.getString("design_name"),
                 rs.getString("image_url"),
                 rs.getString("performance_title"),
+                rs.getString("event_name"),
                 NftMintStatus.valueOf(rs.getString("status")),
                 rs.getBoolean("listed"),
+                rs.getString("market_type"),
+                rs.getString("market_status"),
                 rs.getObject("created_at", LocalDateTime.class),
                 rs.getString("group_name"),
                 rs.getString("grade") == null ? null : NftPhotocardGrade.valueOf(rs.getString("grade")),
                 (Long) rs.getObject("average_price")
+        ));
+    }
+
+    /**
+     * 한 사람이 가진 <b>같은 도안</b>의 카드 전부. 발행 순서(오래된 것부터)다.
+     *
+     * <p>🔴 커서 페이지가 없다. 같은 도안을 수십 장 가지는 일은 구조상 없고(도안마다 발행
+     * 총량이 정해져 있다), 상세 화면은 "이 도안을 내가 몇 장 가졌나" 를 <b>한 번에</b> 알아야
+     * 한다 — 첫 페이지만 세면 4번째 장부터 없는 것이 된다. 상한만 걸어 둔다.
+     *
+     * <p>🔴 {@code owner_id} 로 거른다. 도안 ID만으로 거르면 <b>남의 카드까지</b> 나온다.
+     *
+     * <p>좌석·회차는 포토카드의 티켓에서 가져온다. 도안의 공연명이 아니다 —
+     * {@link com.teacat.server.nft.dto.response.MyDesignPhotocardResponse} 주석 참고.
+     */
+    public List<DesignCopyRow> findMyPhotocardsOfDesign(Long userId, Long designId, int limit) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.created_at AS issued_at, p.status,
+                       pa.grade AS seat_grade, a.area_code, s.row_label, s.seat_number,
+                       pd.performance_num, pd.performance_date,
+                       CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
+                            WHEN au.id IS NOT NULL THEN 'AUCTION' END AS market_type,
+                       COALESCE(l.status::text, au.status::text) AS market_status
+                FROM nft_photocards p
+                -- 뽑기 카드는 티켓·좌석·회차가 없다. 내부 조인이면 행이 통째로 빠진다
+                LEFT JOIN tickets t ON t.id = p.ticket_id
+                LEFT JOIN performance_details pd ON pd.id = t.performance_detail_id
+                LEFT JOIN areas a ON a.id = t.area_id
+                LEFT JOIN seats s ON s.id = t.seat_id
+                LEFT JOIN performance_areas pa
+                       ON pa.performance_general_id = pd.performance_general_id
+                      AND pa.area_id = t.area_id
+                LEFT JOIN nft_photocard_listings l
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_auctions au
+                       ON au.photocard_id = p.id AND au.status IN ('ACTIVE', 'SETTLING')
+                WHERE p.owner_id = :userId AND p.design_id = :designId
+                ORDER BY p.created_at, p.id
+                LIMIT :limit
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
+                .addValue("designId", designId)
+                .addValue("limit", limit);
+
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new DesignCopyRow(
+                rs.getLong("photocard_id"),
+                rs.getObject("issued_at", LocalDateTime.class),
+                NftMintStatus.valueOf(rs.getString("status")),
+                rs.getString("seat_grade"),
+                rs.getString("area_code"),
+                rs.getString("row_label"),
+                (Integer) rs.getObject("seat_number"),
+                (Integer) rs.getObject("performance_num"),
+                rs.getObject("performance_date", LocalDateTime.class),
+                rs.getString("market_type"),
+                rs.getString("market_status")
         ));
     }
 
@@ -188,6 +320,7 @@ public class NftMarketQueryRepository {
                 JOIN users seller ON seller.id = t.seller_id
                 JOIN users buyer ON buyer.id = t.buyer_id
                 WHERE t.photocard_id = :photocardId
+                  AND t.chain_status = 'COMPLETED'
                 """);
         MapSqlParameterSource params = new MapSqlParameterSource("photocardId", photocardId);
         appendTimeCursor(sql, params, "t.traded_at", "t.id", cursorAt, cursorId);
@@ -326,7 +459,9 @@ public class NftMarketQueryRepository {
      */
     public List<PendingMintRow> findPendingMints(Long performanceId, int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
                 JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
@@ -343,7 +478,9 @@ public class NftMarketQueryRepository {
                         .addValue("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -360,8 +497,11 @@ public class NftMarketQueryRepository {
      */
     public List<PendingMintRow> findPendingDrawMints(int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
+                JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
                 WHERE p.status = 'PENDING'
                   AND p.ticket_id IS NULL
@@ -373,7 +513,9 @@ public class NftMarketQueryRepository {
                 new MapSqlParameterSource("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -458,9 +600,12 @@ public class NftMarketQueryRepository {
     /** {@link #findPendingMints} 의 회차 스코프 버전. 이 회차 티켓의 PENDING 카드만 고른다 */
     public List<PendingMintRow> findPendingMintsForSchedule(Long scheduleId, int limit) {
         String sql = """
-                SELECT p.id AS photocard_id, p.design_id, w.address
+                SELECT p.id AS photocard_id, COALESCE(p.issue_key, p.id::text) AS issue_key,
+                       p.design_id, COALESCE(d.chain_token_id, d.id::numeric) AS chain_token_id,
+                       w.address
                 FROM nft_photocards p
                 JOIN tickets t ON t.id = p.ticket_id
+                JOIN nft_photocard_designs d ON d.id = p.design_id
                 JOIN wallets w ON w.id = p.wallet_id
                 WHERE t.performance_detail_id = :scheduleId
                   AND p.status = 'PENDING'
@@ -474,7 +619,9 @@ public class NftMarketQueryRepository {
                         .addValue("limit", limit),
                 (rs, rowNum) -> new PendingMintRow(
                         rs.getLong("photocard_id"),
+                        rs.getString("issue_key"),
                         rs.getLong("design_id"),
+                        rs.getBigDecimal("chain_token_id"),
                         rs.getString("address").trim()
                 ));
     }
@@ -494,6 +641,7 @@ public class NftMarketQueryRepository {
                 JOIN users seller ON seller.id = t.seller_id
                 JOIN users buyer ON buyer.id = t.buyer_id
                 WHERE %s = :userId
+                  AND t.chain_status = 'COMPLETED'
                 """.formatted(counterpartyColumn, userColumn));
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
         appendTimeCursor(sql, params, "t.traded_at", "t.id", cursorAt, cursorId);
@@ -529,8 +677,10 @@ public class NftMarketQueryRepository {
         params.addValue("cursorPrice", Long.parseLong(cursorValue));
         if (sort == NftMarketSort.PRICE_ASC) {
             sql.append(" AND (l.price > :cursorPrice OR (l.price = :cursorPrice AND l.id > :cursorId))");
-        } else {
+        } else if (sort == NftMarketSort.PRICE_DESC) {
             sql.append(" AND (l.price < :cursorPrice OR (l.price = :cursorPrice AND l.id < :cursorId))");
+        } else {
+            sql.append(" AND (p.view_count < :cursorPrice OR (p.view_count = :cursorPrice AND l.id < :cursorId))");
         }
     }
 
@@ -554,28 +704,71 @@ public class NftMarketQueryRepository {
     }
 
     public record MarketRow(Long photocardId, Long listingId, String designName, String imageUrl,
-                            String performanceTitle, Long price, String sellerNickname,
-                            LocalDateTime listedAt) {
+                            String performanceTitle, String eventName, Long price, String sellerNickname,
+                            LocalDateTime listedAt, long viewCount) {
     }
 
-    public record DetailRow(Long photocardId, String designName, String imageUrl,
-                            String performanceTitle, Long ownerId, String ownerNickname,
+    public record DetailRow(Long photocardId, Long designId, String designName, String imageUrl,
+                            String performanceTitle, String eventName, Long ownerId, String ownerNickname,
                             LocalDateTime issuedAt,
                             boolean hasTicket,
                             String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
-                            NftMintStatus status, Long listingId, Long price, String sellerDescription,
+                            NftMintStatus status, Long listingId, NftListingStatus listingStatus,
+                            Long price, String sellerDescription,
                             LocalDateTime listedAt,
-                            String groupName, NftPhotocardGrade grade, Long averagePrice) {
+                            String groupName, NftPhotocardGrade grade, Long averagePrice, long viewCount) {
     }
 
     public record UserTradeRow(Long tradeId, Long photocardId, String designName, String imageUrl,
                                String counterpartyNickname, Long price, LocalDateTime tradedAt) {
     }
 
-    public record OwnedRow(Long photocardId, String designName, String imageUrl,
-                           String performanceTitle, NftMintStatus status, boolean listed,
+    /**
+     * 내가 가진 카드의 **요약용 최소 열** — 도감이 "몇 장 · 어디에 나가 있나" 를 셀 때 쓴다.
+     *
+     * <p>{@link #findOwnedPhotocards} 와 달리 공연·도안 이름·평균가 서브쿼리를 읽지 않고 페이지도 없다.
+     * 도감이 필요한 것은 개수뿐인데 카드 목록을 20장씩 끝까지 받아 오던 것을 이 한 번으로 대신한다.
+     * 정렬은 목록과 같다(최신순) — 대표 카드를 고르는 규칙이 그 순서에 기대고 있다.
+     */
+    public List<OwnedStateRow> findOwnedStates(Long userId) {
+        String sql = """
+                SELECT p.id AS photocard_id, p.design_id, p.status,
+                       CASE WHEN l.id IS NOT NULL THEN 'FIXED_PRICE'
+                            WHEN a.id IS NOT NULL THEN 'AUCTION' END AS market_type,
+                       COALESCE(l.status::text, a.status::text) AS market_status
+                FROM nft_photocards p
+                LEFT JOIN nft_photocard_listings l
+                       ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
+                LEFT JOIN nft_auctions a
+                       ON a.photocard_id = p.id AND a.status IN ('ACTIVE', 'SETTLING')
+                WHERE p.owner_id = :userId
+                ORDER BY p.created_at DESC, p.id DESC
+                """;
+        return jdbcTemplate.query(sql, new MapSqlParameterSource("userId", userId),
+                (rs, rowNum) -> new OwnedStateRow(
+                        rs.getLong("photocard_id"),
+                        rs.getLong("design_id"),
+                        NftMintStatus.valueOf(rs.getString("status")),
+                        rs.getString("market_type"),
+                        rs.getString("market_status")));
+    }
+
+    public record OwnedStateRow(Long photocardId, Long designId, NftMintStatus status,
+                                String marketType, String marketStatus) {
+    }
+
+    public record OwnedRow(Long photocardId, Long designId, String designName, String imageUrl,
+                           String performanceTitle, String eventName, NftMintStatus status, boolean listed,
+                           String marketType, String marketStatus,
                            LocalDateTime createdAt,
                            String groupName, NftPhotocardGrade grade, Long averagePrice) {
+    }
+
+    /** 같은 도안 한 장. 좌석·회차는 뽑기 카드에서 전부 null 이다 */
+    public record DesignCopyRow(Long photocardId, LocalDateTime issuedAt, NftMintStatus status,
+                                String seatGrade, String areaCode, String rowLabel, Integer seatNumber,
+                                Integer performanceNum, LocalDateTime performanceDate,
+                                String marketType, String marketStatus) {
     }
 
     public record CardTradeRow(Long tradeId, Long price, String sellerNickname,
@@ -591,7 +784,11 @@ public class NftMarketQueryRepository {
     public record UserWalletRow(Long userId, Long walletId, String address) {
     }
 
-    /** 발행 요청에 실어 보낼 한 장. {@code photocardId} 가 그대로 온체인 멱등 키다 */
-    public record PendingMintRow(Long photocardId, Long designId, String address) {
+    /** 발행 요청에 실어 보낼 한 장. 관계형 ID와 온체인 식별자를 함께 유지한다. */
+    public record PendingMintRow(Long photocardId, String issueKey, Long designId,
+                                 BigDecimal chainTokenId, String address) {
+    }
+
+    public record ViewCountRow(long viewCount, boolean counted) {
     }
 }
