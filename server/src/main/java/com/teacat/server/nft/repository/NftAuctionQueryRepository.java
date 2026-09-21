@@ -79,7 +79,8 @@ public class NftAuctionQueryRepository {
             params.addValue("performanceId", performanceId);
         }
         if (keyword != null) {
-            sql.append(" AND d.name ILIKE :keyword");
+            sql.append(" AND (d.name ILIKE :keyword ESCAPE '\\'"
+                    + " OR pg.title ILIKE :keyword ESCAPE '\\')");
             params.addValue("keyword", '%' + escapeLike(keyword) + '%');
         }
         if (cursorValue != null) {

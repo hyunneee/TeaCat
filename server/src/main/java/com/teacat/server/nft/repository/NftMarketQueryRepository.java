@@ -53,7 +53,8 @@ public class NftMarketQueryRepository {
             params.addValue("performanceId", performanceId);
         }
         if (keyword != null) {
-            sql.append(" AND d.name ILIKE :keyword");
+            sql.append(" AND (d.name ILIKE :keyword ESCAPE '\\'"
+                    + " OR pg.title ILIKE :keyword ESCAPE '\\')");
             params.addValue("keyword", '%' + escapeLike(keyword) + '%');
         }
         appendMarketCursor(sql, params, sort, cursorValue, cursorId);
@@ -757,6 +758,7 @@ public class NftMarketQueryRepository {
                                 String marketType, String marketStatus) {
     }
 
+    /** One owned photocard row used by the paginated collection API. */
     public record OwnedRow(Long photocardId, Long designId, String designName, String imageUrl,
                            String performanceTitle, String eventName, NftMintStatus status, boolean listed,
                            String marketType, String marketStatus,

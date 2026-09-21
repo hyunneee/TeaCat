@@ -596,6 +596,48 @@ class NftAuctionServiceIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 경매는_도안명과_공연명으로_검색하고_와일드카드는_문자로_취급한다() {
+        Long sellerId = insertUser("auction-search@test.com", "검색판매자");
+        Long designCard = insertPhotocardOwnedBy(sellerId);
+        Long performanceCard = insertPhotocardOwnedBy(sellerId);
+        Long designAuction = insertAuction(
+                designCard, sellerId, 1_000, null, "now() + interval '1 day'");
+        Long performanceAuction = insertAuction(
+                performanceCard, sellerId, 2_000, null, "now() + interval '2 day'");
+
+        jdbcTemplate.update("""
+                UPDATE nft_photocard_designs
+                   SET name = '은하수_100% 포토카드'
+                 WHERE id = (SELECT design_id FROM nft_photocards WHERE id = ?)
+                """, designCard);
+        jdbcTemplate.update("""
+                UPDATE performance_general
+                   SET title = '검색되는 별빛 공연'
+                 WHERE id = (SELECT d.performance_general_id
+                               FROM nft_photocards p
+                               JOIN nft_photocard_designs d ON d.id = p.design_id
+                              WHERE p.id = ?)
+                """, performanceCard);
+
+        assertThat(auctionService.getAuctions(
+                null, "은하수", NftAuctionSort.ENDING_SOON, null, 20).items())
+                .extracting(NftAuctionSummaryResponse::auctionId)
+                .containsExactly(designAuction);
+        assertThat(auctionService.getAuctions(
+                null, "별빛 공연", NftAuctionSort.ENDING_SOON, null, 20).items())
+                .extracting(NftAuctionSummaryResponse::auctionId)
+                .containsExactly(performanceAuction);
+        assertThat(auctionService.getAuctions(
+                null, "%", NftAuctionSort.ENDING_SOON, null, 20).items())
+                .extracting(NftAuctionSummaryResponse::auctionId)
+                .containsExactly(designAuction);
+        assertThat(auctionService.getAuctions(
+                null, "_", NftAuctionSort.ENDING_SOON, null, 20).items())
+                .extracting(NftAuctionSummaryResponse::auctionId)
+                .containsExactly(designAuction);
+    }
+
+    @Test
     void 상세는_요청자_관점을_담고_만료된_경매는_먼저_닫아서_보여준다() {
         Long sellerId = insertUser("s@test.com", "판매자");
         Long a = insertFundedUser("a@test.com", "A", 10_000);
