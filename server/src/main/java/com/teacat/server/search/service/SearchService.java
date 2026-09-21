@@ -52,6 +52,15 @@ public class SearchService {
             throw new BusinessException(SearchErrorCode.INVALID_SESSION);
         }
 
+        UnifiedSearchResponse response = new UnifiedSearchResponse(
+                display,
+                performanceService.getConcerts(display, false, null, 6).concerts(),
+                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items());
+        // 결과 없는 검색은 중복 집계 키도 만들지 않는다. 이후 결과가 생기면 집계할 수 있다.
+        if (response.concerts().isEmpty() && response.photocards().isEmpty()) {
+            return response;
+        }
+
         LocalDateTime bucket = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
         try {
             cacheRepository.incrementOnce(bucket, sessionId, normalized, display);
@@ -60,10 +69,7 @@ public class SearchService {
             log.warn("검색어 집계 실패. bucket={}, keyword={}", bucket, normalized, e);
         }
 
-        return new UnifiedSearchResponse(
-                display,
-                performanceService.getConcerts(display, false, null, 6).concerts(),
-                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items());
+        return response;
     }
 
     @Scheduled(cron = "${search.trends.cron:5 0 * * * *}")

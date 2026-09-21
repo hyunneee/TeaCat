@@ -76,6 +76,57 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
             """, nativeQuery = true)
     LocalDateTime findNextOpenAt(@Param("userId") Long userId, @Param("leadSeconds") long leadSeconds);
 
+    /**
+     * 안 쓴 팩 목록 — **팩마다** 개봉 시각과 지금 열 수 있는지를 함께 돌려준다.
+     *
+     * <p>개봉 시각({@code open_at})은 저장된 값이 아니라 <b>이 쿼리가 회차의 공연 일시에서 계산</b>한다
+     * ({@code lockOneAvailable}·{@code countOpenable} 과 같은 식). 값을 얼려 두면 공연을 연기했을 때
+     * 예매 취소 마감과 어긋난다 ({@code NftPhotocardPack#performanceDetailId} 주석).
+     *
+     * <p>{@code openable} 도 SQL 안(DB 시계)에서 판정한다. 자바에서 다시 비교하면 뽑기 API 와
+     * 다른 시계로 답하게 된다. 이벤트 팩은 회차가 없어 {@code open_at} 이 null 이고 언제나 열린다.
+     *
+     * <p>🔴 {@code LIMIT} 이 있다. 팩은 예매 한 건당 하나라 오래 쓴 계정은 많아질 수 있고, 화면이 그리는 것은
+     * 가장 빨리 열리는 몇 개뿐이다. 전체 개수는 {@link #countOpenable}·{@link #countScheduled} 가 따로 답한다.
+     * 정렬은 <b>열 수 있는 것(open_at 이 지났거나 null)이 먼저, 그다음 개봉이 이른 순</b>이다.
+     */
+    @Query(value = """
+            SELECT p.id                         AS packId,
+                   p.source::text               AS source,
+                   pg.title                     AS performanceTitle,
+                   ev.name                      AS eventName,
+                   d.performance_date - (:leadSeconds * interval '1 second') AS openAt,
+                   (p.performance_detail_id IS NULL
+                    OR d.performance_date - (:leadSeconds * interval '1 second') <= now()) AS openable
+              FROM nft_photocard_packs p
+              LEFT JOIN performance_details d ON d.id = p.performance_detail_id
+              LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
+              LEFT JOIN nft_photocard_pack_events ev
+                     ON p.source = 'EVENT' AND ev.code = p.source_ref
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL
+             ORDER BY d.performance_date - (:leadSeconds * interval '1 second') NULLS FIRST, p.id
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<PackRow> findUnconsumedPacks(@Param("userId") Long userId,
+                                      @Param("leadSeconds") long leadSeconds,
+                                      @Param("limit") int limit);
+
+    /** {@link #findUnconsumedPacks} 한 줄. 이벤트 팩은 {@code openAt}·{@code performanceTitle} 이 null */
+    interface PackRow {
+        Long getPackId();
+
+        String getSource();
+
+        String getPerformanceTitle();
+
+        String getEventName();
+
+        /** 개봉 시각. 회차가 없는 팩(이벤트)은 null */
+        java.time.LocalDateTime getOpenAt();
+
+        boolean getOpenable();
+    }
+
     boolean existsByUserIdAndSourceAndSourceRef(Long userId, NftPhotocardPackSource source, String sourceRef);
 
     /** 이 티켓으로 받은 팩을 이미 썼는가. 카드가 나갔다면 예매를 되돌릴 수 없다 */

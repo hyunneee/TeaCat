@@ -1,6 +1,7 @@
 import { PageTransition } from '@/shared/components/common';
 import { BottomNav } from './BottomNav';
 import { TopNav } from './TopNav';
+import { SectionNavigation } from './SectionNavigation';
 
 /**
  * 주요 화면의 껍데기.
@@ -31,6 +32,7 @@ export function AppLayout() {
             위 여백은 **화면마다 다릅니다.** 여기서 한 줄 띄우면 홈의 초록 배경판이
             상단 내비에서 떨어져 그 사이에 흰 띠가 생깁니다. 각 화면이 직접 줍니다. */}
         <div className="mx-auto w-full lg:max-w-5xl lg:px-6">
+          <SectionNavigation />
           <PageTransition />
         </div>
       </main>

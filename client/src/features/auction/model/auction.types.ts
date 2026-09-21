@@ -107,4 +107,5 @@ export interface MyBid {
   status: AuctionStatus;
   endsAt: string;
   result: MyBidResult;
+  lastBidAt: string;
 }

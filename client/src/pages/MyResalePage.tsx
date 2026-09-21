@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Hourglass } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
+import { TicketNavigation } from '@/shared/components/layout/TicketNavigation';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
 import { ROUTES } from '@/shared/constants';
@@ -20,7 +21,8 @@ export function MyResalePage() {
 
   return (
     <>
-      <Header title="취소표 대기" showBack />
+      <Header title="내 티켓" />
+      <TicketNavigation />
 
       <div className="p-4">
         {isPending ? (
@@ -32,7 +34,7 @@ export function MyResalePage() {
             description="원하는 좌석이 없을 때 추첨 대기를 신청해 보세요."
           />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
             {entries.map((entry) => (
               <li key={entry.id}>
                 <ResaleEntryCard
@@ -50,8 +52,7 @@ export function MyResalePage() {
                   onForfeit={(e) =>
                     open('common/confirm', {
                       title: '당첨을 포기할까요?',
-                      message:
-                        '포기하면 이 좌석은 다음 대기자에게 넘어갑니다. 되돌릴 수 없습니다.',
+                      message: '포기하면 이 좌석은 다음 대기자에게 넘어갑니다. 되돌릴 수 없습니다.',
                       confirmText: '포기하기',
                       danger: true,
                       onConfirm: () => cancel.mutate(e.id),

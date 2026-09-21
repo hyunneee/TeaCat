@@ -22,15 +22,17 @@ import {
  *
  * 🔴 여기에 카드를 넣지 않으면 그 공연 팩은 열어도 `NFT_041` 로 실패합니다.
  *
- * 페이지는 조립만 합니다 (CLAUDE.md 3-6). 접근 제어는 라우터의 `RequireRole(['ADMIN'])`.
+ * 페이지는 조립만 합니다 (CLAUDE.md 3-6). ADMIN과 PERFORMANCE가 접근하며 서버에서 담당 공연인지 검사합니다.
  */
 export function AdminPerformanceDrawPoolPage() {
   const { concertId = '' } = useParams();
   const performanceId = Number(concertId);
 
   const { data: concert } = useMyConcert(concertId);
-  const { data: pool, isPending } = usePerformanceDrawPool(performanceId);
-  const { data: templates } = useAdminPocaTemplates();
+  const poolQuery = usePerformanceDrawPool(performanceId);
+  const templateQuery = useAdminPocaTemplates();
+  const { data: pool, isPending } = poolQuery;
+  const { data: templates } = templateQuery;
 
   const add = useAddPerformanceDesigns(performanceId);
   const retry = useRetryDesignRegistration();
@@ -74,7 +76,24 @@ export function AdminPerformanceDrawPoolPage() {
         </p>
       </div>
 
-      {isPending ? (
+      {poolQuery.isError || templateQuery.isError ? (
+        <EmptyState
+          icon={TriangleAlert}
+          title="뽑기 카드 정보를 불러오지 못했어요"
+          description={(poolQuery.error ?? templateQuery.error)?.message}
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                void poolQuery.refetch();
+                void templateQuery.refetch();
+              }}
+            >
+              다시 시도
+            </Button>
+          }
+        />
+      ) : isPending || templateQuery.isPending ? (
         <Skeleton className="h-40" />
       ) : !pool ? (
         <EmptyState icon={TriangleAlert} title="공연을 찾지 못했어요" />

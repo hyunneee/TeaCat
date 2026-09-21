@@ -81,6 +81,14 @@ export const ROUTES = {
   MY_NFT_TRADES: '/my/nfts/trades',
   MY_NFT_SALES: '/my/nfts/sales',
 
+  /* ── AI 스티커 (포카 꾸미기) ──
+     진입은 내 포카(`MY_NFTS`) 머리말의 "포카 꾸미기" 버튼 하나입니다.
+     `FEATURE.sticker` 가 꺼져 있으면 라우트도 버튼도 등록되지 않습니다. */
+  /** 그리기 → 만들기. 정적 경로라 `:id` 류보다 먼저 매칭됩니다 */
+  STICKER_CREATE: '/my/stickers/new',
+  /** 내가 만든 스티커 목록 */
+  MY_STICKERS: '/my/stickers',
+
   /* ── 캣머니 ── */
   TOKEN: '/token',
   /* 게임은 머리말만 남기고 화면을 꽉 쓰므로 잔액 화면과 **길을 나눕니다** —
@@ -114,6 +122,13 @@ export const ROUTES = {
   ADMIN_USERS: '/admin/users',
   /** 게이트 입장 확인 — QR + 얼굴로 본인을 확인하고 입장 처리합니다 */
   ADMIN_CHECK_IN: '/admin/check-in',
+  /**
+   * 좌석·예매자 — 회차의 좌석 현황과 예매자 명단.
+   *
+   * 입장 확인과 **나란한 별도 메뉴**입니다. 공연·회차 필터는 각 화면 안에 있고 선택 상태도
+   * 따로 둡니다 — 공통 필터를 만들면 한쪽에서 바꾼 회차가 다른 쪽의 작업을 바꿔 놓습니다.
+   */
+  ADMIN_SEAT_ATTENDEES: '/admin/seat-attendees',
   /** 회원 상세 — 예매·포카를 탭으로 봅니다. 되돌릴 수 없는 동작도 여기에 모읍니다 */
   ADMIN_USER_DETAIL: (userId: string) => `/admin/users/${userId}`,
   MONITORING: '/admin/monitoring',
@@ -121,6 +136,8 @@ export const ROUTES = {
   ADMIN_STADIUMS: '/admin/stadiums',
   ADMIN_STADIUM_DETAIL: (stadiumId: string) => `/admin/stadiums/${stadiumId}`,
   ADMIN_INQUIRIES: '/admin/inquiries',
+  /** 이상거래 심사 · 거래 내역 (server/AUCTION_FRAUD_DESIGN.md) */
+  ADMIN_TRADE_REVIEWS: '/admin/trade-reviews',
   ADMIN_BANNERS: '/admin/banners',
   /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
   ADMIN_POCA_TEMPLATES: '/admin/poca-templates',
@@ -142,6 +159,13 @@ export const ROUTES = {
    * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
    */
   DEV_FACE: '/dev/face',
+  /**
+   * 개발용 포카 꾸미기 미리보기 — 로그인 가드 밖에서 그림판을 봅니다.
+   * 백엔드가 안 닿는 곳(집·캠퍼스 밖)에서 화면 작업을 하기 위한 길입니다.
+   * ⚠️ 개발 환경에서만 라우터에 등록됩니다 (운영 번들에는 없습니다).
+   */
+  DEV_STICKER: '/dev/sticker',
+  DEV_MY_STICKERS: '/dev/stickers',
 
   NOT_FOUND: '*',
 } as const;

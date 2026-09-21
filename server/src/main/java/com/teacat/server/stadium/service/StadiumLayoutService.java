@@ -92,6 +92,7 @@ public class StadiumLayoutService {
 
     public AreaListResponse getAreas(Long layoutId) {
         StadiumLayout layout = getLayoutEntity(layoutId);
+
         List<AreaSummaryResponse> areas = areaRepository.findAllWithStatsByLayoutId(layoutId).stream()
                 .map(area -> new AreaSummaryResponse(area.getAreaId(), area.getLevelCode(), area.getAreaCode(),
                         AreaType.valueOf(area.getType()), area.getMaxSeat(), area.getSeatCount(),
@@ -154,6 +155,7 @@ public class StadiumLayoutService {
         List<CreatedLayoutAreaResponse> createdAreas = new ArrayList<>();
         int seatCount = 0;
         long layoutCapacity = 0;
+        int displayOrder = 0;
         for (LayoutImportAreaRequest areaRequest : request.areas()) {
             if (!areaCodes.add(areaRequest.levelCodeOrDefault() + '#' + areaRequest.areaCode())) {
                 throw new BusinessException(StadiumErrorCode.DUPLICATE_AREA_CODE);
@@ -178,6 +180,7 @@ public class StadiumLayoutService {
                     areaRequest.areaCode(), areaRequest.type(), maxSeat,
                     areaRequest.bounds().x(), areaRequest.bounds().y(), areaRequest.bounds().height(),
                     areaRequest.bounds().width()));
+            area.changeDisplayOrder(displayOrder++);
             seatBatchRepository.insertAll(seats.stream()
                     .map(seat -> new SeatBatchRepository.SeatBatchRow(
                             area.getId(), seat.x(), seat.y(), seat.rowLabel(), seat.seatNumber()))
@@ -234,11 +237,12 @@ public class StadiumLayoutService {
         List<CreatedLayoutAreaResponse> createdAreas = new ArrayList<>();
         int createdSeatCount = 0;
         for (Area sourceArea : areaRepository
-                .findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(sourceLayoutId)) {
+                .findAllByStadiumLayoutIdOrderByDisplayOrderAscIdAsc(sourceLayoutId)) {
             Area copiedArea = areaRepository.saveAndFlush(Area.create(
                     stadium, copied, sourceArea.getLevelCode(), sourceArea.getAreaCode(),
                     sourceArea.getType(), sourceArea.getMaxSeat(), sourceArea.getAreaX(),
                     sourceArea.getAreaY(), sourceArea.getHeight(), sourceArea.getWidth()));
+            copiedArea.changeDisplayOrder(sourceArea.getDisplayOrder());
             List<Seat> sourceSeats = seatRepository
                     .findAllByAreaIdOrderByRowLabelAscSeatNumberAsc(sourceArea.getId());
             seatBatchRepository.insertAll(sourceSeats.stream()

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Gavel } from 'lucide-react';
-import { Header } from '@/shared/components/layout';
+import { DetailHeader as Header } from '@/shared/components/layout';
 import { Badge, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
@@ -31,9 +31,13 @@ export function MyAuctionsPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<MyAuctionFilter>('');
 
-  const { data: rows, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useMyAuctions(
-    filter === '' ? undefined : (filter as AuctionStatus),
-  );
+  const {
+    data: rows,
+    isPending,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useMyAuctions(filter === '' ? undefined : (filter as AuctionStatus));
 
   const sentinel = useInfiniteScroll({
     hasNext: !!hasNextPage,
@@ -45,7 +49,7 @@ export function MyAuctionsPage() {
     <>
       <Header title="내 경매" showBack />
 
-      <div className="bg-canvas under-header sticky z-10 flex justify-end px-4 pt-2 pb-3">
+      <div className="bg-canvas under-header sticky z-10 flex justify-end px-4 pt-2 pb-3 lg:top-[var(--top-inset)]">
         <Select
           label="상태"
           options={MY_AUCTION_FILTERS}
@@ -74,9 +78,9 @@ export function MyAuctionsPage() {
                   <button
                     type="button"
                     onClick={() => navigate(ROUTES.AUCTION_DETAIL(String(row.auctionId)))}
-                    className="surface shadow-list hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors"
+                    className="surface shadow-list hover:bg-surface-2 flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors lg:gap-5 lg:p-5"
                   >
-                    <div className="w-12 shrink-0">
+                    <div className="w-12 shrink-0 lg:w-16">
                       <PocaArt
                         seed={pocaSeed(row.photocardId)}
                         imageUrl={row.imageUrl}
@@ -84,9 +88,9 @@ export function MyAuctionsPage() {
                       />
                     </div>
 
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-8 lg:gap-y-2">
                       {/* 상태 뱃지는 제목 **위**, 첫 줄에 (DESIGN.md 4장) */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 lg:col-start-2 lg:row-start-1 lg:justify-end">
                         {running ? (
                           <AuctionCountdown
                             endsAt={row.endsAt}
@@ -103,9 +107,11 @@ export function MyAuctionsPage() {
                         </span>
                       </div>
 
-                      <p className="mt-0.5 truncate font-bold">{row.designName}</p>
+                      <p className="mt-0.5 truncate font-bold lg:col-start-1 lg:row-start-1 lg:text-lg">
+                        {row.designName}
+                      </p>
 
-                      <p className="mt-0.5 text-sm">
+                      <p className="mt-0.5 text-sm lg:col-start-2 lg:row-start-2 lg:text-right">
                         <span className="text-muted">
                           {row.status === 'SOLD' ? '체결가 ' : '현재가 '}
                         </span>

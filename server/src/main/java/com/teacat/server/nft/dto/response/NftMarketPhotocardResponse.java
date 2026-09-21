@@ -19,6 +19,9 @@ public record NftMarketPhotocardResponse(
         @Schema(description = "공연명", example = "TeaCat 쇼케이스")
         String performanceTitle,
 
+        @Schema(description = "획득한 이벤트 이름. 이벤트 팩이 아니면 null")
+        String eventName,
+
         @Schema(description = "판매가(CAT)", example = "3000")
         Long price,
 

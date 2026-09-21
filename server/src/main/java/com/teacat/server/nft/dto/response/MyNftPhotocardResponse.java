@@ -12,7 +12,9 @@ public record MyNftPhotocardResponse(
         Long designId,
         @Schema(description = "도안명") String designName,
         @Schema(description = "이미지 URL") String imageUrl,
-        @Schema(description = "공연명. 뽑기 카드는 null") String performanceTitle,
+        @Schema(description = "공연명. 카드팩에서 나온 카드는 null") String performanceTitle,
+        @Schema(description = "획득한 이벤트 이름. 이벤트 카드팩이 아니면 null", example = "오픈 기념 카드팩")
+        String eventName,
         @Schema(description = "민팅 상태") NftMintStatus status,
         @Schema(description = "고정가 또는 경매 판매 진행 여부") boolean listed,
         @Schema(description = "판매 방식. 판매 중이 아니면 null", example = "AUCTION") MarketType marketType,

@@ -2,17 +2,29 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { STALE_TIME } from '@/shared/constants';
-import { getViewSessionId } from '@/shared/lib';
+import { getViewSessionId, parseServerTime } from '@/shared/lib';
 import type { CursorPage } from '@/shared/types';
 import { toast } from '@/shared/stores';
-import { useIsLoggedIn } from '@/features/auth';
+import { useAuth, useIsLoggedIn } from '@/features/auth';
 import { tokenKeys } from '@/features/token';
 import { nftApi, nftKeys } from '../api/nftApi';
-import { DEFAULT_SORT, mergeTrades, type NftSort } from '../model/nft.model';
+import { DEFAULT_SORT, mergeTrades, nextLockedOpenAt, type NftSort } from '../model/nft.model';
 import type { PhotocardDetail } from '../model/nft.types';
 import { buildPocaDex } from '../model/pocaDex.model';
 
 const PAGE_SIZE = 20;
+
+export function useNftMarketPage(
+  params: { keyword?: string; sort: NftSort; cursor?: string },
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...nftKeys.market(params.keyword, params.sort), 'page', params.cursor, 25],
+    queryFn: () => nftApi.market({ ...params, size: 25 }),
+    enabled,
+    staleTime: STALE_TIME.SHORT,
+  });
+}
 
 /**
  * 발행이 끝나기를 기다리는 동안 다시 물어보는 간격.
@@ -22,6 +34,9 @@ const PAGE_SIZE = 20;
  * 잘못된 줄 압니다. 확정되면 스스로 멈춥니다(끝없이 폴링하지 않습니다).
  */
 const MINT_POLL_MS = 3000;
+
+/** `setTimeout` 이 견디는 최대 지연(2^31-1 ms ≈ 24.8일). 넘기면 즉시 실행됩니다 */
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 /** 서버 커서 페이지 → 다음 pageParam. 마지막 페이지면 undefined (더 안 부름) */
 function nextCursor<T>(last: CursorPage<T>): string | undefined {
@@ -69,12 +84,32 @@ export function usePhotocardArts() {
 }
 
 /**
+ * 내 포카 요약 — 도안별 보유 수·판매 상태.
+ *
+ * 카드 목록(`useMyPhotocards`)과 달리 **한 번의 요청**입니다. 도감이 필요한 것은 개수뿐이라
+ * 카드를 페이지마다 끝까지 받아 오던 것을 이걸로 대신합니다.
+ *
+ * 🔴 `pendingCount > 0` 일 때만 다시 물어봅니다 — 발행 중이거나 정산 중인 카드가 있어서 상태가
+ * 바뀔 것이 있을 때입니다. 0 이면 스스로 멈춥니다. 예전에는 카드 목록 전체를 3초마다 다시
+ * 받았습니다(이미 받은 페이지를 전부 다시).
+ */
+export function useMyPhotocardSummary() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useQuery({
+    queryKey: nftKeys.mySummary(),
+    queryFn: nftApi.mySummary,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn,
+    refetchInterval: (query) => ((query.state.data?.pendingCount ?? 0) > 0 ? MINT_POLL_MS : false),
+  });
+}
+
+/**
  * 도감 — 전체 도안 위에 내가 가진 것을 얹습니다.
  *
- * 🔴 **내 카드를 끝까지 받습니다.** 목록이 커서 페이지(20장)라, 첫 페이지만 보고 세면
- * 21번째부터 가진 카드가 도감에서 "아직 없음" 으로 보입니다. 다 받을 때까지는
- * `isPending` 을 유지해서 **모자란 장수를 잠깐이라도 보여주지 않습니다** —
- * 도감에서 "×2 였는데 ×1 이 됐다" 는 버그로 읽힙니다.
+ * 🔴 **카드 목록을 받지 않습니다.** 요약 한 번(`useMyPhotocardSummary`)과 도안 풀만 씁니다.
+ * "보유 카드만" 을 눌렀을 때 필요한 카드 한 장 한 장은 `useOwnedCards` 가 그때 받습니다.
  */
 export function usePocaDex() {
   const pool = useQuery({
@@ -82,22 +117,40 @@ export function usePocaDex() {
     queryFn: nftApi.drawPool,
     staleTime: STALE_TIME.LONG,
   });
-  const mine = useMyPhotocards();
-
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const summary = useMyPhotocardSummary();
 
   const entries = useMemo(
-    () => buildPocaDex(pool.data ?? [], mine.data ?? []),
-    [pool.data, mine.data],
+    () => buildPocaDex(pool.data ?? [], summary.data?.designs ?? []),
+    [pool.data, summary.data],
   );
 
   return {
     entries,
-    isPending: pool.isPending || mine.isPending || !!hasNextPage,
-    isError: pool.isError,
+    isPending: !pool.isError && !summary.isError && (pool.isPending || summary.isPending),
+    isError: pool.isError || summary.isError,
+  };
+}
+
+/**
+ * 내 카드 한 장 한 장 — **"보유 카드만" 을 켰을 때만** 받습니다.
+ *
+ * 목록이 커서 페이지(20장)라 끝까지 받아야 21번째부터 가진 카드가 빠지지 않습니다. 다 받을
+ * 때까지 `cardsPending` 을 유지해서 모자란 장수를 잠깐이라도 보여주지 않습니다.
+ *
+ * `enabled` 가 false 면 **아무 요청도 나가지 않습니다** — 도감만 보는 사람은 이 목록이 필요 없습니다.
+ */
+export function useOwnedCards(enabled: boolean) {
+  const mine = useMyPhotocards(enabled);
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = mine;
+  useEffect(() => {
+    if (enabled && hasNextPage && !isFetchingNextPage && !mine.isError) void fetchNextPage();
+  }, [enabled, hasNextPage, isFetchingNextPage, fetchNextPage, mine.isError]);
+
+  return {
+    cards: mine.data ?? [],
+    cardsPending: enabled && !mine.isError && (mine.isPending || !!hasNextPage),
+    cardsError: enabled && mine.isError,
   };
 }
 
@@ -115,17 +168,19 @@ export function usePocaDex() {
  * 판매를 걸거나 내리면 이 목록의 판매 상태도 함께 갱신돼야 합니다.
  */
 export function useMyDesignCopies(designId: number | undefined) {
+  const { user, isLoggedIn } = useAuth();
   return useQuery({
-    queryKey: nftKeys.myCopies(designId ?? 0),
+    queryKey: [...nftKeys.myCopies(designId ?? 0), isLoggedIn ? user?.userId : null],
     queryFn: () => nftApi.myCopies(designId as number),
     staleTime: STALE_TIME.SHORT,
-    enabled: Number.isInteger(designId) && (designId ?? 0) > 0,
+    enabled: isLoggedIn && !!user?.userId && Number.isInteger(designId) && (designId ?? 0) > 0,
   });
 }
 
 export function usePhotocardDetail(photocardId: number) {
+  const { user, isLoggedIn } = useAuth();
   return useQuery({
-    queryKey: nftKeys.detail(photocardId),
+    queryKey: [...nftKeys.detail(photocardId), isLoggedIn ? user?.userId : null],
     queryFn: () => nftApi.detail(photocardId),
     staleTime: STALE_TIME.SHORT,
     refetchInterval: (query) => {
@@ -146,7 +201,7 @@ export function useRecordPhotocardView(photocardId: number, enabled: boolean) {
   const record = useMutation({
     mutationFn: (id: number) => nftApi.recordView(id, getViewSessionId()),
     onSuccess: (result, id) => {
-      queryClient.setQueryData<PhotocardDetail>(nftKeys.detail(id), (current) =>
+      queryClient.setQueriesData<PhotocardDetail>({ queryKey: nftKeys.detail(id) }, (current) =>
         current ? { ...current, viewCount: result.viewCount } : current,
       );
     },
@@ -192,22 +247,50 @@ export function useClaimEventPack() {
 /**
  * 가진 카드팩 — 목록에 카드팩을 보여줄지, 몇 개인지 정할 때 씁니다.
  * 팩이 어떻게 늘어나는지는 서버가 정합니다. 화면은 남은 수만 봅니다.
+ *
+ * 🔴 **열리는 시각에 한 번** 다시 물어봅니다. 서버가 팩마다 개봉 시각(`packs[].openAt`)을 주므로
+ * 가장 이른 잠긴 팩의 시각까지 기다렸다가 그때 한 번만 요청합니다. 예전에는 남은 시간을 60초로
+ * 잘라 계속 물어봤는데, 열리기 전에는 매번 같은 답이었습니다.
+ *
+ * 🔴 **탭에 돌아왔을 때도 다시 받습니다**(`refetchOnWindowFocus`). 백그라운드에서는 타이머가 늦게
+ * 돌 수 있고, 앱 전체가 포커스 재조회를 끄고 있어서 이 쿼리만 켭니다 — 응답이 작고 개인 값입니다.
  */
 export function useDrawAvailability() {
   // 개인 데이터입니다 (useMyPhotocards 와 같은 이유로 막아둡니다).
   // 쓰는 화면은 로그인 뒤에만 열리지만, 세션 중에 토큰이 만료되면 비로그인 상태로 호출됩니다.
   const isLoggedIn = useIsLoggedIn();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: nftKeys.drawAvailability(),
     queryFn: nftApi.drawAvailability,
     /* 뽑고 나면 mutation 이 nftKeys.all 을 무효화해 곧바로 다시 물어봅니다 */
     staleTime: STALE_TIME.SHORT,
+    refetchOnWindowFocus: true,
     enabled: isLoggedIn,
   });
+
+  const { refetch, dataUpdatedAt } = query;
+  const nextOpenAt = nextLockedOpenAt(query.data);
+  useEffect(() => {
+    if (!nextOpenAt) return;
+
+    const delay = parseServerTime(nextOpenAt) - Date.now();
+    if (!Number.isFinite(delay)) return;
+    /* setTimeout 은 약 24.8일(2^31ms)을 넘으면 즉시 실행돼 버립니다 — 그보다 먼 팩은 기다리지 않습니다.
+       화면을 그만큼 오래 열어 두는 일은 없고, 다시 들어오면 새로 받습니다. */
+    if (delay > MAX_TIMER_MS) return;
+
+    /* 여유 250ms: 서버 시계보다 조금 늦게 물어야 "이미 열렸다" 는 답이 옵니다.
+       내 시계가 서버보다 빨라 이미 지났다고 나오면(delay ≤ 0) 5초 뒤에 다시 봅니다 —
+       재요청이 `dataUpdatedAt` 을 바꿔 이 effect 가 다시 돌므로, 서버가 열렸다고 답할 때까지만 반복됩니다. */
+    const timer = setTimeout(() => void refetch(), delay > 0 ? delay + 250 : 5000);
+    return () => clearTimeout(timer);
+  }, [nextOpenAt, dataUpdatedAt, refetch]);
+
+  return query;
 }
 
-export function useMyPhotocards() {
+export function useMyPhotocards(enabled = true) {
   // 개인 데이터입니다. 마켓(공개 화면)에서도 쓰기 때문에
   // 비로그인 상태에서 호출되면 401 이 나므로 반드시 막아둡니다.
   const isLoggedIn = useIsLoggedIn();
@@ -218,7 +301,7 @@ export function useMyPhotocards() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: nextCursor,
     staleTime: STALE_TIME.SHORT,
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && enabled,
     /* 민팅 또는 거래 정산이 끝날 때까지만 갱신합니다. 완료되면 스스로 멈춥니다. */
     refetchInterval: (query) =>
       query.state.data?.pages.some((page) =>

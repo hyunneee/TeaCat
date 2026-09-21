@@ -76,7 +76,7 @@ export function MyPage() {
       <Header title="마이페이지" transparent sticky={false} className="relative z-10 text-white" />
 
       <div style={{ paddingTop: HEADER_GAP }}>
-        <div className="relative px-4">
+        <div className="relative px-4 lg:px-0">
           <div
             aria-hidden
             /* 넓은 화면에서는 홈과 같이 **화면 끝까지** 갑니다. 본문 폭(1024px)에서
@@ -90,10 +90,8 @@ export function MyPage() {
             }}
           />
 
-          {/* 넓은 화면에서는 **카드만** 좁힙니다 — 짙은 배경판(위 div)은 full-bleed 로
-              둬야 경계가 화면을 가로지릅니다. 카드를 감싸는 컨테이너를 좁히면
-              `bottom-1/2` 가 기대는 높이는 그대로지만 배경판까지 같이 줄어듭니다. */}
-          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center lg:mx-auto lg:max-w-3xl">
+          {/* 프로필과 아래 목록은 AppLayout의 공통 본문 폭을 사용합니다. */}
+          <div className="surface shadow-card relative rounded-2xl px-5 pt-11 pb-5 text-center">
             {/* 카드 위쪽 테두리에 절반만 걸칩니다 (size-14 → -top-7).
                 위 절반이 짙은 배경 위에 놓이므로 **밝은 원**이어야 보입니다 —
                 배경과 같은 어두운 원이면 흰 테두리만 동동 뜬 것처럼 보입니다. */}
@@ -147,7 +145,7 @@ export function MyPage() {
         </div>
       </div>
 
-      <div className="space-y-6 p-4 lg:mx-auto lg:max-w-3xl lg:px-0">
+      <div className="space-y-6 p-4 lg:px-0">
         {!can.useTicket(user) && (
           <Card
             tone="warning"
@@ -167,7 +165,7 @@ export function MyPage() {
         )}
 
         <section>
-          <SectionTitle>내 활동</SectionTitle>
+          <SectionTitle>티켓</SectionTitle>
           <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<Ticket size={18} />}
@@ -179,6 +177,12 @@ export function MyPage() {
               title="취소표 대기 내역"
               onClick={() => navigate(ROUTES.MY_RESALE)}
             />
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>포카 활동</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<Sparkles size={18} />}
               title="내 포토카드"
@@ -204,6 +208,12 @@ export function MyPage() {
               title="내 판매 내역"
               onClick={() => navigate(ROUTES.MY_NFT_SALES)}
             />
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>고객 지원</SectionTitle>
+          <Card padded={false} className="divide-line divide-y overflow-hidden">
             <ListRow
               icon={<MessageSquare size={18} />}
               title="문의하기"

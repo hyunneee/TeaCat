@@ -8,6 +8,8 @@ import com.teacat.server.auth.dto.response.OauthCallbackResult;
 import com.teacat.server.auth.dto.response.PendingSignupResponse;
 import com.teacat.server.auth.exception.AuthErrorCode;
 import com.teacat.server.auth.security.AuthCookieFactory;
+import com.teacat.server.auth.security.ClientRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import com.teacat.server.auth.service.OauthService;
 import com.teacat.server.common.config.AppProperties;
 import com.teacat.server.common.exception.BusinessException;
@@ -84,7 +86,8 @@ public class OauthController {
             @Parameter(description = "SSAFY 가 실패를 알릴 때 붙여 보내는 값")
             @RequestParam(required = false) String error,
             @Parameter(hidden = true)
-            @CookieValue(name = AuthCookieFactory.OAUTH_STATE_COOKIE, required = false) String stateCookie) {
+            @CookieValue(name = AuthCookieFactory.OAUTH_STATE_COOKIE, required = false) String stateCookie,
+            @Parameter(hidden = true) HttpServletRequest http) {
         if (StringUtils.hasText(error)) {
             log.warn("SSAFY 인가 거부: {}", error);
             return withExpiredState(redirectToFrontend(STATUS_ERROR, AuthErrorCode.OAUTH_STATE_INVALID.getCode()))
@@ -94,7 +97,7 @@ public class OauthController {
         try {
             // 콜백에 실려 오는 state 는 SSAFY 가 자기 흐름을 위해 만든 값이라 우리 것이 아니다.
             // 그래서 쿼리가 아니라 우리가 심어 둔 쿠키로만 검증한다.
-            OauthCallbackResult result = oauthService.handleCallback(code, stateCookie);
+            OauthCallbackResult result = oauthService.handleCallback(code, stateCookie, ClientRequest.from(http));
 
             if (result.needsSignup()) {
                 // 가입이 끝날 때까지만 쓰는 티켓. 주소창에 남지 않도록 쿠키로 넘긴다

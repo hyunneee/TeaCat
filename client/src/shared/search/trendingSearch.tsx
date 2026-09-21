@@ -1,69 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Search, X } from 'lucide-react';
-import { http } from '@/shared/api';
+import { useSearchTrends, type SearchTrendItem } from './useSearchTrends';
 import { cn } from '@/shared/lib';
-
-export interface SearchTrendItem {
-  rank: number;
-  previousRank: number | null;
-  trend: 'UP' | 'DOWN' | 'SAME' | 'NEW';
-  keyword: string;
-  searchCount: number;
-}
-
-export interface SearchTrends {
-  bucketStartedAt: string | null;
-  generatedAt: string;
-  nextRefreshAt: string;
-  items: SearchTrendItem[];
-}
-
-const CACHE_KEY = 'teacat:search-trends:v1';
-const QUERY_KEY = ['global-search-trends'] as const;
-
-function cachedTrends(): SearchTrends | undefined {
-  try {
-    const value = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as SearchTrends | null;
-    return value && Date.parse(value.nextRefreshAt) > Date.now() ? value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function fetchTrends() {
-  const cached = cachedTrends();
-  if (cached) return cached;
-  const result = await http.get<SearchTrends>('/search/trends');
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(result));
-  } catch {
-    // 저장소가 차단된 환경에서는 TanStack Query 메모리 캐시만 사용합니다.
-  }
-  return result;
-}
-
-function useSearchTrends() {
-  const queryClient = useQueryClient();
-  const cached = cachedTrends();
-  const query = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: fetchTrends,
-    initialData: cached,
-    staleTime: cached ? Math.max(0, Date.parse(cached.nextRefreshAt) - Date.now()) : 0,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    if (!query.data) return;
-    const delay = Math.max(0, Date.parse(query.data.nextRefreshAt) - Date.now()) + 1000;
-    const timer = window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: QUERY_KEY }), delay);
-    return () => window.clearTimeout(timer);
-  }, [query.data, queryClient]);
-  return query;
-}
+import { Input, SectionTitle } from '@/shared/components/ui';
+import { DURATION } from '@/shared/lib/motion';
 
 interface Props {
   value: string;
@@ -72,6 +13,7 @@ interface Props {
   className?: string;
   autoFocus?: boolean;
   ariaLabel?: string;
+  variant?: 'default' | 'topnav';
 }
 
 export function TrendingSearchInput({
@@ -81,70 +23,164 @@ export function TrendingSearchInput({
   className,
   autoFocus,
   ariaLabel = '검색어',
+  variant = 'default',
 }: Props) {
-  const [focused, setFocused] = useState(false);
-  const [index, setIndex] = useState(0);
-  const reducedMotion = useReducedMotion();
-  const { data } = useSearchTrends();
-  const items = data?.items ?? [];
-  const rotating = !value && !focused && items.length > 0;
-
-  useEffect(() => {
-    if (!rotating || items.length < 2) return;
-    const timer = window.setInterval(() => setIndex((current) => (current + 1) % items.length), 2500);
-    return () => window.clearInterval(timer);
-  }, [items.length, rotating]);
-
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit(value);
   };
-  const item = items[index % Math.max(items.length, 1)];
 
   return (
     <form role="search" onSubmit={submit} className={cn('relative', className)}>
-      <div className="surface-sunken border-line flex h-10 items-center gap-2 rounded-full border px-4">
-        <Search size={17} className="text-ink-subtle shrink-0" />
-        <input
+      {variant === 'topnav' ? (
+        <div className="surface-sunken border-line flex h-10 items-center gap-2 rounded-full border px-4">
+          <button type="submit" aria-label="검색 실행" className="text-ink-subtle shrink-0">
+            <Search size={17} />
+          </button>
+          <input
+            autoFocus={autoFocus}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="공연·포토카드 검색"
+            aria-label={ariaLabel}
+            type="search"
+            enterKeyHint="search"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+          {value && (
+            <button type="button" aria-label="입력 지우기" onClick={() => onChange('')}>
+              <X size={16} className="text-ink-subtle" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <Input
           autoFocus={autoFocus}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder={items.length === 0 ? '공연·포토카드 검색' : undefined}
+          onClear={() => onChange('')}
           aria-label={ariaLabel}
+          placeholder="공연·포토카드 검색"
           type="search"
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          enterKeyHint="search"
+          tone="contrast"
+          leftIcon={
+            <button
+              type="submit"
+              aria-label="검색 실행"
+              className="hover:text-ink flex items-center justify-center rounded-full transition-colors"
+            >
+              <Search size={17} />
+            </button>
+          }
         />
-        {value && (
-          <button type="button" aria-label="검색어 지우기" onClick={() => onChange('')}>
-            <X size={16} className="text-ink-subtle" />
-          </button>
-        )}
-      </div>
-      {rotating && item && (
-        <button
-          type="button"
-          className="absolute inset-y-0 right-4 left-10 overflow-hidden text-left text-sm"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onSubmit(item.keyword)}
-          aria-label={`${item.rank}위 ${item.keyword} 검색`}
-        >
+      )}
+    </form>
+  );
+}
+
+function trendLabel(item: SearchTrendItem) {
+  if (item.trend === 'NEW') return 'NEW';
+  if (item.trend === 'SAME' || item.previousRank === null) return '—';
+  return `${item.trend === 'UP' ? '↑' : '↓'}${Math.abs(item.previousRank - item.rank)}`;
+}
+
+export function SearchEntryButton({
+  onOpen,
+  className,
+}: {
+  onOpen: () => void;
+  className?: string;
+}) {
+  const { data } = useSearchTrends();
+  const items = data?.items ?? [];
+  const [index, setIndex] = useState(0);
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    if (items.length < 2) return;
+    const timer = window.setInterval(
+      () => setIndex((current) => (current + 1) % items.length),
+      2500,
+    );
+    return () => window.clearInterval(timer);
+  }, [items.length]);
+  const item = items[index % Math.max(items.length, 1)];
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="공연·포토카드 검색 화면 열기"
+      className={cn(
+        'surface-sunken border-line flex h-10 items-center gap-2 rounded-full border px-4 text-left text-sm',
+        className,
+      )}
+    >
+      <Search size={17} className="text-ink-subtle shrink-0" />
+      <span className="relative h-6 min-w-0 flex-1 overflow-hidden" aria-hidden="true">
+        {item ? (
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
               key={`${item.rank}:${item.keyword}`}
               initial={reducedMotion ? false : { y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={reducedMotion ? undefined : { y: -16, opacity: 0 }}
-              transition={{ duration: 0.25 }}
+              transition={{ duration: reducedMotion ? 0 : DURATION.base }}
               className="absolute inset-0 flex items-center gap-2"
             >
               <strong className="text-accent-800 tabular-nums">{item.rank}</strong>
               <span className="truncate">{item.keyword}</span>
+              <span className="text-ink-subtle ml-auto shrink-0 text-xs">{trendLabel(item)}</span>
             </motion.span>
           </AnimatePresence>
-        </button>
+        ) : (
+          <span>공연·포토카드 검색</span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+export function SearchTrendList({ onSelect }: { onSelect: (keyword: string) => void }) {
+  const { data, isPending, isError, refetch } = useSearchTrends();
+  return (
+    <section className="w-full p-4 lg:mx-auto lg:max-w-xl lg:px-8 lg:pt-8" aria-label="인기 검색어">
+      <SectionTitle
+        description={`매시간 갱신${data?.bucketStartedAt ? ` · ${data.bucketStartedAt.replace('T', ' ').slice(0, 16)}부터 1시간 집계` : ''}`}
+      >
+        인기 검색어
+      </SectionTitle>
+      {isPending ? (
+        <p className="mt-4" role="status">
+          인기 검색어를 불러오는 중이에요.
+        </p>
+      ) : isError ? (
+        <div className="mt-4">
+          <p>인기 검색어를 불러오지 못했어요.</p>
+          <button type="button" onClick={() => void refetch()}>
+            다시 시도
+          </button>
+        </div>
+      ) : !data?.items.length ? (
+        <p className="text-ink-subtle mt-4 text-sm">
+          아직 집계된 인기 검색어가 없어요. 검색어를 직접 입력해 주세요.
+        </p>
+      ) : (
+        <ol className="mt-3 lg:mt-6 lg:space-y-1">
+          {data.items.map((item) => (
+            <li key={item.keyword}>
+              <button
+                type="button"
+                onClick={() => onSelect(item.keyword)}
+                className="hover:bg-canvas flex min-h-11 w-full items-center gap-3 rounded-lg px-2 text-left lg:min-h-12 lg:px-4"
+              >
+                <strong className="text-accent-800 w-6 tabular-nums">{item.rank}</strong>
+                <span className="min-w-0 flex-1 truncate">{item.keyword}</span>
+                <span className="text-ink-subtle text-xs">{trendLabel(item)}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
       )}
-    </form>
+    </section>
   );
 }

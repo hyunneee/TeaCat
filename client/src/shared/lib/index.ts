@@ -10,6 +10,15 @@ export {
   maskName,
 } from './format';
 export { local, session, STORAGE_KEY } from './storage';
+export {
+  FULL_VENUE,
+  STAGE_BAND_RATIO,
+  STAGE_LINE_RATIO,
+  seatSizeOf,
+  viewBoxOf,
+  type SeatPoint,
+  type ViewBox,
+} from './seatGeometry';
 export { getViewSessionId } from './viewSession';
 /* 🔴 공연 포스터·배너 전용입니다. 얼굴 이미지에 쓰지 마세요 (image.ts 주석 · CLAUDE.md 7장) */
 export { downscaleImage, type DownscaleOptions } from './image';

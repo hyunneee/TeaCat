@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
-import { Header } from '@/shared/components/layout';
+import { DetailHeader as Header } from '@/shared/components/layout';
 import { Loading } from '@/shared/components/common';
 import { Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import {
@@ -64,7 +64,11 @@ export function InquiryWritePage() {
     <>
       <Header title={isEditing ? '문의 수정' : '문의하기'} showBack />
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 p-4 pt-6">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 pt-6"
+      >
         <div>
           <Segmented
             options={TYPE_OPTIONS}

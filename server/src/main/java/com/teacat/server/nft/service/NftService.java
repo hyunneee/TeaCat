@@ -1,5 +1,6 @@
 package com.teacat.server.nft.service;
 
+import com.teacat.server.auth.security.ClientRequest;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftDesignAllocationRequest;
 import com.teacat.server.nft.dto.request.NftListingCreateRequest;
@@ -7,6 +8,7 @@ import com.teacat.server.nft.dto.request.NftMarketSort;
 import com.teacat.server.nft.dto.request.NftPhotocardIssueRequest;
 import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
+import com.teacat.server.nft.dto.response.MyNftPhotocardSummaryResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
 import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
@@ -20,6 +22,7 @@ import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
 import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
 import com.teacat.server.nft.entity.NftAuctionStatus;
 import com.teacat.server.nft.entity.NftListingStatus;
+import com.teacat.server.nft.entity.NftMintStatus;
 import com.teacat.server.nft.entity.NftPhotocard;
 import com.teacat.server.nft.entity.NftPhotocardDesign;
 import com.teacat.server.nft.entity.NftPhotocardListing;
@@ -102,7 +105,7 @@ public class NftService {
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.price(), row.sellerNickname(), row.viewCount()))
+                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(), row.viewCount()))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -155,8 +158,8 @@ public class NftService {
                 : null;
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
-                row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
-                row.groupName(), row.grade(), row.averagePrice(), row.viewCount());
+                row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
+                row.groupName(), row.grade(), row.averagePrice(), row.viewCount(), isOwner);
     }
 
     /**
@@ -212,6 +215,15 @@ public class NftService {
     public NftListingResponse registerListing(Long userId,
                                               Long photocardId,
                                               NftListingCreateRequest request) {
+        return registerListing(userId, photocardId, request, ClientRequest.unknown());
+    }
+
+    /** @param client 등록 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말)가 읽는다 */
+    @Transactional
+    public NftListingResponse registerListing(Long userId,
+                                              Long photocardId,
+                                              NftListingCreateRequest request,
+                                              ClientRequest client) {
         NftPhotocard photocard = getPhotocardForUpdate(photocardId);
         if (!photocard.isOwnedBy(userId)) {
             throw new BusinessException(NftErrorCode.PHOTOCARD_NOT_OWNED);
@@ -229,11 +241,11 @@ public class NftService {
             throw new BusinessException(NftErrorCode.AUCTION_ALREADY_ACTIVE);
         }
 
-        NftPhotocardListing listing = listingRepository.save(
-                NftPhotocardListing.create(
-                        photocard, photocard.getOwner(), request.price(),
-                        request.description() == null ? "" : request.description().trim()));
-        return NftListingResponse.from(listing);
+        NftPhotocardListing listing = NftPhotocardListing.create(
+                photocard, photocard.getOwner(), request.price(),
+                request.description() == null ? "" : request.description().trim());
+        listing.recordClientRequest(client);
+        return NftListingResponse.from(listingRepository.save(listing));
     }
 
     @Transactional
@@ -248,6 +260,13 @@ public class NftService {
 
     @Transactional
     public NftPurchaseResponse purchase(Long buyerId, Long photocardId, String idempotencyKeyHeader) {
+        return purchase(buyerId, photocardId, idempotencyKeyHeader, ClientRequest.unknown());
+    }
+
+    /** @param client 구매 요청을 보낸 단말. 이상거래 심사(판매자·구매자 동일 단말, 계정 탈취)가 읽는다 */
+    @Transactional
+    public NftPurchaseResponse purchase(Long buyerId, Long photocardId, String idempotencyKeyHeader,
+                                        ClientRequest client) {
         UUID idempotencyKey = parseIdempotencyKey(idempotencyKeyHeader);
 
         // 같은 구매자의 중복 키 요청과, 추후 CAT 계정 차감을 직렬화하기 위한 임시 잠금이다.
@@ -281,8 +300,9 @@ public class NftService {
         User buyer = userRepository.findById(buyerId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        NftPhotocardTrade trade = tradeRepository.saveAndFlush(
-                NftPhotocardTrade.pendingListing(listing, buyer, idempotencyKey));
+        NftPhotocardTrade trade = NftPhotocardTrade.pendingListing(listing, buyer, idempotencyKey);
+        trade.recordClientRequest(client); // 단말 컬럼은 updatable=false 라 INSERT 전에 채운다
+        trade = tradeRepository.saveAndFlush(trade);
         trade.initializeSettlement(CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.hold(buyerId, listing.getPrice(), CatMoneyHoldRefType.NFT_TRADE_BUYER, trade.getId());
         holdService.holdIncoming(listing.getSeller().getId(), listing.getPrice(),
@@ -334,6 +354,66 @@ public class NftService {
                 nextTimeCursor(hasNext, SALE_SCOPE, pageRows), hasNext);
     }
 
+    /**
+     * 내 포토카드 요약 — 도안별 보유 수와 판매 상태.
+     *
+     * <p>대표 카드 고르는 규칙은 화면이 갖고 있던 것을 그대로 옮겼다({@code buildPocaDex}).
+     * 카드는 최신순으로 오므로 <b>가장 최근 보관 중인 카드</b>가 대표가 되고, 보관 중인 카드가
+     * 없으면 가장 최근 카드다. 판매 상태는 마켓에 나간 것 중 가장 최근 한 장의 것이다.
+     */
+    public MyNftPhotocardSummaryResponse getMyPhotocardSummary(Long userId) {
+        List<NftMarketQueryRepository.OwnedStateRow> rows = queryRepository.findOwnedStates(userId);
+
+        Map<Long, DesignTally> byDesign = new LinkedHashMap<>();
+        long pending = 0;
+        for (NftMarketQueryRepository.OwnedStateRow row : rows) {
+            MyNftPhotocardSummaryResponse.MarketState state = marketStateOf(row);
+            if (row.status() == NftMintStatus.PENDING || "SETTLING".equals(row.marketStatus())) pending++;
+
+            DesignTally tally = byDesign.computeIfAbsent(row.designId(), id -> new DesignTally(row.photocardId(), state != null));
+            tally.count++;
+            if (state != null) {
+                tally.marketCount++;
+                if (tally.marketState == null) tally.marketState = state;
+            }
+            /* 대표는 보관 중인 카드를 먼저 — 세 장 중 한 장만 올려 둔 사람이 판매 중인 카드 상세로
+               떨어지면 거기서 할 일이 "판매 내리기" 뿐이라 남은 두 장을 보러 온 사람에게 막힌 길이다 */
+            if (tally.representativeOnMarket && state == null) {
+                tally.photocardId = row.photocardId();
+                tally.representativeOnMarket = false;
+            }
+        }
+
+        List<MyNftPhotocardSummaryResponse.Design> designs = byDesign.entrySet().stream()
+                .map(e -> new MyNftPhotocardSummaryResponse.Design(
+                        e.getKey(), e.getValue().count, e.getValue().marketCount,
+                        e.getValue().marketState, e.getValue().photocardId))
+                .toList();
+        return new MyNftPhotocardSummaryResponse(designs, pending);
+    }
+
+    /** 판매 상태 판정 — 화면의 `photocardMarketState` 와 같은 규칙이다 (정산 중 > 경매 > 고정가) */
+    private static MyNftPhotocardSummaryResponse.MarketState marketStateOf(
+            NftMarketQueryRepository.OwnedStateRow row) {
+        if ("SETTLING".equals(row.marketStatus())) return MyNftPhotocardSummaryResponse.MarketState.SETTLING;
+        if ("AUCTION".equals(row.marketType())) return MyNftPhotocardSummaryResponse.MarketState.AUCTION;
+        if ("FIXED_PRICE".equals(row.marketType())) return MyNftPhotocardSummaryResponse.MarketState.LISTED;
+        return null;
+    }
+
+    private static final class DesignTally {
+        int count;
+        int marketCount;
+        MyNftPhotocardSummaryResponse.MarketState marketState;
+        Long photocardId;
+        boolean representativeOnMarket;
+
+        DesignTally(Long photocardId, boolean onMarket) {
+            this.photocardId = photocardId;
+            this.representativeOnMarket = onMarket;
+        }
+    }
+
     public NftCursorPageResponse<MyNftPhotocardResponse> getMyPhotocards(
             Long userId, Boolean listed, String cursor, Integer requestedSize) {
         int size = validateSize(requestedSize);
@@ -345,7 +425,7 @@ public class NftService {
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.status(), row.listed(),
+                        row.performanceTitle(), row.eventName(), row.status(), row.listed(),
                         row.marketType() == null ? null
                                 : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
                         row.marketStatus() == null ? null

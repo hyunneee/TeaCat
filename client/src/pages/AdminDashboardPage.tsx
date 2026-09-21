@@ -1,5 +1,7 @@
 import {
   Armchair,
+  Activity,
+  Music,
   Building2,
   CalendarPlus,
   ChartLine,
@@ -71,7 +73,7 @@ export function AdminDashboardPage() {
 
             <BentoTile
               span={4}
-              title="유저 관리"
+              title="회원 관리"
               description="회원을 검색하고 역할·정보를 수정하거나 새 계정을 만듭니다."
               icon={UserPlus}
               to={ROUTES.ADMIN_USERS}
@@ -84,6 +86,13 @@ export function AdminDashboardPage() {
                 ))}
               </div>
             </BentoTile>
+            <BentoTile
+              span={4}
+              title="공연 관리"
+              description="공연 정보와 회차·가격을 관리합니다."
+              icon={Music}
+              to={ROUTES.ADMIN_CONCERTS}
+            />
 
             {/* 🔴 타일을 추가할 자리입니다. span 은 12칸 기준이고, 합이 12를
                    넘으면 자동으로 다음 줄로 넘어갑니다. */}
@@ -110,6 +119,13 @@ export function AdminDashboardPage() {
               icon={Armchair}
               to={ROUTES.ADMIN_STADIUM}
             />
+            <BentoTile
+              span={4}
+              title="모니터링"
+              description="운영 모니터링 화면을 확인합니다."
+              icon={Activity}
+              to={ROUTES.MONITORING}
+            />
           </>
         ) : canManageStadiumLayouts ? (
           <>
@@ -127,6 +143,25 @@ export function AdminDashboardPage() {
               icon={Armchair}
               to={ROUTES.ADMIN_STADIUM}
             />
+          </>
+        ) : can.manageConcert(user) ? (
+          <>
+            <BentoTile
+              span={6}
+              title="담당 공연 관리"
+              description="담당 공연의 정보와 회차·가격을 관리합니다."
+              icon={Music}
+              to={ROUTES.ADMIN_CONCERTS}
+            />
+            {can.checkIn(user) && (
+              <BentoTile
+                span={6}
+                title="입장 확인"
+                description="담당 공연의 회차를 선택하고 관객의 입장을 확인합니다."
+                icon={ScanFace}
+                to={ROUTES.ADMIN_CHECK_IN}
+              />
+            )}
           </>
         ) : (
           <BentoTile

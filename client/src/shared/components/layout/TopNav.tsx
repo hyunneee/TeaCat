@@ -5,7 +5,9 @@ import { Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { cn } from '@/shared/lib';
 import { TABS, useActiveIndex } from './navTabs';
-import { TrendingSearchInput } from '@/shared/search';
+import { SearchEntryButton, TrendingSearchInput } from '@/shared/search';
+import { useScrollNavigation } from './useScrollNavigation';
+import { sectionNavigation } from './sectionNavigation.model';
 
 /** 본문과 같은 폭으로 맞춥니다 — 로고가 본문 왼쪽 끝과 한 줄로 서야 기둥이 하나로 보입니다 */
 const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
@@ -30,28 +32,33 @@ const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
  * 아무도 안 옮깁니다 — 폰에서 하단 탭이 늘 붙어 있는 것과 같은 이유입니다.
  */
 export function TopNav() {
+  const { headerRef, hidden, reveal } = useScrollNavigation();
   const navigate = useNavigate();
   const location = useLocation();
+  const compact = sectionNavigation(location.pathname) !== null;
+  const isSearch = location.pathname === ROUTES.SEARCH;
+  const urlKeyword = new URLSearchParams(location.search).get('q') ?? '';
+  const [keyword, setKeyword] = useState(urlKeyword);
+  useEffect(() => setKeyword(urlKeyword), [urlKeyword, location.key]);
+  const submit = (value: string) => {
+    const query = value.trim();
+    navigate(query ? `${ROUTES.SEARCH}?q=${encodeURIComponent(query)}` : ROUTES.SEARCH, {
+      replace: true,
+    });
+  };
   const activeIndex = useActiveIndex();
   const activeTo = activeIndex >= 0 ? TABS[activeIndex]!.to : null;
-  const [keyword, setKeyword] = useState('');
-
-  /* 검색은 통합 검색 화면이 받습니다. 적은 글자를 `?q=` 로 넘겨 그 화면이 이어서 씁니다 */
-  const submit = (nextKeyword: string) => {
-    const q = nextKeyword.trim();
-    setKeyword(nextKeyword);
-    navigate(q ? `${ROUTES.SEARCH}?q=${encodeURIComponent(q)}` : ROUTES.SEARCH);
-  };
-
-  useEffect(() => {
-    if (location.pathname !== ROUTES.SEARCH) return;
-    setKeyword(new URLSearchParams(location.search).get('q') ?? '');
-  }, [location.pathname, location.search]);
 
   return (
-    <header className="surface border-line sticky top-0 z-30 hidden border-b lg:block">
+    <header
+      ref={headerRef}
+      data-nav-hidden={!compact && hidden}
+      data-nav-compact={compact}
+      onFocusCapture={reveal}
+      className="desktop-navigation surface border-line sticky top-0 z-40 hidden border-b lg:block"
+    >
       {/* ── 1줄 — 로고 · 검색 · 계정 ── */}
-      <div className={cn(ROW, 'relative h-16 gap-6')}>
+      <div className={cn(ROW, 'navigation-brand surface relative z-10 h-16 gap-6')}>
         <Link to={ROUTES.HOME} aria-label="TEACAT 홈" className="shrink-0">
           <Logo size={24} markSize={36} />
         </Link>
@@ -62,12 +69,21 @@ export function TopNav() {
             (남는 공간의 가운데일 뿐), 줄 기준으로 직접 가운데에 놓습니다.
             줄 폭은 최소 976px(64rem - px-6)이고 창은 448px 이라 좌우로 264px 씩
             남습니다 — 로고·계정과 겹치지 않습니다. */}
-        <TrendingSearchInput
-          value={keyword}
-          onChange={setKeyword}
-          onSubmit={submit}
-          className="absolute left-1/2 w-full max-w-md -translate-x-1/2"
-        />
+        {isSearch ? (
+          <TrendingSearchInput
+            variant="topnav"
+            autoFocus
+            value={keyword}
+            onChange={setKeyword}
+            onSubmit={submit}
+            className="absolute left-1/2 w-full max-w-md -translate-x-1/2"
+          />
+        ) : (
+          <SearchEntryButton
+            onOpen={() => navigate(ROUTES.SEARCH)}
+            className="absolute left-1/2 w-full max-w-md -translate-x-1/2"
+          />
+        )}
 
         {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
             어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
@@ -85,7 +101,11 @@ export function TopNav() {
       </div>
 
       {/* ── 2줄 — 가로 탭. 줄 폭을 **똑같이 나눠** 가집니다 ── */}
-      <nav className={cn(ROW, 'h-11')}>
+      <nav
+        aria-label="주요 메뉴"
+        inert={hidden || compact}
+        className={cn(ROW, 'h-11', compact && 'hidden')}
+      >
         {DESKTOP_TABS.map(({ to, label }) => {
           const isActive = to === activeTo;
 

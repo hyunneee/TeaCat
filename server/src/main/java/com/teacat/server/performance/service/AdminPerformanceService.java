@@ -458,7 +458,7 @@ public class AdminPerformanceService {
 
         // 남의 공연장 구역을 붙이면 배치도와 좌석이 어긋난다
         Map<Long, Area> stadiumAreas = areaRepository
-                .findAllByStadiumLayoutIdOrderByLevelCodeAscAreaCodeAsc(performance.getStadiumLayout().getId())
+                .findAllByStadiumLayoutIdOrderByDisplayOrderAscIdAsc(performance.getStadiumLayout().getId())
                 .stream()
                 .collect(Collectors.toMap(Area::getId, Function.identity()));
 

@@ -5,6 +5,7 @@ import type {
   MarketPhotocard,
   MyDesignCopy,
   MyPhotocard,
+  MyPhotocardSummary,
   DrawPoolCard,
   PhotocardArt,
   PhotocardDetail,
@@ -64,6 +65,12 @@ export const nftApi = {
   /** 내 포카. `listed` 로 고정가/경매 판매 중인 카드와 보관 중인 카드를 거를 수 있다 */
   mine: (params: PageParams & { listed?: boolean }) =>
     http.get<CursorPage<MyPhotocard>>('/users/me/photocards', { params }),
+
+  /**
+   * 내 포카 **요약** — 도안별 보유 수·판매 상태. 도감이 씁니다.
+   * 카드 목록을 페이지마다 끝까지 받아 오지 않고 이 한 번으로 갈음합니다.
+   */
+  mySummary: () => http.get<MyPhotocardSummary>('/users/me/photocards/summary'),
 
   /**
    * 내가 가진 **같은 도안** 카드 전부. 페이지가 없습니다 — 상세가 "몇 장 가졌나" 를
@@ -128,6 +135,7 @@ export const nftKeys = {
   arts: () => [...nftKeys.all, 'arts'] as const,
   drawPool: () => [...nftKeys.all, 'draw-pool'] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
+  mySummary: () => [...nftKeys.all, 'mine-summary'] as const,
   myCopies: (designId: number) => [...nftKeys.all, 'my-copies', designId] as const,
   drawAvailability: () => [...nftKeys.all, 'draw-availability'] as const,
   purchases: () => [...nftKeys.all, 'purchases'] as const,

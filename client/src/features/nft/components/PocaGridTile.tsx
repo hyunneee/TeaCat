@@ -30,7 +30,7 @@ interface Props {
  * ── 띠는 왜 고정 높이인가 ──────────────────────────────────
  * 카드팩에는 둘째 줄이 꼭 필요합니다(언제 열리는지). 포토카드에는 소속이 있지만 없는
  * 도안도 있습니다. 줄 수에 따라 띠가 늘었다 줄면 그 순간 다시 높이가 어긋나므로,
- * 띠는 `h-11` 로 두고 안에서 **가운데 맞춤**합니다. 한 줄만 있으면 그 줄이 가운데로 옵니다.
+ * 띠는 `h-16`으로 두어 카드 이름 두 줄과 소속 한 줄을 담습니다.
  *
  * 서버를 모릅니다 — props 로 받은 것만 그립니다. (CLAUDE.md 4-3)
  */
@@ -45,10 +45,12 @@ export function PocaGridTile({ art, overlay, label, caption, dimmed, className }
         {overlay}
       </div>
 
-      <div className="border-line/70 flex h-11 flex-col justify-center border-t px-2">
-        <p className="truncate text-center text-xs leading-tight font-semibold">{label}</p>
+      <div className="border-line/70 flex h-16 flex-col justify-center border-t px-3">
+        <p className="line-clamp-2 text-center text-[0.9375rem] leading-snug font-semibold">
+          {label}
+        </p>
         {caption && (
-          <p className="text-subtle mt-0.5 truncate text-center text-[0.6875rem] leading-tight">
+          <p className="text-subtle mt-0.5 truncate text-center text-[0.8125rem] leading-tight">
             {caption}
           </p>
         )}
