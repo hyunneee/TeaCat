@@ -159,4 +159,22 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".analytics")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi resaleApi() {
+        return GroupedOpenApi.builder()
+                .group("12-resale")
+                .displayName("취소표 대기")
+                .packagesToScan(BASE_PACKAGE + ".resale")
+                .build();
+    }
+
+    @Bean
+    public GroupedOpenApi notificationApi() {
+        return GroupedOpenApi.builder()
+                .group("13-notification")
+                .displayName("알림")
+                .packagesToScan(BASE_PACKAGE + ".notification")
+                .build();
+    }
 }
