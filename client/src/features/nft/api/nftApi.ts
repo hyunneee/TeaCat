@@ -6,7 +6,7 @@ import type {
   MyDesignCopy,
   MyPhotocard,
   MyPhotocardSummary,
-  DrawPoolCard,
+  PocaDexResponse,
   PhotocardArt,
   PhotocardDetail,
   PhotocardListing,
@@ -47,13 +47,8 @@ export const nftApi = {
    */
   arts: () => http.get<PhotocardArt[]>('/photocard-templates'),
 
-  /**
-   * 도감에 깔 **전체 도안** (뽑기에서 나올 수 있는 카드).
-   *
-   * 🔴 내 카드가 아니라 도안 목록입니다 — 도감은 안 가진 칸도 그려야 합니다.
-   * 커서가 없는 단순 배열입니다(도안 수가 많지 않습니다).
-   */
-  drawPool: () => http.get<DrawPoolCard[]>('/photocard-designs/draw-pool'),
+  /** 공개된 수집 도안과 내 보유 상태를 합친 도감. 미보유 앞면 정보는 서버가 null로 가립니다. */
+  drawPool: () => http.get<PocaDexResponse>('/photocard-designs/draw-pool'),
 
   /**
    * 포카 뽑기. **어떤 카드가 나오는지는 서버가 정합니다** — 응답을 그대로 연출합니다.
@@ -133,7 +128,7 @@ export const nftKeys = {
     [...nftKeys.all, 'market', keyword ?? '', sort ?? '', performanceId ?? 0] as const,
   detail: (photocardId: number) => [...nftKeys.all, 'detail', photocardId] as const,
   arts: () => [...nftKeys.all, 'arts'] as const,
-  drawPool: () => [...nftKeys.all, 'draw-pool'] as const,
+  drawPool: (userId?: number) => [...nftKeys.all, 'draw-pool', userId ?? 0] as const,
   mine: () => [...nftKeys.all, 'mine'] as const,
   mySummary: () => [...nftKeys.all, 'mine-summary'] as const,
   myCopies: (designId: number) => [...nftKeys.all, 'my-copies', designId] as const,

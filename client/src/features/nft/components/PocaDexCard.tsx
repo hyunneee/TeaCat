@@ -80,14 +80,18 @@ function StateDot({
  * 도감은 안 가진 칸이 대부분인 화면이라 그 비용이 큽니다. 그래서 아예 요청하지 않고
  * 물음표만 그립니다 — 무엇이 남았는지는 세어 보면 알고, 무엇인지는 모아야 압니다.
  *
- * ⚠️ 대신 안 가진 칸은 **모양으로도 구분되지 않습니다.** 그게 도감의 재미이기도 하지만,
- * "어떤 카드가 남았는지 힌트라도" 라는 요구가 오면 이름만 여는 쪽부터 검토하세요.
+ * 안 가진 칸도 획득처는 표시합니다. 카드의 정체는 숨기면서 어느 공연이나 이벤트 팩을
+ * 확인해야 하는지는 알 수 있어야 하기 때문입니다.
  *
  * 껍데기(그림 상자 + 이름 띠)는 `PocaGridTile` 이 그립니다 — 카드팩 칸과 높이를
  * 구조로 맞추기 위해서입니다(그 주석 참고).
  */
 export function PocaDexCard({ entry, onOpen }: Props) {
   const owned = entry.count > 0;
+  const acquisition =
+    entry.acquisition.type === 'PERFORMANCE'
+      ? `공연 · ${entry.acquisition.name}`
+      : entry.acquisition.name;
 
   const tile = (
     <PocaGridTile
@@ -142,8 +146,8 @@ export function PocaDexCard({ entry, onOpen }: Props) {
         ) : undefined
       }
       label={owned ? entry.name : '???'}
-      /* 소속은 가진 칸에만. 안 가진 칸에 적으면 "무엇인지는 모아야 안다" 가 깨집니다 */
-      caption={owned ? entry.group : undefined}
+      /* 앞면은 숨겨도 어디에서 얻는 카드는 알려 줍니다. 공연명은 공개된 공연만 응답됩니다. */
+      caption={<span title={`획득처: ${acquisition}`}>{acquisition}</span>}
     />
   );
 

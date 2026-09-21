@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ImagePlus, TriangleAlert } from 'lucide-react';
 import { Button, Card, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
@@ -8,8 +9,10 @@ import { useMyConcert } from '@/features/organizer';
 import {
   AdminPocaDesignTable,
   AdminPocaPoolPicker,
+  AdminPocaTemplateFormModal,
   useAddPerformanceDesigns,
   useAdminPocaTemplates,
+  useCreatePocaTemplate,
   usePerformanceDrawPool,
   useRetryDesignRegistration,
   useSetDesignDrawPool,
@@ -35,9 +38,11 @@ export function AdminPerformanceDrawPoolPage() {
   const { data: templates } = templateQuery;
 
   const add = useAddPerformanceDesigns(performanceId);
+  const createTemplate = useCreatePocaTemplate();
   const retry = useRetryDesignRegistration();
   const exclude = useSetDesignDrawPool();
   const { open } = useModal();
+  const [addingTemplate, setAddingTemplate] = useState(false);
 
   /* 🔴 되돌릴 수 없는 동작입니다 — 수량이 온체인 maxSupply 로 박히고, 첫 장이 나가면
      올리지도 내리지도 못합니다. 소각 함수가 없어 잘못 나간 카드는 회수도 안 됩니다. */
@@ -130,7 +135,17 @@ export function AdminPerformanceDrawPoolPage() {
           </Card>
 
           <Card className="space-y-3 p-4">
-            <p className="text-ink font-semibold">카드 넣기</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-ink font-semibold">카드 넣기</p>
+              <Button
+                variant="soft"
+                size="sm"
+                leftIcon={<ImagePlus size={15} />}
+                onClick={() => setAddingTemplate(true)}
+              >
+                새 카드 그림
+              </Button>
+            </div>
             <AdminPocaPoolPicker
               templates={templates ?? []}
               addedTemplateIds={pool.designs
@@ -173,6 +188,17 @@ export function AdminPerformanceDrawPoolPage() {
           뒤로
         </Button>
       </div>
+
+      {addingTemplate && (
+        <AdminPocaTemplateFormModal
+          open
+          onClose={() => setAddingTemplate(false)}
+          isPending={createTemplate.isPending}
+          onSubmit={(body) =>
+            createTemplate.mutate(body, { onSuccess: () => setAddingTemplate(false) })
+          }
+        />
+      )}
     </div>
   );
 }

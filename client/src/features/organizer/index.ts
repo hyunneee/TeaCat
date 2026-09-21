@@ -10,11 +10,7 @@ export {
   useDeleteConcert,
   useStadiums,
 } from './hooks/useCreateConcert';
-export {
-  useAddSchedule,
-  useDeleteSchedule,
-  useGenerateSeats,
-} from './hooks/useManageSchedules';
+export { useAddSchedule, useDeleteSchedule, useGenerateSeats } from './hooks/useManageSchedules';
 export { useMyConcerts, useMyConcert, useSetVisibility } from './hooks/useMyConcerts';
 export {
   useStadiumLayouts,
@@ -30,7 +26,7 @@ export { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 export { ConcertForm } from './components/ConcertForm';
 export { ScheduleEditor } from './components/ScheduleEditor';
 export { AreaPricingEditor } from './components/AreaPricingEditor';
-export { PhotocardDesignEditor } from './components/PhotocardDesignEditor';
+export { ConcertPhotocardPoolEditor } from './components/ConcertPhotocardPoolEditor';
 
 // Model
 export { organizerApi, organizerKeys } from './api/organizerApi';
@@ -46,7 +42,6 @@ export {
   isUnsellable,
   pickSaleType,
   changeSaleType,
-
   exceedsVenueCapacity,
   type AreaPricingRow,
   type StadiumArea,
@@ -60,10 +55,6 @@ export {
   isTicketingStarted,
   isConcertFormDirty,
   validateNewScheduleDate,
-  arePhotocardDesignsValid,
-  validatePhotocardDesign,
-  filledPhotocardDesigns,
-  EMPTY_PHOTOCARD_DESIGN,
   type ConcertCreateForm as ConcertCreateFormValues,
   type ConcertCreateErrors,
   type ConcertFormMode,
@@ -71,6 +62,4 @@ export {
   type ConcertUpdateRequest,
   type ConcertVisibilityResponse,
   type StadiumSummary,
-  type PhotocardDesignForm,
-  type PhotocardDesignResponse,
 } from './model/organizer.types';

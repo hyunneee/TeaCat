@@ -4,15 +4,12 @@ import type { ConcertDetail, ConcertSummary, PerformanceArea } from '@/features/
 import type { AreaSaveRequest, StadiumAreaListResponse } from '../model/areaPricing';
 import {
   toConcertCreateFormData,
-  toPhotocardDesignFormData,
   toServerDateTime,
   type ConcertCreateForm,
   type ConcertCreateResponse,
   type ConcertUpdateRequest,
   type ConcertVisibilityResponse,
   type ImageType,
-  type PhotocardDesignForm,
-  type PhotocardDesignResponse,
   type PresignedUpload,
   type ScheduleCreateResponse,
   type SeatGenerateResponse,
@@ -38,9 +35,13 @@ export const organizerApi = {
     /* 등록은 파일을 multipart 로 서버에 보내고(수정은 스토리지로 직접 PUT 합니다),
        서버는 크기만 검사하고 변환하지 않습니다. 그래서 여기서도 줄여 보냅니다 —
        한쪽만 줄이면 "등록한 공연은 가볍고 수정한 공연은 무거운" 상태가 됩니다. */
-    http.post<ConcertCreateResponse>('/admin/concerts', toConcertCreateFormData(await shrink(form)), {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    http.post<ConcertCreateResponse>(
+      '/admin/concerts',
+      toConcertCreateFormData(await shrink(form)),
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    ),
 
   /** 공연 수정 (API-262). 보낸 필드만 바뀝니다 */
   updateConcert: (concertId: string, body: ConcertUpdateRequest) =>
@@ -109,23 +110,6 @@ export const organizerApi = {
   generateSeats: (scheduleId: string) =>
     http.post<SeatGenerateResponse>(`/admin/schedules/${scheduleId}/seats`),
 
-  /**
-   * 포토카드 도안 등록. ADMIN 전용, multipart.
-   *
-   * 요청 하나가 **IPFS 핀 두 번(이미지 → 메타데이터 JSON) → 도안 저장 → 온체인 등록**까지 갑니다.
-   * 그래서 공연 등록보다 느리고, 응답은 `chainStatus: REGISTERING` 으로 옵니다 —
-   * 확정(`REGISTERED`)은 서버의 감시가 30~40초 뒤에 채웁니다.
-   *
-   * 공연 이미지와 달리 업로드 URL(API-270)을 쓰지 않습니다. 파일 바이트를 쥔 쪽이 그대로
-   * Pinata 에 올려야 CID 가 나오기 때문입니다.
-   */
-  createPhotocardDesign: (performanceId: number, design: PhotocardDesignForm) =>
-    http.post<PhotocardDesignResponse>(
-      '/admin/photocard-designs',
-      toPhotocardDesignFormData(performanceId, design),
-      { headers: { 'Content-Type': 'multipart/form-data' } },
-    ),
-
   /** 이미지 업로드 URL 발급 (API-270) */
   issueUploadUrl: (imageType: ImageType, contentType: string) =>
     http.post<PresignedUpload>('/admin/uploads/presigned', { imageType, contentType }),
@@ -192,7 +176,8 @@ export const organizerKeys = {
   stadiums: () => [...organizerKeys.all, 'stadiums'] as const,
   myConcerts: () => [...organizerKeys.all, 'myConcerts'] as const,
   myConcert: (concertId: string) => [...organizerKeys.all, 'myConcert', concertId] as const,
-  stadiumLayouts: (stadiumId: string) => [...organizerKeys.all, 'stadiumLayouts', stadiumId] as const,
+  stadiumLayouts: (stadiumId: string) =>
+    [...organizerKeys.all, 'stadiumLayouts', stadiumId] as const,
   /* 구역은 공연장이 아니라 **무대 형식**에 딸려 있습니다. 형식마다 구역이 다르게 나뉘어서,
      공연장 id 로 캐시하면 형식을 바꿔도 앞 형식의 구역이 그대로 남습니다 */
   layoutAreas: (layoutId: string) => [...organizerKeys.all, 'layoutAreas', layoutId] as const,

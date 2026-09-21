@@ -8,12 +8,10 @@ import {
   TITLE_MAX_LENGTH,
   type ConcertCreateErrors,
   type ConcertCreateForm as FormValues,
-  type PhotocardDesignForm,
   type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
 import { AreaPricingEditor } from './AreaPricingEditor';
-import { PhotocardDesignEditor } from './PhotocardDesignEditor';
 
 interface Props {
   form: FormValues;
@@ -56,14 +54,10 @@ interface Props {
     onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
   };
   /**
-   * 공연과 함께 등록할 포토카드 도안. **등록 화면에서만** 넘깁니다 —
-   * 도안 API 가 `performanceId` 를 요구해서 공연이 만들어진 뒤에야 보낼 수 있고,
-   * 수정 화면은 이미 있는 공연이라 도안 관리가 따로 필요합니다.
+   * 공연과 함께 구성할 포토카드 풀. 등록 화면이 템플릿 조회·추가 상태를 조립해 넘깁니다.
+   * 수정 화면은 이미 공연 ID가 있으므로 별도 풀 관리 화면을 씁니다.
    */
-  designs?: PhotocardDesignForm[];
-  onDesignsChange?: (designs: PhotocardDesignForm[]) => void;
-  /** 도안 줄의 에러를 보여줄지. 제출을 누른 뒤부터 켭니다 */
-  showDesignErrors?: boolean;
+  photocardPool?: ReactNode;
   onChange: (patch: Partial<FormValues>) => void;
   onBlur: (name: keyof FormValues) => void;
   onSubmit: () => void;
@@ -88,9 +82,7 @@ export function ConcertForm({
   editing = false,
   layouts,
   areaPricing,
-  designs,
-  onDesignsChange,
-  showDesignErrors = false,
+  photocardPool,
   onChange,
   onBlur,
   onSubmit,
@@ -193,10 +185,13 @@ export function ConcertForm({
               공연장을 먼저 선택하면 무대 형식이 나타나요.
             </p>
           ) : layouts.loading ? (
-            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">무대 형식을 불러오는 중…</p>
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              무대 형식을 불러오는 중…
+            </p>
           ) : layouts.options.length === 0 ? (
             <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">
-              이 공연장에 쓸 수 있는 무대 형식이 없어요. 공연장 관리에서 형식을 활성 상태로 만들어 주세요.
+              이 공연장에 쓸 수 있는 무대 형식이 없어요. 공연장 관리에서 형식을 활성 상태로 만들어
+              주세요.
             </p>
           ) : (
             <select
@@ -235,9 +230,13 @@ export function ConcertForm({
               무대 형식을 먼저 선택하면 구역이 나타나요.
             </p>
           ) : areaPricing.loading ? (
-            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">구역을 불러오는 중…</p>
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              구역을 불러오는 중…
+            </p>
           ) : areaPricing.error ? (
-            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">구역 목록을 불러오지 못했어요.</p>
+            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">
+              구역 목록을 불러오지 못했어요.
+            </p>
           ) : (
             <AreaPricingEditor
               rows={areaPricing.rows}
@@ -342,14 +341,7 @@ export function ConcertForm({
         onChange={pickFile('detailImage')}
       />
 
-      {designs && onDesignsChange && (
-        <PhotocardDesignEditor
-          designs={designs}
-          showErrors={showDesignErrors}
-          disabled={submitting}
-          onChange={onDesignsChange}
-        />
-      )}
+      {photocardPool}
 
       <Button
         type="submit"
