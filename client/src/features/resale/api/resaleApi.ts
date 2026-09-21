@@ -1,10 +1,5 @@
 import { http } from '@/shared/api';
-import type {
-  ApplyResaleRequest,
-  DrawResult,
-  ResaleEntry,
-  ResaleSection,
-} from '../model/resale.types';
+import type { ApplyResaleRequest, ResaleEntry, ResaleSection } from '../model/resale.types';
 
 export const resaleApi = {
   sections: (scheduleId: string) =>
@@ -22,11 +17,8 @@ export const resaleApi = {
   cancel: (entryId: string, rejoin = false) =>
     http.delete<void>(`/resale/${entryId}?rejoin=${rejoin ? 'true' : 'false'}`),
 
-  /**
-   * [데모 전용] 즉시 추첨.
-   * 실제로는 취소표가 나오는 순간 서버가 NRF 로 돌리고 메일로 알립니다.
-   */
-  draw: (entryId: string) => http.post<DrawResult>(`/resale/${entryId}/draw`),
+  /* "즉시 추첨" API 는 없습니다. 추첨은 취소표가 생기는 순간 서버가 온체인으로 돌리고,
+     사용자는 결과만 봅니다 — 사용자가 돌릴 수 있는 것처럼 보이면 공정성이 의심받습니다. */
 };
 
 export const resaleKeys = {

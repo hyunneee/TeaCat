@@ -76,21 +76,3 @@ export function useCancelResale() {
   });
 }
 
-/** [데모 전용] 추첨 즉시 실행 */
-/**
- * 즉시 추첨.
- *
- * ⚠️ **사용자 화면에서는 쓰지 않습니다.** 추첨은 취소표가 생길 때 서버가 돌립니다.
- *    사용자가 직접 돌릴 수 있는 것처럼 보이면 공정성이 의심받습니다.
- *    운영 도구·데모용으로만 남겨둔 바인딩입니다.
- */
-export function useDrawResale() {
-  return useMutation({
-    mutationFn: (entryId: string) => resaleApi.draw(entryId),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: resaleKeys.all });
-      if (result.status === 'WON') toast.success('당첨됐어요! 12시간 내에 결제해 주세요.');
-      else toast.info('아쉽게도 이번엔 당첨되지 않았어요.');
-    },
-  });
-}
