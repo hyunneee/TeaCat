@@ -5,6 +5,7 @@ import { STALE_TIME } from '@/shared/constants';
 import { adminPocaDesignApi, adminPocaDesignKeys } from '../api/adminPocaDesignApi';
 import type {
   AdminPocaDesign,
+  AdminPocaTemplate,
   AdminPocaTemplateCreateRequest,
   PocaPoolItem,
 } from '../model/adminPocaDesign.types';
@@ -34,8 +35,13 @@ export function useCreatePocaTemplate() {
     mutationFn: (body: AdminPocaTemplateCreateRequest) => adminPocaDesignApi.createTemplate(body),
     /* 그림을 IPFS 에 올리는 요청이라 느립니다. 자동 재시도가 붙으면 같은 그림이 두 번 올라갑니다 */
     retry: false,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: adminPocaDesignKeys.templates() });
+    onSuccess: (template) => {
+      /* 등록 응답을 바로 목록에 넣습니다. 공연 등록 모달은 새 templateId를 즉시 선택하므로,
+         invalidate 응답을 기다리면 수량 칸이 잠깐 사라져 폼 검증이 흔들립니다. */
+      queryClient.setQueryData<AdminPocaTemplate[]>(adminPocaDesignKeys.templates(), (current) => [
+        template,
+        ...(current ?? []).filter((item) => item.templateId !== template.templateId),
+      ]);
       toast.success('카드 그림을 등록했어요.');
     },
     onError: (error) => toast.error(message(error, '카드 그림을 등록하지 못했어요.')),

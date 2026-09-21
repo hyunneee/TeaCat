@@ -3,8 +3,8 @@
  *
  * 이 파일에 없는 것은 밖에서 쓸 수 없습니다 (ESLint 가 막습니다).
  *
- * 🔴 서버의 /admin/** 은 전부 ADMIN 전용입니다. 화면을 붙일 때
- *    `can.accessAdmin` / `can.manageUsers` (features/auth) 로 먼저 막으세요.
+ * 서버의 /admin/** 권한은 기능별로 다릅니다. 템플릿 조회·등록과 공연 풀은 PERFORMANCE도 쓰고,
+ * 회원·전역 콘텐츠 관리는 ADMIN 전용입니다. 화면을 붙일 때 해당 `can.*` 정책을 확인하세요.
  */
 
 // Controller
@@ -142,9 +142,13 @@ export {
 } from './hooks/useAdminPocaDesigns';
 export {
   DESIGN_NAME_MAX,
+  POCA_POOL_MAX_SUPPLY,
   designNameLength,
   isDrawable,
+  isPerformancePoolSelectionValid,
+  isPocaPoolSelectionValid,
   notYetDrawable,
+  pocaPoolItems,
 } from './model/adminPocaDesign.model';
 export type {
   AdminPerformanceDrawPool,
@@ -154,6 +158,7 @@ export type {
   PocaDesignChainStatus,
   PocaDesignGrade,
   PocaPoolItem,
+  PocaPoolSelection,
 } from './model/adminPocaDesign.types';
 export { adminAnalyticsApi, adminAnalyticsKeys } from './api/adminAnalyticsApi';
 export {
