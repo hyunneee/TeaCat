@@ -55,6 +55,7 @@ const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage
 const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
+const SongpyeonGamePage = page(() => import('@/pages/SongpyeonGamePage'), 'SongpyeonGamePage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
@@ -429,6 +430,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
           { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
+          { path: ROUTES.TOKEN_SONGPYEON, element: withBoundary(<SongpyeonGamePage />) },
 
 
           /* ── AI 스티커 (포카 꾸미기) ── `FEATURE.sticker` 가 꺼지면 길이 없습니다.

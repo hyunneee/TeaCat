@@ -4,6 +4,8 @@ import com.teacat.server.banner.entity.MainBanner;
 import com.teacat.server.banner.entity.MainBannerImageFocus;
 import com.teacat.server.banner.entity.MainBannerType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -40,10 +42,21 @@ public record BannerWriteRequest(
         String imageKey,
 
         @Schema(description = """
-                그림에서 보여줄 부분. 배너 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면
-                나머지가 잘린다. 타입과 무관하며, 비우면 CENTER 다.
-                """, example = "TOP")
-        MainBannerImageFocus imageFocus,
+                그림에서 보여줄 한 점의 가로 위치(%). 배너 틀(폰 4:3 · 데스크톱 2:1)과 비율이
+                다르면 나머지가 잘린다. 0 이 왼쪽 끝, 50 이 가운데, 100 이 오른쪽 끝이고
+                CSS `object-position` 으로 그대로 옮겨진다. 타입과 무관하며, 비우면 50 이다.
+                """, example = "50")
+        @Min(value = 0, message = "보여줄 위치는 0 ~ 100 사이여야 합니다.")
+        @Max(value = 100, message = "보여줄 위치는 0 ~ 100 사이여야 합니다.")
+        Integer imageFocusX,
+
+        @Schema(description = """
+                그림에서 보여줄 한 점의 세로 위치(%). 0 이 위쪽 끝, 50 이 가운데,
+                100 이 아래쪽 끝이다. 비우면 50 이다.
+                """, example = "30")
+        @Min(value = 0, message = "보여줄 위치는 0 ~ 100 사이여야 합니다.")
+        @Max(value = 100, message = "보여줄 위치는 0 ~ 100 사이여야 합니다.")
+        Integer imageFocusY,
 
         @Schema(description = "연결할 공연 ID (PERFORMANCE 일 때 필수)", example = "3")
         Long performanceId,
@@ -66,6 +79,6 @@ public record BannerWriteRequest(
      * 400 이 나면 배너를 아예 못 고치게 된다. 안 오면 지금까지와 같은 가운데다.
      */
     public MainBannerImageFocus imageFocusOrCenter() {
-        return imageFocus == null ? MainBannerImageFocus.CENTER : imageFocus;
+        return MainBannerImageFocus.of(imageFocusX, imageFocusY);
     }
 }

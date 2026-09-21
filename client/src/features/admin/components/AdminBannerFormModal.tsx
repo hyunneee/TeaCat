@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageUp } from 'lucide-react';
 import { Button, Input, Modal, Segmented, Select, Textarea } from '@/shared/components/ui';
 import { useConcerts } from '@/features/concert';
-import { DEFAULT_BANNER_FOCUS, type BannerImageFocus } from '@/features/banner';
+import { DEFAULT_BANNER_FOCUS, focusOf, type BannerImageFocus } from '@/features/banner';
 import { BannerFocusPicker } from './BannerFocusPicker';
 import type {
   AdminBanner,
@@ -54,7 +54,7 @@ export function AdminBannerFormModal({
   const [imageKey, setImageKey] = useState(banner?.imageKey ?? '');
   const [preview, setPreview] = useState(banner?.imageUrl ?? '');
   const [imageFocus, setImageFocus] = useState<BannerImageFocus>(
-    banner?.imageFocus ?? DEFAULT_BANNER_FOCUS,
+    banner ? focusOf(banner.imageFocusX, banner.imageFocusY) : DEFAULT_BANNER_FOCUS,
   );
   const [submitted, setSubmitted] = useState(false);
 
@@ -73,6 +73,9 @@ export function AdminBannerFormModal({
     const key = await onUpload(file);
     setImageKey(key);
     setPreview(URL.createObjectURL(file));
+    /* 그림이 바뀌면 맞춰 둔 자리는 의미가 없습니다 — 다른 그림의 "위쪽 얼굴" 자리를
+       그대로 물려받으면 엉뚱한 데가 남습니다. 가운데에서 다시 맞추게 합니다 */
+    setImageFocus(DEFAULT_BANNER_FOCUS);
   };
 
   /* 크롭 위치를 고르려면 **무엇이 잘리는지** 보여야 합니다. 이미지 배너는 방금 올린
@@ -101,7 +104,8 @@ export function AdminBannerFormModal({
       label: label.trim() || null,
       imageKey: type === 'IMAGE' ? imageKey : null,
       /* 타입과 무관합니다 — 공연 포스터도 같은 틀에 담겨 잘립니다 */
-      imageFocus,
+      imageFocusX: imageFocus.x,
+      imageFocusY: imageFocus.y,
       performanceId: type === 'PERFORMANCE' ? Number(performanceId) : null,
       linkPath: type === 'IMAGE' ? linkPath.trim() || null : null,
       active: banner?.active ?? true,

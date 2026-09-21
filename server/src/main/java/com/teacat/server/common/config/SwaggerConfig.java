@@ -177,4 +177,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".notification")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi rewardApi() {
+        return GroupedOpenApi.builder()
+                .group("14-reward")
+                .displayName("캣머니 보상")
+                .packagesToScan(BASE_PACKAGE + ".reward")
+                .build();
+    }
 }
