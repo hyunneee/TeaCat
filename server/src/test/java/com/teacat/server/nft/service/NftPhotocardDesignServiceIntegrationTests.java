@@ -2,6 +2,7 @@ package com.teacat.server.nft.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.common.ipfs.IpfsPinService;
+import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.nft.client.ChainTxReport;
 import com.teacat.server.nft.client.PhotocardChainClient;
 import com.teacat.server.nft.client.PhotocardDesignRegisterResult;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willReturn;
@@ -75,7 +77,11 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
 
     private static final String IMAGE_CID = "bafyIMAGE";
     private static final String METADATA_CID = "bafyMETADATA";
+    /** MinIO 가 실패했을 때만 쓰이는 폴백 주소 */
     private static final String GATEWAY_URL = "https://gateway.pinata.cloud/ipfs/" + IMAGE_CID;
+    /** 평소에 화면이 쓰는 주소 — MinIO 공개 경로 */
+    private static final String STORAGE_URL =
+            "https://teacat.site/storage/teacat/public/photocards/" + IMAGE_CID + ".png";
     private static final String TX_HASH = "0x" + "a".repeat(64);
     private static final String CONTRACT = "0x" + "b".repeat(40);
 
@@ -94,6 +100,9 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
     @MockitoBean
     private PhotocardChainClient chainClient;
 
+    @MockitoBean
+    private FileStorageService fileStorageService;
+
     private Long performanceId;
 
     @BeforeEach
@@ -103,6 +112,7 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
         given(ipfsPinService.pinImage(any())).willReturn(IMAGE_CID);
         given(ipfsPinService.pinJson(any(), any())).willReturn(METADATA_CID);
         given(ipfsPinService.gatewayUrl(IMAGE_CID)).willReturn(GATEWAY_URL);
+        given(fileStorageService.uploadPublic(any(), anyString(), anyString())).willReturn(STORAGE_URL);
         given(chainClient.photocardContractAddress()).willReturn(CONTRACT);
     }
 
@@ -139,14 +149,33 @@ class NftPhotocardDesignServiceIntegrationTests extends PostgresIntegrationTest 
 
         assertThat(response.imageCid()).isEqualTo(IMAGE_CID);
         assertThat(response.metadataCid()).isEqualTo(METADATA_CID);
-        // ipfs:// 는 브라우저가 못 연다. 화면이 쓰는 주소는 게이트웨이여야 한다
-        assertThat(response.imageUrl()).isEqualTo(GATEWAY_URL);
+        // 화면이 쓰는 주소는 MinIO 사본이다. 게이트웨이를 직접 보던 시절에는
+        // Pinata 한도가 차는 날 포토카드가 뜨는 모든 화면이 함께 깨졌다 (2026-09-21)
+        assertThat(response.imageUrl()).isEqualTo(STORAGE_URL);
         // 체인이 가리키는 문서는 게이트웨이가 아니라 스킴 주소다
         assertThat(response.metadataUri()).isEqualTo("ipfs://" + METADATA_CID);
         assertThat(response.chainStatus()).isEqualTo(NftDesignChainStatus.REGISTERING);
         assertThat(response.registerTxHash()).isEqualTo(TX_HASH);
         assertThat(response.contractAddress()).isEqualTo(CONTRACT);
         assertThat(response.chainId()).isEqualTo(blockchainProperties.chainId());
+    }
+
+    /**
+     * MinIO 사본은 화면 편의지 NFT 의 성립 조건이 아니다. CID 는 이미 손에 있고 온체인 등록도
+     * 그 CID 로 된다 — 여기서 막아 세우면 MinIO 가 잠깐 흔들릴 때 도안을 아예 못 만든다.
+     */
+    @Test
+    void 그림_사본_업로드가_실패해도_도안은_만들어지고_게이트웨이로_물러선다() {
+        givenChainAccepts("PENDING");
+        willThrow(new BusinessException(NftErrorCode.DESIGN_NOT_FOUND))
+                .given(fileStorageService).uploadPublic(any(), anyString(), anyString());
+
+        NftPhotocardDesignResponse response = designService.create(request());
+
+        assertThat(response.imageUrl()).isEqualTo(GATEWAY_URL);
+        // 핀도 온체인 등록도 그대로 간다 — 실패한 건 화면용 사본뿐이다
+        assertThat(response.imageCid()).isEqualTo(IMAGE_CID);
+        assertThat(response.chainStatus()).isEqualTo(NftDesignChainStatus.REGISTERING);
     }
 
     @Test

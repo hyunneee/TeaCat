@@ -29,14 +29,17 @@ public class NftPhotocardTemplateService {
 
     private final NftPhotocardTemplateRepository templateRepository;
     private final IpfsPinService ipfsPinService;
+    private final NftPhotocardImageStore imageStore;
 
     // 🔴 C5: @Transactional 을 떼었다. pinImage(IPFS 핀)를 트랜잭션 안에서 기다리고 있었다 —
     // 이 프로젝트 규칙은 "핀·체인은 트랜잭션 밖" 이고, 저장이 save() 단일 호출이라
     // Spring Data 의 자체 트랜잭션으로 충분해 이 메서드에 트랜잭션이 필요 없다.
     public NftPhotocardTemplateResponse create(NftPhotocardTemplateCreateRequest request) {
         String imageCid = ipfsPinService.pinImage(request.image());
-        // ipfs:// 는 브라우저가 못 연다. 화면 코드가 그대로 쓰도록 게이트웨이 주소를 넣는다
-        String imageUrl = ipfsPinService.gatewayUrl(imageCid);
+        /* 화면이 쓸 주소는 MinIO 사본을 가리킨다 (NftPhotocardImageStore 주석).
+           게이트웨이 주소는 MinIO 가 실패했을 때의 폴백으로만 쓴다 — 예전처럼 여기를
+           게이트웨이로 두면 Pinata 한도가 차는 날 화면이 통째로 깨진다 (2026-09-21). */
+        String imageUrl = imageStore.store(request.image(), imageCid, ipfsPinService.gatewayUrl(imageCid));
 
         NftPhotocardTemplate saved = templateRepository.save(NftPhotocardTemplate.create(
                 request.name().trim(), request.description(), imageCid, imageUrl,

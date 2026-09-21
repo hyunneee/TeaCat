@@ -18,10 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -88,6 +90,55 @@ public class FileStorageService {
         }
 
         return key;
+    }
+
+    /**
+     * 공개로 읽히는 이미지를 올리고 <b>만료 없는 고정 조회 주소</b>를 돌려준다.
+     *
+     * <p><b>포토카드 도안 그림 전용이다.</b> 포스터·티켓·좌석배치도는 그대로 presigned 를 쓴다.
+     * 이쪽만 고정 주소인 이유는 두 가지다.
+     * <ol>
+     *   <li>도안 그림은 이미 IPFS 로 전세계 공개된 자산이라 서명이 지킬 것이 없다</li>
+     *   <li>presigned 는 유효시간마다 서명이 달라져 <b>같은 그림이 매번 새 URL</b> 이 된다.
+     *       그러면 브라우저 캐시도, 프론트 서비스워커의 image-cache(maxEntries 200)도
+     *       통째로 무력화되고 포스터 캐시까지 밀려난다</li>
+     * </ol>
+     *
+     * <p>만료가 없으므로 <b>이 주소는 DB 에 저장해도 된다</b> — 클래스 주석의 "presigned URL 은
+     * DB 에 저장하면 안 된다" 는 presigned 에만 해당한다.
+     *
+     * <p>🔴 이 주소가 열리려면 버킷의 해당 접두사에 익명 읽기 정책이 걸려 있어야 한다:
+     * {@code mc anonymous set download <별칭>/<버킷>/public/photocards}.
+     * 정책이 없으면 <b>업로드는 되고 조회만 403</b> 이 나므로 배포 환경마다 확인해야 한다.
+     *
+     * @param key 저장 key. 도안 그림은 CID 를 쓴다 — 내용 주소라 같은 그림이면 키도 같아
+     *            중복이 자동으로 정리되고, 어느 원본인지 추적된다
+     */
+    public String uploadPublic(byte[] bytes, String key, String contentType) {
+        try (InputStream stream = new ByteArrayInputStream(bytes)) {
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .stream(stream, bytes.length, -1)
+                    .contentType(contentType)
+                    // 키가 CID 라 바이트가 바뀌면 키도 바뀐다. 길게 잡아도 낡은 그림이 남지 않는다.
+                    // (다만 현재 nginx 가 /storage/ 응답에 max-age=600 을 덮어쓰고 있다)
+                    .headers(Map.of("Cache-Control", "public, max-age=31536000, immutable"))
+                    .build());
+        } catch (Exception e) {
+            log.error("MinIO 공개 업로드 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.UPLOAD_FAILED);
+        }
+
+        return publicObjectUrl(key);
+    }
+
+    /** 공개 객체의 고정 조회 주소. presigned 와 달리 만료되지 않는다. */
+    public String publicObjectUrl(String key) {
+        String base = properties.hasPublicBaseUrl()
+                ? stripTrailingSlash(properties.publicBaseUrl())
+                : stripTrailingSlash(properties.endpoint());
+        return base + "/" + properties.bucket() + "/" + key;
     }
 
     /**
