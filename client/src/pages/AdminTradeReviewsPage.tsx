@@ -95,6 +95,7 @@ export function AdminTradeReviewsPage() {
             <AdminTradeTable
               trades={tradePage?.trades ?? []}
               isLoading={trades.isPending}
+              isError={trades.isError}
               onOpenReview={setOpenedId}
             />
             <AdminPagination
@@ -110,6 +111,7 @@ export function AdminTradeReviewsPage() {
             <AdminTradeReviewTable
               reviews={reviewPage?.reviews ?? []}
               isLoading={reviews.isPending}
+              isError={reviews.isError}
               decided={tab === 'DECIDED'}
               selectedId={openedId}
               onSelect={setOpenedId}

@@ -21,6 +21,8 @@ import type { TradeReviewSummary } from '../model/adminTradeReview.types';
 export interface AdminTradeReviewTableProps {
   reviews: TradeReviewSummary[];
   isLoading: boolean;
+  /** 🔴 실패를 빈 목록으로 그리면 "심사가 없다" 로 읽힙니다 */
+  isError?: boolean;
   /** 대기 목록이면 남은 시한을, 결정 목록이면 결정을 보여줍니다 */
   decided: boolean;
   selectedId: number | null;
@@ -32,10 +34,20 @@ const HEADERS = ['무게', '걸린 규칙', '카드', '경로', '거래가', '�
 export function AdminTradeReviewTable({
   reviews,
   isLoading,
+  isError,
   decided,
   selectedId,
   onSelect,
 }: AdminTradeReviewTableProps) {
+  if (isError) {
+    return (
+      <EmptyState
+        title="심사 목록을 불러오지 못했어요"
+        description="잠시 후 다시 시도해 주세요. 계속 실패하면 서버 로그를 확인해야 해요."
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-2 p-4">
