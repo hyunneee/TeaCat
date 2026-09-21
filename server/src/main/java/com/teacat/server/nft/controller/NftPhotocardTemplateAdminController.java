@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "NFT 포토카드 템플릿", description = "카드 그림을 등록하는 ADMIN API (수량 없음)")
+@Tag(name = "NFT 포토카드 템플릿", description = "카드 그림을 등록하는 ADMIN·공연 기획자 API (수량 없음)")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/admin/photocard-templates")
@@ -37,7 +37,7 @@ public class NftPhotocardTemplateAdminController {
     @Operation(
             summary = "템플릿 등록",
             description = """
-                    ADMIN 전용 API입니다. 카드 그림을 등록합니다 — **수량을 받지 않습니다.**
+                    ADMIN 또는 공연 기획자 API입니다. 카드 그림을 등록합니다 — **수량을 받지 않습니다.**
 
                     몇 장 발행할지는 이 템플릿을 공연이나 이벤트에 넣을 때 정합니다
                     (`POST /admin/performances/{id}/draw-designs`). 그래서 이 요청은 **이미지 IPFS 핀
@@ -56,7 +56,7 @@ public class NftPhotocardTemplateAdminController {
     @Operation(
             summary = "템플릿 목록",
             description = """
-                    ADMIN 전용 API입니다. 감춘 템플릿은 빠집니다. 최신순입니다.
+                    ADMIN 또는 공연 기획자 API입니다. 감춘 템플릿은 빠집니다. 최신순입니다.
 
                     `usedCount`는 이 템플릿으로 만든 도안 수입니다(공연 + 이벤트 합계).
                     """

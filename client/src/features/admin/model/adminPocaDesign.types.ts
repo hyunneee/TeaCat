@@ -85,3 +85,11 @@ export interface PocaPoolItem {
   /** 🔴 온체인 maxSupply 로 박힙니다. 첫 장이 나가면 되돌릴 수 없습니다 */
   totalSupply: number;
 }
+
+/**
+ * 아직 서버에 보내지 않은 풀 선택값.
+ *
+ * 수량 입력 중에는 빈 문자열도 유효한 화면 상태라 `PocaPoolItem`과 분리합니다.
+ * 키가 있으면 템플릿을 고른 것이고, 값은 숫자 입력창의 원문입니다.
+ */
+export type PocaPoolSelection = Record<number, string>;

@@ -9,6 +9,7 @@ export {
 export { ConcertCard } from './components/ConcertCard';
 export { useBookingAccess } from './hooks/useBookingAccess';
 export { ScheduleList } from './components/ScheduleList';
+export { ConcertLinkButton } from './components/ConcertLinkButton';
 export { concertApi, concertKeys } from './api/concertApi';
 export { isBookable, canWaitlist, scheduleStatusLabel, scheduleTone } from './model/schedule.model';
 export {
