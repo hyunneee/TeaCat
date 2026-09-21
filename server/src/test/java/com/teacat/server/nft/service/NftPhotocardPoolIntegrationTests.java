@@ -254,6 +254,8 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
     void 어드민이_템플릿을_등록하면_이미지만_핀하고_체인에_올리지_않는다() throws Exception {
         willReturn("bafyIMG").given(ipfsPinService).pinImage(any());
         willReturn("/gateway/bafyIMG").given(ipfsPinService).gatewayUrl("bafyIMG");
+        willReturn("/storage/teacat/public/photocards/bafyIMG.png")
+                .given(fileStorageService).uploadPublic(any(), anyString(), anyString());
 
         mockMvc.perform(multipart("/admin/photocard-templates")
                         .file(new MockMultipartFile("image", "card.png", "image/png", "bytes".getBytes()))
@@ -264,7 +266,8 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
                         .header("Authorization", adminToken()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.name").value("김예린"))
-                .andExpect(jsonPath("$.data.imageUrl").value("/gateway/bafyIMG"))
+                // 화면이 쓰는 주소는 MinIO 사본이다 (NftPhotocardImageStore 주석)
+                .andExpect(jsonPath("$.data.imageUrl").value("/storage/teacat/public/photocards/bafyIMG.png"))
                 .andExpect(jsonPath("$.data.hidden").value(false))
                 .andExpect(jsonPath("$.data.usedCount").value(0));
 
@@ -280,6 +283,8 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
         String token = "Bearer " + jwtTokenProvider.createAccessToken(organizerId, UserRole.PERFORMANCE);
         willReturn("bafyPERFORMANCE").given(ipfsPinService).pinImage(any());
         willReturn("/gateway/bafyPERFORMANCE").given(ipfsPinService).gatewayUrl("bafyPERFORMANCE");
+        willReturn("/storage/teacat/public/photocards/bafyPERFORMANCE.png")
+                .given(fileStorageService).uploadPublic(any(), anyString(), anyString());
 
         mockMvc.perform(multipart("/admin/photocard-templates")
                         .file(new MockMultipartFile("image", "card.png", "image/png", "bytes".getBytes()))
@@ -406,17 +411,31 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
-    void 공연_도안_메타데이터에는_공연이_속성으로_들어간다() {
-        PhotocardNftMetadata metadata = PhotocardNftMetadata.ofPerformancePool(
-                "김예린 · 2026 단독 콘서트", "설명", "bafyIMG", "서울 5반", "SPECIAL", "2026 단독 콘서트");
+    void 공연_도안_메타데이터는_공연을_담지_않는다() {
+        PhotocardNftMetadata metadata = PhotocardNftMetadata.ofDrawPool(
+                "김예린", "설명", "bafyIMG", "서울 5반", "SPECIAL");
 
         assertThat(metadata.image()).isEqualTo("ipfs://bafyIMG");
         assertThat(metadata.attributes())
                 .extracting(PhotocardNftMetadata.Attribute::traitType)
-                .containsExactly("소속", "등급", "공연");
+                .containsExactly("소속", "등급");
         assertThat(metadata.attributes())
                 .extracting(PhotocardNftMetadata.Attribute::value)
-                .containsExactly("서울 5반", "SPECIAL", "2026 단독 콘서트");
+                .containsExactly("서울 5반", "SPECIAL");
+    }
+
+    /**
+     * 이게 이 변경의 전부다 — 같은 템플릿이면 공연이 달라도 <b>같은 문서</b>여야 한다.
+     * 같아야 CID 가 같고, CID 가 같아야 Pinata 파일이 공연 수만큼 늘지 않는다.
+     */
+    @Test
+    void 같은_템플릿이면_공연이_달라도_메타데이터가_같다() {
+        PhotocardNftMetadata 공연A = PhotocardNftMetadata.ofDrawPool(
+                "김예린", "설명", "bafyIMG", "서울 5반", "SPECIAL");
+        PhotocardNftMetadata 공연B = PhotocardNftMetadata.ofDrawPool(
+                "김예린", "설명", "bafyIMG", "서울 5반", "SPECIAL");
+
+        assertThat(공연A).isEqualTo(공연B);
     }
 
     @Test

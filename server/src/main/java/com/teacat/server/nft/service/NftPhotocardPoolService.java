@@ -102,9 +102,10 @@ public class NftPhotocardPoolService {
             if (designRepository.existsByPerformanceIdAndTemplateId(performanceId, template.getId())) {
                 throw new BusinessException(NftErrorCode.TEMPLATE_ALREADY_IN_POOL);
             }
-            // 🔴 C1: 이름은 온체인 메타데이터에 박혀 되돌릴 수 없다. 조용히 자르면 어드민이
-            // 의도하지 않은 이름이 영구히 남으므로 자르지 않고 거절한다. 검증 루프에서 미리
-            // 본다 — 생성 루프 중간에서 터지면 앞 항목은 이미 온체인에 올라간 뒤다.
+            // 🔴 C1: 이 이름은 DB 컬럼(100자)에만 들어간다 — 2026-09-21 이후 메타데이터에서는
+            // 공연을 뺐다. 그래도 조용히 자르지 않고 거절한다: 잘린 이름이 목록·지갑 화면에
+            // 그대로 노출되고 고칠 경로가 없다. 검증 루프에서 미리 본다 — 생성 루프 중간에서
+            // 터지면 앞 항목은 이미 온체인에 올라간 뒤다.
             if (designName(template, performance).length() > DESIGN_NAME_MAX_LENGTH) {
                 throw new BusinessException(NftErrorCode.DESIGN_NAME_TOO_LONG);
             }
@@ -119,10 +120,14 @@ public class NftPhotocardPoolService {
 
     private void createPerformanceDesign(PerformanceGeneral performance, NftPhotocardTemplate template,
                                          int totalSupply) {
+        // DB 이름에는 공연을 붙인다 — 어드민·사용자 화면이 보는 값이다
         String name = designName(template, performance);
-        PhotocardNftMetadata metadata = PhotocardNftMetadata.ofPerformancePool(
-                name, template.getDescription(), template.getImageCid(),
-                template.getGroupName(), template.getGrade().name(), performance.getTitle());
+        /* 🔴 메타데이터에는 공연을 넣지 않는다. 템플릿이 같으면 JSON 바이트가 같아지고,
+           같으면 CID 도 같아 공연을 아무리 늘려도 Pinata 파일이 안 늘어난다
+           (PhotocardNftMetadata.ofDrawPool 주석). 지갑 표시와 DB 이름이 여기서 갈린다. */
+        PhotocardNftMetadata metadata = PhotocardNftMetadata.ofDrawPool(
+                template.getName(), template.getDescription(), template.getImageCid(),
+                template.getGroupName(), template.getGrade().name());
         String metadataCid = ipfsPinService.pinJson(METADATA_FILENAME, metadata);
 
         NftPhotocardDesign design = writer.createFromTemplate(
