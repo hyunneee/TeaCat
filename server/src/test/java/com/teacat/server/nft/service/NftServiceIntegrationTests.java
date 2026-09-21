@@ -1511,11 +1511,17 @@ class NftServiceIntegrationTests {
         performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
         performanceService.recordView(second.performanceId(), UUID.randomUUID().toString());
 
+        jdbcTemplate.update("""
+                UPDATE performance_details
+                   SET performance_date = now() - interval '1 minute'
+                 WHERE performance_general_id = ?
+                """, first.performanceId());
+
         var ranking = rankingService.popularConcerts();
 
         assertThat(ranking).extracting(item -> item.concertId())
-                .containsExactly(second.performanceId(), first.performanceId());
-        assertThat(ranking).extracting(item -> item.score()).containsExactly(2L, 1L);
+                .containsExactly(second.performanceId());
+        assertThat(ranking).extracting(item -> item.score()).containsExactly(2L);
     }
 
     @Test

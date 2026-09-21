@@ -194,7 +194,6 @@ export function MyNftsPage() {
                           performanceTitle={card.performanceTitle}
                           eventName={card.eventName}
                           state={photocardMarketState(card)}
-                          caption={`#${card.photocardId}`}
                           onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
                         />
                       </li>

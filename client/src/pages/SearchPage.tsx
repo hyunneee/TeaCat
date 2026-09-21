@@ -43,8 +43,14 @@ export function SearchPage() {
   /* 빈 검색어에서는 결과 API를 호출하지 않고 인기 검색어를 보여줍니다. */
   const concertHits = enabled ? (data?.concerts ?? []) : [];
   const pocaHits = enabled ? (data?.photocards ?? []) : [];
+  const auctionHits = enabled ? (data?.auctions ?? []) : [];
   const loading = enabled && isPending;
-  const empty = enabled && !loading && concertHits.length === 0 && pocaHits.length === 0;
+  const empty =
+    enabled &&
+    !loading &&
+    concertHits.length === 0 &&
+    pocaHits.length === 0 &&
+    auctionHits.length === 0;
 
   return (
     /* 결과가 없을 때 안내를 **화면 한가운데**에 놓기 위해 세로 flex 로 짭니다.
@@ -135,6 +141,29 @@ export function SearchPage() {
                         performanceTitle={card.performanceTitle}
                         price={card.price}
                         onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {auctionHits.length > 0 && (
+              <section>
+                <SectionTitle>경매</SectionTitle>
+                <ul className="grid grid-cols-2 gap-x-3 gap-y-6 md:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
+                  {auctionHits.slice(0, LIMIT).map((auction) => (
+                    <li key={auction.auctionId}>
+                      <NftCard
+                        photocardId={auction.photocardId}
+                        designName={auction.designName}
+                        imageUrl={auction.imageUrl}
+                        performanceTitle={auction.performanceTitle}
+                        price={auction.currentPrice}
+                        state="AUCTION"
+                        onClick={() =>
+                          navigate(ROUTES.AUCTION_DETAIL(String(auction.auctionId)))
+                        }
                       />
                     </li>
                   ))}
