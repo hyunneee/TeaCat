@@ -2,6 +2,7 @@ package com.teacat.server.banner.entity;
 
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -64,13 +65,11 @@ public class MainBanner {
     private String imageKey;
 
     /**
-     * 그림에서 <b>보여줄 부분</b>. 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면 나머지가 잘린다.
+     * 그림에서 <b>보여줄 한 점</b>. 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면 나머지가 잘린다.
      *
      * 타입과 무관하게 채운다 — 공연 배너의 3:4 포스터가 가장 많이 잘린다.
      */
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "image_focus", nullable = false, columnDefinition = "main_banner_image_focus")
+    @Embedded
     private MainBannerImageFocus imageFocus;
 
     @ManyToOne(fetch = FetchType.LAZY)
