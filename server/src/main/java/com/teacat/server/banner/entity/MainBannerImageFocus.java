@@ -29,6 +29,11 @@ public class MainBannerImageFocus {
     private static final int MAX = 100;
     private static final int MIDDLE = 50;
 
+    /*
+     * 🔴 컬럼은 **integer** 다. smallint 로 두면 `ddl-auto: validate` 가 부팅 중에 멈춰
+     *    애플리케이션이 통째로 안 뜬다 — 실제로 배포에서 터졌고 V20260922_1110 이 수습했다.
+     *    Integer ↔ integer, Short ↔ smallint 가 짝이다. 타입을 바꿀 때 컬럼도 같이 보세요.
+     */
     @Column(name = "image_focus_x", nullable = false)
     private Integer x;
 
