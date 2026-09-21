@@ -1295,6 +1295,12 @@ registry.registerPath({
     '**`performanceId` 를 키 문자열에 넣으세요** — 같은 공연에 추첨이 몇 번 열렸는지가 ' +
     '눈에 띄어야 합니다.\n\n' +
     '도안 등록(`POST /internal/photocards/designs`)이 먼저입니다.\n\n' +
+    '### 취소표 추첨도 같은 API 를 씁니다\n\n' +
+    '이 컨트랙트는 토큰을 모르는 순수 난수 컨트랙트라 입력 이름만 도안 배정 모양입니다. ' +
+    '취소표 추첨(Spring `ResaleDrawChainClient`)은 `ticketIds` = 대기 신청 id(오름차순), ' +
+    '`designIds` = 순위 `1…N`, `quantities` = 전부 `1` 로 보냅니다. 순위 N 개를 참가자 N 명에게 ' +
+    '한 장씩 배정하면 그것이 곧 순열이고 당첨 순서입니다. `drawKey` 는 ' +
+    '`resale:p{공연}:d{회차}:s{좌석}:n{회차번호}` 입니다.\n\n' +
     TICKET_PENDING,
   security: [{ [internalKey.name]: [] }],
   request: {

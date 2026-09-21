@@ -12,6 +12,7 @@ import com.teacat.server.payment.entity.TicketOrderStatus;
 import com.teacat.server.payment.exception.PaymentErrorCode;
 import com.teacat.server.payment.repository.PaymentCancelRepository;
 import com.teacat.server.payment.repository.TicketOrderRepository;
+import com.teacat.server.resale.service.SeatDrawWriter;
 import com.teacat.server.ticket.entity.Ticket;
 import com.teacat.server.wallet.entity.CatTransaction;
 import com.teacat.server.wallet.repository.CatTransactionRepository;
@@ -46,6 +47,7 @@ public class TicketCancelRecorder {
     private final CatTransactionRepository catTransactionRepository;
     private final BookingPolicyProperties bookingPolicy;
     private final NftPhotocardPackRepository photocardPackRepository;
+    private final SeatDrawWriter seatDrawWriter;
 
     /**
      * 예매를 무효화한다. <b>환불보다 먼저</b> 커밋된다.
@@ -91,15 +93,29 @@ public class TicketCancelRecorder {
         photocardPackRepository.deleteUnconsumed(
                 userId, NftPhotocardPackSource.TICKET_PURCHASE, ticket.getId().toString());
 
-        // 좌석을 되돌린다. 이미 남이 가져갔을 수는 없다 — SOLD 는 취소로만 풀린다
-        performanceSeatRepository.release(
+        /* 좌석의 행방은 그 구역에 취소표 대기자가 있는지로 갈린다.
+             대기자 없음 → 지금처럼 바로 AVAILABLE. 남이 살 수 있어야 한다
+             대기자 있음 → 좌석은 SOLD 로 둔 채 추첨 행을 만든다. 추첨이 끝나면 당첨자의 선점(HELD)이 된다
+           둘 다 이 트랜잭션에서 결정된다 — 취소는 커밋됐는데 좌석이 허공에 뜨는 상태가 없어야 한다.
+           커밋(체인 호출)은 트랜잭션 밖에서 TicketCancelService 가 보낸다 */
+        Long seatId = order.getSeat() == null ? null : order.getSeat().getId();
+        Long seatDrawId = seatId == null ? null : seatDrawWriter.claimSeatForDraw(
+                order.getPerformanceDetail().getPerformance().getId(),
                 order.getPerformanceDetail().getId(),
-                order.getSeat() == null ? null : order.getSeat().getId());
+                order.getArea().getId(),
+                seatId,
+                order.getId()).orElse(null);
 
-        log.info("예매 취소 ticketOrderId={} ticketId={}", ticketOrderId, ticket.getId());
+        if (seatDrawId == null) {
+            // 좌석을 되돌린다. 이미 남이 가져갔을 수는 없다 — SOLD 는 취소로만 풀린다
+            performanceSeatRepository.release(order.getPerformanceDetail().getId(), seatId);
+        }
+
+        log.info("예매 취소 ticketOrderId={} ticketId={} seatDrawId={}", ticketOrderId, ticket.getId(),
+                seatDrawId);
 
         return new Invalidated(order.getId(), ticket.getId(), order.getCashAmount(),
-                order.getTokenAmount());
+                order.getTokenAmount(), seatDrawId);
     }
 
     /** 카드 취소를 기록한다. 토스 호출이 성공한 뒤에 부른다 */
@@ -188,7 +204,11 @@ public class TicketCancelRecorder {
         return UUID.nameUUIDFromBytes(("ticket-order-cancel:" + ticketOrderId).getBytes());
     }
 
-    public record Invalidated(Long ticketOrderId, Long ticketId, int cashAmount, int tokenAmount) {
+    /**
+     * @param seatDrawId 좌석을 풀지 않고 취소표 추첨으로 넘겼으면 그 추첨 id. 바로 풀었으면 null
+     */
+    public record Invalidated(Long ticketOrderId, Long ticketId, int cashAmount, int tokenAmount,
+                              Long seatDrawId) {
     }
 
     public record RefundTarget(Long ticketOrderId, Long userId, BigInteger amount, String operationKey) {

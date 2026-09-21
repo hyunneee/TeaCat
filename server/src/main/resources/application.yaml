@@ -143,6 +143,22 @@ booking:
     #   🔴 카드팩 개봉 시각도 같은 값을 읽는다. 둘이 어긋나면 그 차이만큼
     #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
     cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
+  # 취소표 추첨 (resale). 결제 완료된 예매가 취소될 때 그 구역에 대기자가 있으면 좌석을 풀지 않고
+  # 온체인 추첨(VerifiableDraw)을 연다. 당첨자는 결제 기한이 있는 선점(HELD)을 받는다.
+  resale:
+    # 당첨자가 결제를 마쳐야 하는 시간. 프론트 RESALE_PAYMENT_HOURS(12) 와 맞춘다
+    payment-window: ${BOOKING_RESALE_PAYMENT_WINDOW:PT12H}
+    # 추첨 스위퍼 — 난수 확인·당첨자 이양·기한 만료·대기 정리. @Scheduled 가 읽으므로 ISO-8601
+    #   난수는 커밋 다음 블록(약 10초)에 확정되고 스위퍼가 그걸 집어 당첨자를 정한다.
+    #   이 주기가 곧 "취소 뒤 당첨 알림까지" 의 지연에 더해지는 시간이다 — 짧게 둔다
+    sweep-enabled: ${BOOKING_RESALE_SWEEP_ENABLED:true}
+    sweep-interval: ${BOOKING_RESALE_SWEEP_INTERVAL:PT5S}
+    batch-size: 50
+    # 커밋을 못 보냈거나(PENDING) 보냈는데 체인에 없는(OPEN·exists=false) 추첨을 다시 보내기까지 기다리는 시간
+    open-retry-after: ${BOOKING_RESALE_OPEN_RETRY_AFTER:PT2M}
+    # 커밋 뒤 이 시간이 지나도 난수가 없으면 그 키는 죽은 것으로 보고 새 키로 다시 연다.
+    #   블록해시 창(256블록 ≈ 42분)보다 길어야 한다
+    reveal-timeout: ${BOOKING_RESALE_REVEAL_TIMEOUT:PT50M}
 
 # 가상 대기실 (server/QUEUE_DESIGN.md). 회차마다 관리자 API 로 켜고 끈다 — 기본은 전부 꺼져 있다.
 queue:

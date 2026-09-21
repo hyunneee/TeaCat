@@ -20,6 +20,7 @@ import com.teacat.server.payment.exception.PaymentErrorCode;
 import com.teacat.server.payment.repository.PaymentRepository;
 import com.teacat.server.payment.repository.TicketOrderRepository;
 import com.teacat.server.nft.repository.NftTicketRepository;
+import com.teacat.server.resale.service.SeatDrawWriter;
 import com.teacat.server.ticket.entity.Ticket;
 import com.teacat.server.ticket.repository.TicketRepository;
 import com.teacat.server.user.entity.User;
@@ -58,6 +59,7 @@ public class TicketOrderRecorder {
     private final CatTransactionRepository catTransactionRepository;
     private final NftTicketRepository nftTicketRepository;
     private final CatMoneyHoldService catMoneyHoldService;
+    private final SeatDrawWriter seatDrawWriter;
     private final NftPhotocardPackRepository photocardPackRepository;
     /* 2026-09-11: 카드팩 개봉 시각을 더 이상 여기서 계산하지 않는다(회차에서 매번 계산하도록
        NftPhotocardPackRepository 로 옮겼다). 이 클래스에서는 더 안 쓴다.
@@ -156,6 +158,9 @@ public class TicketOrderRecorder {
                     ticketOrderId, order.getPerformanceDetail().getId(), seatId);
             throw new BusinessException(PaymentErrorCode.SEAT_NO_LONGER_HELD);
         }
+
+        // 취소표 추첨 당첨자가 자기 좌석을 결제한 것이면 당첨 기록을 PURCHASED 로 굳힌다. 같은 트랜잭션이다
+        seatDrawWriter.onSeatSold(user.getId(), order.getPerformanceDetail().getId(), seatId);
 
         Ticket ticket = ticketRepository.save(Ticket.issue(
                 user, order.getPerformanceDetail(), order.getArea(), order.getSeat(), user.getFace()));
