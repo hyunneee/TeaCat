@@ -15,7 +15,12 @@ export const resaleApi = {
 
   myEntries: () => http.get<ResaleEntry[]>('/me/resale'),
 
-  cancel: (entryId: string) => http.delete<void>(`/resale/${entryId}`),
+  /**
+   * 대기 취소 또는 당첨 포기.
+   * `rejoin` 은 당첨을 포기하면서 **다시 대기**할 때만 의미가 있습니다 — 다음 취소표부터 다시 추첨에 들어갑니다.
+   */
+  cancel: (entryId: string, rejoin = false) =>
+    http.delete<void>(`/resale/${entryId}?rejoin=${rejoin ? 'true' : 'false'}`),
 
   /**
    * [데모 전용] 즉시 추첨.

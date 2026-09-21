@@ -91,7 +91,8 @@ export function ScheduleList({ schedules, onBook, onWaitlist, blocked, checkingI
                 {/* 버튼은 상태별로 딱 하나만.
                     - 예매 가능(OPEN)·오픈 전(BEFORE): 예매 — 오픈 전에도 누를 수 있고,
                       아직이면 `onBook` 이 서버에 물어본 뒤 안내합니다
-                    - 매진(SOLDOUT): 취소표 추첨 대기 — 매진된 뒤에만 열립니다
+                    - 예매 가능(OPEN)·매진(SOLDOUT): 취소표 추첨 대기 — 대기는 구역 단위라
+                      회차가 다 팔리지 않아도 매진된 구역에는 걸 수 있습니다
                     - 마감(CLOSED): 버튼 없음. 표가 다시 나올 일이 없습니다 */}
                 {canPressBook && (
                   <Button

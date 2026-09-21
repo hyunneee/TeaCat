@@ -18,7 +18,10 @@ export function isBookable(schedule: ScheduleSummary): boolean {
  * 구역 단위의 매진 여부는 취소표 화면이 구역 목록에서 다시 봅니다.
  */
 export function canWaitlist(schedule: Pick<ScheduleSummary, 'bookingStatus'>): boolean {
-  return schedule.bookingStatus === 'SOLDOUT';
+  /* 대기는 **구역 단위**입니다. 회차 전체가 매진되지 않아도 A구역만 매진일 수 있으므로,
+     티켓팅이 열려 있으면(OPEN·SOLDOUT) 들어갈 수 있게 하고, 어느 구역에 걸 수 있는지는
+     취소표 화면의 구역 목록(`soldOut`)이 정합니다. 서버도 같은 규칙으로 거절합니다(ERR_RESALE_003) */
+  return schedule.bookingStatus === 'SOLDOUT' || schedule.bookingStatus === 'OPEN';
 }
 
 export function scheduleStatusLabel(schedule: ScheduleSummary): string {
