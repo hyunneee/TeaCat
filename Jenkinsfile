@@ -24,6 +24,10 @@
 //    올리는데, 그 순간 옛 색이 아직 옛 코드로 서비스 중이다. 컬럼을 지우거나 이름을
 //    바꾸면 전환하는 동안 옛 색이 깨진다. 지우는 건 다음 배포에서 따로 한다.
 //
+// 🔴 blockchain 은 server 보다 **뒤에** 올린다. 부팅할 때 Spring 스키마를 검사하고
+//    컬럼이 없으면 스스로 죽는데, 그 컬럼을 만드는 게 server 의 Flyway 라서다.
+//    순서를 되돌리면 새 마이그레이션이 들어간 배포마다 서로를 기다리다 멈춘다.
+//
 // 전환하는 몇 초간 두 인스턴스가 함께 산다. 스케줄러가 그 사이 같은 건을 두 번 집을 수
 // 있지만 **낭비일 뿐 위험하지 않다.** 확인하고 넘어온 것이라 적어 둔다 —
 //   - 돈이 움직이는 둘은 DB 가 막는다. 경매 마감은 SELECT ... FOR UPDATE + ACTIVE 조건이라
@@ -454,15 +458,22 @@ pipeline {
                     # 🔴 여기서는 --remove-orphans 를 쓰지 않는다. 블루-그린 이전의 단일
                     #    컨테이너 prod-server 는 compose 파일에서 사라져 지금은 '고아' 다.
                     #    여기서 지우면 새 색이 뜨기도 전에 운영이 끊긴다 — 무중단이 목적인데
-                    #    그 반대가 된다. 그 컨테이너는 전환이 끝난 5단계에서 지운다.
+                    #    그 반대가 된다. 그 컨테이너는 전환이 끝난 6단계에서 지운다.
+                    #
+                    # 🔴 blockchain 은 **여기서 올리지 않는다**. 부팅할 때 Spring 스키마를
+                    #    검사하고 컬럼이 없으면 스스로 죽는데(blockchain/api/src/main.ts),
+                    #    그 컬럼은 server 가 Flyway 로 만든다. 여기서 --wait 로 묶으면
+                    #    blockchain 은 server 를, 파이프라인은 blockchain 을 기다려
+                    #    새 마이그레이션이 있는 배포가 통째로 막힌다. 4단계에서 올린다.
                     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" up -d --wait \
-                        postgres redis rabbitmq minio blockchain
+                        postgres redis rabbitmq minio
 
                     # ── 2. 유휴 색을 새 이미지로 ─────────────────────────────────
                     # 🔴 --force-recreate 가 필요하다. 이미지 태그가 teacat-server:prod 로
                     #    고정이라 태그만으로는 compose 가 "바뀐 게 없다" 고 볼 수 있다.
-                    # 🔴 --no-deps: 인프라는 위에서 --wait 로 확인했다. 빼면 depends_on 이
-                    #    blockchain 헬스를 처음부터 다시 기다려 전환이 느려진다.
+                    # 🔴 --no-deps: 인프라는 위에서 --wait 로 확인했다. 빼면 depends_on 을
+                    #    따라 blockchain 까지 같이 올라가 1단계에서 피한 순서 문제가
+                    #    그대로 돌아온다.
                     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" \
                         up -d --no-deps --force-recreate "server-$NEW_COLOR"
 
@@ -495,7 +506,23 @@ pipeline {
                         exit 1
                     fi
 
-                    # ── 4. 전환 ─────────────────────────────────────────────────
+                    # ── 4. blockchain ───────────────────────────────────────────
+                    # 새 색이 UP 이라는 건 Flyway 가 끝났다는 뜻이다. 이제야 스키마 검사가
+                    # 통과하므로 여기서 올린다.
+                    #
+                    # 🔴 --force-recreate. 1단계에서 안 올린 탓에 옛 이미지 컨테이너가
+                    #    남아 있거나, 앞선 실패가 남긴 재시작 루프에 걸려 있을 수 있다.
+                    #    그 상태로 --wait 만 걸면 compose 가 곧장 unhealthy 로 끊는다.
+                    # 🔴 --no-deps: 인프라는 1단계에서 확인했다.
+                    if ! docker compose -f "$COMPOSE" --env-file "$ENV_FILE" \
+                            up -d --wait --no-deps --force-recreate blockchain; then
+                        echo "❌ prod-blockchain 이 뜨지 않았습니다. 마지막 로그:"
+                        docker logs --tail 80 prod-blockchain 2>&1 || true
+                        echo "   운영은 $OLDC 가 그대로 받고 있습니다 — 전환하지 않았습니다."
+                        exit 1
+                    fi
+
+                    # ── 5. 전환 ─────────────────────────────────────────────────
                     # 🔴 원본을 남기고 바꾼다. nginx -t 가 실패하면 되돌리고 reload 하지 않는다.
                     #    깨진 설정으로 reload 하면 nginx 는 옛 설정을 유지한 채 초록불만 켜진다.
                     # 🔴 sed 패턴에 $ 를 넣지 않는다 (`^set ` 로만 잡는다). 정규식의 $ 와
@@ -516,7 +543,7 @@ pipeline {
                     rm -f "$INC.bak"
                     echo "트래픽을 $NEWC 로 넘겼습니다."
 
-                    # ── 5. 옛 색 정리 ───────────────────────────────────────────
+                    # ── 6. 옛 색 정리 ───────────────────────────────────────────
                     # 🔴 stop 만 한다. rm 하지 않는 이유는 되돌릴 때 `docker start` 한 줄이면
                     #    되기 때문이다 (docker/nginx/conf.d/prod-backend.inc 주석 참고).
                     docker stop "$OLDC" >/dev/null 2>&1 || true
