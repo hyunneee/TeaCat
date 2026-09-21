@@ -14,7 +14,8 @@ public enum StorageErrorCode implements ErrorCode {
     FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "STORAGE_003", "파일 용량이 너무 큽니다."),
     UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_004", "파일 업로드에 실패했습니다."),
     URL_ISSUE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_005", "파일 주소 발급에 실패했습니다."),
-    DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_006", "파일 삭제에 실패했습니다.");
+    DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_006", "파일 삭제에 실패했습니다."),
+    DOWNLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_007", "파일을 읽지 못했습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

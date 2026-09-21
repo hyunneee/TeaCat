@@ -71,7 +71,8 @@ export interface Stroke {
 export const DOODLE_EXPORT_SIZE = 1024;
 
 /* ───────────────────────── 서버 계약 (구현 계획 0-1 · 설계 6-1) ─────────────────────────
-   서버가 아직 없어 이 타입이 **계약의 기준**입니다. 목업(mocks/handlers/sticker.ts)도 이 모양으로 응답합니다. */
+   🔴 2026-09-21 부터 **실서버가 기준**입니다. 목업(mocks/handlers/sticker.ts)은 지웠습니다.
+   백엔드 완성 + GPU 워커 연결까지 확인했고, 이 타입은 서버 응답을 그대로 받아쓰는 모양입니다. */
 
 /** 생성 작업 상태. 워커가 집어가면 RUNNING, 결과가 올라오면 DONE */
 export type StickerJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
@@ -102,6 +103,15 @@ export interface CreateStickerRequest {
   subject?: string;
   /** "다시 만들기" 는 seed 를 바꿔 같은 낙서로 다른 결과를 냅니다 */
   seed?: number;
+  /**
+   * 낙서에서 가장 많이 쓴 잉크 색 (`#RRGGBB`). 서버가 이걸로 결과 색을 정합니다.
+   *
+   * 🔴 이게 없으면 결과 색이 바랩니다 — 얇은 선화는 모델이 색을 확신하지 못해
+   * 회색빛으로 칠합니다 (2026-09-21 GPU 실측: 같은 낙서가 색 지정 없이는 연한 세이지,
+   * 지정하면 선명하게 나왔습니다). 기본 검정만 썼으면 **생략**하고, 그때는 서버가
+   * 주제에 맞는 색을 고르게 둡니다.
+   */
+  inkColor?: string;
 }
 
 export interface CreateStickerResponse {
@@ -119,7 +129,7 @@ export interface StickerQuota {
 
 /** 서버가 일일 상한에서 내는 에러 코드 (429) */
 export const STICKER_ERROR = {
-  DAILY_LIMIT: 'STICKER_DAILY_LIMIT',
+  DAILY_LIMIT: 'STICKER_001',
 } as const;
 
 /** 주제 입력 상한 (설계 9-2) */
