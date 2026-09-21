@@ -1,4 +1,4 @@
-import type { DrawPoolCard, MyPhotocard, MyPhotocardSummaryDesign, PocaGrade } from './nft.types';
+import type { DrawPoolCard, MyPhotocard, PocaGrade } from './nft.types';
 import { type photocardMarketState } from './nft.model';
 import { pocaRole, type PocaRole } from './pocaDraw.model';
 
@@ -15,6 +15,7 @@ export interface PocaDexEntry {
   imageUrl: string | null;
   group: string | null;
   grade: PocaGrade | null;
+  acquisition: DrawPoolCard['acquisition'];
   /** 코치·교육생·개발자. 소속 꼬리표가 없는 옛 도안은 null */
   role: PocaRole | null;
   /** 몇 장 가졌는가. 0 이면 아직 없는 칸 */
@@ -62,7 +63,7 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
 ];
 
 /**
- * 전체 도안 + 내 보유 요약 → 도감.
+ * 사용자별 도감 API 응답 → 화면 모델.
  *
  * 🔴 **도안 ID 로 맞춥니다.** 이름으로 맞추면 운영자가 도안 이름을 바꾸는 순간 보유 표시가
  * 통째로 어긋나고, 이름이 같은 다른 도안이 생기면 남의 칸이 채워집니다.
@@ -74,32 +75,26 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
  * 순서는 **서버가 준 도안 순서 그대로**입니다 — 가진 것을 앞으로 당기면 카드를 얻을 때마다
  * 도감의 자리가 바뀌어서, 외워 둔 위치로 찾아가는 도감의 성질이 사라집니다.
  *
- * 개수·판매 상태·대표 카드는 **서버가 센 값**(`GET /users/me/photocards/summary`)을 그대로 씁니다.
- * 예전에는 카드 목록을 끝까지 받아 여기서 세었는데, 그러려고 요청이 페이지 수만큼 나갔습니다.
- * 판정 규칙(보관 카드를 대표로, 정산 > 경매 > 고정가)은 서버가 같은 규칙으로 옮겨 갔습니다.
+ * 개수·판매 상태·대표 카드는 서버가 센 값을 그대로 씁니다. 미보유 도안은 서버 응답부터
+ * 이름·이미지·소속·등급이 null이라 도감 API 응답만으로 앞면을 미리 볼 수 없습니다.
  */
-export function buildPocaDex(
-  pool: DrawPoolCard[],
-  mine: MyPhotocardSummaryDesign[],
-): PocaDexEntry[] {
-  const owned = new Map(mine.map((design) => [design.designId, design]));
-
+export function buildPocaDex(pool: DrawPoolCard[]): PocaDexEntry[] {
   return pool.map((design) => {
-    const has = owned.get(design.designId);
     return {
       designId: design.designId,
-      name: design.name,
+      name: design.name ?? '???',
       imageUrl: design.imageUrl,
       group: design.group,
       grade: design.grade,
+      acquisition: design.acquisition,
       /* 🔴 소속이 없으면 역할을 **추측하지 않습니다.** `pocaRole` 은 문자열을 전제로 하고,
          없는 값으로 부르면 터집니다. 옛 도안은 역할 필터에서 빠지는 편이 낫습니다 —
          틀린 칸에 넣는 것보다 안 보이는 쪽이 고치기 쉽습니다. */
       role: design.group ? pocaRole(design.group, design.grade ?? undefined) : null,
-      count: has?.count ?? 0,
-      marketCount: has?.marketCount ?? 0,
-      marketState: has?.marketState ?? null,
-      photocardId: has?.photocardId ?? null,
+      count: design.count,
+      marketCount: design.marketCount,
+      marketState: design.marketState,
+      photocardId: design.photocardId,
     };
   });
 }
@@ -107,8 +102,8 @@ export function buildPocaDex(
 /**
  * 검색어 + 역할로 거릅니다.
  *
- * ⚠️ **안 가진 칸도 검색에 걸립니다.** 이름으로 찾는 것은 "이 카드를 가졌는지" 를 확인하려는
- * 행동이라, 없는 카드가 빠지면 정작 답을 못 얻습니다.
+ * 안 가진 칸은 앞면 이름을 모르므로 획득처로 찾을 수 있습니다. 공연명을 검색했을 때
+ * 아직 모으지 못한 슬롯도 함께 보여야 어디에서 채울지 알 수 있습니다.
  */
 export function filterPocaDex(
   entries: PocaDexEntry[],
@@ -120,10 +115,11 @@ export function filterPocaDex(
   return entries.filter((entry) => {
     if (role !== DEX_ROLE_ALL && entry.role !== role) return false;
     if (!keyword) return true;
-    /* 이름과 소속 둘 다 봅니다 — "서울 5반" 으로 반 전체를 찾는 쓰임이 자연스럽습니다 */
+    /* 보유 카드는 이름·소속, 미보유 카드는 공개된 획득처로 찾을 수 있습니다. */
     return (
       entry.name.toLowerCase().includes(keyword) ||
-      (entry.group?.toLowerCase().includes(keyword) ?? false)
+      (entry.group?.toLowerCase().includes(keyword) ?? false) ||
+      entry.acquisition.name.toLowerCase().includes(keyword)
     );
   });
 }
@@ -139,7 +135,9 @@ export function filterOwnedCards(
     return (
       !keyword ||
       card.designName.toLowerCase().includes(keyword) ||
-      (card.group?.toLowerCase().includes(keyword) ?? false)
+      (card.group?.toLowerCase().includes(keyword) ?? false) ||
+      (card.performanceTitle?.toLowerCase().includes(keyword) ?? false) ||
+      (card.eventName?.toLowerCase().includes(keyword) ?? false)
     );
   });
 }

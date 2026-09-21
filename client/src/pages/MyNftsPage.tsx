@@ -25,9 +25,9 @@ import {
 /**
  * 내 포토카드 — **도감**.
  *
- * 가진 것만 늘어놓으면 "뭘 더 모아야 하는지" 를 알 수 없어서, 뽑기에 나오는 카드 전체를
- * 깔고 그 위에 내가 가진 것을 얹습니다. 안 가진 칸은 물음표로 자리만 지킵니다
- * (`PocaDexCard` 주석 — 그림을 아예 받지 않습니다).
+ * 가진 것만 늘어놓으면 "뭘 더 모아야 하는지" 를 알 수 없어서, 공개된 이벤트·공연의 카드를
+ * 모두 깔고 그 위에 내가 가진 것을 얹습니다. 안 가진 칸은 물음표와 획득처만 보여 주며 서버도
+ * 그 칸의 이름과 그림 URL을 보내지 않습니다.
  *
  * 보유 카드만 선택하면 풀과 관계없이 개별 카드 목록을 표시합니다.
  */
@@ -35,10 +35,10 @@ export function MyNftsPage() {
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
   const [role, setRole] = useState<DexRoleFilter>(DEX_ROLE_ALL);
-  const [ownedOnly, setOwnedOnly] = useState(false);
+  const [ownedOnly, setOwnedOnly] = useState(true);
 
   const { entries, isPending, isError } = usePocaDex();
-  /* 🔴 카드 한 장 한 장은 "보유 카드만" 을 켰을 때만 받습니다. 도감은 요약 한 번이면 그려지고,
+  /* 🔴 카드 한 장 한 장은 "보유 카드만" 을 켰을 때만 받습니다. 도감은 전용 응답 한 번이면 그려지고,
      끄고 있는 동안에는 이 목록 요청이 **아예 나가지 않습니다.** */
   const { cards, cardsPending, cardsError } = useOwnedCards(ownedOnly);
 
@@ -99,7 +99,7 @@ export function MyNftsPage() {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               onClear={() => setKeyword('')}
-              placeholder="카드 이름, 소속으로 검색"
+              placeholder="카드 이름, 소속, 획득처로 검색"
               leftIcon={<Search size={17} />}
               type="search"
               tone="contrast"
@@ -130,17 +130,17 @@ export function MyNftsPage() {
             <label className="ml-auto flex min-h-8 cursor-pointer items-center">
               <input
                 type="checkbox"
-                checked={ownedOnly}
-                onChange={(event) => setOwnedOnly(event.target.checked)}
+                checked={!ownedOnly}
+                onChange={(event) => setOwnedOnly(!event.target.checked)}
                 className="peer sr-only"
               />
               <span className="text-ink-muted peer-checked:text-accent-800 peer-focus-visible:outline-brand-900 flex items-center gap-1.5 rounded-lg px-1 py-1 transition-colors peer-checked:font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
                 <Check
                   size={15}
                   aria-hidden="true"
-                  className={`shrink-0 transition-colors ${ownedOnly ? 'text-accent-800' : 'text-ink-subtle'}`}
+                  className={`shrink-0 transition-colors ${!ownedOnly ? 'text-accent-800' : 'text-ink-subtle'}`}
                 />
-                보유 카드만
+                전체 보기
               </span>
             </label>
           </div>
@@ -215,7 +215,7 @@ export function MyNftsPage() {
                   title="찾는 카드가 없어요"
                   description={
                     ownedOnly
-                      ? '보유 카드만 선택을 해제하거나 다른 이름·역할로 찾아보세요.'
+                      ? '전체 보기를 선택하거나 다른 이름·역할로 찾아보세요.'
                       : '다른 이름이나 역할로 찾아보세요.'
                   }
                 />
