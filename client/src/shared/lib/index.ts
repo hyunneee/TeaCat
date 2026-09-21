@@ -10,6 +10,8 @@ export {
   maskName,
 } from './format';
 export { local, session, STORAGE_KEY } from './storage';
+/* 관리자가 적는 바로가기 주소 — 서비스 내 경로와 http(s) 외부 주소만 받습니다 */
+export { LINK_PATTERN, isValidLink, isExternalLink, openExternalLink } from './link';
 export {
   FULL_VENUE,
   STAGE_BAND_RATIO,

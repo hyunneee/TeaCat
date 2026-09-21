@@ -1,19 +1,18 @@
-import { ImagePlus, Lock, Plus, RefreshCw, X } from 'lucide-react';
-import type { ChangeEvent, FormEvent, ReactNode } from 'react';
+import { ImagePlus, Link2, Lock, Plus, RefreshCw, X } from 'lucide-react';
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Button, IconButton, Input } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
 import type { AreaPricingRow } from '../model/areaPricing';
 import {
   ACCEPTED_IMAGE_TYPES,
+  LINK_MAX_LENGTH,
   TITLE_MAX_LENGTH,
   type ConcertCreateErrors,
   type ConcertCreateForm as FormValues,
-  type PhotocardDesignForm,
   type StadiumLayoutSummary,
   type StadiumSummary,
 } from '../model/organizer.types';
 import { AreaPricingEditor } from './AreaPricingEditor';
-import { PhotocardDesignEditor } from './PhotocardDesignEditor';
 
 interface Props {
   form: FormValues;
@@ -56,14 +55,10 @@ interface Props {
     onChange: (index: number, patch: Partial<AreaPricingRow>) => void;
   };
   /**
-   * 공연과 함께 등록할 포토카드 도안. **등록 화면에서만** 넘깁니다 —
-   * 도안 API 가 `performanceId` 를 요구해서 공연이 만들어진 뒤에야 보낼 수 있고,
-   * 수정 화면은 이미 있는 공연이라 도안 관리가 따로 필요합니다.
+   * 공연과 함께 구성할 포토카드 풀. 등록 화면이 템플릿 조회·추가 상태를 조립해 넘깁니다.
+   * 수정 화면은 이미 공연 ID가 있으므로 별도 풀 관리 화면을 씁니다.
    */
-  designs?: PhotocardDesignForm[];
-  onDesignsChange?: (designs: PhotocardDesignForm[]) => void;
-  /** 도안 줄의 에러를 보여줄지. 제출을 누른 뒤부터 켭니다 */
-  showDesignErrors?: boolean;
+  photocardPool?: ReactNode;
   onChange: (patch: Partial<FormValues>) => void;
   onBlur: (name: keyof FormValues) => void;
   onSubmit: () => void;
@@ -88,9 +83,7 @@ export function ConcertForm({
   editing = false,
   layouts,
   areaPricing,
-  designs,
-  onDesignsChange,
-  showDesignErrors = false,
+  photocardPool,
   onChange,
   onBlur,
   onSubmit,
@@ -193,10 +186,13 @@ export function ConcertForm({
               공연장을 먼저 선택하면 무대 형식이 나타나요.
             </p>
           ) : layouts.loading ? (
-            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">무대 형식을 불러오는 중…</p>
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              무대 형식을 불러오는 중…
+            </p>
           ) : layouts.options.length === 0 ? (
             <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">
-              이 공연장에 쓸 수 있는 무대 형식이 없어요. 공연장 관리에서 형식을 활성 상태로 만들어 주세요.
+              이 공연장에 쓸 수 있는 무대 형식이 없어요. 공연장 관리에서 형식을 활성 상태로 만들어
+              주세요.
             </p>
           ) : (
             <select
@@ -235,9 +231,13 @@ export function ConcertForm({
               무대 형식을 먼저 선택하면 구역이 나타나요.
             </p>
           ) : areaPricing.loading ? (
-            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">구역을 불러오는 중…</p>
+            <p className="text-subtle surface-2 rounded-xl px-3 py-3 text-sm">
+              구역을 불러오는 중…
+            </p>
           ) : areaPricing.error ? (
-            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">구역 목록을 불러오지 못했어요.</p>
+            <p className="text-danger surface-2 rounded-xl px-3 py-3 text-sm">
+              구역 목록을 불러오지 못했어요.
+            </p>
           ) : (
             <AreaPricingEditor
               rows={areaPricing.rows}
@@ -342,14 +342,18 @@ export function ConcertForm({
         onChange={pickFile('detailImage')}
       />
 
-      {designs && onDesignsChange && (
-        <PhotocardDesignEditor
-          designs={designs}
-          showErrors={showDesignErrors}
-          disabled={submitting}
-          onChange={onDesignsChange}
-        />
-      )}
+      {photocardPool}
+
+      {/* 바로가기 — 등록 옵션 맨 아래. 대부분의 공연에는 없으므로 **접어 둡니다.**
+          칸을 늘 펼쳐 두면 "채워야 하는 것" 으로 읽혀서, 안 쓰는 사람이 매번 지나쳐야 합니다
+          (포토카드 도안에서 줄을 미리 열지 않는 것과 같은 판단입니다). */}
+      <LinkField
+        value={form.linkUrl}
+        error={errors.linkUrl}
+        disabled={submitting}
+        onChange={(linkUrl) => onChange({ linkUrl })}
+        onBlur={() => onBlur('linkUrl')}
+      />
 
       <Button
         type="submit"
@@ -367,6 +371,92 @@ export function ConcertForm({
 }
 
 /* ── 폼 보조 요소 ─────────────────────────────────────────── */
+
+/**
+ * 바로가기 추가하기.
+ *
+ * 접힌 상태에서는 버튼 하나만 있고, 누르면 주소 칸이 열립니다. 주소가 이미 있는 공연
+ * (수정 화면)은 **열린 채로** 시작합니다 — 접어 두면 값이 있는데 안 보여서
+ * "안 들어갔나?" 가 됩니다.
+ *
+ * 🔴 접을 때 값을 **비웁니다.** 비우지 않으면 화면에서 사라진 주소가 그대로 저장돼,
+ *    "뺐는데 상세에 버튼이 그대로" 가 됩니다. 수정 화면에서는 이 빈 값이 서버로 가서
+ *    바로가기를 뗍니다 (`toConcertUpdateRequest` 주석).
+ */
+function LinkField({
+  value,
+  error,
+  disabled,
+  onChange,
+  onBlur,
+}: {
+  value: string;
+  error?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onBlur: () => void;
+}) {
+  const [opened, setOpened] = useState(false);
+  /* 값이 있으면 무조건 열어 둡니다 — 수정 화면은 값이 늦게 도착할 수 있어
+     마운트 시점의 상태만으로는 판단할 수 없습니다 */
+  const open = opened || value.length > 0;
+
+  const close = () => {
+    setOpened(false);
+    onChange('');
+    onBlur();
+  };
+
+  if (!open) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="md"
+          fullWidth
+          leftIcon={<Link2 size={16} />}
+          disabled={disabled}
+          onClick={() => setOpened(true)}
+        >
+          바로가기 추가하기
+        </Button>
+        <span className="text-subtle text-xs">
+          공식 사이트·아티스트 채널처럼 우리가 담지 않는 곳으로 보내는 버튼을 공연 상세에 답니다.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">바로가기</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          leftIcon={<X size={14} />}
+          disabled={disabled}
+          onClick={close}
+        >
+          빼기
+        </Button>
+      </div>
+
+      <Input
+        placeholder="https://example.com 또는 /nft/draw"
+        value={value}
+        error={error}
+        disabled={disabled}
+        maxLength={LINK_MAX_LENGTH}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        hint="http(s) 로 시작하는 외부 주소는 새 탭으로, '/' 로 시작하는 서비스 내 경로는 같은 탭에서 열려요."
+      />
+    </div>
+  );
+}
 
 function Field({
   label,

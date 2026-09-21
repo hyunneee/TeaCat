@@ -36,6 +36,24 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: teacat-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: teacat
+      RABBITMQ_DEFAULT_PASS: teacat_local_pw
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   minio:
     image: minio/minio
     ports:
@@ -51,4 +69,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
   minio_data:

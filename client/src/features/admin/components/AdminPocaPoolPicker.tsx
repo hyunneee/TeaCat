@@ -3,8 +3,18 @@ import { CheckCheck, X } from 'lucide-react';
 import { Button, Input } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { cn } from '@/shared/lib';
-import { designNameLength, DESIGN_NAME_MAX, splitSupply } from '../model/adminPocaDesign.model';
-import type { AdminPocaTemplate, PocaPoolItem } from '../model/adminPocaDesign.types';
+import {
+  designNameLength,
+  DESIGN_NAME_MAX,
+  pocaPoolItems,
+  POCA_POOL_MAX_SUPPLY,
+  splitSupply,
+} from '../model/adminPocaDesign.model';
+import type {
+  AdminPocaTemplate,
+  PocaPoolItem,
+  PocaPoolSelection,
+} from '../model/adminPocaDesign.types';
 
 interface Props {
   templates: AdminPocaTemplate[];
@@ -20,9 +30,18 @@ interface Props {
    * 종수로 나눠 수량 칸을 미리 채웁니다. 좌석이라는 기준이 없는 이벤트 풀은 넘기지 않습니다.
    */
   suggestTotal?: number;
-  isPending: boolean;
+  isPending?: boolean;
+  disabled?: boolean;
+  showErrors?: boolean;
+  /** 공연 등록처럼 아직 performanceId가 없을 때는 선택값을 부모 폼이 보관합니다. */
+  selection?: {
+    value: PocaPoolSelection;
+    onChange: (value: PocaPoolSelection) => void;
+  };
+  submitLabel?: string;
+  emptyDescription?: string;
   /** 확인 단계는 바깥(페이지)이 맡습니다 — 되돌릴 수 없는 동작이라 한 번 더 묻습니다 */
-  onSubmit: (items: PocaPoolItem[], summary: string) => void;
+  onSubmit?: (items: PocaPoolItem[], summary: string) => void;
 }
 
 /**
@@ -38,11 +57,26 @@ export function AdminPocaPoolPicker({
   addedTemplateIds,
   performanceTitle,
   suggestTotal,
-  isPending,
+  isPending = false,
+  disabled = false,
+  showErrors = false,
+  selection,
+  submitLabel = '풀에 넣기',
+  emptyDescription = "먼저 '카드 그림 관리' 에서 그림을 올려야 풀에 넣을 수 있습니다.",
   onSubmit,
 }: Props) {
   /** templateId → 수량 문자열. 키가 있으면 체크된 것입니다 */
-  const [picked, setPicked] = useState<Record<number, string>>({});
+  const [localPicked, setLocalPicked] = useState<PocaPoolSelection>({});
+  const picked = selection?.value ?? localPicked;
+
+  const setPicked = (update: (current: PocaPoolSelection) => PocaPoolSelection) => {
+    const next = update(picked);
+    if (selection) {
+      selection.onChange(next);
+      return;
+    }
+    setLocalPicked(next);
+  };
 
   /**
    * 사람이 직접 고친 칸. 자동 채움이 이 칸은 건드리지 않습니다 — 애써 적은 숫자를
@@ -90,9 +124,7 @@ export function AdminPocaPoolPicker({
     setPicked((prev) => ({ ...prev, [templateId]: value.replace(/\D/g, '').slice(0, 6) }));
   };
 
-  const items: PocaPoolItem[] = Object.entries(picked)
-    .map(([id, supply]) => ({ templateId: Number(id), totalSupply: Number(supply) }))
-    .filter((item) => item.totalSupply > 0);
+  const items = pocaPoolItems(picked);
 
   /* 이미 넣은 카드는 다시 못 넣습니다(409) — 전체 선택도 그것만 빼고 고릅니다 */
   const selectable = templates.filter((t) => !addedTemplateIds.includes(t.templateId));
@@ -101,14 +133,15 @@ export function AdminPocaPoolPicker({
   const toggleAll = () => {
     touched.current.clear();
     if (allPicked) {
-      setPicked({});
+      setPicked(() => ({}));
       return;
     }
-    setPicked(autofill(Object.fromEntries(selectable.map((t) => [t.templateId, '']))));
+    setPicked(() => autofill(Object.fromEntries(selectable.map((t) => [t.templateId, '']))));
   };
 
   const total = items.reduce((sum, item) => sum + item.totalSupply, 0);
   const allFilled = Object.keys(picked).length === items.length;
+  const overLimit = items.some((item) => item.totalSupply > POCA_POOL_MAX_SUPPLY);
 
   /* 🔴 이름이 100자를 넘으면 서버가 거절합니다(NFT_049). 확인 모달까지 갔다가 튕기지 않게 미리 봅니다 */
   const tooLong = templates.filter(
@@ -123,16 +156,11 @@ export function AdminPocaPoolPicker({
       })
       .join(' · ');
 
-    onSubmit(items, summary);
+    onSubmit?.(items, summary);
   };
 
   if (templates.length === 0) {
-    return (
-      <EmptyState
-        title="등록된 카드 그림이 없어요"
-        description="먼저 '카드 그림 관리' 에서 그림을 올려야 풀에 넣을 수 있습니다."
-      />
-    );
+    return <EmptyState title="등록된 카드 그림이 없어요" description={emptyDescription} />;
   }
 
   return (
@@ -155,9 +183,9 @@ export function AdminPocaPoolPicker({
           variant="soft"
           size="sm"
           className="shrink-0"
-          disabled={selectable.length === 0}
           leftIcon={allPicked ? <X size={14} /> : <CheckCheck size={14} />}
           onClick={toggleAll}
+          disabled={disabled || selectable.length === 0}
         >
           {allPicked ? '전체 해제' : `전체 선택 (${selectable.length})`}
         </Button>
@@ -181,7 +209,7 @@ export function AdminPocaPoolPicker({
                   type="checkbox"
                   id={`tpl-${template.templateId}`}
                   checked={checked}
-                  disabled={added}
+                  disabled={disabled || added}
                   onChange={() => toggle(template.templateId)}
                   className="size-4 shrink-0"
                 />
@@ -200,6 +228,7 @@ export function AdminPocaPoolPicker({
                 {checked && (
                   <Input
                     value={picked[template.templateId] ?? ''}
+                    disabled={disabled}
                     onChange={(e) => setSupply(template.templateId, e.target.value)}
                     placeholder="수량"
                     inputMode="numeric"
@@ -219,6 +248,16 @@ export function AdminPocaPoolPicker({
         </p>
       )}
 
+      {overLimit && (
+        <p className="text-danger text-sm">
+          카드별 수량은 {POCA_POOL_MAX_SUPPLY.toLocaleString()}장 이하여야 합니다.
+        </p>
+      )}
+
+      {showErrors && Object.keys(picked).length > items.length && (
+        <p className="text-danger text-sm">선택한 카드의 수량을 1장 이상 입력해 주세요.</p>
+      )}
+
       <div className="border-line flex items-center justify-between gap-4 border-t pt-3">
         <p className="text-ink-muted text-sm">
           {items.length > 0 ? (
@@ -232,14 +271,18 @@ export function AdminPocaPoolPicker({
           )}
         </p>
 
-        <Button
-          variant="dark"
-          disabled={items.length === 0 || !allFilled || tooLong.length > 0}
-          loading={isPending}
-          onClick={submit}
-        >
-          풀에 넣기
-        </Button>
+        {onSubmit && (
+          <Button
+            variant="dark"
+            disabled={
+              disabled || items.length === 0 || !allFilled || overLimit || tooLong.length > 0
+            }
+            loading={isPending}
+            onClick={submit}
+          >
+            {submitLabel}
+          </Button>
+        )}
       </div>
     </div>
   );

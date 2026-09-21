@@ -79,6 +79,25 @@ export function TrendingSearchInput({
   );
 }
 
+/**
+ * 도감 카드처럼 "지금 뭘 보고 있나" 를 숨기지 않습니다 — `bucketStartedAt` 은 서버가
+ * 집계를 마친 **직전 1시간**의 시작 시각이라, 그대로 "매시간 갱신" 이라고만 쓰면
+ * 언제까지의 집계인지 알 수 없습니다. 끝 시각은 시작 + 1시간으로 계산합니다
+ * (서버 `SearchService.snapshotLastHour` 가 정각 단위로 자르므로 항상 정시입니다).
+ */
+function trendPeriodLabel(bucketStartedAt: string | null): string | null {
+  if (!bucketStartedAt) return null;
+  const start = new Date(bucketStartedAt);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const date = (value: Date) => `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  const time = (value: Date) => `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  const startLabel = `${date(start)} ${time(start)}`;
+  const endLabel = date(start) === date(end) ? time(end) : `${date(end)} ${time(end)}`;
+  return `${startLabel} ~ ${endLabel} 집계`;
+}
+
 function trendLabel(item: SearchTrendItem) {
   if (item.trend === 'NEW') return 'NEW';
   if (item.trend === 'SAME' || item.previousRank === null) return '—';
@@ -144,9 +163,7 @@ export function SearchTrendList({ onSelect }: { onSelect: (keyword: string) => v
   const { data, isPending, isError, refetch } = useSearchTrends();
   return (
     <section className="w-full p-4 lg:mx-auto lg:max-w-xl lg:px-8 lg:pt-8" aria-label="인기 검색어">
-      <SectionTitle
-        description={`매시간 갱신${data?.bucketStartedAt ? ` · ${data.bucketStartedAt.replace('T', ' ').slice(0, 16)}부터 1시간 집계` : ''}`}
-      >
+      <SectionTitle description={trendPeriodLabel(data?.bucketStartedAt ?? null) ?? '집계 준비 중'}>
         인기 검색어
       </SectionTitle>
       {isPending ? (

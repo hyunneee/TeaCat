@@ -5,8 +5,16 @@ import { Card, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import {
-  arePhotocardDesignsValid,
+  AdminPocaTemplateFormModal,
+  isPerformancePoolSelectionValid,
+  pocaPoolItems,
+  useAdminPocaTemplates,
+  useCreatePocaTemplate,
+  type PocaPoolSelection,
+} from '@/features/admin';
+import {
   ConcertForm,
+  ConcertPhotocardPoolEditor,
   EMPTY_CONCERT_CREATE,
   isConcertCreateValid,
   useAreaPricingRows,
@@ -15,7 +23,6 @@ import {
   useStadiums,
   validateConcertCreate,
   type ConcertCreateFormValues,
-  type PhotocardDesignForm,
 } from '@/features/organizer';
 
 /**
@@ -35,8 +42,9 @@ const REDIRECT = {
 
 export function AdminConcertCreatePage() {
   const [form, setForm] = useState<ConcertCreateFormValues>(EMPTY_CONCERT_CREATE);
-  /* 도안은 공연이 만들어진 뒤에야 보낼 수 있어 폼 값과 따로 들고 있습니다 */
-  const [designs, setDesigns] = useState<PhotocardDesignForm[]>([]);
+  /* 공연 ID가 생기기 전이라 템플릿과 수량만 보관하고, 등록 성공 뒤 풀 API로 보냅니다 */
+  const [poolSelection, setPoolSelection] = useState<PocaPoolSelection>({});
+  const [addingTemplate, setAddingTemplate] = useState(false);
   const [touched, setTouched] = useState<Partial<Record<keyof ConcertCreateFormValues, boolean>>>(
     {},
   );
@@ -47,6 +55,8 @@ export function AdminConcertCreatePage() {
   /* 구역은 공연장이 아니라 고른 **무대 형식**에 딸려 있습니다 */
   const areaPricing = useAreaPricingRows(form.stadiumLayoutId);
   const create = useCreateConcert(REDIRECT);
+  const templateQuery = useAdminPocaTemplates();
+  const createTemplate = useCreatePocaTemplate();
 
   /* 공연장을 고르면 기본 형식을 미리 골라 둡니다 — 형식이 하나뿐인 공연장에서 한 번 더 고르게 하지 않습니다.
      공연장을 바꾸면 앞 공연장의 형식은 더 이상 유효하지 않으니 함께 갈아탑니다.
@@ -65,7 +75,9 @@ export function AdminConcertCreatePage() {
 
   const errors = validateConcertCreate(form);
   const valid =
-    isConcertCreateValid(form) && areaPricing.valid && arePhotocardDesignsValid(designs);
+    isConcertCreateValid(form) &&
+    areaPricing.valid &&
+    isPerformancePoolSelectionValid(poolSelection, templateQuery.data ?? [], form.title);
 
   const visibleErrors = Object.fromEntries(
     Object.entries(errors).filter(
@@ -76,7 +88,7 @@ export function AdminConcertCreatePage() {
   const handleSubmit = () => {
     setSubmitted(true);
     if (!valid) return;
-    create.mutate({ form, areaRows: areaPricing.rows, designs });
+    create.mutate({ form, areaRows: areaPricing.rows, poolItems: pocaPoolItems(poolSelection) });
   };
 
   return (
@@ -112,11 +124,7 @@ export function AdminConcertCreatePage() {
             stadiums={stadiums}
             submitting={create.isPending}
             disabled={submitted && !valid}
-            submitLabel={
-              create.designProgress
-                ? `포토카드 올리는 중 ${create.designProgress.done + 1}/${create.designProgress.total}`
-                : '등록하기'
-            }
+            submitLabel="등록하기"
             layouts={{
               options: layouts.usable,
               loading: layouts.isPending,
@@ -131,14 +139,44 @@ export function AdminConcertCreatePage() {
               error: areaPricing.error,
               onChange: areaPricing.setRow,
             }}
-            designs={designs}
-            onDesignsChange={setDesigns}
-            showDesignErrors={submitted}
+            photocardPool={
+              <ConcertPhotocardPoolEditor
+                templates={templateQuery.data}
+                selection={poolSelection}
+                performanceTitle={form.title}
+                loading={templateQuery.isPending}
+                error={templateQuery.isError}
+                disabled={create.isPending || createTemplate.isPending}
+                showErrors={submitted}
+                onSelectionChange={setPoolSelection}
+                onAddTemplate={() => setAddingTemplate(true)}
+                onRetry={() => void templateQuery.refetch()}
+              />
+            }
             onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
             onBlur={(name) => setTouched((prev) => ({ ...prev, [name]: true }))}
             onSubmit={handleSubmit}
           />
         </Card>
+      )}
+
+      {addingTemplate && (
+        <AdminPocaTemplateFormModal
+          open
+          onClose={() => setAddingTemplate(false)}
+          isPending={createTemplate.isPending}
+          onSubmit={(body) =>
+            createTemplate.mutate(body, {
+              onSuccess: (template) => {
+                setPoolSelection((current) => ({
+                  ...current,
+                  [template.templateId]: '',
+                }));
+                setAddingTemplate(false);
+              },
+            })
+          }
+        />
       )}
     </div>
   );

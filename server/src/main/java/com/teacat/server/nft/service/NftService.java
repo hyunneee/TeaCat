@@ -16,6 +16,7 @@ import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardIssueResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
+import com.teacat.server.nft.dto.response.NftPocaDexResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
@@ -31,6 +32,7 @@ import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftAuctionQueryRepository;
 import com.teacat.server.nft.repository.NftAuctionRepository;
 import com.teacat.server.nft.repository.NftMarketQueryRepository;
+import com.teacat.server.nft.repository.NftPocaDexQueryRepository;
 import com.teacat.server.nft.repository.NftPhotocardDesignRepository;
 import com.teacat.server.nft.repository.NftPhotocardListingRepository;
 import com.teacat.server.nft.repository.NftPhotocardRepository;
@@ -85,6 +87,7 @@ public class NftService {
     private final NftPhotocardListingRepository listingRepository;
     private final NftPhotocardTradeRepository tradeRepository;
     private final NftMarketQueryRepository queryRepository;
+    private final NftPocaDexQueryRepository pocaDexQueryRepository;
     private final UserRepository userRepository;
     private final NftCursorCodec cursorCodec;
     private final BlockchainProperties blockchainProperties;
@@ -362,6 +365,51 @@ public class NftService {
      * 없으면 가장 최근 카드다. 판매 상태는 마켓에 나간 것 중 가장 최근 한 장의 것이다.
      */
     public MyNftPhotocardSummaryResponse getMyPhotocardSummary(Long userId) {
+        OwnedSummary summary = summarizeOwned(userId);
+        List<MyNftPhotocardSummaryResponse.Design> designs = summary.byDesign().entrySet().stream()
+                .map(e -> new MyNftPhotocardSummaryResponse.Design(
+                        e.getKey(), e.getValue().count, e.getValue().marketCount,
+                        e.getValue().marketState, e.getValue().photocardId))
+                .toList();
+        return new MyNftPhotocardSummaryResponse(designs, summary.pendingCount());
+    }
+
+    /**
+     * 사용자별 도감. 공개된 공연·이벤트 도안을 슬롯으로 깔고 보유 상태를 한 번에 합친다.
+     *
+     * <p>미보유 슬롯은 ID와 획득처 외의 앞면 정보를 내리지 않는다. 사용자가 가진 도안은 공연이
+     * 나중에 비공개로 바뀌어도 수집 기록에서 사라지지 않는다.
+     */
+    public NftPocaDexResponse getPocaDex(Long userId) {
+        OwnedSummary summary = summarizeOwned(userId);
+        List<NftPocaDexResponse.Card> cards = pocaDexQueryRepository.findDesigns(userId).stream()
+                .map(row -> {
+                    DesignTally tally = summary.byDesign().get(row.designId());
+                    boolean owned = tally != null;
+                    NftPocaDexResponse.Acquisition acquisition = row.performanceId() == null
+                            ? new NftPocaDexResponse.Acquisition(
+                                    NftPocaDexResponse.AcquisitionType.EVENT, "이벤트 포토카드 팩")
+                            : new NftPocaDexResponse.Acquisition(
+                                    NftPocaDexResponse.AcquisitionType.PERFORMANCE,
+                                    row.performanceTitle());
+                    return new NftPocaDexResponse.Card(
+                            row.designId(),
+                            owned,
+                            owned ? row.name() : null,
+                            owned ? row.imageUrl() : null,
+                            owned ? row.groupName() : null,
+                            owned ? row.grade() : null,
+                            acquisition,
+                            owned ? tally.count : 0,
+                            owned ? tally.marketCount : 0,
+                            owned ? tally.marketState : null,
+                            owned ? tally.photocardId : null);
+                })
+                .toList();
+        return new NftPocaDexResponse(cards, summary.pendingCount());
+    }
+
+    private OwnedSummary summarizeOwned(Long userId) {
         List<NftMarketQueryRepository.OwnedStateRow> rows = queryRepository.findOwnedStates(userId);
 
         Map<Long, DesignTally> byDesign = new LinkedHashMap<>();
@@ -383,13 +431,7 @@ public class NftService {
                 tally.representativeOnMarket = false;
             }
         }
-
-        List<MyNftPhotocardSummaryResponse.Design> designs = byDesign.entrySet().stream()
-                .map(e -> new MyNftPhotocardSummaryResponse.Design(
-                        e.getKey(), e.getValue().count, e.getValue().marketCount,
-                        e.getValue().marketState, e.getValue().photocardId))
-                .toList();
-        return new MyNftPhotocardSummaryResponse(designs, pending);
+        return new OwnedSummary(byDesign, pending);
     }
 
     /** 판매 상태 판정 — 화면의 `photocardMarketState` 와 같은 규칙이다 (정산 중 > 경매 > 고정가) */
@@ -412,6 +454,9 @@ public class NftService {
             this.photocardId = photocardId;
             this.representativeOnMarket = onMarket;
         }
+    }
+
+    private record OwnedSummary(Map<Long, DesignTally> byDesign, long pendingCount) {
     }
 
     public NftCursorPageResponse<MyNftPhotocardResponse> getMyPhotocards(

@@ -109,6 +109,12 @@ export interface ConcertDetail {
   posterUrl: string | null;
   /** 상세 페이지 본문 이미지 (세로로 긴 한 장) */
   detailImageUrl: string | null;
+  /**
+   * "바로가기" 버튼이 갈 곳. 없으면 버튼을 그리지 않습니다.
+   * 서비스 내 경로(`/nft/draw`)일 수도, 외부 주소(`https://…`)일 수도 있습니다 —
+   * 어느 쪽인지는 `isExternalLink` 가 가릅니다 (`shared/lib/link`).
+   */
+  linkUrl: string | null;
   stadium: Stadium;
   schedules: ScheduleSummary[];
   /**

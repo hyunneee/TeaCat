@@ -556,4 +556,89 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
             """, nativeQuery = true)
     int release(@Param("performanceDetailId") Long performanceDetailId,
             @Param("seatId") Long seatId);
+
+    /* ── 취소표 추첨 (resale) ──────────────────────────────────────────────
+       취소된 좌석은 추첨이 도는 동안 SOLD 로 남는다 — 아무도 잡지 못한다. 난수가 확정되면
+       당첨자에게 HELD(held_by = 당첨자, held_until = 결제 기한) 로 넘기고, 당첨자는 평소
+       결제 흐름(open → confirm → sell)을 그대로 탄다. 상태 값을 늘리지 않은 이유다.
+
+       clearAutomatically 를 쓰지 않는다 — 부르는 쪽(SeatDrawWriter)이 잠가 둔 추첨·신청 행을
+       이어서 고친다. 컨텍스트를 비우면 그 변경이 조용히 사라진다. */
+
+    /**
+     * 취소된(SOLD) 좌석을 당첨자의 선점으로 넘긴다. 첫 당첨자에게만 쓴다.
+     *
+     * <p>{@code uq_performance_seats_held_by} 에 걸리면(당첨자가 같은 회차의 다른 좌석을 선점 중)
+     * 예외가 나고 부르는 쪽이 다음 순위로 넘어간다.
+     *
+     * @return 1 이면 넘겼다. 0 이면 좌석이 SOLD 가 아니다 — 추첨이 좌석을 잃었다
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'HELD',
+                   held_by = :userId,
+                   held_until = :heldUntil,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'SOLD'
+            """, nativeQuery = true)
+    int grantSoldToWinner(@Param("performanceDetailId") Long performanceDetailId,
+                          @Param("seatId") Long seatId,
+                          @Param("userId") Long userId,
+                          @Param("heldUntil") LocalDateTime heldUntil);
+
+    /**
+     * 기한을 넘기거나 포기한 당첨자의 선점을 <b>추첨의 손으로 되돌린다</b> (HELD → SOLD).
+     *
+     * <p>그 좌석은 곧바로 새 추첨으로 넘어가고, 새 당첨자에게 다시 {@link #grantSoldToWinner} 로 나간다.
+     * 대기자가 없으면 부르는 쪽이 {@link #release} 로 일반 판매에 푼다.
+     * {@code held_until} 조건이 없다 — 만료된 선점을 되돌리는 것이 이 메서드의 일이다.
+     *
+     * @return 1 이면 되돌렸다. 0 이면 당첨자가 그 사이 결제했거나(SOLD) 선점을 스스로 풀었다(AVAILABLE)
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE performance_seats
+               SET status = 'SOLD',
+                   held_by = NULL,
+                   held_until = NULL,
+                   updated_at = now()
+             WHERE performance_detail_id = :performanceDetailId
+               AND seat_id = :seatId
+               AND status = 'HELD'
+               AND held_by = :userId
+            """, nativeQuery = true)
+    int reclaimWinnerHold(@Param("performanceDetailId") Long performanceDetailId,
+                          @Param("seatId") Long seatId,
+                          @Param("userId") Long userId);
+
+    /**
+     * 구역별로 지금 고를 수 있는 좌석 수. 취소표 대기는 <b>이 값이 0 인 구역에만</b> 걸 수 있다.
+     *
+     * <p>만료된 HELD 는 고를 수 있는 좌석으로 친다 — {@link #findSeatCounts} 와 같은 기준이다.
+     * 회차 좌석이 아직 없는 구역은 행이 없다.
+     */
+    @Query(value = """
+            SELECT s.area_id AS "areaId",
+                   COUNT(*)  AS "totalCount",
+                   COUNT(*) FILTER (WHERE ps.status = 'AVAILABLE'
+                                       OR (ps.status = 'HELD' AND ps.held_until < now()))
+                             AS "availableCount"
+              FROM performance_seats ps
+              JOIN seats s ON s.id = ps.seat_id
+             WHERE ps.performance_detail_id = :performanceDetailId
+             GROUP BY s.area_id
+            """, nativeQuery = true)
+    List<AreaAvailabilityView> findAvailabilityByArea(@Param("performanceDetailId") Long performanceDetailId);
+
+    /** {@link #findAvailabilityByArea} 결과 한 줄 */
+    interface AreaAvailabilityView {
+        Long getAreaId();
+
+        long getTotalCount();
+
+        long getAvailableCount();
+    }
 }

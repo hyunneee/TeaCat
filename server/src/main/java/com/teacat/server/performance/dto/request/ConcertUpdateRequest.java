@@ -1,6 +1,7 @@
 package com.teacat.server.performance.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -33,7 +34,22 @@ public record ConcertUpdateRequest(
         String posterImageKey,
 
         @Schema(description = "새 상세 이미지 key", example = "performance/detail/2026/09/d4e5f6.png")
-        String detailImageKey
+        String detailImageKey,
+
+        /*
+         * 🔴 빈 문자열("")은 "바로가기 떼기" 다. 이 요청은 "안 보낸 필드(null)는 그대로" 라
+         *    빈 문자열까지 무시하면 한 번 붙인 바로가기를 영영 못 뗀다. 그래서 @Pattern 이
+         *    빈 문자열을 함께 허용한다 (@Pattern 은 null 을 통과시키므로 둘이 구분된다).
+         */
+        @Schema(description = """
+                공연 상세의 '바로가기' 버튼이 갈 곳. 서비스 내 경로(`/nft/draw`) 또는
+                외부 주소(`https://…`). **빈 문자열을 보내면 바로가기를 뗍니다.**
+                보내지 않으면(null) 그대로 둡니다.
+                """, example = "https://example.com/artist")
+        @Pattern(regexp = "^$|^(/(?!/)\\S*|https?://\\S+)$",
+                message = "'/' 로 시작하는 서비스 내 경로이거나 http(s) 로 시작하는 주소여야 합니다.")
+        @Size(max = 500, message = "주소가 너무 깁니다.")
+        String linkUrl
 ) {
 
     /** 티켓팅 시작 후에는 건드릴 수 없는 필드가 하나라도 들어왔는지 */
@@ -47,6 +63,6 @@ public record ConcertUpdateRequest(
     }
 
     public boolean isEmpty() {
-        return title == null && !touchesLockedFields() && !touchesImages();
+        return title == null && linkUrl == null && !touchesLockedFields() && !touchesImages();
     }
 }

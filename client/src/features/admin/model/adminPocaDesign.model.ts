@@ -1,5 +1,11 @@
 import type { PocaRole } from '@/features/nft';
-import type { AdminPocaDesign, PocaDesignGrade } from './adminPocaDesign.types';
+import type {
+  AdminPocaDesign,
+  AdminPocaTemplate,
+  PocaDesignGrade,
+  PocaPoolItem,
+  PocaPoolSelection,
+} from './adminPocaDesign.types';
 
 /**
  * 도안 이름의 최대 길이 — 서버 `nft_photocard_designs.name` 이 varchar(100) 입니다.
@@ -7,6 +13,7 @@ import type { AdminPocaDesign, PocaDesignGrade } from './adminPocaDesign.types';
  * 되돌릴 수 없어서, 조용히 잘린 이름이 영구히 남는 것보다 낫다는 판단입니다.
  */
 export const DESIGN_NAME_MAX = 100;
+export const POCA_POOL_MAX_SUPPLY = 100_000;
 
 /** 공연 도안 이름을 잇는 구분자. 서버와 같은 값이어야 길이 계산이 맞습니다 */
 const JOINER = ' · ';
@@ -54,4 +61,38 @@ export function gradeForRole(role: PocaRole): PocaDesignGrade {
 export function splitSupply(total: number, count: number): number {
   if (total <= 0 || count <= 0) return 0;
   return Math.ceil(total / count);
+}
+
+/** 입력 중인 선택값을 서버 요청 형태로 바꿉니다. 빈 수량은 제외합니다. */
+export function pocaPoolItems(selection: PocaPoolSelection): PocaPoolItem[] {
+  return Object.entries(selection)
+    .map(([id, supply]) => ({ templateId: Number(id), totalSupply: Number(supply) }))
+    .filter((item) => item.totalSupply > 0);
+}
+
+/** 카드 선택은 선택 사항이지만, 하나라도 골랐다면 모든 수량이 서버 범위 안이어야 합니다. */
+export function isPocaPoolSelectionValid(selection: PocaPoolSelection): boolean {
+  const items = pocaPoolItems(selection);
+  return (
+    Object.keys(selection).length === items.length &&
+    items.every(
+      (item) => Number.isInteger(item.totalSupply) && item.totalSupply <= POCA_POOL_MAX_SUPPLY,
+    )
+  );
+}
+
+/** 공연 제목이 붙은 최종 도안명과 선택 수량을 함께 검사합니다. */
+export function isPerformancePoolSelectionValid(
+  selection: PocaPoolSelection,
+  templates: AdminPocaTemplate[],
+  performanceTitle: string,
+): boolean {
+  if (!isPocaPoolSelectionValid(selection)) return false;
+
+  return Object.keys(selection).every((id) => {
+    const template = templates.find((item) => item.templateId === Number(id));
+    return (
+      !!template && designNameLength(template.name, performanceTitle.trim()) <= DESIGN_NAME_MAX
+    );
+  });
 }

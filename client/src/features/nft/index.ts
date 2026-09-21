@@ -85,6 +85,7 @@ export {
 export type {
   MarketPhotocard,
   DrawPoolCard,
+  PocaDexResponse,
   PhotocardArt,
   MyPhotocard,
   PhotocardDetail,

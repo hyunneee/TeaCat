@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { Coins, Gamepad2 } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Card, ListRow } from '@/shared/components/ui';
+import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
-import { useTokenBalance } from '@/features/token';
+import { AttendanceCard, SongpyeonPiece, useAttendance, useTokenBalance } from '@/features/token';
 
 /**
  * 캣머니 — 잔액과 모으는 방법.
@@ -15,6 +15,7 @@ import { useTokenBalance } from '@/features/token';
 export function TokenPage() {
   const navigate = useNavigate();
   const { data: token } = useTokenBalance();
+  const attendance = useAttendance();
 
   return (
     <>
@@ -48,7 +49,29 @@ export function TokenPage() {
           )}
         </Card>
 
+        {/* ── 캣머니 벌기 ──────────────────────────────────
+            🔴 화면에서 **실제로 캣머니가 들어오는 것은 출석 체크와 송편 잡기뿐**입니다.
+            짝 맞추기는 아직 기록만 남습니다(`features/token` 의 `REWARD_TIERS` 주석) —
+            그래서 보상이 있는 둘을 위에 두고 설명에 금액을 적습니다. */}
+        <SectionTitle>캣머니 벌기</SectionTitle>
+
+        {/* 한 화면에 primary 버튼은 하나입니다 (CLAUDE.md 4-6). 이 카드의 버튼이 그 하나라
+            아래 게임들은 누르는 줄(ListRow)로 둡니다 */}
+        <AttendanceCard
+          amount={attendance.amount}
+          claimed={attendance.claimed}
+          loading={attendance.loading}
+          claiming={attendance.claiming}
+          onCheck={attendance.check}
+        />
+
         <Card padded={false} className="overflow-hidden">
+          <ListRow
+            icon={<SongpyeonPiece kind="songpyeon" size={18} />}
+            title="송편 잡기"
+            description="5단계를 모두 통과하면 하루 한 번 캣머니"
+            onClick={() => navigate(ROUTES.TOKEN_SONGPYEON)}
+          />
           <ListRow
             icon={<Gamepad2 size={18} />}
             title="캣머니 게임하기"

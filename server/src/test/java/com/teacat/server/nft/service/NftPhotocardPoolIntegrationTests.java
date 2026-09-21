@@ -275,6 +275,33 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 공연기획자도_템플릿을_등록할_수_있지만_감출_수는_없다() throws Exception {
+        Long organizerId = insertUser("template-owner@test.com", "템플릿기획자", "PERFORMANCE");
+        String token = "Bearer " + jwtTokenProvider.createAccessToken(organizerId, UserRole.PERFORMANCE);
+        willReturn("bafyPERFORMANCE").given(ipfsPinService).pinImage(any());
+        willReturn("/gateway/bafyPERFORMANCE").given(ipfsPinService).gatewayUrl("bafyPERFORMANCE");
+
+        mockMvc.perform(multipart("/admin/photocard-templates")
+                        .file(new MockMultipartFile("image", "card.png", "image/png", "bytes".getBytes()))
+                        .param("name", "기획자 카드")
+                        .param("group", "서울 5반")
+                        .param("grade", "COMMON")
+                        .header("Authorization", token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.name").value("기획자 카드"));
+
+        Long templateId = templateRepository.findAllByHiddenFalseOrderByIdDesc().getFirst().getId();
+        mockMvc.perform(patch("/admin/photocard-templates/" + templateId)
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"hidden\":true}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(templateRepository.findById(templateId).orElseThrow().isHidden()).isFalse();
+        verifyNoInteractions(chainClient);
+    }
+
+    @Test
     void 어드민이_템플릿을_감추면_목록에서_빠진다() throws Exception {
         Long templateId = insertTemplate("김예린", "서울 5반", "SPECIAL");
         String token = adminToken();

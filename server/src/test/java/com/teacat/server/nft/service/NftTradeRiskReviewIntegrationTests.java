@@ -250,6 +250,19 @@ class NftTradeRiskReviewIntegrationTests extends PostgresIntegrationTest {
                 .andExpect(status().isOk());
         assertThat(chainStatus(tradeId)).isEqualTo("FAILED");
 
+        // 🔴 필터 없는 전체 조회 — 빈 IN () 로 500 이 났던 자리다. 상태별만 보면 못 잡는다
+        mockMvc.perform(get("/admin/nft/trade-reviews/trades").param("status", "ALL")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin, UserRole.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.trades[0].tradeId").value(tradeId));
+
+        // 파라미터를 아예 생략해도 기본값(ALL)으로 같은 결과여야 한다
+        mockMvc.perform(get("/admin/nft/trade-reviews/trades")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin, UserRole.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
         mockMvc.perform(get("/admin/nft/trade-reviews/trades").param("status", "FAILED")
                         .header(HttpHeaders.AUTHORIZATION, bearer(admin, UserRole.ADMIN)))
                 .andExpect(status().isOk())

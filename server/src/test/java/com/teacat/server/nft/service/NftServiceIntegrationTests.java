@@ -792,10 +792,17 @@ class NftServiceIntegrationTests {
         insertListing(secondCardId, sellerId, 100L);
         insertListing(underscoreCardId, sellerId, 200L);
         insertListing(otherCardId, sellerId, 50L);
+        jdbcTemplate.update("UPDATE performance_general SET title = '별빛 검색 공연' WHERE id = ?",
+                firstPerformance.performanceId());
 
         var filtered = nftService.getMarketPhotocards(
                 firstPerformance.performanceId(), "보라빛", NftMarketSort.PRICE_ASC, null, 20);
         assertThat(filtered.items()).extracting(NftMarketPhotocardResponse::price)
+                .containsExactly(100L, 200L, 300L);
+
+        var byPerformanceTitle = nftService.getMarketPhotocards(
+                null, "별빛 검색", NftMarketSort.PRICE_ASC, null, 20);
+        assertThat(byPerformanceTitle.items()).extracting(NftMarketPhotocardResponse::price)
                 .containsExactly(100L, 200L, 300L);
 
         var percentLiteral = nftService.getMarketPhotocards(

@@ -9,18 +9,17 @@ import com.teacat.server.nft.dto.response.MyDesignPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardResponse;
 import com.teacat.server.nft.dto.response.MyNftPhotocardSummaryResponse;
 import com.teacat.server.nft.dto.response.NftCursorPageResponse;
-import com.teacat.server.nft.dto.response.NftDrawPoolCardResponse;
 import com.teacat.server.nft.dto.response.NftListingResponse;
 import com.teacat.server.nft.dto.response.NftMarketPhotocardResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardArtResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDetailResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardTradeHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardViewResponse;
+import com.teacat.server.nft.dto.response.NftPocaDexResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseHistoryResponse;
 import com.teacat.server.nft.dto.response.NftPurchaseResponse;
 import com.teacat.server.nft.dto.response.NftSaleHistoryResponse;
 import com.teacat.server.nft.dto.response.NftTradeStatusResponse;
-import com.teacat.server.nft.service.NftPhotocardDesignService;
 import com.teacat.server.nft.service.NftPhotocardTemplateService;
 import com.teacat.server.nft.service.NftService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,7 +51,6 @@ public class NftController {
 
     private final NftService nftService;
     private final NftPhotocardTemplateService templateService;
-    private final NftPhotocardDesignService designService;
 
     @Operation(
             summary = "NFT 포토카드 목록 조회",
@@ -283,22 +281,22 @@ public class NftController {
         return ResponseEntity.ok(BaseResponse.success(templateService.findArt()));
     }
     @Operation(
-            summary = "도감 카드 목록 조회",
+            summary = "내 포토카드 도감 조회",
             description = """
-                    뽑기에서 나올 수 있는 카드 전체입니다. "내 포토카드" 도감이 **아직 없는 칸**을
-                    그리려면 가진 것 말고 전체가 필요해서 따로 엽니다.
+                    공개된 공연과 이벤트에서 수집할 수 있는 카드 전체에 내 보유 상태를 합쳐 돌려줍니다.
+                    사용자가 이미 가진 도안은 공연이 비공개로 바뀌어도 도감에서 사라지지 않습니다.
 
-                    🔴 **공연 좌석에서 나오는 도안은 담기지 않습니다.** 그건 아직 열리지 않은
-                    공연의 카드까지 미리 보여주는 셈이고, 역할 꼬리표(`group`)도 뽑기 풀
-                    도안에만 붙어 있어 거를 방법이 없습니다.
+                    미보유 도안은 `designId`, `owned=false`, 수량 0과 획득처만 내려가며
+                    이름·이미지 주소·소속·등급은 null입니다. 화면에서 `???`로 가리는 데 그치지 않고
+                    도감 API 응답에도 앞면 정보를 포함하지 않습니다.
 
-                    🔴 남은 수량·발급 수량·CID·체인 상태는 **내려주지 않습니다** — 운영 정보입니다.
-                    같은 목록의 어드민 API(`GET /admin/photocard-designs/draw-pool`)와 내용이 다릅니다.
+                    남은 수량·발급 수량·CID·체인 상태는 운영 정보이므로 내려주지 않습니다.
                     """
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/photocard-designs/draw-pool")
-    public ResponseEntity<BaseResponse<List<NftDrawPoolCardResponse>>> getDrawPoolCards() {
-        return ResponseEntity.ok(BaseResponse.success(designService.getDrawPoolCards()));
+    public ResponseEntity<BaseResponse<NftPocaDexResponse>> getPocaDex(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getPocaDex(authUser.id())));
     }
 }

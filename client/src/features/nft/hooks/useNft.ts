@@ -106,28 +106,27 @@ export function useMyPhotocardSummary() {
 }
 
 /**
- * 도감 — 전체 도안 위에 내가 가진 것을 얹습니다.
+ * 도감 — 공개된 수집 도안과 내 보유 상태를 서버가 한 번에 합쳐 줍니다.
  *
- * 🔴 **카드 목록을 받지 않습니다.** 요약 한 번(`useMyPhotocardSummary`)과 도안 풀만 씁니다.
- * "보유 카드만" 을 눌렀을 때 필요한 카드 한 장 한 장은 `useOwnedCards` 가 그때 받습니다.
+ * 🔴 미보유 카드의 이름·그림 URL은 응답부터 null입니다. "보유 카드만"을 눌렀을 때 필요한
+ * 카드 한 장 한 장은 `useOwnedCards`가 그때 받습니다.
  */
 export function usePocaDex() {
-  const pool = useQuery({
-    queryKey: nftKeys.drawPool(),
+  const { user, isLoggedIn } = useAuth();
+  const dex = useQuery({
+    queryKey: nftKeys.drawPool(user?.userId),
     queryFn: nftApi.drawPool,
-    staleTime: STALE_TIME.LONG,
+    staleTime: STALE_TIME.SHORT,
+    enabled: isLoggedIn && !!user?.userId,
+    refetchInterval: (query) => ((query.state.data?.pendingCount ?? 0) > 0 ? MINT_POLL_MS : false),
   });
-  const summary = useMyPhotocardSummary();
 
-  const entries = useMemo(
-    () => buildPocaDex(pool.data ?? [], summary.data?.designs ?? []),
-    [pool.data, summary.data],
-  );
+  const entries = useMemo(() => buildPocaDex(dex.data?.cards ?? []), [dex.data]);
 
   return {
     entries,
-    isPending: !pool.isError && !summary.isError && (pool.isPending || summary.isPending),
-    isError: pool.isError || summary.isError,
+    isPending: dex.isPending,
+    isError: dex.isError,
   };
 }
 

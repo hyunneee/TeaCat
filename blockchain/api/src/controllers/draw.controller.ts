@@ -30,8 +30,10 @@ const drawKey = z.string().min(1).max(200);
 const drawInputs = z.object({
   performanceId: numericId,
   ticketIds: z.array(numericId).min(1).max(5000),
-  designIds: z.array(numericId).min(1).max(200),
-  quantities: z.array(numericId).min(1).max(200),
+  /* 포카 배정은 도안이 200개를 넘지 않지만, 취소표 추첨은 designIds 를 "순위 1…N" 으로 써서
+     참가자 수만큼 필요합니다 (Spring ResaleDrawChainClient). 상한을 참가자와 같게 둡니다. */
+  designIds: z.array(numericId).min(1).max(5000),
+  quantities: z.array(numericId).min(1).max(5000),
 });
 
 export const openBody = drawInputs.extend({ drawKey });

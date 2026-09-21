@@ -82,15 +82,29 @@ public class NftTradeReviewQueryRepository {
     }
 
     /**
+     * 상태 필터를 WHERE 조건 문자열로 만든다.
+     *
+     * <p>🔴 <b>빈 목록을 {@code IN (:statuses)} 에 넘기면 안 된다.</b> 바인딩이 {@code IN ()} 가 되어
+     * SQL 문법 오류로 죽는다 — 전체 조회(필터 없음)가 통째로 500 이 됐던 원인이다.
+     * 조건 자체를 빼야 한다. 파라미터는 조건을 쓸 때만 넣는다.
+     */
+    private static String statusFilter(List<String> statuses, MapSqlParameterSource params) {
+        if (statuses == null || statuses.isEmpty()) {
+            return "TRUE";
+        }
+        params.addValue("statuses", statuses);
+        return "t.chain_status::text IN (:statuses)";
+    }
+
+    /**
      * 관리자 거래 내역 — 경로·상태 무관하게 모든 거래를 최신순으로. 심사 행이 있으면 함께 붙인다.
      *
-     * @param statuses null 이면 전부, 아니면 이 체인 상태들만
+     * @param statuses null 이거나 비어 있으면 전부, 아니면 이 체인 상태들만
      */
     public List<TradeRow> findTrades(List<String> statuses, int offset, int limit) {
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("offset", offset).addValue("limit", limit)
-                .addValue("statuses", statuses == null ? List.of() : statuses)
-                .addValue("all", statuses == null);
+                .addValue("offset", offset).addValue("limit", limit);
+        String filter = statusFilter(statuses, params);
         return jdbcTemplate.query("""
                 SELECT t.id, t.auction_id, t.listing_id, t.photocard_id, d.name AS design_name, d.image_url,
                        t.seller_id, s.nickname AS seller_nickname, t.buyer_id, b.nickname AS buyer_nickname,
@@ -102,10 +116,10 @@ public class NftTradeReviewQueryRepository {
                   JOIN users s ON s.id = t.seller_id
                   JOIN users b ON b.id = t.buyer_id
                   LEFT JOIN nft_trade_reviews r ON r.trade_id = t.id
-                 WHERE (:all OR t.chain_status::text IN (:statuses))
+                 WHERE %s
                  ORDER BY t.created_at DESC, t.id DESC
                  OFFSET :offset LIMIT :limit
-                """, params, (rs, i) -> new TradeRow(
+                """.formatted(filter), params, (rs, i) -> new TradeRow(
                 rs.getLong("id"), (Long) rs.getObject("auction_id"), (Long) rs.getObject("listing_id"),
                 rs.getLong("photocard_id"), rs.getString("design_name"), rs.getString("image_url"),
                 rs.getLong("seller_id"), rs.getString("seller_nickname"),
@@ -117,12 +131,11 @@ public class NftTradeReviewQueryRepository {
     }
 
     public long countTrades(List<String> statuses) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("statuses", statuses == null ? List.of() : statuses)
-                .addValue("all", statuses == null);
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        String filter = statusFilter(statuses, params);
         Long count = jdbcTemplate.queryForObject("""
-                SELECT count(*) FROM nft_photocard_trades t WHERE (:all OR t.chain_status::text IN (:statuses))
-                """, params, Long.class);
+                SELECT count(*) FROM nft_photocard_trades t WHERE %s
+                """.formatted(filter), params, Long.class);
         return count == null ? 0 : count;
     }
 
