@@ -55,7 +55,7 @@ class StickerCreateIntegrationTests extends PostgresIntegrationTest {
     }
 
     private static StickerCreateRequest request() {
-        return new StickerCreateRequest(Base64.getEncoder().encodeToString(PNG), null, null);
+        return new StickerCreateRequest(Base64.getEncoder().encodeToString(PNG), null, null, null);
     }
 
     private static String newKey() {
@@ -163,7 +163,7 @@ class StickerCreateIntegrationTests extends PostgresIntegrationTest {
     void seed_를_주면_그대로_쓴다() {
         Long userId = insertUser("sticker-seed2@test.com", "시드2");
         StickerCreateRequest request = new StickerCreateRequest(
-                Base64.getEncoder().encodeToString(PNG), "고양이", 777);
+                Base64.getEncoder().encodeToString(PNG), "고양이", 777, null);
 
         StickerCreateResponse response = stickerService.create(userId, request, newKey());
 
@@ -176,7 +176,7 @@ class StickerCreateIntegrationTests extends PostgresIntegrationTest {
     void 낙서가_PNG_가_아니면_거절한다() {
         Long userId = insertUser("sticker-bad@test.com", "형식");
         StickerCreateRequest request = new StickerCreateRequest(
-                Base64.getEncoder().encodeToString("그냥 글자".getBytes()), null, null);
+                Base64.getEncoder().encodeToString("그냥 글자".getBytes()), null, null, null);
 
         assertThatThrownBy(() -> stickerService.create(userId, request, newKey()))
                 .isInstanceOf(BusinessException.class)

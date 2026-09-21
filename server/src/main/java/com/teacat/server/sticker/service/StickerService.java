@@ -80,7 +80,8 @@ public class StickerService {
         String sketchKey = fileStorageService.uploadBytes(sketch, SKETCH_DIRECTORY, StickerImageCodec.CONTENT_TYPE);
 
         try {
-            StickerJob job = jobWriter.insert(userId, idempotencyKey, sketchKey, request.subject(), seedOf(request));
+            StickerJob job = jobWriter.insert(userId, idempotencyKey, sketchKey,
+                    request.subject(), seedOf(request), request.inkColor());
             return new StickerCreateResponse(job.getId(), remainingToday(userId));
         } catch (DataIntegrityViolationException e) {
             // 같은 키가 동시에 두 번 들어왔다. 먼저 들어온 쪽이 이겼으므로 그 작업을 돌려주고,

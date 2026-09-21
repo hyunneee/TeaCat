@@ -26,8 +26,8 @@ export async function setupMocks() {
     // 내 티켓(/users/me/tickets)·예매 취소도 실서버입니다 -> handlers/ticket.ts 삭제
     import('./handlers/resale'),
     import('./handlers/appInfo'),
-    // AI 스티커 — 서버가 아직 없습니다. 계약은 features/sticker/model/sticker.types.ts 가 기준
-    import('./handlers/sticker'),
+    // AI 스티커(/stickers, /users/me/stickers)도 실서버입니다 -> handlers/sticker.ts 삭제
+    //   2026-09-21 백엔드 완성 + GPU 워커 연결까지 확인했습니다.
   ]);
 
   // 등록 안 된 경로는 원래 어댑터(실제 네트워크)로 폴백시킵니다.

@@ -29,13 +29,14 @@ class StickerJobWriter {
     private final UserRepository userRepository;
 
     @Transactional
-    StickerJob insert(Long userId, String idempotencyKey, String sketchKey, String subject, int seed) {
+    StickerJob insert(Long userId, String idempotencyKey, String sketchKey,
+                      String subject, int seed, String inkColor) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
         // saveAndFlush — 유니크 충돌을 이 메서드 안에서 터뜨려야 부르는 쪽이 잡을 수 있다.
         // save 만 하면 커밋 시점에 터지고, 그때는 이미 이 트랜잭션 밖이다
         return jobRepository.saveAndFlush(
-                StickerJob.pending(user, idempotencyKey, sketchKey, subject, seed));
+                StickerJob.pending(user, idempotencyKey, sketchKey, subject, seed, inkColor));
     }
 }

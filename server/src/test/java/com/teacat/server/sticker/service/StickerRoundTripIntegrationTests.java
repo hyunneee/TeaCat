@@ -54,7 +54,7 @@ class StickerRoundTripIntegrationTests extends PostgresIntegrationTest {
     }
 
     private static StickerCreateRequest sketch() {
-        return new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), "고양이", 777);
+        return new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), "고양이", 777, null);
     }
 
     @Test
@@ -111,10 +111,10 @@ class StickerRoundTripIntegrationTests extends PostgresIntegrationTest {
     @Test
     void 다시_만들면_새_작업이_서고_시드가_다르다() {
         Long first = stickerService.create(userId,
-                new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), null, 1),
+                new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), null, 1, null),
                 UUID.randomUUID().toString()).jobId();
         Long second = stickerService.create(userId,
-                new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), null, 2),
+                new StickerCreateRequest(Base64.getEncoder().encodeToString(SKETCH), null, 2, null),
                 UUID.randomUUID().toString()).jobId();
 
         assertThat(second).isNotEqualTo(first);

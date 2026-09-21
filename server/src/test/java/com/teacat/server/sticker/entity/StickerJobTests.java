@@ -16,7 +16,7 @@ class StickerJobTests {
 
     private static StickerJob job() {
         User user = User.create("sticker@test.com", "encoded", "테스트", "닉네임", "010-0000-0000");
-        return StickerJob.pending(user, "key", "sticker/sketch/a.png", "고양이", 42);
+        return StickerJob.pending(user, "key", "sticker/sketch/a.png", "고양이", 42, null);
     }
 
     @Test

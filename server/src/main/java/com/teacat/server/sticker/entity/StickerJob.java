@@ -62,6 +62,15 @@ public class StickerJob {
     @Column(name = "seed", updatable = false)
     private Integer seed;
 
+    /**
+     * 사용자가 고른 잉크 색 {@code #RRGGBB}. 안 골랐으면 null.
+     *
+     * <p>🔴 이 값이 결과 색을 좌우한다 — 워커에 색 이름으로 넘어가면 모델이 선명하게 칠하고,
+     * 없으면 얇은 선화가 회색빛으로 바랜다. 변환은 {@link StickerInkColor} 가 한다.
+     */
+    @Column(name = "ink_color", length = 7, updatable = false)
+    private String inkColor;
+
     /* 🔴 params_json 은 일부러 매핑하지 않는다.
        하이버네이트의 JSON 매핑({@code @JdbcTypeCode(SqlTypes.JSON)})은 이 값을 한 번 더
        JSON 문자열로 감싸 넣을 수 있고, 이 프로젝트는 Jackson 3(tools.jackson)이라
@@ -90,19 +99,26 @@ public class StickerJob {
     @Column(name = "finished_at")
     private OffsetDateTime finishedAt;
 
-    private StickerJob(User user, String idempotencyKey, String sketchKey, String subject, int seed) {
+    private StickerJob(User user, String idempotencyKey, String sketchKey,
+                       String subject, int seed, String inkColor) {
         this.user = user;
         this.idempotencyKey = idempotencyKey;
         this.sketchKey = sketchKey;
         this.subject = subject;
         this.seed = seed;
+        this.inkColor = inkColor;
         this.status = StickerJobStatus.PENDING;
         this.retryCount = 0;
     }
 
     public static StickerJob pending(User user, String idempotencyKey, String sketchKey,
-                                     String subject, int seed) {
-        return new StickerJob(user, idempotencyKey, sketchKey, subject, seed);
+                                     String subject, int seed, String inkColor) {
+        return new StickerJob(user, idempotencyKey, sketchKey, subject, seed, inkColor);
+    }
+
+    /** 워커가 쓰는 색 이름. 색을 안 골랐으면 null 이라 모델이 주제에 맞게 고른다 */
+    public String colorChip() {
+        return StickerInkColor.toChipName(inkColor);
     }
 
     /** 결과가 도착했다. 워커가 보낸 meta 는 {@code StickerJobRepository.saveMeta} 가 따로 넣는다 */

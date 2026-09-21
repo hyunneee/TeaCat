@@ -144,7 +144,8 @@ public class StickerJobWorkerService {
                 job.getId(),
                 codec.encode(fileStorageService.download(job.getSketchKey())),
                 job.getSubject(),
-                job.getSeed());
+                job.getSeed(),
+                job.colorChip());
     }
 
     private StickerJob find(Long jobId) {
