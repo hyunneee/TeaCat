@@ -2,6 +2,8 @@ package com.teacat.server.search.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftMarketSort;
+import com.teacat.server.nft.dto.request.NftAuctionSort;
+import com.teacat.server.nft.service.NftAuctionService;
 import com.teacat.server.nft.service.NftService;
 import com.teacat.server.performance.service.PerformanceService;
 import com.teacat.server.search.dto.SearchTrendResponse;
@@ -34,6 +36,7 @@ public class SearchService {
     private static final ZoneId ZONE = ZoneId.systemDefault();
     private final PerformanceService performanceService;
     private final NftService nftService;
+    private final NftAuctionService nftAuctionService;
     private final SearchTrendCacheRepository cacheRepository;
     private final SearchTrendRepository trendRepository;
 
@@ -55,9 +58,11 @@ public class SearchService {
         UnifiedSearchResponse response = new UnifiedSearchResponse(
                 display,
                 performanceService.getConcerts(display, false, null, 6).concerts(),
-                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items());
+                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items(),
+                nftAuctionService.getAuctions(null, display, NftAuctionSort.RECENT, null, 6).items());
         // 결과 없는 검색은 중복 집계 키도 만들지 않는다. 이후 결과가 생기면 집계할 수 있다.
-        if (response.concerts().isEmpty() && response.photocards().isEmpty()) {
+        if (response.concerts().isEmpty() && response.photocards().isEmpty()
+                && response.auctions().isEmpty()) {
             return response;
         }
 
