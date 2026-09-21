@@ -149,6 +149,6 @@ class AdminPerformanceServiceImageLimitTests {
     }
 
     private static ConcertUpdateRequest requestWith(String posterKey, String detailKey) {
-        return new ConcertUpdateRequest(null, null, null, null, posterKey, detailKey);
+        return new ConcertUpdateRequest(null, null, null, null, posterKey, detailKey, null);
     }
 }
