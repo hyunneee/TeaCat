@@ -3,6 +3,7 @@ import type { ResaleEntry, ResaleStatus } from './resale.types';
 export const RESALE_STATUS_LABEL: Record<ResaleStatus, string> = {
   WAITING: '추첨 대기',
   WON: '당첨',
+  PURCHASED: '예매 완료',
   LOST: '미당첨',
   EXPIRED: '기한 만료',
 };
