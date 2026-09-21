@@ -286,7 +286,7 @@ export function BannerCarousel({ banners, onSelect, intervalMs = 3500 }: Props) 
                       /* 그림 비율이 틀과 다르면 여기서 잘립니다. 어디를 남길지는 관리자가
                          배너마다 골라 둔 값입니다 — 기본(가운데)이 늘 맞지는 않습니다.
                          (공연 배너의 3:4 포스터를 2:1 로 자를 때가 가장 심합니다) */
-                      style={{ objectPosition: objectPositionOf(banner.imageFocus) }}
+                      style={{ objectPosition: objectPositionOf(banner.imageFocusX, banner.imageFocusY) }}
                       className="absolute inset-0 size-full object-cover"
                     />
                   )}

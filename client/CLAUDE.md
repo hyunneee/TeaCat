@@ -304,12 +304,16 @@ export function Card({ className, ...rest }: CardProps) {
 | 예매(구역·좌석·선점)·결제·주문 | **실서버** (`/schedules/*/seats`, `/performance-details/*/hold`, `/me/holds`, `/payments/ticket-orders*`) |
 | 내 티켓·예매 취소 | **실서버** (`/users/me/tickets`, 취소는 `/payments/ticket-orders/{orderId}/cancel`) |
 | 캣머니 잔액·배너 | **실서버** |
-| 취소표(NRF)·앱정보 | 목업 (`mocks/handlers/resale.ts`, `appInfo.ts`) |
+| 취소표 대기·추첨 | **실서버** (`/schedules/*/resale/sections`, `/schedules/*/resale`, `/me/resale`, `/resale/*`). 추첨은 서버가 온체인(VerifiableDraw)으로 돌리고 화면은 결과만 본다 — "즉시 추첨" API 는 없다 |
+| 앱정보 | 목업 (`mocks/handlers/appInfo.ts`) |
 | 포카(포토카드)·뽑기 | **실서버** (`/nft-market/photocards`, `/photocards/*`, `/users/me/photocards*`, `/photocards/draw`, `/photocards/packs/claim`) |
 | 경매 | **목업 — 서버 계약 기준** (`/nft-market/auctions`, `/auctions/*`, `/users/me/auctions`, `/users/me/bids`). 포카와 같은 규율. 서버에 경매가 생기면 `mocks/handlers/auction.ts` 만 지운다 |
 
-⚠️ 남은 목업(취소표·경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
+⚠️ 남은 목업(경매)은 `mocks/db.ts` 의 자체 ID(`s-1` …)를 씁니다. 실서버 ID 로 그 화면에
 들어가면 404 가 납니다. 해당 도메인이 실서버로 바뀌면 함께 풀립니다.
+🔴 **실서버로 넘어간 도메인의 핸들러는 반드시 지우세요.** 취소표 핸들러를 남겨 둔 채 배포했을 때
+실서버 회차 ID 로 목업 DB 를 뒤져 **구역 목록이 빈 화면으로** 나왔습니다(2026-09-21 dev). 핸들러가
+가로채면 에러가 아니라 "그럴듯한 빈 응답" 이 나와서 눈치채기 어렵습니다.
 
 🔴 **예매 취소는 티켓이 아니라 주문에 걸려 있습니다.** 카드 취소·캣머니 환급·NFT 소각이 한 주문에 묶여
 있어서입니다. 티켓 응답의 `ticketOrderId` 로 `features/payment` 의 `useCancelOrder` 를 부르세요.
@@ -943,6 +947,15 @@ Sentry 가 "무엇이 터졌나", Clarity 가 "어디서 막히나" 라면 이�
 ---
 
 ## [규칙 변경 이력]
+
+- 2026-09-21 **취소표가 실서버로 넘어갔습니다** (5장 현황표 갱신).
+  `mocks/handlers/resale.ts` 와 목업 DB 의 `resaleEntries` 를 지웠습니다. 서버가 목업과 같은
+  경로·형태로 API 를 구현해 화면·훅·api 파일은 그대로입니다. 서버에 없는 데모용 "즉시 추첨"
+  (`POST /resale/{id}/draw`, `useDrawResale`, `DrawResult`)도 함께 지웠습니다 — 추첨은 취소표가
+  생기는 순간 서버가 온체인으로 돌리고 사용자는 결과만 봅니다.
+  🔴 핸들러를 지우지 않은 채 dev 에 배포됐을 때 취소표 화면의 구역 목록이 **빈 화면**으로
+     나왔습니다. 목업이 실서버 회차 ID 로 목업 DB 를 뒤져 빈 배열을 돌려준 것인데, 에러가 아니라
+     정상 응답으로 보여서 원인을 찾기 어려웠습니다. 5장에 경고를 남겼습니다. 사용자 요청
 
 - 2026-09-19 **4-6 색 예외에 "스티커 잉크" 추가** (포카 꾸미기, `features/sticker`).
   그리기 화면에 잉크 팔레트(기본 4색 + `+` 로 사용자 추가, 상한 8)를 둡니다. 화면 UI 의 색이

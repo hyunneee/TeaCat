@@ -9,6 +9,7 @@ import { formatDateTime } from '@/shared/lib';
 import { useModal } from '@/app/providers';
 import { can, useAuth } from '@/features/auth';
 import {
+  ConcertLinkButton,
   ScheduleList,
   posterSeedOf,
   useConcertDetail,
@@ -144,18 +145,27 @@ export function ConcertDetailPage() {
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
             <h1 className="text-lg leading-tight font-extrabold lg:text-2xl">{concert.title}</h1>
 
-            {/* 🔴 말줄임을 쓰지 않습니다. 공연장 이름과 주소는 **찾아가기 위한 정보**라
-                뒤가 잘리면 쓸모가 없습니다("올림픽공원 체조경기…", "서울 송파구 올림…").
-                한 줄에 안 들어가면 줄을 바꿔 다 보여줍니다. */}
-            <p className="text-muted flex items-start gap-1.5 text-[0.8125rem]">
-              <MapPin size={13} className="mt-0.5 shrink-0" />
-              <span className="min-w-0">
-                <span className="block break-keep">{concert.stadium.name}</span>
-                <span className="text-subtle block text-xs break-keep">
-                  {concert.stadium.address}
+            {/* 장소와 바로가기를 **한 줄에 마주 놓습니다.** 바로가기는 등록자가 주소를
+                적어 둔 공연에만 생기므로, 없는 공연에서는 예전과 똑같이 보입니다.
+                아래(`items-end`)로 맞춰 장소 블록의 마지막 줄과 버튼 밑선이 나란히 놓입니다. */}
+            <div className="flex items-end justify-between gap-3">
+              {/* 🔴 말줄임을 쓰지 않습니다. 공연장 이름과 주소는 **찾아가기 위한 정보**라
+                  뒤가 잘리면 쓸모가 없습니다("올림픽공원 체조경기…", "서울 송파구 올림…").
+                  한 줄에 안 들어가면 줄을 바꿔 다 보여줍니다. */}
+              <p className="text-muted flex min-w-0 items-start gap-1.5 text-[0.8125rem]">
+                <MapPin size={13} className="mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block break-keep">{concert.stadium.name}</span>
+                  <span className="text-subtle block text-xs break-keep">
+                    {concert.stadium.address}
+                  </span>
                 </span>
-              </span>
-            </p>
+              </p>
+
+              {concert.linkUrl && (
+                <ConcertLinkButton url={concert.linkUrl} onNavigate={(path) => navigate(path)} />
+              )}
+            </div>
           </div>
         </section>
 

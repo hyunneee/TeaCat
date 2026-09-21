@@ -114,7 +114,8 @@ class AdminPerformanceServiceCreateTests {
 
     private static ConcertCreateRequest requestWith(List<LocalDateTime> dates, Long stadiumLayoutId) {
         return new ConcertCreateRequest(
-                1L, stadiumLayoutId, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1), null, null, dates);
+                1L, stadiumLayoutId, "테스트 공연", TICKETING, LocalDate.of(2026, 9, 1),
+                null, null, null, dates);
     }
 
     @Test

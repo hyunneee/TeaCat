@@ -58,6 +58,8 @@ public abstract class PostgresIntegrationTest {
         registry.add("nft.trade.review.maintenance-enabled", () -> "false");
         // 지갑 발급 스위퍼도 끈다. 테스트에는 브로커가 없다 — 리스너도 붙이지 않는다
         registry.add("wallet.provisioning.sweep-enabled", () -> "false");
+        // 스티커 작업 정리도 끈다. 정리는 테스트가 직접 sweep 을 불러 검증한다
+        registry.add("sticker.sweep-enabled", () -> "false");
         registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
 

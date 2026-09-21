@@ -2,6 +2,7 @@ package com.teacat.server.common.storage;
 
 import com.teacat.server.common.exception.BusinessException;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -210,6 +212,59 @@ public class FileStorageService {
         } catch (Exception e) {
             log.error("MinIO 삭제 실패. key={}", key, e);
             throw new BusinessException(StorageErrorCode.DELETE_FAILED);
+        }
+    }
+
+    /**
+     * 이미 바이트로 들고 있는 이미지를 올리고 저장 key 를 돌려준다.
+     *
+     * <p>{@link #uploadImage} 와 달리 {@link MultipartFile} 이 아니다. base64 로 받아
+     * 디코드해 둔 이미지처럼 <b>업로드 요청의 일부로 오지 않은</b> 바이트를 위한 것이다.
+     * 크기·형식 검사는 이미 끝났다고 보고 여기서 다시 하지 않는다.
+     *
+     * @param directory   용도별 상위 경로. 예: "sticker/sketch"
+     * @param contentType MIME 타입. 확장자는 여기서 정해진다
+     */
+    public String uploadBytes(byte[] bytes, String directory, String contentType) {
+        String extension = ImageFiles.extensionOf(contentType);
+
+        if (extension == null) {
+            throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
+        }
+
+        String key = generateKey(directory, extension);
+
+        try (InputStream stream = new ByteArrayInputStream(bytes)) {
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(properties.bucket())
+                    .object(key)
+                    .stream(stream, bytes.length, -1)
+                    .contentType(contentType)
+                    .build());
+        } catch (Exception e) {
+            log.error("MinIO 업로드 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.UPLOAD_FAILED);
+        }
+
+        return key;
+    }
+
+    /**
+     * key 에 저장된 파일을 바이트로 읽는다.
+     *
+     * <p>브라우저에는 {@link #presignedUrl} 로 주소만 주면 되지만, <b>서버가 내용을 직접
+     * 써야 하는 경우</b>가 있다 — 낙서를 base64 로 워커에 실어 보낼 때처럼.
+     * 파일 전체가 힙에 올라오므로 큰 파일에는 쓰지 말 것.
+     */
+    public byte[] download(String key) {
+        try (InputStream stream = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(key)
+                .build())) {
+            return stream.readAllBytes();
+        } catch (Exception e) {
+            log.error("MinIO 읽기 실패. key={}", key, e);
+            throw new BusinessException(StorageErrorCode.DOWNLOAD_FAILED);
         }
     }
 

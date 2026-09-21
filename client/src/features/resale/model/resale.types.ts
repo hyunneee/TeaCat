@@ -43,11 +43,6 @@ export interface ResaleEntry {
   randomness?: string | null;
 }
 
-export interface DrawResult extends ResaleEntry {
-  /** NRF 가 만들어낸 검증 가능한 난수 */
-  randomness: string;
-}
-
 export interface ApplyResaleRequest {
   sectionId: string;
   quantity: number;

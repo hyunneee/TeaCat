@@ -39,6 +39,10 @@ public record ConcertDetailResponse(
         @Schema(description = "상세 페이지 이미지 조회 URL")
         String detailImageUrl,
 
+        @Schema(description = "'바로가기' 버튼이 갈 곳. 서비스 내 경로 또는 외부 주소(http/https). 없으면 null이고 "
+                + "그때는 버튼을 그리지 않는다", example = "https://example.com/artist")
+        String linkUrl,
+
         @Schema(description = "공연장 정보")
         StadiumResponse stadium,
 
@@ -135,6 +139,7 @@ public record ConcertDetailResponse(
                 performance.getVisibleFrom(),
                 posterUrl,
                 detailImageUrl,
+                performance.getLinkUrl(),
                 StadiumResponse.from(performance.getStadium()),
                 LayoutResponse.from(performance.getStadiumLayout()),
                 schedules,

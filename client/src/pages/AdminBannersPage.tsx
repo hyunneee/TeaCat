@@ -107,7 +107,7 @@ export function AdminBannersPage() {
                   <img
                     src={banner.imageUrl}
                     alt=""
-                    style={{ objectPosition: objectPositionOf(banner.imageFocus) }}
+                    style={{ objectPosition: objectPositionOf(banner.imageFocusX, banner.imageFocusY) }}
                     className="h-16 w-24 shrink-0 rounded-lg object-cover"
                   />
                 ) : (
@@ -156,8 +156,9 @@ export function AdminBannersPage() {
                           label: banner.label,
                           imageKey: banner.imageKey,
                           /* 🔴 노출만 끄고 켜는 자리지만 **전체를 다시 보내는 API** 라,
-                             빠뜨리면 골라 둔 크롭 위치가 가운데로 되돌아갑니다 */
-                          imageFocus: banner.imageFocus,
+                             빠뜨리면 맞춰 둔 크롭 위치가 가운데로 되돌아갑니다 */
+                          imageFocusX: banner.imageFocusX,
+                          imageFocusY: banner.imageFocusY,
                           performanceId: banner.performanceId,
                           linkPath: banner.linkPath,
                           active: !banner.active,

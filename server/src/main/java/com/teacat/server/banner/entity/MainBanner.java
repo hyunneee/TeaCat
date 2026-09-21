@@ -2,6 +2,7 @@ package com.teacat.server.banner.entity;
 
 import com.teacat.server.performance.entity.PerformanceGeneral;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -64,20 +65,24 @@ public class MainBanner {
     private String imageKey;
 
     /**
-     * 그림에서 <b>보여줄 부분</b>. 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면 나머지가 잘린다.
+     * 그림에서 <b>보여줄 한 점</b>. 틀(폰 4:3 · 데스크톱 2:1)과 비율이 다르면 나머지가 잘린다.
      *
      * 타입과 무관하게 채운다 — 공연 배너의 3:4 포스터가 가장 많이 잘린다.
      */
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "image_focus", nullable = false, columnDefinition = "main_banner_image_focus")
+    @Embedded
     private MainBannerImageFocus imageFocus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "performance_general_id")
     private PerformanceGeneral performance;
 
-    @Column(name = "link_path", length = 255)
+    /**
+     * 누르면 갈 곳. 서비스 내 경로(`/nft/draw`)이거나 외부 주소(`https://…`)다.
+     *
+     * <p>이름은 {@code linkPath} 지만 <b>경로만 담지 않는다</b> — 외부 주소도 들어온다.
+     * 규칙은 {@code BannerWriteRequest} 의 {@code @Pattern} 하나가 지킨다.
+     */
+    @Column(name = "link_path", length = 500)
     private String linkPath;
 
     @Column(name = "sort_order", nullable = false)

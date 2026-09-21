@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ImageUp } from 'lucide-react';
 import { Button, Input, Modal, Segmented, Select, Textarea } from '@/shared/components/ui';
+import { isExternalLink, isValidLink } from '@/shared/lib';
 import { useConcerts } from '@/features/concert';
-import { DEFAULT_BANNER_FOCUS, type BannerImageFocus } from '@/features/banner';
+import { DEFAULT_BANNER_FOCUS, focusOf, type BannerImageFocus } from '@/features/banner';
 import { BannerFocusPicker } from './BannerFocusPicker';
 import type {
   AdminBanner,
@@ -54,7 +55,7 @@ export function AdminBannerFormModal({
   const [imageKey, setImageKey] = useState(banner?.imageKey ?? '');
   const [preview, setPreview] = useState(banner?.imageUrl ?? '');
   const [imageFocus, setImageFocus] = useState<BannerImageFocus>(
-    banner?.imageFocus ?? DEFAULT_BANNER_FOCUS,
+    banner ? focusOf(banner.imageFocusX, banner.imageFocusY) : DEFAULT_BANNER_FOCUS,
   );
   const [submitted, setSubmitted] = useState(false);
 
@@ -73,6 +74,9 @@ export function AdminBannerFormModal({
     const key = await onUpload(file);
     setImageKey(key);
     setPreview(URL.createObjectURL(file));
+    /* 그림이 바뀌면 맞춰 둔 자리는 의미가 없습니다 — 다른 그림의 "위쪽 얼굴" 자리를
+       그대로 물려받으면 엉뚱한 데가 남습니다. 가운데에서 다시 맞추게 합니다 */
+    setImageFocus(DEFAULT_BANNER_FOCUS);
   };
 
   /* 크롭 위치를 고르려면 **무엇이 잘리는지** 보여야 합니다. 이미지 배너는 방금 올린
@@ -84,7 +88,9 @@ export function AdminBannerFormModal({
       : (concerts?.find((c) => String(c.concertId) === performanceId)?.posterUrl ??
         (banner?.type === 'PERFORMANCE' ? banner.imageUrl : null));
 
-  const linkPathInvalid = linkPath.length > 0 && !/^\/(?!\/)/.test(linkPath);
+  /* 서비스 내 경로와 http(s) 주소 둘 다 받습니다. 규칙은 `shared/lib/link` 한 곳에 있고
+     서버의 `@Pattern` 과 같은 식입니다 — 여기서만 고치면 화면은 통과시키는데 서버가 400 을 냅니다 */
+  const linkPathInvalid = !isValidLink(linkPath);
   const valid =
     title.trim().length > 0 &&
     !linkPathInvalid &&
@@ -101,7 +107,8 @@ export function AdminBannerFormModal({
       label: label.trim() || null,
       imageKey: type === 'IMAGE' ? imageKey : null,
       /* 타입과 무관합니다 — 공연 포스터도 같은 틀에 담겨 잘립니다 */
-      imageFocus,
+      imageFocusX: imageFocus.x,
+      imageFocusY: imageFocus.y,
       performanceId: type === 'PERFORMANCE' ? Number(performanceId) : null,
       linkPath: type === 'IMAGE' ? linkPath.trim() || null : null,
       active: banner?.active ?? true,
@@ -214,12 +221,21 @@ export function AdminBannerFormModal({
 
         {type === 'IMAGE' && (
           <Input
-            label="누르면 갈 경로"
+            label="누르면 갈 곳"
+            maxLength={500}
             value={linkPath}
             onChange={(e) => setLinkPath(e.target.value)}
-            placeholder="/nft"
-            hint="'/' 로 시작하는 서비스 내 경로만 됩니다. 비우면 눌러도 이동하지 않습니다."
-            error={linkPathInvalid ? "'/' 로 시작하는 서비스 내 경로만 넣을 수 있습니다." : null}
+            placeholder="/nft 또는 https://example.com"
+            hint={
+              isExternalLink(linkPath)
+                ? '외부 주소라 누르면 새 탭으로 열립니다.'
+                : "'/' 로 시작하는 서비스 내 경로는 같은 탭에서, http(s) 주소는 새 탭으로 열립니다. 비우면 이동하지 않아요."
+            }
+            error={
+              linkPathInvalid
+                ? "'/' 로 시작하는 서비스 내 경로이거나 http(s) 로 시작하는 주소여야 합니다."
+                : null
+            }
           />
         )}
       </div>
