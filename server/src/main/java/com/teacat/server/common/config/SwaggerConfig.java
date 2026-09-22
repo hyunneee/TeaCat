@@ -198,4 +198,13 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".sticker")
                 .build();
     }
+
+    @Bean
+    public GroupedOpenApi gameApi() {
+        return GroupedOpenApi.builder()
+                .group("16-game")
+                .displayName("같이 하는 게임")
+                .packagesToScan(BASE_PACKAGE + ".game")
+                .build();
+    }
 }

@@ -48,7 +48,7 @@ export const mintBody = z.object({
   to: address,
   amount,
   /** 발행 사유. 온체인에는 남기지 않고 로그·대사용입니다 */
-  reason: z.enum(['DEPOSIT', 'REWARD', 'REFUND', 'ADMIN_GRANT']),
+  reason: z.enum(['DEPOSIT', 'REWARD', 'REFUND', 'ADMIN_GRANT', 'GAME_PRIZE']),
 });
 
 export const burnBody = z.object({
@@ -56,7 +56,7 @@ export const burnBody = z.object({
   from: address,
   derivationIndex: z.number().int().min(0).max(MAX_DERIVATION_INDEX),
   amount,
-  reason: z.enum(['PAYMENT', 'WITHDRAWAL', 'ADMIN_BURN']),
+  reason: z.enum(['PAYMENT', 'WITHDRAWAL', 'ADMIN_BURN', 'GAME_BET']),
 });
 
 /**
