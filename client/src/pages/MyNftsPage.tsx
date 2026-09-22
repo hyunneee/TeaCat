@@ -220,7 +220,7 @@ export function MyNftsPage() {
                       </li>
                     ))
                   : visible.map((entry) => (
-                      <li key={entry.designId}>
+                      <li key={entry.templateId}>
                         <PocaDexCard
                           entry={entry}
                           onOpen={(photocardId) => navigate(ROUTES.NFT_DETAIL(String(photocardId)))}

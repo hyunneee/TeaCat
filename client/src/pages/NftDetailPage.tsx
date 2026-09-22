@@ -69,7 +69,7 @@ export function NftDetailPage() {
   const trade = useAuctionTrade(card?.auction?.auctionId ?? 0);
   /* 같은 도안을 내가 몇 장 가졌나 — 도감이 한 칸으로 묶기 때문에 상세에서 펼쳐 줍니다.
      designId 는 상세 응답에서 오므로 상세보다 한 박자 늦게 채워집니다. */
-  const { data: copies } = useMyDesignCopies(user ? card?.designId : undefined);
+  const { data: copies } = useMyDesignCopies(user ? card?.designId : undefined, card?.templateId);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();

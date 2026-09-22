@@ -48,7 +48,7 @@ export const nftApi = {
   arts: () => http.get<PhotocardArt[]>('/photocard-templates'),
 
   /** 공개된 수집 도안과 내 보유 상태를 합친 도감. 미보유 앞면 정보는 서버가 null로 가립니다. */
-  drawPool: () => http.get<PocaDexResponse>('/photocard-designs/draw-pool'),
+  templateDex: () => http.get<PocaDexResponse>('/users/me/photocard-templates/dex'),
 
   /**
    * 포카 뽑기. **어떤 카드가 나오는지는 서버가 정합니다** — 응답을 그대로 연출합니다.
@@ -73,6 +73,9 @@ export const nftApi = {
    */
   myCopies: (designId: number) =>
     http.get<MyDesignCopy[]>(`/users/me/photocards/by-design/${designId}`),
+
+  myTemplateCopies: (templateId: number) =>
+    http.get<MyDesignCopy[]>(`/users/me/photocards/by-template/${templateId}`),
 
   purchases: (params: PageParams) =>
     http.get<CursorPage<PurchaseHistory>>('/users/me/photocards/purchases', { params }),

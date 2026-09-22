@@ -89,16 +89,14 @@ function StateDot({
 export function PocaDexCard({ entry, onOpen }: Props) {
   const owned = entry.count > 0;
   const acquisition =
-    entry.acquisition.type === 'PERFORMANCE'
-      ? `공연 · ${entry.acquisition.name}`
-      : entry.acquisition.name;
+    entry.acquisitions.map((source) => source.type === 'PERFORMANCE' ? `공연 · ${source.name}` : source.name).join(', ') || '획득처 준비 중';
 
   const tile = (
     <PocaGridTile
       art={
         owned ? (
           <PocaArt
-            seed={pocaSeed(entry.designId)}
+            seed={pocaSeed(entry.templateId)}
             imageUrl={entry.imageUrl}
             alt={`${entry.name} 포토카드`}
             className="size-full rounded-none"
