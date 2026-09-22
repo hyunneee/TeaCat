@@ -2,6 +2,8 @@ package com.teacat.server.nft.service;
 
 import com.teacat.server.common.config.NftTradeReviewProperties;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.common.storage.FileStorageService;
+import com.teacat.server.nft.repository.NftPhotocardDecorationRepository;
 import com.teacat.server.nft.entity.NftAuction;
 import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.entity.NftTradeChainStatus;
@@ -39,6 +41,8 @@ public class NftTradeSettlementWriter {
     private final NftTradeRiskScreener riskScreener;
     private final NftTradeReviewRepository reviewRepository;
     private final NftTradeReviewProperties reviewProperties;
+    private final NftPhotocardDecorationRepository decorationRepository;
+    private final FileStorageService fileStorageService;
 
     @Transactional(readOnly = true)
     public SettlementCommand command(Long tradeId) {
@@ -138,6 +142,7 @@ public class NftTradeSettlementWriter {
 
         LocalDateTime now = LocalDateTime.now();
         photocard.transferTo(trade.getBuyer(), buyerWallet.walletId());
+        eraseDecorationOf(trade.getSeller().getId(), photocard.getId());
         if (trade.getListing() != null) {
             trade.getListing().sold(now);
         } else {
@@ -228,6 +233,30 @@ public class NftTradeSettlementWriter {
         Wallet wallet = walletRepository.findByOwnerIdAndChainId(owner.getId(), blockchainProperties.chainId())
                 .orElseThrow(() -> new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
         return new WalletRef(wallet.getId(), wallet.getAddress().trim(), owner.getDerivationIndex());
+    }
+
+    /**
+     * 판 사람의 포카 꾸밈을 지운다 — <b>꾸미기 전 모습으로 넘어간다.</b>
+     *
+     * <p>🔴 <b>새 주인에게 안 보이게 하는 것은 이 삭제가 아니다.</b> 꾸밈 조회가 언제나
+     * {@code user_id} 로 함께 거르므로 안 지워도 새 주인에게는 보이지 않는다. 여기서 지우는 것은
+     * 안 쓰는 이미지가 거래마다 쌓이지 않게 하려는 <b>저장공간 정리</b>다.
+     *
+     * <p>🔴 <b>소유권이 바뀌는 길은 여기 하나뿐이다</b> — {@code NftPhotocard.transferTo()} 를
+     * 부르는 곳이 이 메서드 위 한 줄뿐이고, 고정가·경매가 모두 이 정산으로 모인다.
+     * 다른 곳에서 {@code transferTo} 를 부르게 되면 <b>이 삭제도 같이 따라가야 한다.</b>
+     * ({@code PhotocardDecorationIntegrationTests} 가 지킨다)
+     *
+     * <p>⚠️ <b>판매 "등록" 은 소유자를 바꾸지 않는다.</b> 그래서 등록·취소 경로에는 아무것도
+     * 넣지 않는다 — 안 팔리고 돌아오면 꾸밈이 그대로 남는 것이 의도다.
+     */
+    private void eraseDecorationOf(Long sellerId, Long photocardId) {
+        decorationRepository.findByPhotocardIdAndUserId(photocardId, sellerId)
+                .ifPresent(decoration -> {
+                    String key = decoration.getImageKey();
+                    decorationRepository.delete(decoration);
+                    fileStorageService.delete(key);
+                });
     }
 
     public record WalletRef(Long walletId, String address, int derivationIndex) {}
