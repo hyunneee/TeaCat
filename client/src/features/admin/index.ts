@@ -16,6 +16,8 @@ export type { UserDetailTab } from './hooks/useAdminUserDetail';
 export {
   useAdminUserTickets,
   useAdminUserPhotocards,
+  useAdminUserPhotocardPacks,
+  useInvalidateAdminPhotocardPack,
   useAdminUserPurchases,
   useAdminUserSales,
 } from './hooks/useAdminUserRecords';
@@ -64,6 +66,8 @@ export { AdminUserProfileCard } from './components/AdminUserProfileCard';
 export { AdminRecordTable } from './components/AdminRecordTable';
 export { AdminUserTicketTable } from './components/AdminUserTicketTable';
 export { AdminUserPhotocardTable } from './components/AdminUserPhotocardTable';
+export { AdminUserPhotocardPackTable } from './components/AdminUserPhotocardPackTable';
+export { AdminPackInvalidateModal } from './components/AdminPackInvalidateModal';
 export { AdminUserTradeTables } from './components/AdminUserTradeTables';
 
 // View — 문의 관리
@@ -177,6 +181,10 @@ export type {
   BannerUploadUrl,
 } from './model/adminBanner.types';
 export type { AdminInquiryQuery } from './model/adminInquiry.types';
+export type {
+  AdminPhotocardPack,
+  AdminPhotocardPackStatus,
+} from './model/adminPhotocardPack.types';
 
 export { AdminPackEventFormModal } from './components/AdminPackEventFormModal';
 export {
