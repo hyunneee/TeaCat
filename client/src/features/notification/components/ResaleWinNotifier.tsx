@@ -19,7 +19,12 @@ import { useNotificationPermission } from '../hooks/useNotificationPermission';
  *
  * ⚠️ 앱이 **닫혀 있으면 알림이 오지 않습니다.** 백엔드 푸시가 필요합니다.
  */
-const POLL_MS = 60_000;
+/**
+ * 추첨은 취소표가 나오는 순간 서버가 돌리고 약 15초면 끝납니다. 이 값이 60초였을 때는 당첨 알림이
+ * 최대 1분 늦게 떴고, 결제 기한이 12시간이라 늦어도 치명적이진 않지만 "안 온다" 로 읽혔습니다.
+ * 응답이 가벼운 목록 조회라 15초로 줄입니다.
+ */
+const POLL_MS = 15_000;
 const SEEN_KEY = 'tikat.notified.resale';
 
 function readSeen(): Set<string> {

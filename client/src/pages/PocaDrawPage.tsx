@@ -26,7 +26,8 @@ import {
 export function PocaDrawPage() {
   const navigate = useNavigate();
   const { open } = useModal();
-  const { phase, card, isWaiting, rising, startCut, finishCut, reset, usedUp } = usePocaDraw();
+  const { phase, card, isWaiting, rising, startCut, finishCut, reset, blockedMessage } =
+    usePocaDraw();
 
   const opened = phase === 'opening' || phase === 'revealed';
   const revealed = phase === 'revealed' && card !== null;
@@ -36,7 +37,7 @@ export function PocaDrawPage() {
   const { data: packs } = useDrawAvailability();
 
   /* 서버가 "없다" 고 확실히 답했을 때만 잠급니다 — 응답 전(undefined)에는 막지 않습니다 */
-  const locked = packs?.available === false && !opened;
+  const locked = (packs?.available === false || blockedMessage !== null) && !opened;
 
   /* 열 팩이 없으면 **뜯기 전에** 알려 줍니다. 다 뜯고 나서 거절당하면 허탈합니다.
      ref 로 한 번만 — 뒤에서 목록 캐시가 갱신될 때마다 다시 뜨면 안 됩니다. */
@@ -47,12 +48,15 @@ export function PocaDrawPage() {
 
     open('common/confirm', {
       title: '지금은 열 수 있는 카드팩이 없어요',
-      message: '이벤트 카드팩은 이미 받으셨어요. 새 카드팩이 생기면 여기서 열 수 있습니다.',
+      message:
+        packs?.preparing && packs.preparing > 0
+          ? '카드 준비가 완료되면 이 팩을 열 수 있어요.'
+          : '새 카드팩이 생기거나 개봉 시각이 되면 여기서 열 수 있습니다.',
       confirmText: '내 포카 보기',
       cancelText: '닫기',
       onConfirm: () => navigate(ROUTES.MY_NFTS, { replace: true }),
     });
-  }, [locked, open, navigate]);
+  }, [locked, open, navigate, packs?.preparing]);
 
   return (
     <div className="bg-poca-stage relative flex min-h-dvh flex-col">
@@ -90,7 +94,7 @@ export function PocaDrawPage() {
         >
           {/* 뽑기는 계정당 한 번뿐입니다 — 이미 썼으면 뜯으라고 안내하면 안 됩니다 */}
           {!opened &&
-            (usedUp ??
+            (blockedMessage ??
               (locked
                 ? '지금은 열 수 있는 카드팩이 없어요'
                 : '봉지 윗부분 점선을 밀어서 뜯으세요'))}

@@ -5,6 +5,9 @@ import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout, SearchLayout, DetailLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
+/* 🔴 페이지가 아니라 **머리말 조각**이라 lazy 로 나누지 않습니다. 상단 내비와 함께 첫 화면에
+   그려지므로 쪼개면 잔액 자리만 늦게 채워져 머리말이 한 번 움직입니다. */
+import { CatMoneyChip } from '@/features/token';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireQueue, RequireRole } from './guards';
 import { RequireBookingAccess } from './RequireBookingAccess';
 
@@ -98,6 +101,7 @@ const AdminTradeReviewsPage = page(
   () => import('@/pages/AdminTradeReviewsPage'),
   'AdminTradeReviewsPage',
 );
+const AdminAuctionsPage = page(() => import('@/pages/AdminAuctionsPage'), 'AdminAuctionsPage');
 const AdminPackEventsPage = page(
   () => import('@/pages/AdminPackEventsPage'),
   'AdminPackEventsPage',
@@ -308,6 +312,7 @@ const routes: RouteObject[] = [
                     path: ROUTES.ADMIN_TRADE_REVIEWS,
                     element: withBoundary(<AdminTradeReviewsPage />),
                   },
+                  { path: ROUTES.ADMIN_AUCTIONS, element: withBoundary(<AdminAuctionsPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
                   {
                     path: ROUTES.ADMIN_POCA_TEMPLATES,
@@ -336,7 +341,9 @@ const routes: RouteObject[] = [
 
   /* ══ 하단 탭이 보이는 화면 ═══════════════════════════════ */
   {
-    element: <AppLayout />,
+    /* 캣머니 칩은 `features/token` 것이고 AppLayout·TopNav 는 `shared` 라 서로를 모릅니다.
+       두 쪽을 다 아는 자리가 여기(app 레이어)라 여기서 끼워 넣습니다 (CLAUDE.md 3-2). */
+    element: <AppLayout navAction={<CatMoneyChip />} />,
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },
@@ -353,6 +360,9 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
+          /* 캣치 — 하단 탭의 목적지라 탭이 보이는 레이아웃에 있어야 합니다.
+             게임 화면(/token/game·/token/songpyeon)은 전체화면이라 PlainLayout 에 그대로 둡니다. */
+          { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
         ],
       },
     ],
@@ -428,7 +438,6 @@ const routes: RouteObject[] = [
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
-          { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
           { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
           { path: ROUTES.TOKEN_SONGPYEON, element: withBoundary(<SongpyeonGamePage />) },
 

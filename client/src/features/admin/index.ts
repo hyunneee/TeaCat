@@ -16,6 +16,8 @@ export type { UserDetailTab } from './hooks/useAdminUserDetail';
 export {
   useAdminUserTickets,
   useAdminUserPhotocards,
+  useAdminUserPhotocardPacks,
+  useInvalidateAdminPhotocardPack,
   useAdminUserPurchases,
   useAdminUserSales,
 } from './hooks/useAdminUserRecords';
@@ -64,6 +66,8 @@ export { AdminUserProfileCard } from './components/AdminUserProfileCard';
 export { AdminRecordTable } from './components/AdminRecordTable';
 export { AdminUserTicketTable } from './components/AdminUserTicketTable';
 export { AdminUserPhotocardTable } from './components/AdminUserPhotocardTable';
+export { AdminUserPhotocardPackTable } from './components/AdminUserPhotocardPackTable';
+export { AdminPackInvalidateModal } from './components/AdminPackInvalidateModal';
 export { AdminUserTradeTables } from './components/AdminUserTradeTables';
 
 // View — 문의 관리
@@ -103,6 +107,30 @@ export type {
   TradeReviewSummary,
   TradeRiskSignal,
 } from './model/adminTradeReview.types';
+
+// ── 경매 관리 ──────────────────────────────────────────────
+export {
+  useAdminAuctions,
+  useAdminAuction,
+  useCancelAuction,
+} from './hooks/useAdminAuctions';
+export { AdminAuctionTable } from './components/AdminAuctionTable';
+export { AdminAuctionDetailModal } from './components/AdminAuctionDetailModal';
+export { adminAuctionApi, adminAuctionKeys } from './api/adminAuctionApi';
+export {
+  AUCTION_STATUS_LABEL,
+  AUCTION_STATUS_TONE,
+  AUCTION_STATUS_OPTIONS,
+  isClosingSoon,
+} from './model/adminAuction.model';
+export type {
+  AdminAuction,
+  AdminAuctionBid,
+  AdminAuctionDetail,
+  AdminAuctionPage,
+  AdminAuctionQuery,
+  AdminAuctionStatus,
+} from './model/adminAuction.types';
 
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
@@ -177,6 +205,10 @@ export type {
   BannerUploadUrl,
 } from './model/adminBanner.types';
 export type { AdminInquiryQuery } from './model/adminInquiry.types';
+export type {
+  AdminPhotocardPack,
+  AdminPhotocardPackStatus,
+} from './model/adminPhotocardPack.types';
 
 export { AdminPackEventFormModal } from './components/AdminPackEventFormModal';
 export {

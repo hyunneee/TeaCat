@@ -69,11 +69,37 @@ public class ResaleDrawService {
                 writer.applyOpened(drawId, null, null);
                 return;
             }
+            /* 🔴 여기서 자주 막힌다. 원인은 대개 체인 쪽 설정이고, 코드로는 고칠 수 없다:
+                 DRAW_NOT_CONFIGURED   블록체인 서비스에 DRAW_SEED_SECRET 이 없다
+                 CONTRACT_UNAVAILABLE  그 체인에 VerifiableDraw 가 배포돼 있지 않다
+                 CHAIN_UNAVAILABLE 등  오퍼레이터 지갑에 VerifiableDraw 의 OPERATOR_ROLE 이 없으면
+                                       estimateGas 에서 revert 해 트랜잭션이 체인에 남지도 않는다
+                                       (contracts/scripts/grantRoles.ts 주석)
+               그래서 사유를 행에 적어 둔다 — 로그를 못 봐도 seat_draws.failure_reason 으로 보인다 */
+            String reason = e.getRemoteCode() == null ? "체인 호출 실패"
+                    : e.getRemoteCode() + ": " + e.getRemoteMessage();
+            writer.applyOpenFailed(drawId, reason);
             log.warn("취소표 추첨 커밋 실패, 스위퍼가 다시 시도합니다 drawId={} code={} message={}",
                     drawId, e.getRemoteCode(), e.getRemoteMessage());
         } catch (RuntimeException e) {
+            writer.applyOpenFailed(drawId, e.getClass().getSimpleName() + ": " + e.getMessage());
             log.warn("취소표 추첨 커밋 실패, 스위퍼가 다시 시도합니다 drawId={}", drawId, e);
         }
+    }
+
+    /**
+     * 오래 막혀 있는 추첨을 <b>알리기만</b> 한다. 좌석은 그대로 붙잡고 재시도도 계속한다 —
+     * 취소표는 대기자의 것이지, 새로고침하던 사람에게 돌아갈 자리가 아니다.
+     *
+     * <p>그래도 조용히 두지는 않는다. 이만큼 막혔다는 것은 체인 설정이 잘못됐다는 뜻이고
+     * (DRAW_SEED_SECRET · OPERATOR_ROLE · 배포), 사람이 고치기 전에는 풀리지 않는다.
+     * ERROR 라 Sentry 로 올라간다.
+     */
+    public void reportStuck(SeatDraw draw) {
+        log.error("취소표 추첨이 {}분 넘게 커밋되지 않았습니다. 체인 설정을 확인하세요 — 좌석은 계속 대기자의 것입니다. "
+                        + "drawId={} key={} 마지막사유={}",
+                properties.stuckAlertAfter().toMinutes(), draw.getId(), draw.getDrawKey(),
+                draw.getFailureReason());
     }
 
     /** OPEN 인 추첨의 난수가 확정됐는지 본다. 확정됐으면 순위를 받아 첫 당첨자에게 넘긴다 */

@@ -47,8 +47,16 @@ public class ResaleDrawSweeper {
 
         // ① 커밋을 못 보낸 추첨. 취소 스레드가 방금 만든 것은 그쪽이 보내므로 조금 기다린 것만
         LocalDateTime retryBefore = now.minus(properties.openRetryAfter());
+        LocalDateTime stuckBefore = now.minus(properties.stuckAlertAfter());
         forEach(seatDrawRepository.findByStatusOrderByIdAsc(SeatDrawStatus.PENDING, limit),
                 draw -> {
+                    /* 만든 지 한참 지나도 커밋이 안 나갔다 — 체인 설정 문제다.
+                       🔴 그래도 좌석은 풀지 않는다. 취소표는 대기자의 것이고, 풀어 버리면
+                          새로고침하던 사람이 가져간다 — 이 기능이 막으려던 바로 그 일이다.
+                          알리기만 하고 재시도를 이어간다. */
+                    if (draw.getCreatedAt().isBefore(stuckBefore)) {
+                        drawService.reportStuck(draw);
+                    }
                     if (draw.getUpdatedAt().isBefore(retryBefore)) {
                         drawService.open(draw.getId());
                     }

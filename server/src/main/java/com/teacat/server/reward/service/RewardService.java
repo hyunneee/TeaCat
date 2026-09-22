@@ -63,7 +63,10 @@ public class RewardService {
             claimed.put(row.getRewardType(), row);
         }
 
+        /* 누를 수 있는 것만 내려보낸다. 짝 맞추기 1등 보상(MEMORY_RANK)은 스케줄러가 넣는 것이라
+           목록에 띄우면 "눌러도 안 받아지는 줄" 이 된다 (RewardType.MEMORY_RANK 주석) */
         List<RewardStateResponse> rewards = Arrays.stream(RewardType.values())
+                .filter(RewardType::claimable)
                 .map(type -> RewardStateResponse.of(type, claimed.get(type)))
                 .toList();
 
@@ -82,6 +85,10 @@ public class RewardService {
      * 재시도하는 위 경로가 두 번 지급으로 이어지지 않는 마지막 방어선이다.
      */
     public RewardClaimResponse claim(Long userId, RewardType type) {
+        if (!type.claimable()) {
+            // 컨트롤러가 타입을 고정해 부르므로 여기까지 올 일은 없다. 경로가 생기면 여기서 막힌다
+            throw new BusinessException(RewardErrorCode.NOT_CLAIMABLE);
+        }
         if (!userRepository.existsById(userId)) {
             throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
         }

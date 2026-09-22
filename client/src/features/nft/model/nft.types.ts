@@ -281,6 +281,8 @@ export interface PocaDrawStatus {
    * 팩은 산 순간 생기고, 여는 것만 공연 직전으로 미뤄집니다.
    */
   scheduled: number;
+  /** 개봉 시각은 지났지만 등록 완료된 잔여 카드가 없어 기다리는 팩 수 */
+  preparing: number;
   /** 가장 빨리 열리는 시각. 잠긴 팩이 없으면 null */
   nextOpenAt: string | null;
   /**
@@ -305,6 +307,7 @@ export interface PocaDrawPack {
   title: string | null;
   /** 개봉 시각. 이벤트 팩처럼 언제든 열 수 있으면 null */
   openAt: string | null;
+  status: 'OPENABLE' | 'SCHEDULED' | 'PREPARING';
   /** 지금 열 수 있는가 — 서버가 DB 시계로 판정합니다 */
   openable: boolean;
 }

@@ -254,11 +254,11 @@ export interface LockedPackGroup {
  */
 export function groupLockedPacks(status: PocaDrawStatus | undefined): LockedPackGroup[] | null {
   if (!status?.packs) return null;
-  if (status.packs.length < status.remaining + status.scheduled) return null;
+  if (status.packs.length < status.remaining + status.scheduled + status.preparing) return null;
 
   const groups = new Map<string, number>();
   for (const pack of status.packs) {
-    if (pack.openable || !pack.openAt) continue;
+    if (pack.status !== 'SCHEDULED' || !pack.openAt) continue;
     groups.set(pack.openAt, (groups.get(pack.openAt) ?? 0) + 1);
   }
   return [...groups.entries()]

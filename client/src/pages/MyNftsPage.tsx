@@ -60,7 +60,23 @@ export function MyNftsPage() {
    * 숫자가 튀는 것으로만 보입니다 — 무엇을 세는 중인지 알 수 없습니다.
    */
   const progress = dexProgress(filterPocaDex(entries, { role }));
-  const searching = keyword.trim().length > 0 || role !== DEX_ROLE_ALL || ownedOnly;
+
+  /*
+   * 카드팩을 그릴지.
+   *
+   * 🔴 **보유 화면에 둡니다.** 팩은 "아직 안 깐 내 소유물" 이고, 도감은 어떤 도안이
+   * 있는지 보는 목록이라 소유물이 낄 자리가 아닙니다. 팩을 받은 직후 모달의
+   * "보러 가기" 도 이 화면으로 보냅니다(`PocaPackGotModal`).
+   *
+   * 검색어·역할 필터 중에는 감춥니다 — 거른 결과에 팩이 끼면 검색 결과로 읽힙니다.
+   *
+   * ⚠️ 예전에는 이 판단이 `searching` 하나였고 거기에 `ownedOnly` 가 섞여 있었습니다.
+   *    `ownedOnly` 기본값이 true 라 **기본 화면에서 팩이 한 번도 보이지 않았고**,
+   *    "전체 보기" 를 눌러야 나타나는 정반대 동작이었습니다. `ownedOnly` 는 필터가
+   *    아니라 보기 모드라 같은 자리에 두면 안 됩니다.
+   */
+  const filtering = keyword.trim().length > 0 || role !== DEX_ROLE_ALL;
+  const showPacks = ownedOnly && !filtering;
 
   return (
     <>
@@ -163,8 +179,8 @@ export function MyNftsPage() {
                 {/* 카드팩이 맨 앞 — 목록 밖에 배너처럼 두면 광고로 읽힙니다.
                   🔴 열 수 있는 팩과 잠긴 팩을 **따로** 그립니다. 한 칸으로 합치면
                   "1개는 열 수 있고 2개는 기다린다" 가 "1개뿐" 으로 보입니다.
-                  ⚠️ 검색·필터 중에는 감춥니다 — 거른 결과에 팩이 끼면 검색 결과로 읽힙니다. */}
-                {!searching && draw && draw.remaining > 0 && (
+                  ⚠️ 보유 화면에서만, 검색·필터 중에는 감춥니다 (`showPacks` 주석). */}
+                {showPacks && draw && draw.remaining > 0 && (
                   <li>
                     <PocaPackTile
                       count={draw.remaining}
@@ -172,9 +188,14 @@ export function MyNftsPage() {
                     />
                   </li>
                 )}
+                {showPacks && draw && draw.preparing > 0 && (
+                  <li>
+                    <PocaPackTile count={draw.preparing} preparing onClick={() => undefined} />
+                  </li>
+                )}
                 {/* 잠긴 팩은 **개봉 시각별로** 한 칸씩 — 서버가 팩마다 시각을 줍니다.
                     목록이 잘렸거나 옛 서버면(null) 예전처럼 한 칸으로 물러섭니다. */}
-                {!searching &&
+                {showPacks &&
                   draw &&
                   draw.scheduled > 0 &&
                   (lockedGroups ?? [{ openAt: draw.nextOpenAt, count: draw.scheduled }]).map(
@@ -199,7 +220,6 @@ export function MyNftsPage() {
                           performanceTitle={card.performanceTitle}
                           eventName={card.eventName}
                           state={photocardMarketState(card)}
-                          caption={`#${card.photocardId}`}
                           onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
                         />
                       </li>

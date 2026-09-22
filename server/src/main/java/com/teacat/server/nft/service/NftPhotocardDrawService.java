@@ -1,8 +1,10 @@
 package com.teacat.server.nft.service;
 
+import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.response.NftPhotocardDrawResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardDrawStatusResponse;
 import com.teacat.server.nft.dto.response.NftPhotocardPackClaimResponse;
+import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.service.NftPhotocardDrawWriter.DrawOutcome;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,22 +41,19 @@ public class NftPhotocardDrawService {
            다음 조회가 바로잡으므로 한 트랜잭션으로 묶지 않는다 — 화면은 `packs` 의 `openable` 로 그린다. */
         List<NftPhotocardDrawStatusResponse.Pack> packs = writer.packs(userId).stream()
                 .map(pack -> new NftPhotocardDrawStatusResponse.Pack(
-                        pack.packId(), pack.source(), pack.title(), pack.openAt(), pack.openable()))
+                        pack.packId(), pack.source(), pack.title(), pack.openAt(),
+                        NftPhotocardDrawStatusResponse.PackStatus.valueOf(pack.status().name()),
+                        pack.status() == NftPhotocardDrawWriter.PackStatus.OPENABLE))
                 .toList();
         return new NftPhotocardDrawStatusResponse(
-                counts.openable() > 0, counts.openable(), counts.scheduled(), counts.nextOpenAt(), packs);
+                counts.openable() > 0, counts.openable(), counts.scheduled(), counts.preparing(),
+                counts.nextOpenAt(), packs);
     }
 
     public NftPhotocardDrawResponse draw(Long userId, String idempotencyKeyHeader) {
         UUID key = NftRequestSupport.parseIdempotencyKey(idempotencyKeyHeader);
 
-        DrawOutcome outcome;
-        try {
-            outcome = writer.draw(userId, key);
-        } catch (DataIntegrityViolationException e) {
-            // 같은 키가 동시에 두 번 왔다. 먼저 커밋된 쪽의 카드를 돌려준다
-            outcome = writer.findReplay(userId, key).orElseThrow(() -> e);
-        }
+        DrawOutcome outcome = drawWithContentionRetry(userId, key);
 
         if (!outcome.replayed()) {
             try {
@@ -68,6 +67,28 @@ public class NftPhotocardDrawService {
 
         return new NftPhotocardDrawResponse(outcome.photocardId(), outcome.designName(), outcome.imageUrl(),
                 outcome.group(), outcome.grade(), outcome.issuedAt());
+    }
+
+    /**
+     * {@code SKIP LOCKED} 때문에 후보가 잠깐 안 보인 경우만 새 트랜잭션으로 다시 시도한다.
+     * 재고 없음·지갑 없음 같은 확정 오류는 그대로 돌려준다.
+     */
+    private DrawOutcome drawWithContentionRetry(Long userId, UUID key) {
+        final int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return writer.draw(userId, key);
+            } catch (DataIntegrityViolationException e) {
+                // 같은 키가 동시에 두 번 왔다. 먼저 커밋된 쪽의 카드를 돌려준다
+                return writer.findReplay(userId, key).orElseThrow(() -> e);
+            } catch (BusinessException e) {
+                if (e.getErrorCode() != NftErrorCode.DRAW_POOL_BUSY || attempt == maxAttempts) {
+                    throw e;
+                }
+                log.info("카드팩 도안 잠금 경합 재시도 userId={} attempt={}", userId, attempt + 1);
+            }
+        }
+        throw new IllegalStateException("unreachable");
     }
 
     public NftPhotocardPackClaimResponse claimEventPack(Long userId) {
