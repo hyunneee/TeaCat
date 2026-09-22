@@ -50,4 +50,23 @@ public class ScheduleSeatAvailability {
     public boolean isSoldOut(Long scheduleId) {
         return !findSoldOut(Set.of(scheduleId)).isEmpty();
     }
+
+    /**
+     * <b>구역이 하나라도 매진된</b> 회차의 ID — 취소표 대기를 받을 수 있는 회차다.
+     *
+     * <p>{@link #findSoldOut} 과 기준이 다르다. 저쪽은 회차 전체가 팔렸는지를 보고, 이쪽은 구역 하나만
+     * 팔려도 담는다. 대기가 구역 단위라서다 — A구역이 매진이면 B구역에 자리가 남아도 A구역 대기는
+     * 받아야 하고, 모든 구역에 자리가 있으면 대기를 받을 이유가 없다(그냥 예매하면 된다).
+     */
+    public Set<Long> findWithSoldOutArea(Collection<Long> scheduleIds) {
+        if (scheduleIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(performanceSeatRepository.findScheduleIdsWithSoldOutArea(scheduleIds));
+    }
+
+    /** 회차 하나만 볼 때 */
+    public boolean hasSoldOutArea(Long scheduleId) {
+        return !findWithSoldOutArea(Set.of(scheduleId)).isEmpty();
+    }
 }

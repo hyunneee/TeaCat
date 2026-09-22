@@ -170,6 +170,33 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
             """, nativeQuery = true)
     List<SeatCountView> findSeatCounts(@Param("scheduleIds") Collection<Long> scheduleIds);
 
+    /**
+     * <b>구역이 하나라도 매진된</b> 회차의 ID. 취소표 대기를 받을 수 있는 회차다.
+     *
+     * <p>{@link #findSeatCounts} 는 회차 전체가 매진됐는지를 보지만, 대기는 <b>구역 단위</b>다 —
+     * A구역만 다 팔리고 B구역에 자리가 남은 회차에도 A구역 대기는 받아야 한다. 반대로 모든 구역에
+     * 자리가 남아 있으면 대기를 받을 이유가 없다. 그냥 예매하면 되는 자리이기 때문이다.
+     *
+     * <p>회차마다 따로 물으면 N+1 이라 한 번에 묻는다. 좌석을 아직 만들지 않은 구역은 GROUP BY 에서
+     * 빠지므로 매진으로 세지 않는다.
+     */
+    @Query(value = """
+            SELECT DISTINCT sold.performance_detail_id
+              FROM (
+                    SELECT ps.performance_detail_id,
+                           COUNT(*) FILTER (
+                               WHERE ps.status = 'AVAILABLE'
+                                  OR (ps.status = 'HELD' AND ps.held_until < now())
+                           ) AS available_count
+                      FROM performance_seats ps
+                      JOIN seats s ON s.id = ps.seat_id
+                     WHERE ps.performance_detail_id IN (:scheduleIds)
+                     GROUP BY ps.performance_detail_id, s.area_id
+                   ) sold
+             WHERE sold.available_count = 0
+            """, nativeQuery = true)
+    List<Long> findScheduleIdsWithSoldOutArea(@Param("scheduleIds") Collection<Long> scheduleIds);
+
     /** {@link #findSeatCounts} 결과 한 줄 */
     interface SeatCountView {
         Long getScheduleId();

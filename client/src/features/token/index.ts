@@ -57,6 +57,15 @@ export {
 /* ── 포토카드 짝 맞추기 ── */
 export { useMemoryGame, type MemoryGame } from './hooks/useMemoryGame';
 export { useMemoryArt, type MemoryArt } from './hooks/useMemoryArt';
+export { useMemoryRanking, useMemoryGameRecord } from './hooks/useMemoryRanking';
+export { MemoryRankingCard } from './components/MemoryRankingCard';
+export { CatMoneyChip } from './components/CatMoneyChip';
+export type {
+  MemoryRanking,
+  MemoryRankEntry,
+  MemoryGameResult,
+  MemoryGameStart,
+} from './model/memoryRanking.types';
 export { MemoryBoard } from './components/MemoryBoard';
 export { MemoryHud } from './components/MemoryHud';
 export { MemoryIntro } from './components/MemoryIntro';

@@ -40,10 +40,11 @@ export function ResalePage() {
   /* 회차 정보가 먼저 옵니다. 대기를 받을 수 없는 회차면 구역 목록을 기다리지 않고 바로 안내합니다 */
   if (schedulePending) return <PageLoader />;
 
-  /* 상세 화면의 대기 버튼은 티켓팅이 열린 회차에만 보이지만, 주소로 바로 들어오는 경우까지 여기서 다시 막습니다.
-     자리가 남은 구역은 아래 구역 목록에서 고를 수 없게(soldOut=false) 걸러집니다 */
+  /* 상세 화면의 대기 버튼은 매진된 구역이 생겨야 보이지만, 주소로 바로 들어오는 경우까지 여기서 다시 막습니다.
+     매진된 구역 중 어디에 걸지는 아래 구역 목록이 정합니다 (자리가 남은 구역은 고를 수 없습니다) */
   if (schedule && !canWaitlist(schedule)) {
     const beforeOpen = schedule.bookingStatus === 'BEFORE';
+    const closed = schedule.bookingStatus === 'CLOSED';
     return (
       <>
         <Header title="취소표 추첨 대기" showBack />
@@ -53,7 +54,9 @@ export function ResalePage() {
           description={
             beforeOpen
               ? '취소표 대기는 티켓팅이 시작되고 구역이 매진된 뒤에 열립니다. 먼저 예매에 참여해 주세요.'
-              : '마감된 회차는 취소표가 다시 판매되지 않습니다.'
+              : closed
+                ? '마감된 회차는 취소표가 다시 판매되지 않습니다.'
+                : '아직 매진된 구역이 없어요. 남은 자리는 예매로 바로 구매할 수 있습니다.'
           }
         />
       </>
