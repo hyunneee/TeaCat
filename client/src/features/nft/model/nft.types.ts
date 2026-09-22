@@ -105,6 +105,13 @@ export interface MyPhotocard extends PocaDesignInfo {
   marketType?: PhotocardMarketType | null;
   /** ACTIVE 또는 온체인 정산 중. 판매 중이 아니면 null */
   marketStatus?: PhotocardMarketStatus | null;
+  /**
+   * 스티커를 얹어 꾸민 카드 그림. 꾸미지 않았으면 없습니다.
+   *
+   * 🔴 **내 카드 목록에만 있는 필드입니다.** 마켓(`MarketPhotocard`)에는 없고 있어서도
+   *    안 됩니다 — 마켓에 꾸민 그림이 뜨면 사는 사람이 원본을 오해합니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /**
@@ -176,6 +183,13 @@ export interface PhotocardDetail extends PocaDesignInfo {
     bidCount: number;
     endsAt: string;
   } | null;
+  /**
+   * 스티커를 얹어 꾸민 카드 그림.
+   *
+   * 🔴 **서버가 본인 카드일 때만 채웁니다.** 남의 카드 상세에서는 늘 없습니다 —
+   *    남이 꾸민 그림을 보고 산 사람이 받는 것은 원본이라 속는 셈이 됩니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /** 판매 등록(P3) 응답 */

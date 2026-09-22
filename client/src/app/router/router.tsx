@@ -54,6 +54,7 @@ const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const StickerCreatePage = page(() => import('@/pages/StickerCreatePage'), 'StickerCreatePage');
 const MyStickersPage = page(() => import('@/pages/MyStickersPage'), 'MyStickersPage');
+const PocaDecoratePage = page(() => import('@/pages/PocaDecoratePage'), 'PocaDecoratePage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
@@ -454,6 +455,12 @@ const routes: RouteObject[] = [
                 { path: ROUTES.STICKER_CREATE, element: withBoundary(<StickerCreatePage />) },
                 /* 내가 만든 것들 — 내 데이터라 withMask */
                 { path: ROUTES.MY_STICKERS, element: withMask(withBoundary(<MyStickersPage />)) },
+                /* 포카 꾸미기 — 내 카드를 그리므로 withMask.
+                   🔴 화면이 소유자인지 다시 확인하고 아니면 상세로 돌려보냅니다 */
+                {
+                  path: ROUTES.NFT_DECORATE(':photocardId'),
+                  element: withMask(withBoundary(<PocaDecoratePage />)),
+                },
               ]
             : []),
 

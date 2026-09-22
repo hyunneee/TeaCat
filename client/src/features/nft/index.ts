@@ -18,6 +18,29 @@ export {
   useUnlistPhotocard,
 } from './hooks/useNft';
 export { usePocaDraw, type DrawPhase } from './hooks/usePocaDraw';
+export { useDecoration, useSaveDecoration, useDeleteDecoration } from './hooks/useDecoration';
+export { DecorateCanvas } from './components/DecorateCanvas';
+export { DecorateSticker } from './components/DecorateSticker';
+export { StickerDrawer } from './components/StickerDrawer';
+export { decorationApi, decorationKeys } from './api/decorationApi';
+export {
+  clampScale,
+  clampPosition,
+  composeDecorated,
+  newPlacedId,
+  parsePlacements,
+  serializePlacements,
+} from './model/decoration.model';
+export {
+  DECORATION_ERROR,
+  PLACED_DEFAULT_SCALE,
+  PLACED_MAX_COUNT,
+  PLACED_MAX_SCALE,
+  PLACED_MIN_SCALE,
+  type Decoration,
+  type Placed,
+  type PlacedRecord,
+} from './model/decoration.types';
 export { NftCard } from './components/NftCard';
 export { PocaDexCard } from './components/PocaDexCard';
 export { PocaGridTile } from './components/PocaGridTile';
