@@ -6,11 +6,14 @@ import { ROUTES } from '@/shared/constants';
 import { AttendanceCard, SongpyeonPiece, useAttendance, useTokenBalance } from '@/features/token';
 
 /**
- * 캣머니 — 잔액과 모으는 방법.
+ * 캣플레이 — 캣머니 잔액과 모으는 방법.
  *
- * 🔴 **여기서 바로 게임이 시작되지 않습니다.** 마이페이지에서 잔액을 보려고 누르는
- * 자리라, 들어오자마자 판이 깔리면 잔액을 볼 수 없습니다. 게임은 `/token/game` 으로
- * 길을 나눠 두었습니다 (`ROUTES.TOKEN_GAME`).
+ * 🔴 **여기서 바로 게임이 시작되지 않습니다.** 잔액을 보려고 누르는 자리라, 들어오자마자
+ * 판이 깔리면 잔액을 볼 수 없습니다. 게임은 `/token/game` 으로 길을 나눠 두었습니다
+ * (`ROUTES.TOKEN_GAME`).
+ *
+ * <p>하단 탭의 목적지입니다(`navTabs` 의 '캣플레이'). 탭 루트라 <b>뒤로가기를 두지 않습니다</b> —
+ * 탭으로 들어온 사람에게는 되돌아갈 곳이 없고, 그 자리는 탭 바가 대신합니다.
  */
 export function TokenPage() {
   const navigate = useNavigate();
@@ -19,7 +22,7 @@ export function TokenPage() {
 
   return (
     <>
-      <Header title="캣머니" showBack />
+      <Header title="캣플레이" />
 
       <div className="space-y-4 p-4">
         <Card className="flex flex-col items-center gap-2 py-8">

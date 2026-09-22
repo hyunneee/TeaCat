@@ -353,6 +353,9 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
+          /* 캣플레이 — 하단 탭의 목적지라 탭이 보이는 레이아웃에 있어야 합니다.
+             게임 화면(/token/game·/token/songpyeon)은 전체화면이라 PlainLayout 에 그대로 둡니다. */
+          { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
         ],
       },
     ],
@@ -428,7 +431,6 @@ const routes: RouteObject[] = [
           /* 뽑은 카드는 내 것이 되므로 로그인이 필요합니다 */
           { path: ROUTES.NFT_PACK_CLAIM, element: withBoundary(<PocaPackClaimPage />) },
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
-          { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
           { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
           { path: ROUTES.TOKEN_SONGPYEON, element: withBoundary(<SongpyeonGamePage />) },
 
