@@ -61,7 +61,14 @@ public record NftPhotocardDetailResponse(
         long viewCount,
 
         @Schema(description = "인증된 조회자가 현재 소유자인지")
-        boolean isMine
+        boolean isMine,
+
+        /* 🔴 위의 imageUrl 을 **바꿔치우지 않고 따로 둔다.** imageUrl 은 마켓·경매·거래내역
+           DTO 에도 같은 이름으로 있어, 거기까지 꾸민 그림으로 바뀌면 사는 사람이 꾸며진
+           그림을 보고 샀는데 맨 카드를 받는다.
+           🔴 이 DTO 는 **남의 카드 상세에도 쓰인다.** 그래서 isMine 일 때만 채운다. */
+        @Schema(description = "꾸민 카드 이미지 URL. 본인 카드이고 꾸몄을 때만 있습니다")
+        String decoratedImageUrl
 ) {
 
     public record Auction(
