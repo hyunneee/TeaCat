@@ -126,6 +126,70 @@ public class NftAuctionQueryRepository {
         return jdbcTemplate.query(sql.toString(), params, AUCTION_ROW);
     }
 
+    /**
+     * 어드민 경매 목록. <b>모든 상태</b>를 최근 등록순으로 본다.
+     *
+     * <p>🔴 사용자 목록({@link #findActiveAuctions})과 달리 커서가 아니라 오프셋 페이지다.
+     * 어드민 화면은 "몇 건인지" 와 "3페이지로 건너뛰기" 가 필요하고, 다른 어드민 목록
+     * (거래 심사·문의)도 전부 오프셋이라 화면 부품을 같이 쓴다.
+     *
+     * <p>🔴 마감 시각이 지났지만 아직 ACTIVE 인 행도 그대로 보여준다 — 숨기면 스위퍼가
+     * 멈췄을 때 아무도 모른다. 상태를 화면이 "마감 대기" 로 갈라 적는다.
+     */
+    public List<AuctionRow> findAuctionsForAdmin(NftAuctionStatus status, String keyword,
+                                                 int offset, int limit) {
+        StringBuilder sql = new StringBuilder(AUCTION_SELECT).append(adminWhere(status, keyword));
+        MapSqlParameterSource params = adminParams(status, keyword)
+                .addValue("offset", offset)
+                .addValue("limit", limit);
+        sql.append(" ORDER BY a.created_at DESC, a.id DESC OFFSET :offset LIMIT :limit");
+        return jdbcTemplate.query(sql.toString(), params, AUCTION_ROW);
+    }
+
+    /** 위 목록의 전체 건수. 페이지 수를 내려주려면 필요하다 */
+    public long countAuctionsForAdmin(NftAuctionStatus status, String keyword) {
+        String sql = """
+                SELECT count(*)
+                  FROM nft_auctions a
+                  JOIN nft_photocards p ON p.id = a.photocard_id
+                  JOIN nft_photocard_designs d ON d.id = p.design_id
+                  LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
+                  JOIN users seller ON seller.id = a.seller_id
+                """ + adminWhere(status, keyword);
+        Long count = jdbcTemplate.queryForObject(sql, adminParams(status, keyword), Long.class);
+        return count == null ? 0 : count;
+    }
+
+    /**
+     * 목록과 카운트가 <b>같은 조건</b>을 쓰게 하려고 한 곳에서 만든다.
+     * 갈라 적으면 "3건" 이라 써 놓고 5건이 나오는 식으로 조용히 어긋난다.
+     *
+     * <p>🔴 winner 조인은 카운트 쿼리에 없으므로 여기서 winner 를 조건에 쓰지 않는다.
+     */
+    private String adminWhere(NftAuctionStatus status, String keyword) {
+        StringBuilder where = new StringBuilder(" WHERE 1 = 1");
+        if (status != null) {
+            where.append(" AND a.status = CAST(:status AS nft_auction_status)");
+        }
+        if (keyword != null) {
+            where.append(" AND (d.name ILIKE :keyword ESCAPE '\'"
+                    + " OR pg.title ILIKE :keyword ESCAPE '\'"
+                    + " OR seller.nickname ILIKE :keyword ESCAPE '\')");
+        }
+        return where.toString();
+    }
+
+    private MapSqlParameterSource adminParams(NftAuctionStatus status, String keyword) {
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        if (status != null) {
+            params.addValue("status", status.name());
+        }
+        if (keyword != null) {
+            params.addValue("keyword", '%' + escapeLike(keyword) + '%');
+        }
+        return params;
+    }
+
     public Optional<AuctionDetailRow> findAuctionDetail(Long auctionId) {
         String sql = """
                 SELECT a.id AS auction_id, a.status::text AS status, p.id AS photocard_id, d.name AS design_name,

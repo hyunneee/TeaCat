@@ -119,7 +119,17 @@ public enum NftErrorCode implements ErrorCode {
     TRADE_REVIEW_ALREADY_DECIDED(HttpStatus.CONFLICT, "NFT_056", "이미 결정이 끝난 거래 심사입니다."),
     TRADE_NOT_UNDER_REVIEW(HttpStatus.CONFLICT, "NFT_057", "심사 대기 상태가 아닌 거래입니다."),
     TRADE_REVIEW_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_058", "거절 사유를 입력해 주세요."),
-    INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요.");
+    INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요."),
+
+    /*
+     * 어드민 강제 취소 전용.
+     *
+     * 🔴 AUCTION_NOT_ACTIVE 로 뭉개지 않는 이유는 어드민이 할 일이 다르기 때문이다.
+     *    이 코드는 "곧 스위퍼가 닫는다, 잠시 뒤 다시 보라" 이고, NOT_ACTIVE 는
+     *    "이미 끝난 경매다" 다. 같은 메시지를 주면 어드민이 새로고침을 포기한다.
+     */
+    AUCTION_CLOSING(HttpStatus.CONFLICT, "NFT_060",
+            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;
