@@ -43,6 +43,9 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
     private NftPhotocardDrawWriter writer;
 
     @Autowired
+    private NftPhotocardPackAdminService packAdminService;
+
+    @Autowired
     private NftPhotocardDrawService drawService;
 
     /** 뽑은 카드가 어느 이벤트에서 나왔는지는 조회 쪽(상세·내 포카)이 보여준다 */
@@ -108,6 +111,7 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         Long userId = insertUser("delay@test.com", "연기");
         insertWallet(userId);
         Fixture fixture = insertPerformanceFixture();
+        insertPerformancePoolDesign(fixture.performanceId(), "연기 공연 카드");
         Long ticketId = insertTicket(userId, fixture);
         packRepository.save(
                 NftPhotocardPack.grantForTicket(userId, ticketId, fixture.performanceDetailId()));
@@ -132,6 +136,9 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
 
         Fixture soon = insertPerformanceFixture();
         Fixture later = insertPerformanceFixture();
+        insertDrawPoolDesign("이벤트 카드", 10, "서울 5반", "COMMON");
+        insertPerformancePoolDesign(soon.performanceId(), "곧 열리는 카드");
+        insertPerformancePoolDesign(later.performanceId(), "나중 카드");
         packRepository.save(NftPhotocardPack.grantForTicket(
                 userId, insertTicket(userId, soon), soon.performanceDetailId()));
         packRepository.save(NftPhotocardPack.grantForTicket(
@@ -145,6 +152,7 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         // 요약 필드는 그대로다 (구 클라이언트 호환)
         assertThat(status.remaining()).isEqualTo(2);
         assertThat(status.scheduled()).isEqualTo(1);
+        assertThat(status.preparing()).isZero();
         assertThat(status.nextOpenAt()).isNotNull();
 
         assertThat(status.packs()).hasSize(3);
@@ -160,6 +168,8 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         assertThat(locked.source()).isEqualTo("TICKET_PURCHASE");
         assertThat(locked.title()).isEqualTo("테스트 공연");
         assertThat(locked.openable()).isFalse();
+        assertThat(locked.status()).isEqualTo(
+                com.teacat.server.nft.dto.response.NftPhotocardDrawStatusResponse.PackStatus.SCHEDULED);
         // 🔴 개봉 시각은 저장값이 아니라 계산값이다 — 잠긴 팩 중 가장 이른 시각이 nextOpenAt 과 같아야 한다
         assertThat(locked.openAt()).isEqualTo(status.nextOpenAt());
     }
@@ -189,6 +199,55 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 관리자는_미사용_팩을_삭제하지_않고_무효화한다() throws Exception {
+        Long userId = insertUser("invalidated-pack@test.com", "무효화대상");
+        Long adminId = insertUser("pack-admin@test.com", "관리자");
+        insertWallet(userId);
+        Long packId = insertPack(userId, "WRONG_EVENT");
+        insertDrawPoolDesign("정상 이벤트 카드", 10, "서울 5반", "COMMON");
+        String bearer = "Bearer " + jwtTokenProvider.createAccessToken(adminId, UserRole.ADMIN);
+
+        mockMvc.perform(post("/admin/users/{userId}/photocard-packs/{packId}/invalidation", userId, packId)
+                        .header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"취소된 예매에 잘못 지급됨\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM nft_photocard_packs WHERE id = ?", Long.class, packId)).isEqualTo(1L);
+        assertThat(drawService.status(userId).remaining()).isZero();
+        assertThat(packAdminService.findAll(userId).getFirst().status())
+                .isEqualTo(com.teacat.server.nft.dto.response.NftPhotocardPackAdminResponse.Status.INVALIDATED);
+        assertThatThrownBy(() -> writer.draw(userId, UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.PACK_NOT_AVAILABLE);
+    }
+
+    @Test
+    void 이미_개봉한_팩은_무효화할_수_없다() {
+        Long userId = insertUser("consumed-pack@test.com", "개봉완료");
+        Long adminId = insertUser("consumed-pack-admin@test.com", "관리자");
+        insertWallet(userId);
+        Long packId = insertPack(userId, "CONSUMED_EVENT");
+        insertDrawPoolDesign("개봉 카드", 10, "서울 5반", "COMMON");
+        writer.draw(userId, UUID.randomUUID());
+
+        assertThatThrownBy(() -> packAdminService.invalidate(userId, packId, adminId, "잘못 지급됨"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(NftErrorCode.PACK_ALREADY_CONSUMED);
+    }
+
+    private Long insertPerformancePoolDesign(Long performanceId, String name) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO nft_photocard_designs
+                    (performance_general_id, name, image_url, total_supply, image_cid, metadata_cid,
+                     chain_status, draw_pool, group_name, grade)
+                VALUES (?, ?, '/draw.png', 10, 'bafyIMG', 'bafyMETA',
+                        'REGISTERED', true, '서울 5반', 'COMMON') RETURNING id
+                """, Long.class, performanceId, name);
+    }
+
+    @Test
     void 개봉_시각_전인_팩은_열리지_않는다() {
         Long userId = insertUser("locked@test.com", "잠김");
         insertWallet(userId);
@@ -211,6 +270,7 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
         Long userId = insertUser("open@test.com", "열림");
         insertWallet(userId);
         Fixture fixture = insertPerformanceFixture();
+        insertPerformancePoolDesign(fixture.performanceId(), "개봉 가능 카드");
         Long ticketId = insertTicket(userId, fixture);
         packRepository.save(NftPhotocardPack.grantForTicket(
                 userId, ticketId, fixture.performanceDetailId()));
@@ -228,6 +288,7 @@ class NftPhotocardPackIntegrationTests extends PostgresIntegrationTest {
     void 이벤트_팩은_개봉_시각이_없어_바로_열린다() {
         Long userId = insertUser("now@test.com", "즉시");
         insertPack(userId, "OPEN_EVENT");
+        insertDrawPoolDesign("즉시 이벤트 카드", 10, "서울 5반", "COMMON");
 
         var status = drawService.status(userId);
 

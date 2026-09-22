@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Card, ConfirmModal, Segmented, Skeleton } from '@/shared/components/ui';
@@ -5,6 +6,8 @@ import { EmptyState } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import {
   AdminCatMoneyModal,
+  AdminPackInvalidateModal,
+  AdminUserPhotocardPackTable,
   AdminUserPhotocardTable,
   AdminUserProfileCard,
   AdminUserTicketTable,
@@ -12,10 +15,13 @@ import {
   USER_DETAIL_TABS,
   useAdminUserDetail,
   useAdminUserPhotocards,
+  useAdminUserPhotocardPacks,
+  useInvalidateAdminPhotocardPack,
   useAdminUserPurchases,
   useAdminUserSales,
   useAdminUserTickets,
 } from '@/features/admin';
+import type { AdminPhotocardPack } from '@/features/admin';
 
 /**
  * 회원 상세 (어드민 콘솔).
@@ -35,8 +41,21 @@ export function AdminUserDetailPage() {
      리액트 훅 규칙에 걸립니다. */
   const tickets = useAdminUserTickets(userId);
   const photocards = useAdminUserPhotocards(userId);
+  const packs = useAdminUserPhotocardPacks(userId);
+  const invalidatePack = useInvalidateAdminPhotocardPack(userId);
   const purchases = useAdminUserPurchases(userId);
   const sales = useAdminUserSales(userId);
+  const [packToInvalidate, setPackToInvalidate] = useState<AdminPhotocardPack | null>(null);
+
+  const invalidateSelectedPack = async (reason: string) => {
+    if (!packToInvalidate) return;
+    try {
+      await invalidatePack.mutateAsync({ packId: packToInvalidate.packId, reason });
+      setPackToInvalidate(null);
+    } catch {
+      // 훅이 서버 메시지를 토스트로 보여줍니다. 실패하면 모달을 남겨 사유를 잃지 않습니다.
+    }
+  };
 
   const backToList = () => navigate(ROUTES.ADMIN_USERS);
 
@@ -102,13 +121,24 @@ export function AdminUserDetailPage() {
         )}
 
         {m.tab === 'PHOTOCARDS' && (
-          <AdminUserPhotocardTable
-            photocards={photocards.items}
-            isLoading={photocards.isPending}
-            hasMore={photocards.hasNextPage}
-            isLoadingMore={photocards.isFetchingNextPage}
-            onMore={() => void photocards.fetchNextPage()}
-          />
+          <div className="flex flex-col">
+            <div className="border-line border-b">
+              <p className="text-ink-muted px-4 pt-4 text-xs font-semibold">카드팩 지급 이력</p>
+              <AdminUserPhotocardPackTable
+                packs={packs.data ?? []}
+                isLoading={packs.isPending}
+                onInvalidate={setPackToInvalidate}
+              />
+            </div>
+            <p className="text-ink-muted px-4 pt-4 text-xs font-semibold">보유 포토카드</p>
+            <AdminUserPhotocardTable
+              photocards={photocards.items}
+              isLoading={photocards.isPending}
+              hasMore={photocards.hasNextPage}
+              isLoadingMore={photocards.isFetchingNextPage}
+              onMore={() => void photocards.fetchNextPage()}
+            />
+          </div>
         )}
 
         {m.tab === 'TRADES' && (
@@ -134,6 +164,13 @@ export function AdminUserDetailPage() {
       </Card>
 
       <AdminCatMoneyModal user={m.adjustingCatMoney ? user : null} onClose={m.closeCatMoney} />
+
+      <AdminPackInvalidateModal
+        pack={packToInvalidate}
+        loading={invalidatePack.isPending}
+        onClose={() => setPackToInvalidate(null)}
+        onInvalidate={invalidateSelectedPack}
+      />
 
       {/* 되돌릴 수 없는 동작은 확인 모달 + danger (CLAUDE.md 4-7) */}
       {m.confirming && (
