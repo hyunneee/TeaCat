@@ -1,0 +1,154 @@
+package com.teacat.server.game.engine.halligalli;
+
+import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.game.engine.GameAction;
+import com.teacat.server.game.engine.GameStateCodec;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class HalliGalliEngineTests {
+
+    private GameStateCodec codec;
+    private HalliGalliEngine engine;
+
+    @BeforeEach
+    void setUp() {
+        codec = new GameStateCodec(new ObjectMapper());
+        engine = new HalliGalliEngine(codec);
+    }
+
+    @Test
+    void 카드는_쉰여섯_장이고_고르게_나뉜다() {
+        assertThat(HalliGalliState.newDeck()).hasSize(56);
+
+        HalliGalliState state = codec.read(engine.start(4), HalliGalliState.class);
+
+        assertThat(state.hands).hasSize(4);
+        assertThat(state.hands.stream().mapToInt(List::size).sum()).isEqualTo(56);
+        assertThat(state.hands).allSatisfy(hand -> assertThat(hand).hasSize(14));
+    }
+
+    @Test
+    void 과일마다_열네_장씩이다() {
+        for (String fruit : HalliGalliState.FRUITS) {
+            long count = HalliGalliState.newDeck().stream()
+                    .filter(card -> card.fruit().equals(fruit))
+                    .count();
+            assertThat(count).as(fruit).isEqualTo(14);
+        }
+    }
+
+    @Test
+    void 내_차례가_아니면_뒤집지_못한다() {
+        Map<String, Object> state = engine.start(2);
+
+        assertThatThrownBy(() -> engine.apply(state, 1, new GameAction("FLIP", null, null)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void 종은_차례가_아니어도_칠_수_있다() {
+        Map<String, Object> state = engine.start(2);
+
+        // 규칙에 어긋나지 않는다 — 틀렸으면 벌칙을 받을 뿐 예외가 아니다
+        Map<String, Object> next = engine.apply(state, 1, new GameAction("BELL", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.lastBellSeat).isEqualTo(1);
+    }
+
+    @Test
+    void 보이는_과일이_정확히_다섯이면_종이_맞다() {
+        HalliGalliState state = handMade();
+        state.piles.get(0).addFirst(new HalliGalliCard("BANANA", 3));
+        state.piles.get(1).addFirst(new HalliGalliCard("BANANA", 2));
+
+        assertThat(state.bellIsCorrect()).isTrue();
+    }
+
+    @Test
+    void 다섯이_아니면_종이_틀리다() {
+        HalliGalliState state = handMade();
+        state.piles.get(0).addFirst(new HalliGalliCard("BANANA", 3));
+        state.piles.get(1).addFirst(new HalliGalliCard("BANANA", 3));
+
+        assertThat(state.bellIsCorrect()).isFalse();
+    }
+
+    @Test
+    void 맨_위_카드만_센다() {
+        HalliGalliState state = handMade();
+        // 아래에 깔린 카드는 보이지 않으므로 합계에 들어가면 안 된다
+        state.piles.get(0).addFirst(new HalliGalliCard("LIME", 4));
+        state.piles.get(0).addFirst(new HalliGalliCard("LIME", 1));
+        state.piles.get(1).addFirst(new HalliGalliCard("LIME", 4));
+
+        assertThat(state.bellIsCorrect()).isTrue();
+    }
+
+    @Test
+    void 종을_맞게_치면_펼쳐진_카드를_모두_가져간다() {
+        HalliGalliState state = handMade();
+        state.piles.get(0).addFirst(new HalliGalliCard("PLUM", 2));
+        state.piles.get(1).addFirst(new HalliGalliCard("PLUM", 3));
+        int before = state.hands.get(1).size();
+
+        Map<String, Object> next = engine.apply(codec.write(state), 1, new GameAction("BELL", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.lastBellCorrect).isTrue();
+        assertThat(after.piles).allSatisfy(pile -> assertThat(pile).isEmpty());
+        assertThat(after.hands.get(1)).hasSize(before + 2);
+    }
+
+    @Test
+    void 종을_틀리게_치면_남은_사람에게_한_장씩_물어준다() {
+        HalliGalliState state = handMade();
+        state.piles.get(0).addFirst(new HalliGalliCard("PLUM", 1));
+        int mine = state.hands.get(1).size();
+        int theirs = state.hands.get(0).size();
+
+        Map<String, Object> next = engine.apply(codec.write(state), 1, new GameAction("BELL", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.lastBellCorrect).isFalse();
+        assertThat(after.hands.get(1)).hasSize(mine - 1);
+        assertThat(after.hands.get(0)).hasSize(theirs + 1);
+    }
+
+    @Test
+    void 뒤집을_카드가_없으면_탈락하고_마지막_한_명이_일등이다() {
+        HalliGalliState state = handMade();
+        state.hands.get(0).clear();
+
+        Map<String, Object> next = engine.apply(codec.write(state), 0, new GameAction("FLIP", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.isAlive(0)).isFalse();
+        assertThat(after.finished).isTrue();
+        assertThat(engine.ranking(next)).containsExactly(1, 0);
+    }
+
+    @Test
+    void 나간_사람은_꼴찌로_밀린다() {
+        Map<String, Object> state = engine.start(3);
+
+        Map<String, Object> next = engine.retire(state, 0);
+
+        assertThat(engine.ranking(next).getLast()).isZero();
+    }
+
+    /** 카드를 마음대로 놓기 위한 2인 판 */
+    private HalliGalliState handMade() {
+        HalliGalliState state = codec.read(engine.start(2), HalliGalliState.class);
+        state.piles.forEach(List::clear);
+        return state;
+    }
+}
