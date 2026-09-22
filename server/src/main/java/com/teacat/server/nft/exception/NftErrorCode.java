@@ -138,7 +138,8 @@ public enum NftErrorCode implements ErrorCode {
      *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
      */
     AUCTION_CLOSING(HttpStatus.CONFLICT, "NFT_064",
-            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요.");
+            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요."),
+    TEMPLATE_HIDDEN(HttpStatus.CONFLICT, "NFT_065", "숨김 처리된 카드 그림은 풀에 추가할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
