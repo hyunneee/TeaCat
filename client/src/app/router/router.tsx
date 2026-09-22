@@ -5,6 +5,9 @@ import { FEATURE, ROUTES } from '@/shared/constants';
 import { IS_DEV_BUILD } from '@/shared/config';
 import { AppLayout, PlainLayout, SearchLayout, DetailLayout } from '@/shared/components/layout';
 import { RouteBoundary } from '@/shared/components/common';
+/* 🔴 페이지가 아니라 **머리말 조각**이라 lazy 로 나누지 않습니다. 상단 내비와 함께 첫 화면에
+   그려지므로 쪼개면 잔액 자리만 늦게 채워져 머리말이 한 번 움직입니다. */
+import { CatMoneyChip } from '@/features/token';
 import { RequireAuth, RequireFace, RequireCaptcha, RequireQueue, RequireRole } from './guards';
 import { RequireBookingAccess } from './RequireBookingAccess';
 
@@ -336,7 +339,9 @@ const routes: RouteObject[] = [
 
   /* ══ 하단 탭이 보이는 화면 ═══════════════════════════════ */
   {
-    element: <AppLayout />,
+    /* 캣머니 칩은 `features/token` 것이고 AppLayout·TopNav 는 `shared` 라 서로를 모릅니다.
+       두 쪽을 다 아는 자리가 여기(app 레이어)라 여기서 끼워 넣습니다 (CLAUDE.md 3-2). */
+    element: <AppLayout navAction={<CatMoneyChip />} />,
     children: [
       { path: ROUTES.HOME, element: withBoundary(<HomePage />) },
       { path: ROUTES.CONCERTS, element: withBoundary(<ConcertListPage />) },

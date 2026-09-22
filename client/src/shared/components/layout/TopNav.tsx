@@ -31,7 +31,17 @@ const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
  * 스크롤을 따라옵니다. 목록을 한참 내린 뒤 다른 곳으로 가려고 맨 위까지 되돌아가야 하면
  * 아무도 안 옮깁니다 — 폰에서 하단 탭이 늘 붙어 있는 것과 같은 이유입니다.
  */
-export function TopNav() {
+interface TopNavProps {
+  /**
+   * MY 링크 **왼쪽**에 놓을 것 (지금은 캣머니 칩).
+   *
+   * 🔴 이 자리에 들어갈 것이 `features` 에 있어도 여기서 직접 부를 수 없습니다 — `shared` 는
+   * 도메인을 모릅니다(CLAUDE.md 3-2). 넣어 주는 쪽은 `AppLayout` 을 렌더하는 라우터입니다.
+   */
+  action?: React.ReactNode;
+}
+
+export function TopNav({ action }: TopNavProps = {}) {
   const { headerRef, hidden, reveal } = useScrollNavigation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,19 +95,25 @@ export function TopNav() {
           />
         )}
 
-        {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
-            어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
-        <Link
-          to={ROUTES.MY}
-          aria-current={activeTo === ROUTES.MY ? 'page' : undefined}
-          className={cn(
-            'ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
-            activeTo === ROUTES.MY ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
-          )}
-        >
-          <UserRound size={18} />
-          MY
-        </Link>
+        {/* 캣머니 칩. 로그인했을 때만 자리를 차지합니다 (없으면 null 이라 MY 가 그대로 오른쪽 끝).
+            `ml-auto` 가 여기로 옮겨 왔습니다 — 칩이 있을 때 둘이 함께 오른쪽에 붙어야 합니다. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          {action}
+
+          {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
+              어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
+          <Link
+            to={ROUTES.MY}
+            aria-current={activeTo === ROUTES.MY ? 'page' : undefined}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
+              activeTo === ROUTES.MY ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
+            )}
+          >
+            <UserRound size={18} />
+            MY
+          </Link>
+        </div>
       </div>
 
       {/* ── 2줄 — 가로 탭. 줄 폭을 **똑같이 나눠** 가집니다 ── */}

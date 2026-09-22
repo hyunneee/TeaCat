@@ -1,65 +1,54 @@
 import { useNavigate } from 'react-router-dom';
-import { Coins, Gamepad2 } from 'lucide-react';
+import { ChevronRight, Coins, Grid2x2 } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Card, ListRow, SectionTitle } from '@/shared/components/ui';
+import { Card, SectionTitle } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
-import { AttendanceCard, SongpyeonPiece, useAttendance, useTokenBalance } from '@/features/token';
+import {
+  AttendanceCard,
+  MemoryRankingCard,
+  SongpyeonPiece,
+  useAttendance,
+  useMemoryRanking,
+  useTokenBalance,
+} from '@/features/token';
 
 /**
- * 캣플레이 — 캣머니 잔액과 모으는 방법.
+ * 캣플레이 — 캣머니를 모으는 자리.
  *
- * 🔴 **여기서 바로 게임이 시작되지 않습니다.** 잔액을 보려고 누르는 자리라, 들어오자마자
- * 판이 깔리면 잔액을 볼 수 없습니다. 게임은 `/token/game` 으로 길을 나눠 두었습니다
- * (`ROUTES.TOKEN_GAME`).
+ * <p>하단 탭의 목적지입니다(`navTabs` 의 '캣플레이'). 탭 루트라 <b>뒤로가기를 두지 않습니다</b>.
  *
- * <p>하단 탭의 목적지입니다(`navTabs` 의 '캣플레이'). 탭 루트라 <b>뒤로가기를 두지 않습니다</b> —
- * 탭으로 들어온 사람에게는 되돌아갈 곳이 없고, 그 자리는 탭 바가 대신합니다.
+ * <p>🔴 **잔액은 크게 띄우지 않습니다.** 예전에는 화면 절반을 잔액 카드가 차지했는데,
+ * 여기는 "얼마 있나" 를 보러 오는 자리가 아니라 **모으러** 오는 자리입니다. 잔액은 상단 내비와
+ * 마이페이지에서 이미 보이므로 한 줄로 줄이고, 그 자리를 게임에 내줍니다.
+ *
+ * <p>🔴 **여기서 바로 게임이 시작되지 않습니다.** 들어오자마자 판이 깔리면 순위도 출석도
+ * 볼 수 없습니다. 게임은 각자의 화면으로 길을 나눠 두었습니다.
  */
 export function TokenPage() {
   const navigate = useNavigate();
   const { data: token } = useTokenBalance();
   const attendance = useAttendance();
+  const { data: ranking, isPending: rankingPending } = useMemoryRanking();
 
   return (
     <>
       <Header title="캣플레이" />
 
       <div className="space-y-4 p-4">
-        <Card className="flex flex-col items-center gap-2 py-8">
-          <Coins size={34} className="text-brand-500" />
-          <p className="text-muted text-sm">쓸 수 있는 캣머니</p>
-          {/* 총액이 아니라 **쓸 수 있는 금액**입니다 (features/token 의 token.types.ts 주석) */}
-          <p className="text-3xl font-extrabold tabular-nums">
+        {/* 잔액 한 줄. 총액·묶인 금액 같은 자세한 건 마이페이지가 보여줍니다 */}
+        <Card className="flex items-center gap-2 py-3">
+          <Coins size={18} className="text-brand-500 shrink-0" aria-hidden />
+          <span className="text-muted flex-1 text-sm">쓸 수 있는 캣머니</span>
+          <span className="text-lg font-extrabold tabular-nums">
             {(token?.available ?? 0).toLocaleString()}
-          </p>
-          {/* 내부 식별자(symbol: 'CATMONEY')를 화면에 그대로 띄우지 마세요.
-              사용자가 보는 이름은 언제나 "캣머니" 입니다. */}
-          <p className="text-subtle text-xs">캣머니</p>
-
-          {/* 여기는 잔액을 보러 오는 화면이라 총액과 묶인 금액을 함께 풀어 줍니다.
-              마이페이지는 한 줄만 보여주고, 자세한 건 이 화면입니다. */}
-          {!!token?.held && (
-            <div className="border-line mt-3 w-full space-y-1 border-t pt-3 text-xs">
-              <p className="flex justify-between">
-                <span className="text-muted">보유 총액</span>
-                <span className="font-semibold tabular-nums">{token.balance.toLocaleString()}</span>
-              </p>
-              <p className="flex justify-between">
-                <span className="text-muted">경매 입찰로 묶임</span>
-                <span className="font-semibold tabular-nums">−{token.held.toLocaleString()}</span>
-              </p>
-            </div>
-          )}
+          </span>
         </Card>
 
         {/* ── 캣머니 벌기 ──────────────────────────────────
-            🔴 화면에서 **실제로 캣머니가 들어오는 것은 출석 체크와 송편 잡기뿐**입니다.
-            짝 맞추기는 아직 기록만 남습니다(`features/token` 의 `REWARD_TIERS` 주석) —
-            그래서 보상이 있는 둘을 위에 두고 설명에 금액을 적습니다. */}
+            🔴 실제로 캣머니가 들어오는 것은 출석 체크·송편 잡기·짝 맞추기 1등 셋입니다.
+            한 화면에 primary 버튼은 하나라(CLAUDE.md 4-6) 출석 카드가 그 하나를 가집니다. */}
         <SectionTitle>캣머니 벌기</SectionTitle>
 
-        {/* 한 화면에 primary 버튼은 하나입니다 (CLAUDE.md 4-6). 이 카드의 버튼이 그 하나라
-            아래 게임들은 누르는 줄(ListRow)로 둡니다 */}
         <AttendanceCard
           amount={attendance.amount}
           claimed={attendance.claimed}
@@ -68,21 +57,57 @@ export function TokenPage() {
           onCheck={attendance.check}
         />
 
-        <Card padded={false} className="overflow-hidden">
-          <ListRow
-            icon={<SongpyeonPiece kind="songpyeon" size={18} />}
+        {/* 게임은 누르는 줄(ListRow) 대신 **각자 카드**입니다. 줄로 두면 설정 목록처럼 읽혀서
+            "놀거리" 로 보이지 않았습니다. 무엇을 하면 뭘 받는지를 카드마다 적습니다. */}
+        <div className="grid grid-cols-2 gap-3">
+          <GameCard
+            icon={<SongpyeonPiece kind="songpyeon" size={26} />}
             title="송편 잡기"
-            description="5단계를 모두 통과하면 하루 한 번 캣머니"
+            reward="하루 한 번 1,000"
+            description="5단계 통과"
             onClick={() => navigate(ROUTES.TOKEN_SONGPYEON)}
           />
-          <ListRow
-            icon={<Gamepad2 size={18} />}
-            title="캣머니 게임하기"
-            description="포토카드 짝 맞추기"
+          <GameCard
+            icon={<Grid2x2 size={26} className="text-brand-500" />}
+            title="포토카드 짝 맞추기"
+            reward="1등이면 다음날 1,000"
+            description="빠를수록 위"
             onClick={() => navigate(ROUTES.TOKEN_GAME)}
           />
-        </Card>
+        </div>
+
+        {/* ── 짝 맞추기 순위 ────────────────────────────── */}
+        <SectionTitle>포토카드 짝 맞추기</SectionTitle>
+        <MemoryRankingCard ranking={ranking} loading={rankingPending} />
       </div>
     </>
+  );
+}
+
+interface GameCardProps {
+  icon: React.ReactNode;
+  title: string;
+  /** 무엇을 받는지. 이게 없으면 그냥 게임 목록이 됩니다 */
+  reward: string;
+  description: string;
+  onClick: () => void;
+}
+
+/** 놀거리 한 칸. 아이콘·이름·보상·한 줄 설명 */
+function GameCard({ icon, title, reward, description, onClick }: GameCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="surface shadow-card hover:shadow-list flex flex-col gap-2 rounded-2xl p-4 text-left transition-shadow"
+    >
+      <span className="surface-2 flex size-11 items-center justify-center rounded-xl">{icon}</span>
+      <span className="flex items-center gap-0.5 text-sm font-bold">
+        <span className="min-w-0 flex-1">{title}</span>
+        <ChevronRight size={15} className="text-ink-subtle shrink-0" aria-hidden />
+      </span>
+      <span className="text-brand-600 text-xs font-semibold">{reward}</span>
+      <span className="text-subtle text-xs">{description}</span>
+    </button>
   );
 }
