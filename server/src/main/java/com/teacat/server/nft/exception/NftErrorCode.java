@@ -138,7 +138,18 @@ public enum NftErrorCode implements ErrorCode {
      *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
      */
     AUCTION_CLOSING(HttpStatus.CONFLICT, "NFT_064",
-            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요.");
+            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요."),
+
+    /*
+     * 포카 꾸미기 (2026-09-22).
+     *
+     * 🔴 카드가 없거나 남의 것일 때는 **새 코드를 만들지 않는다** — 위의
+     *    PHOTOCARD_NOT_FOUND(NFT_001) · PHOTOCARD_NOT_OWNED(NFT_003) 를 그대로 쓴다.
+     *    같은 뜻에 코드가 둘이면 프론트가 어느 쪽으로 분기할지 알 수 없다.
+     */
+    DECORATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_065", "꾸민 카드가 없습니다."),
+    DECORATION_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "NFT_066", "꾸민 이미지를 읽을 수 없습니다."),
+    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
