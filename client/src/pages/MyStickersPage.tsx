@@ -10,6 +10,11 @@ import { StickerGrid, useDeleteSticker, useMyStickers, type Sticker } from '@/fe
 /**
  * 내 스티커 — 만든 것들의 격자. 삭제만 됩니다 (붙이는 화면은 1차 범위 밖, 설계 10장).
  * DONE 이 된 작업은 서버가 바로 스티커로 만들어 두므로 "저장" 버튼 없이 여기 쌓입니다.
+ *
+ * 🔴 **"포카 꾸미기" 의 입구입니다** (2026-09-22). 내 포토카드 머리말의 버튼이 여기로 옵니다.
+ *    만든 스티커를 먼저 보여주고, "스티커 만들기" 로 그리기 화면에 들어갑니다.
+ *    그래서 이 화면의 버튼은 "포카 꾸미기" 가 아니라 **"스티커 만들기"** 입니다 —
+ *    들어온 곳이 이미 포카 꾸미기라, 같은 이름이 두 번 나오면 어디로 가는지 알 수 없습니다.
  */
 export function MyStickersPage() {
   const navigate = useNavigate();
@@ -39,7 +44,7 @@ export function MyStickersPage() {
             leftIcon={<Sparkles size={15} />}
             onClick={() => navigate(ROUTES.STICKER_CREATE)}
           >
-            새로 만들기
+            스티커 만들기
           </Button>
         }
       />
@@ -56,7 +61,7 @@ export function MyStickersPage() {
             description="낙서 한 장이면 스티커가 됩니다."
             action={
               <Button variant="dark" onClick={() => navigate(ROUTES.STICKER_CREATE)}>
-                포카 꾸미기
+                스티커 만들기
               </Button>
             }
           />

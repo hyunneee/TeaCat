@@ -11,5 +11,7 @@ public enum CatMoneyHoldRefType {
     /** ref_id = nft_photocard_trades.id. 보상 가능성을 위한 판매자 수령액 잠금 */
     NFT_TRADE_SELLER,
     /** ref_id = ticket_orders.id. 결제가 끝나면 CAPTURED(소각), 무산되면 RELEASED */
-    TICKET_ORDER
+    TICKET_ORDER,
+    /** ref_id = game_participants.id. 게임이 끝나면 CAPTURED, 판이 깨지면 RELEASED */
+    GAME_BET
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Coins, Grid2x2 } from 'lucide-react';
+import { ChevronRight, Coins, Dices, Grid2x2, Hand } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Card, SectionTitle } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
@@ -73,6 +73,28 @@ export function TokenPage() {
             reward="1등이면 다음날 1,000"
             description="빠를수록 위"
             onClick={() => navigate(ROUTES.TOKEN_GAME)}
+          />
+        </div>
+
+        {/* ── 같이 하기 ──────────────────────────────────
+            🔴 위쪽 "캣머니 벌기" 와 나눠 둡니다. 저쪽은 혼자 해서 받는 자리이고 이쪽은
+            **걸고 겨루는** 자리라, 섞어 놓으면 판돈이 걸린다는 것을 모르고 들어갑니다. */}
+        <SectionTitle>같이 하기</SectionTitle>
+
+        <div className="grid grid-cols-2 gap-3">
+          <GameCard
+            icon={<Dices size={26} className="text-brand-500" />}
+            title="윷놀이"
+            reward="1~4인 · 등수대로"
+            description="업고 잡고 지름길"
+            onClick={() => navigate(ROUTES.GAME)}
+          />
+          <GameCard
+            icon={<Hand size={26} className="text-brand-500" />}
+            title="할리갈리"
+            reward="1~4인 · 등수대로"
+            description="같은 과일 5개면 종"
+            onClick={() => navigate(ROUTES.GAME)}
           />
         </div>
 

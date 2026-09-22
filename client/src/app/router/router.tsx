@@ -54,11 +54,14 @@ const MyBidsPage = page(() => import('@/pages/MyBidsPage'), 'MyBidsPage');
 const MyNftsPage = page(() => import('@/pages/MyNftsPage'), 'MyNftsPage');
 const StickerCreatePage = page(() => import('@/pages/StickerCreatePage'), 'StickerCreatePage');
 const MyStickersPage = page(() => import('@/pages/MyStickersPage'), 'MyStickersPage');
+const PocaDecoratePage = page(() => import('@/pages/PocaDecoratePage'), 'PocaDecoratePage');
 const NftTradesPage = page(() => import('@/pages/NftTradesPage'), 'NftTradesPage');
 const NftSalesPage = page(() => import('@/pages/NftSalesPage'), 'NftSalesPage');
 const TokenPage = page(() => import('@/pages/TokenPage'), 'TokenPage');
 const TokenGamePage = page(() => import('@/pages/TokenGamePage'), 'TokenGamePage');
 const SongpyeonGamePage = page(() => import('@/pages/SongpyeonGamePage'), 'SongpyeonGamePage');
+const GamePage = page(() => import('@/pages/GamePage'), 'GamePage');
+const GameRoomPage = page(() => import('@/pages/GameRoomPage'), 'GameRoomPage');
 
 const MyPage = page(() => import('@/pages/MyPage'), 'MyPage');
 const SettingsPage = page(() => import('@/pages/SettingsPage'), 'SettingsPage');
@@ -440,6 +443,9 @@ const routes: RouteObject[] = [
           { path: ROUTES.NFT_DRAW, element: withBoundary(<PocaDrawPage />) },
           { path: ROUTES.TOKEN_GAME, element: withBoundary(<TokenGamePage />) },
           { path: ROUTES.TOKEN_SONGPYEON, element: withBoundary(<SongpyeonGamePage />) },
+          /* 같이 하는 게임. 방 하나가 대기실이자 게임판이라 전체화면으로 둡니다 */
+          { path: ROUTES.GAME, element: withBoundary(<GamePage />) },
+          { path: ROUTES.GAME_ROOM, element: withBoundary(<GameRoomPage />) },
 
 
           /* ── AI 스티커 (포카 꾸미기) ── `FEATURE.sticker` 가 꺼지면 길이 없습니다.
@@ -449,6 +455,12 @@ const routes: RouteObject[] = [
                 { path: ROUTES.STICKER_CREATE, element: withBoundary(<StickerCreatePage />) },
                 /* 내가 만든 것들 — 내 데이터라 withMask */
                 { path: ROUTES.MY_STICKERS, element: withMask(withBoundary(<MyStickersPage />)) },
+                /* 포카 꾸미기 — 내 카드를 그리므로 withMask.
+                   🔴 화면이 소유자인지 다시 확인하고 아니면 상세로 돌려보냅니다 */
+                {
+                  path: ROUTES.NFT_DECORATE(':photocardId'),
+                  element: withMask(withBoundary(<PocaDecoratePage />)),
+                },
               ]
             : []),
 
