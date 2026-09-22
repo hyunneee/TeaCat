@@ -104,6 +104,30 @@ export type {
   TradeRiskSignal,
 } from './model/adminTradeReview.types';
 
+// ── 경매 관리 ──────────────────────────────────────────────
+export {
+  useAdminAuctions,
+  useAdminAuction,
+  useCancelAuction,
+} from './hooks/useAdminAuctions';
+export { AdminAuctionTable } from './components/AdminAuctionTable';
+export { AdminAuctionDetailModal } from './components/AdminAuctionDetailModal';
+export { adminAuctionApi, adminAuctionKeys } from './api/adminAuctionApi';
+export {
+  AUCTION_STATUS_LABEL,
+  AUCTION_STATUS_TONE,
+  AUCTION_STATUS_OPTIONS,
+  isClosingSoon,
+} from './model/adminAuction.model';
+export type {
+  AdminAuction,
+  AdminAuctionBid,
+  AdminAuctionDetail,
+  AdminAuctionPage,
+  AdminAuctionQuery,
+  AdminAuctionStatus,
+} from './model/adminAuction.types';
+
 // View — 메인 배너 관리
 export { AdminBannerFormModal } from './components/AdminBannerFormModal';
 export { AdminPocaTemplateFormModal } from './components/AdminPocaTemplateFormModal';

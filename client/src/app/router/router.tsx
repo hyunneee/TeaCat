@@ -98,6 +98,7 @@ const AdminTradeReviewsPage = page(
   () => import('@/pages/AdminTradeReviewsPage'),
   'AdminTradeReviewsPage',
 );
+const AdminAuctionsPage = page(() => import('@/pages/AdminAuctionsPage'), 'AdminAuctionsPage');
 const AdminPackEventsPage = page(
   () => import('@/pages/AdminPackEventsPage'),
   'AdminPackEventsPage',
@@ -308,6 +309,7 @@ const routes: RouteObject[] = [
                     path: ROUTES.ADMIN_TRADE_REVIEWS,
                     element: withBoundary(<AdminTradeReviewsPage />),
                   },
+                  { path: ROUTES.ADMIN_AUCTIONS, element: withBoundary(<AdminAuctionsPage />) },
                   { path: ROUTES.ADMIN_BANNERS, element: withBoundary(<AdminBannersPage />) },
                   {
                     path: ROUTES.ADMIN_POCA_TEMPLATES,
