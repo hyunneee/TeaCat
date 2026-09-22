@@ -120,6 +120,15 @@ export const can = {
   /** 이상거래 심사(승인·거절)와 전체 거래 내역. 서버 `/admin/nft/trade-reviews/**` 는 ADMIN 전용이다 */
   reviewTrades: (user: User | null): boolean => user?.role === 'ADMIN',
 
+  /**
+   * 경매 관리(목록·상세·강제 취소). 서버 `/admin/nft/auctions/**` 는 ADMIN 전용이다.
+   *
+   * 🔴 `reviewTrades` 와 합치지 않았다. 지금은 둘 다 ADMIN 이지만 다루는 대상이 다르다 —
+   *    저쪽은 이미 체결된 거래의 정산을 판정하고, 이쪽은 아직 진행 중인 경매를 돌린다.
+   *    나중에 한쪽만 다른 역할에 열게 되면 합쳐 둔 것을 다시 갈라야 한다.
+   */
+  manageAuctions: (user: User | null): boolean => user?.role === 'ADMIN',
+
   /** 공연장·구역·좌석 배치 관리. 서버 정책과 같이 ADMIN 및 STADIUM 역할에 허용합니다. */
   manageStadiumLayouts: (user: User | null): boolean => hasRole(user, 'ADMIN', 'STADIUM'),
 };
