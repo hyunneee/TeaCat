@@ -138,6 +138,30 @@ pipeline {
                         exit 1
                     }
                     docker compose version >/dev/null
+
+                    # ── 마이그레이션 버전 중복 ───────────────────────────────
+                    # 🔴 Flyway 는 같은 버전이 둘이면 **마이그레이션을 하나도 적용하지 않고**
+                    #    기동을 멈춘다. 그대로 배포하면 그 환경이 통째로 502 가 된다
+                    #    (2026-09-22 dev 에서 하루 두 번). 각자 브랜치에서는 멀쩡하고
+                    #    합쳐지는 순간에만 생겨서, 만든 사람은 끝까지 모른다.
+                    #
+                    # 🔴 **이미지 빌드·배포보다 먼저** 본다. 여기서 멈추면 돌던 컨테이너가
+                    #    그대로 살아 있어서, 고칠 때까지 서비스가 죽지 않는다.
+                    #    (서버 build.gradle 의 checkMigrationVersions 도 같은 것을 보지만
+                    #     그건 이미 이미지를 만들기 시작한 뒤다 — 둘의 목적이 다르다)
+                    DUP=$(ls server/src/main/resources/db/migration/*.sql 2>/dev/null \
+                            | sed 's|.*/||; s|__.*||' | sort | uniq -d)
+                    if [ -n "$DUP" ]; then
+                        echo "마이그레이션 버전이 겹칩니다. 이대로 배포하면 서버가 기동하지 못합니다."
+                        for v in $DUP; do
+                            echo "  버전 $v :"
+                            ls server/src/main/resources/db/migration/${v}__*.sql | sed 's|.*/||; s|^|    |'
+                        done
+                        echo "  → 나중에 머지된 쪽의 버전을 뒤로 미세요 (내용은 그대로, 파일 이름만)."
+                        echo "     이미 적용된 마이그레이션의 이름은 바꾸지 마세요 —"
+                        echo "     Flyway 가 '적용됐는데 파일이 없다' 로 또 거부합니다."
+                        exit 1
+                    fi
                 '''
             }
         }
