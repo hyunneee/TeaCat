@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiError, queryClient } from '@/shared/api';
 import { toast } from '@/shared/stores';
 import { STALE_TIME } from '@/shared/constants';
+import { nftKeys } from '@/features/nft';
 import { adminPocaDesignApi, adminPocaDesignKeys } from '../api/adminPocaDesignApi';
 import type {
   AdminPocaDesign,
@@ -22,10 +23,10 @@ const whileRegistering = (designs: AdminPocaDesign[] | undefined) =>
 
 /* ── 템플릿 ───────────────────────────────────────────── */
 
-export function useAdminPocaTemplates() {
+export function useAdminPocaTemplates(hidden = false) {
   return useQuery({
-    queryKey: adminPocaDesignKeys.templates(),
-    queryFn: adminPocaDesignApi.templates,
+    queryKey: hidden ? [...adminPocaDesignKeys.templates(), true] : adminPocaDesignKeys.templates(),
+    queryFn: () => adminPocaDesignApi.templates(hidden),
     staleTime: STALE_TIME.SHORT,
   });
 }
@@ -42,6 +43,7 @@ export function useCreatePocaTemplate() {
         template,
         ...(current ?? []).filter((item) => item.templateId !== template.templateId),
       ]);
+      void queryClient.invalidateQueries({ queryKey: nftKeys.all });
       toast.success('카드 그림을 등록했어요.');
     },
     onError: (error) => toast.error(message(error, '카드 그림을 등록하지 못했어요.')),
@@ -54,6 +56,7 @@ export function useSetTemplateHidden() {
     mutationFn: ({ templateId, hidden }: { templateId: number; hidden: boolean }) =>
       adminPocaDesignApi.setTemplateHidden(templateId, hidden),
     onSuccess: (_, { hidden }) => {
+      void queryClient.invalidateQueries({ queryKey: nftKeys.all });
       void queryClient.invalidateQueries({ queryKey: adminPocaDesignKeys.templates() });
       toast.success(hidden ? '목록에서 감췄어요.' : '다시 보이게 했어요.');
     },

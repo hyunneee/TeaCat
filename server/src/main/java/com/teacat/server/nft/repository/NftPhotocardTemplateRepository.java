@@ -11,6 +11,8 @@ public interface NftPhotocardTemplateRepository extends JpaRepository<NftPhotoca
     /** 어드민 목록. 감춘 것은 빠진다 */
     List<NftPhotocardTemplate> findAllByHiddenFalseOrderByIdDesc();
 
+    List<NftPhotocardTemplate> findAllByHiddenOrderByIdDesc(boolean hidden);
+
     /**
      * 템플릿별로 만들어진 도안 수. 어드민 목록이 "이 카드가 몇 군데 쓰였나" 를 보여줄 때 쓴다.
      *

@@ -32,7 +32,7 @@ export const adminPocaDesignApi = {
   /* ── 템플릿 ─────────────────────────────────────────── */
 
   /** 감춘 템플릿은 내려오지 않습니다 */
-  templates: () => http.get<AdminPocaTemplate[]>('/admin/photocard-templates'),
+  templates: (hidden = false) => http.get<AdminPocaTemplate[]>('/admin/photocard-templates', { params: { hidden } }),
 
   createTemplate: async (body: AdminPocaTemplateCreateRequest) => {
     /* 🔴 올리기 직전이 **유일하게 줄일 수 있는 지점**입니다.
