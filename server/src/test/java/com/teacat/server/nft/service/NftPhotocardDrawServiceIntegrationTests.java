@@ -188,6 +188,9 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
                 .extracting("errorCode").isEqualTo(NftErrorCode.DRAW_POOL_EMPTY);
 
         assertThat(unconsumedPacksOf(userId)).isEqualTo(1);
+        assertThat(drawService.status(userId).available()).isFalse();
+        assertThat(drawService.status(userId).remaining()).isZero();
+        assertThat(drawService.status(userId).preparing()).isEqualTo(1);
     }
 
     @Test
@@ -207,6 +210,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
     void 이벤트_팩은_계정당_한_번이다() {
         Long userId = userWithWallet();
         givenActiveEvent("OPEN_EVENT");
+        insertDrawPoolDesign("이벤트 카드", 10, "서울 5반", "COMMON");
 
         assertThat(writer.claimEventPack(userId)).isTrue();
         assertThat(writer.counts(userId).openable()).isEqualTo(1);
@@ -347,6 +351,7 @@ class NftPhotocardDrawServiceIntegrationTests extends PostgresIntegrationTest {
     void 이벤트_팩_지급_응답() {
         Long userId = userWithWallet();
         givenActiveEvent("OPEN_EVENT");
+        insertDrawPoolDesign("이벤트 카드", 10, "서울 5반", "COMMON");
 
         NftPhotocardPackClaimResponse first = drawService.claimEventPack(userId);
         NftPhotocardPackClaimResponse second = drawService.claimEventPack(userId);

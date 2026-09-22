@@ -158,7 +158,7 @@ class NftAuctionAdminApiIntegrationTests extends PostgresIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"신고 접수\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("NFT_060"));
+                .andExpect(jsonPath("$.code").value("NFT_064"));
 
         assertThat(auctionStatus(auctionId)).isEqualTo(NftAuctionStatus.ACTIVE.name());
         // 목록에서도 취소할 수 없다고 알려 줘야 어드민이 헛되이 누르지 않는다

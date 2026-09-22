@@ -183,6 +183,11 @@ export function MyNftsPage() {
                     />
                   </li>
                 )}
+                {showPacks && draw && draw.preparing > 0 && (
+                  <li>
+                    <PocaPackTile count={draw.preparing} preparing onClick={() => undefined} />
+                  </li>
+                )}
                 {/* 잠긴 팩은 **개봉 시각별로** 한 칸씩 — 서버가 팩마다 시각을 줍니다.
                     목록이 잘렸거나 옛 서버면(null) 예전처럼 한 칸으로 물러섭니다. */}
                 {showPacks &&
