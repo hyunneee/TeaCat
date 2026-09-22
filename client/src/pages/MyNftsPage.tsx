@@ -216,7 +216,11 @@ export function MyNftsPage() {
                         <NftCard
                           photocardId={card.photocardId}
                           designName={card.designName}
-                          imageUrl={card.imageUrl}
+                          /* 꾸몄으면 꾸민 모습으로. 🔴 **여기가 내 카드 화면이라 되는 것입니다** —
+                             `NftCard` 는 마켓·홈·검색도 쓰므로 컴포넌트 안에서 이 판단을 하면
+                             마켓에 꾸민 그림이 새어 나가 사는 사람이 속습니다. 그래서 컴포넌트는
+                             그대로 두고 **부르는 쪽이 어느 그림을 줄지 정합니다.** */
+                          imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                           performanceTitle={card.performanceTitle}
                           eventName={card.eventName}
                           state={photocardMarketState(card)}

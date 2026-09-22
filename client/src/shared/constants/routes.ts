@@ -73,6 +73,11 @@ export const ROUTES = {
   NFT_DRAW: '/nft/draw',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
+  /**
+   * 포카 꾸미기 — 내 카드에 AI 스티커를 얹습니다. 상세 화면의 곁가지라 그 아래 둡니다.
+   * 🔴 **내 카드에서만** 들어갑니다. 라우트는 `FEATURE.sticker` 가 켜져 있을 때만 등록됩니다.
+   */
+  NFT_DECORATE: (photocardId: string) => `/nft/${photocardId}/decorate`,
   /** 경매 상세. 비로그인도 구경할 수 있어야 해서 가드 밖에 둡니다 */
   AUCTION_DETAIL: (auctionId: string) => `/auctions/${auctionId}`,
   MY_AUCTIONS: '/my/auctions',

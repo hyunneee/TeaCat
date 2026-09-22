@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Armchair, BadgeCheck, Coins, Hand, Layers, TriangleAlert } from 'lucide-react';
+import { Armchair, BadgeCheck, Coins, Hand, Layers, Sparkles, TriangleAlert } from 'lucide-react';
 import { BottomBar, DetailHeader as Header } from '@/shared/components/layout';
 import { Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import {
@@ -13,7 +13,7 @@ import {
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
 import { ApiError, newIdempotencyKey } from '@/shared/api';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
@@ -147,6 +147,14 @@ export function NftDetailPage() {
   /* 내 카드가 아니면 보유 목록을 그리지 않습니다 — 남의 카드 화면에서 내 보유 장수를
      꺼내 보일 자리가 아닙니다(목록 자체는 내 것만 옵니다) */
   const myCopies = mine ? allCopies : [];
+  /*
+   * 스티커로 꾸민 그림이 있으면 그걸 보여줍니다.
+   *
+   * 🔴 **내 카드일 때만입니다.** 서버도 남의 카드에는 `decoratedImageUrl` 을 채우지 않지만,
+   *    화면에서도 한 번 더 조입니다 — 마켓에서 꾸민 그림을 보고 산 사람이 받는 것은
+   *    원본이라 속는 셈이 됩니다.
+   */
+  const shownImageUrl = (mine && card.decoratedImageUrl) || card.imageUrl;
   const listing = card.listing ?? null;
   const auction = card.auction ?? null;
   /* 모바일에 고정 버튼이 떠 있는가 — 아래 `BottomBar.Spacer` 주석 참고.
@@ -195,7 +203,7 @@ export function NftDetailPage() {
                 <PocaLiveCard
                   photocardId={card.photocardId}
                   designName={card.designName}
-                  imageUrl={card.imageUrl}
+                  imageUrl={shownImageUrl}
                   glow={card.grade === undefined || isSpecial(card.grade)}
                   motes
                   className="aspect-[2/3] w-full"
@@ -217,6 +225,22 @@ export function NftDetailPage() {
                 <Hand size={14} />
                 카드를 눌러 자세히 봐요
               </p>
+            )}
+
+            {/* 🔴 **내 카드일 때만** 보입니다. 이 화면은 마켓에서 들어온 **남의 카드도**
+                그리기 때문에, 조건 없이 달면 남의 그림을 꾸며 가져가는 길이 열립니다.
+                하단 초록 버튼(사기/팔기)과 겹치지 않게 `soft` 로 둡니다 — 한 화면의
+                primary 는 하나입니다 (DESIGN.md 1장). */}
+            {FEATURE.sticker && mine && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  variant="soft"
+                  leftIcon={<Sparkles size={16} />}
+                  onClick={() => navigate(ROUTES.NFT_DECORATE(String(card.photocardId)))}
+                >
+                  스티커로 꾸미기
+                </Button>
+              </div>
             )}
           </>
         }
@@ -493,7 +517,7 @@ export function NftDetailPage() {
         onClose={() => setZoomed(false)}
         photocardId={card.photocardId}
         designName={card.designName}
-        imageUrl={card.imageUrl}
+        imageUrl={shownImageUrl}
         group={card.group}
         grade={card.grade}
       />
