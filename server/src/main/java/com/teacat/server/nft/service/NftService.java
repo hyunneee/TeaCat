@@ -165,7 +165,7 @@ public class NftService {
            쓰이므로, 조건 없이 채우면 남의 꾸밈이 그대로 노출된다. */
         String decoratedImageUrl = isOwner ? decorationService.imageUrlOf(viewerId, photocardId) : null;
         return new NftPhotocardDetailResponse(
-                row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
+                row.photocardId(), row.designId(), row.templateId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
                 row.groupName(), row.grade(), row.averagePrice(), row.viewCount(), isOwner, decoratedImageUrl);
     }
@@ -183,8 +183,16 @@ public class NftService {
      */
     @Transactional(readOnly = true)
     public List<MyDesignPhotocardResponse> getMyPhotocardsOfDesign(Long userId, Long designId) {
-        return queryRepository.findMyPhotocardsOfDesign(userId, designId, DESIGN_COPY_LIMIT)
-                .stream()
+        return toCopies(queryRepository.findMyPhotocardsOfDesign(userId, designId, DESIGN_COPY_LIMIT));
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyDesignPhotocardResponse> getMyPhotocardsOfTemplate(Long userId, Long templateId) {
+        return toCopies(queryRepository.findMyPhotocardsOfTemplate(userId, templateId));
+    }
+
+    private List<MyDesignPhotocardResponse> toCopies(List<NftMarketQueryRepository.DesignCopyRow> rows) {
+        return rows.stream()
                 .map(row -> new MyDesignPhotocardResponse(
                         row.photocardId(),
                         row.issuedAt(),

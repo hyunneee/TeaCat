@@ -149,7 +149,13 @@ public enum NftErrorCode implements ErrorCode {
      */
     DECORATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_065", "꾸민 카드가 없습니다."),
     DECORATION_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "NFT_066", "꾸민 이미지를 읽을 수 없습니다."),
-    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다.");
+    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다."),
+
+    /*
+     * ⚠️ 처음에 NFT_065 로 적었다가 dev 가 먼저 065~067(포카 꾸미기)을 가져가서 068 로 옮겼다.
+     *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
+     */
+    TEMPLATE_HIDDEN(HttpStatus.CONFLICT, "NFT_068", "숨김 처리된 카드 그림은 풀에 추가할 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

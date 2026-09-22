@@ -83,7 +83,7 @@ public class NftMarketQueryRepository {
 
     public Optional<DetailRow> findPhotocardDetail(Long photocardId) {
         String sql = """
-                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.template_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title,
                        -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
                        CASE WHEN pack.source = 'EVENT'
@@ -121,6 +121,7 @@ public class NftMarketQueryRepository {
                 (rs, rowNum) -> new DetailRow(
                         rs.getLong("photocard_id"),
                         rs.getLong("design_id"),
+                        rs.getObject("template_id", Long.class),
                         rs.getString("design_name"),
                         rs.getString("image_url"),
                         rs.getString("performance_title"),
@@ -199,7 +200,7 @@ public class NftMarketQueryRepository {
                                               Long cursorId,
                                               int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT p.id AS photocard_id, d.id AS design_id, d.name AS design_name, d.image_url,
+                SELECT p.id AS photocard_id, d.id AS design_id, d.template_id, d.name AS design_name, d.image_url,
                        pg.title AS performance_title, p.status, p.created_at,
                        -- 이벤트 카드팩에서 나온 카드의 이벤트 이름 (findMarketPhotocards 주석 참고)
                        CASE WHEN pack.source = 'EVENT'
@@ -267,6 +268,14 @@ public class NftMarketQueryRepository {
      * {@link com.teacat.server.nft.dto.response.MyDesignPhotocardResponse} 주석 참고.
      */
     public List<DesignCopyRow> findMyPhotocardsOfDesign(Long userId, Long designId, int limit) {
+        return findMyCopies(userId, designId, limit, false);
+    }
+
+    public List<DesignCopyRow> findMyPhotocardsOfTemplate(Long userId, Long templateId) {
+        return findMyCopies(userId, templateId, null, true);
+    }
+
+    private List<DesignCopyRow> findMyCopies(Long userId, Long scopeId, Integer limit, boolean byTemplate) {
         String sql = """
                 SELECT p.id AS photocard_id, p.created_at AS issued_at, p.status,
                        pa.grade AS seat_grade, a.area_code, s.row_label, s.seat_number,
@@ -287,12 +296,14 @@ public class NftMarketQueryRepository {
                        ON l.photocard_id = p.id AND l.status IN ('ACTIVE', 'SETTLING')
                 LEFT JOIN nft_auctions au
                        ON au.photocard_id = p.id AND au.status IN ('ACTIVE', 'SETTLING')
-                WHERE p.owner_id = :userId AND p.design_id = :designId
+                WHERE p.owner_id = :userId AND %s
                 ORDER BY p.created_at, p.id
                 LIMIT :limit
-                """;
+                """.formatted(byTemplate
+                        ? "p.design_id IN (SELECT id FROM nft_photocard_designs WHERE template_id = :scopeId)"
+                        : "p.design_id = :scopeId");
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
-                .addValue("designId", designId)
+                .addValue("scopeId", scopeId)
                 .addValue("limit", limit);
 
         return jdbcTemplate.query(sql, params, (rs, rowNum) -> new DesignCopyRow(
@@ -709,7 +720,7 @@ public class NftMarketQueryRepository {
                             LocalDateTime listedAt, long viewCount) {
     }
 
-    public record DetailRow(Long photocardId, Long designId, String designName, String imageUrl,
+    public record DetailRow(Long photocardId, Long designId, Long templateId, String designName, String imageUrl,
                             String performanceTitle, String eventName, Long ownerId, String ownerNickname,
                             LocalDateTime issuedAt,
                             boolean hasTicket,

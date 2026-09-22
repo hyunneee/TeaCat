@@ -48,17 +48,17 @@ export interface PhotocardArt {
 
 /** 사용자별 도감 한 칸. 미보유이면 앞면 정보는 서버부터 null로 가립니다. */
 export interface DrawPoolCard {
-  designId: number;
+  templateId: number;
   owned: boolean;
   name: string | null;
   imageUrl: string | null;
   group: string | null;
   grade: PocaGrade | null;
-  acquisition: {
+  acquisitions: {
     type: 'PERFORMANCE' | 'EVENT';
     /** 공연명이거나, 전역 풀이라면 이벤트 포토카드 팩 이름입니다. */
     name: string;
-  };
+  }[];
   count: number;
   marketCount: number;
   marketState: 'LISTED' | 'AUCTION' | 'SETTLING' | null;
@@ -151,6 +151,7 @@ export interface PhotocardOrigin {
 
 /** 포카 상세 */
 export interface PhotocardDetail extends PocaDesignInfo {
+  templateId?: number | null;
   isMine?: boolean;
   photocardId: number;
   /** 내가 가진 같은 도안 카드를 물을 때 쓰는 열쇠 (`nftApi.myCopies`) */

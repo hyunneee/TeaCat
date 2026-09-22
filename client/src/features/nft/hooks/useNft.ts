@@ -114,8 +114,8 @@ export function useMyPhotocardSummary() {
 export function usePocaDex() {
   const { user, isLoggedIn } = useAuth();
   const dex = useQuery({
-    queryKey: nftKeys.drawPool(user?.userId),
-    queryFn: nftApi.drawPool,
+    queryKey: [...nftKeys.all, 'template-dex', user?.userId],
+    queryFn: nftApi.templateDex,
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn && !!user?.userId,
     refetchInterval: (query) => ((query.state.data?.pendingCount ?? 0) > 0 ? MINT_POLL_MS : false),
@@ -166,11 +166,11 @@ export function useOwnedCards(enabled: boolean) {
  * 무효화는 `invalidateTrade` 가 `nftKeys.all` 로 한 번에 걷습니다(키가 그 아래입니다) —
  * 판매를 걸거나 내리면 이 목록의 판매 상태도 함께 갱신돼야 합니다.
  */
-export function useMyDesignCopies(designId: number | undefined) {
+export function useMyDesignCopies(designId: number | undefined, templateId?: number | null) {
   const { user, isLoggedIn } = useAuth();
   return useQuery({
-    queryKey: [...nftKeys.myCopies(designId ?? 0), isLoggedIn ? user?.userId : null],
-    queryFn: () => nftApi.myCopies(designId as number),
+    queryKey: [...nftKeys.myCopies(designId ?? 0), templateId ?? null, isLoggedIn ? user?.userId : null],
+    queryFn: () => templateId ? nftApi.myTemplateCopies(templateId) : nftApi.myCopies(designId as number),
     staleTime: STALE_TIME.SHORT,
     enabled: isLoggedIn && !!user?.userId && Number.isInteger(designId) && (designId ?? 0) > 0,
   });

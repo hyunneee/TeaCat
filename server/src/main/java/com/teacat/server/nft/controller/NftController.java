@@ -49,6 +49,25 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NftController {
 
+    private final com.teacat.server.nft.service.NftTemplateDexService templateDexService;
+
+    @Operation(summary = "템플릿 기준 내 도감", description = "hidden=false 원본 전체를 표시합니다. 미보유 앞면은 가리며 공연별 도안의 보유 수는 합산합니다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/users/me/photocard-templates/dex")
+    public ResponseEntity<BaseResponse<com.teacat.server.nft.dto.response.NftTemplateDexResponse>> templateDex(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.ok(BaseResponse.success(templateDexService.getDex(authUser.id())));
+    }
+
+    @Operation(summary = "같은 템플릿의 내 카드 목록", description = "공연에 관계없이 로그인 사용자가 가진 모든 사본을 반환합니다. 숨김 템플릿의 기존 카드도 조회할 수 있습니다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @GetMapping("/users/me/photocards/by-template/{templateId}")
+    public ResponseEntity<BaseResponse<List<MyDesignPhotocardResponse>>> templateCopies(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long templateId) {
+        return ResponseEntity.ok(BaseResponse.success(nftService.getMyPhotocardsOfTemplate(authUser.id(), templateId)));
+    }
+
     private final NftService nftService;
     private final NftPhotocardTemplateService templateService;
 
