@@ -27,8 +27,8 @@ export async function setupMocks() {
     // 취소표(/schedules/*/resale*, /me/resale, /resale/*)도 실서버입니다 -> handlers/resale.ts 삭제
     //   🔴 목업이 남아 있으면 실서버 회차 ID 로 구역을 찾지 못해 구역 목록이 비어 보입니다 (2026-09-21 dev)
     import('./handlers/appInfo'),
-    // AI 스티커 — 서버가 아직 없습니다. 계약은 features/sticker/model/sticker.types.ts 가 기준
-    import('./handlers/sticker'),
+    // AI 스티커(/stickers, /users/me/stickers)도 실서버입니다 -> handlers/sticker.ts 삭제
+    //   2026-09-21 백엔드 완성 + GPU 워커 연결까지 확인했습니다.
   ]);
 
   // 등록 안 된 경로는 원래 어댑터(실제 네트워크)로 폴백시킵니다.

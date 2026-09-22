@@ -19,6 +19,14 @@ export interface SearchTrends {
 const CACHE_KEY = 'teacat:search-trends:v1';
 const QUERY_KEY = ['global-search-trends'] as const;
 
+function clearCachedTrends() {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // 저장소가 차단된 환경에서는 TanStack Query의 메모리 캐시만 갱신합니다.
+  }
+}
+
 function cachedTrends(): SearchTrends | undefined {
   try {
     const value = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as SearchTrends | null;
@@ -55,10 +63,10 @@ export function useSearchTrends() {
   useEffect(() => {
     if (!query.data) return;
     const delay = Math.max(0, Date.parse(query.data.nextRefreshAt) - Date.now()) + 1000;
-    const timer = window.setTimeout(
-      () => void queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-      delay,
-    );
+    const timer = window.setTimeout(() => {
+      clearCachedTrends();
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    }, delay);
     return () => window.clearTimeout(timer);
   }, [query.data, queryClient]);
   return query;

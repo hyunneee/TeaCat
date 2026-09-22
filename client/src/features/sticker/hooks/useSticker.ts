@@ -5,7 +5,7 @@ import { STALE_TIME } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { stickerApi, stickerKeys } from '../api/stickerApi';
 import { blobToBase64, exportDoodlePng } from '../model/sticker.model';
-import { STICKER_ERROR, type Stroke, type StickerJob } from '../model/sticker.types';
+import { INK_DEFAULT, STICKER_ERROR, type Stroke, type StickerJob } from '../model/sticker.types';
 
 /**
  * 작업이 끝나기를 기다리는 동안 다시 물어보는 간격.
@@ -15,6 +15,37 @@ import { STICKER_ERROR, type Stroke, type StickerJob } from '../model/sticker.ty
 const JOB_POLL_MS = 2000;
 
 const isWaiting = (job?: StickerJob) => job?.status === 'PENDING' || job?.status === 'RUNNING';
+
+/**
+ * 낙서에서 **가장 많이 쓴 잉크 색**을 뽑습니다. 서버가 이걸로 결과 색을 정합니다.
+ *
+ * 🔴 지금 고른 색(`drawStore.color`)이 아니라 **실제로 그은 획**에서 셉니다 —
+ * 파랑으로 다 그려 놓고 마지막에 팔레트만 건드린 경우를 잘못 보내지 않기 위해서입니다.
+ * 길이(획의 점 개수)로 가중치를 줘서, 점 하나 찍은 색이 전체를 대표하지 않게 합니다.
+ *
+ * 지우개 획은 셉니다에서 빼고(흰색이라 의미가 없습니다), 기본 검정만 썼으면
+ * `undefined` 를 돌려줍니다 — 서버는 그걸 "색을 안 골랐다" 로 보고 주제에 맞는 색을 고릅니다.
+ */
+function dominantInk(strokes: Stroke[]): string | undefined {
+  const weight = new Map<string, number>();
+  for (const s of strokes) {
+    if (s.tool === 'eraser') continue;
+    const key = s.color.toLowerCase();
+    weight.set(key, (weight.get(key) ?? 0) + Math.max(1, s.points.length));
+  }
+
+  let best: string | undefined;
+  let bestWeight = 0;
+  for (const [color, w] of weight) {
+    if (w > bestWeight) {
+      bestWeight = w;
+      best = color;
+    }
+  }
+
+  // 기본 잉크(검정)만 썼으면 색을 고르지 않은 것 — 서버가 판단하게 둡니다
+  return best === INK_DEFAULT.toLowerCase() ? undefined : best;
+}
 
 /** 작업 상태 폴링. jobId 가 없으면 부르지 않습니다 */
 export function useStickerJob(jobId: number | null) {
@@ -78,7 +109,7 @@ export function useStickerMaker() {
       const blob = await exportDoodlePng(strokes);
       const sketchBase64 = await blobToBase64(blob);
       setSketchUrl(`data:image/png;base64,${sketchBase64}`);
-      return stickerApi.create({ sketchBase64, seed }, newIdempotencyKey());
+      return stickerApi.create({ sketchBase64, seed, inkColor: dominantInk(strokes) }, newIdempotencyKey());
     },
     retry: false, // 실패했으면 사용자가 다시 누르는 게 맞습니다 — 조용히 두 번 만들지 않습니다
     onSuccess: (res) => {

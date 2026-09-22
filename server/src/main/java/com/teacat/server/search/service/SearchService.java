@@ -2,6 +2,8 @@ package com.teacat.server.search.service;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.nft.dto.request.NftMarketSort;
+import com.teacat.server.nft.dto.request.NftAuctionSort;
+import com.teacat.server.nft.service.NftAuctionService;
 import com.teacat.server.nft.service.NftService;
 import com.teacat.server.performance.service.PerformanceService;
 import com.teacat.server.search.dto.SearchTrendResponse;
@@ -34,6 +36,7 @@ public class SearchService {
     private static final ZoneId ZONE = ZoneId.systemDefault();
     private final PerformanceService performanceService;
     private final NftService nftService;
+    private final NftAuctionService nftAuctionService;
     private final SearchTrendCacheRepository cacheRepository;
     private final SearchTrendRepository trendRepository;
 
@@ -55,9 +58,11 @@ public class SearchService {
         UnifiedSearchResponse response = new UnifiedSearchResponse(
                 display,
                 performanceService.getConcerts(display, false, null, 6).concerts(),
-                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items());
+                nftService.getMarketPhotocards(null, display, NftMarketSort.RECENT, null, 6).items(),
+                nftAuctionService.getAuctions(null, display, NftAuctionSort.RECENT, null, 6).items());
         // 결과 없는 검색은 중복 집계 키도 만들지 않는다. 이후 결과가 생기면 집계할 수 있다.
-        if (response.concerts().isEmpty() && response.photocards().isEmpty()) {
+        if (response.concerts().isEmpty() && response.photocards().isEmpty()
+                && response.auctions().isEmpty()) {
             return response;
         }
 
@@ -91,20 +96,45 @@ public class SearchService {
 
     @Transactional(readOnly = true)
     public SearchTrendResponse trends() {
-        LocalDateTime bucket = trendRepository.latestBucket().orElse(null);
-        LocalDateTime nextHour = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS).plusHours(1);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expectedBucket = now.truncatedTo(ChronoUnit.HOURS).minusHours(1);
+        List<SearchTrendRepository.Snapshot> ranked = trendRepository.findByBucket(expectedBucket);
+
+        // 정각 스냅샷이 아직 실행되지 않았거나 배포 중 한 번 누락됐더라도,
+        // Redis에 남아 있는 동일한 직전 시간대 집계를 그대로 보여준다.
+        if (ranked.isEmpty()) {
+            var cachedCounts = cacheRepository.topTen(expectedBucket);
+            ranked = java.util.stream.IntStream.range(0, cachedCounts.size())
+                .mapToObj(index -> {
+                    var item = cachedCounts.get(index);
+                    return new SearchTrendRepository.Snapshot(index + 1, item.normalizedKeyword(),
+                            item.displayKeyword(), item.count());
+                })
+                .toList();
+        }
+
+        LocalDateTime bucket = ranked.isEmpty()
+                ? trendRepository.latestBucket().orElse(null)
+                : expectedBucket;
+        if (ranked.isEmpty() && bucket != null) {
+            ranked = trendRepository.findByBucket(bucket);
+        }
+        // 스냅샷 작업은 매시 00분 05초에 실행된다. 클라이언트가 그보다 먼저 캐시를
+        // 갱신하지 않도록 5초의 여유를 두고 00분 10초를 다음 조회 시각으로 안내한다.
+        LocalDateTime nextRefresh = now.truncatedTo(ChronoUnit.HOURS).plusHours(1).plusSeconds(10);
         Instant generatedAt = bucket == null
                 ? Instant.now()
                 : bucket.plusHours(1).atZone(ZONE).toInstant();
         if (bucket == null) {
-            return new SearchTrendResponse(null, generatedAt, nextHour.atZone(ZONE).toInstant(), List.of());
+            return new SearchTrendResponse(null, generatedAt,
+                    nextRefresh.atZone(ZONE).toInstant(), List.of());
         }
 
         Map<String, Integer> previousRanks = new HashMap<>();
         for (SearchTrendRepository.Snapshot item : trendRepository.findByBucket(bucket.minusHours(1))) {
             previousRanks.put(item.normalizedKeyword(), item.rank());
         }
-        List<SearchTrendResponse.Item> items = trendRepository.findByBucket(bucket).stream()
+        List<SearchTrendResponse.Item> items = ranked.stream()
                 .map(item -> {
                     Integer previous = previousRanks.get(item.normalizedKeyword());
                     String trend = previous == null ? "NEW"
@@ -114,7 +144,8 @@ public class SearchService {
                             item.displayKeyword(), item.count());
                 })
                 .toList();
-        return new SearchTrendResponse(bucket, generatedAt, nextHour.atZone(ZONE).toInstant(), items);
+        return new SearchTrendResponse(bucket, generatedAt,
+                nextRefresh.atZone(ZONE).toInstant(), items);
     }
 
     private String displayKeyword(String keyword) {

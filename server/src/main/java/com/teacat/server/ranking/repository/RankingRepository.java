@@ -28,6 +28,11 @@ public class RankingRepository {
                       JOIN performance_general pg ON pg.id = pv.performance_general_id
                      WHERE pv.viewed_at >= :previousFrom AND pv.viewed_at < :now
                        AND pg.hidden_at IS NULL
+                       AND EXISTS (
+                           SELECT 1 FROM performance_details upcoming
+                            WHERE upcoming.performance_general_id = pg.id
+                              AND upcoming.performance_date >= :now
+                       )
                      GROUP BY pg.id, period
                     UNION ALL
                     SELECT pg.id,
@@ -39,6 +44,11 @@ public class RankingRepository {
                       JOIN performance_general pg ON pg.id = pd.performance_general_id
                      WHERE o.status = 'PAID' AND o.paid_at >= :previousFrom AND o.paid_at < :now
                        AND pg.hidden_at IS NULL
+                       AND EXISTS (
+                           SELECT 1 FROM performance_details upcoming
+                            WHERE upcoming.performance_general_id = pg.id
+                              AND upcoming.performance_date >= :now
+                       )
                      GROUP BY pg.id, period
                 ), totals AS (
                     SELECT id, period, sum(view_count + paid_count * 5) AS score,

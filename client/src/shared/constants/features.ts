@@ -1,5 +1,3 @@
-import { IS_DEV_BUILD } from '@/shared/config';
-
 /**
  * 배포 단계에 따라 **닫아 두는 기능**들.
  *
@@ -19,11 +17,20 @@ export const FEATURE = {
    * AI 스티커 — 포카 꾸미기 (`features/sticker`). 내 포카 머리말의 "포카 꾸미기" 버튼과
    * `/my/stickers/*` 라우트가 이 값 하나로 함께 열리고 닫힙니다.
    *
-   * ── 지금은 **개발 빌드에서만** 켜져 있습니다 ─────────────────
-   * 만드는 중이라 `dev` 에 머지돼도 배포본에는 길이 나지 않습니다. 다 만들어지면
-   * `true` 로 바꿉니다. 서버 API 가 없는 동안은 `mocks/handlers/sticker.ts` 가 응답합니다.
+   * ── 지금은 **켜져 있습니다** (true) ─────────────────────────
+   * 2026-09-21 `IS_DEV_BUILD` 에서 `true` 로 바꿨습니다. 백엔드가 dev 에 배포됐고
+   * (`/users/me/stickers`·`/internal/ai-jobs/**` 가 401 로 응답 — 존재 확인),
+   * 목업(`mocks/handlers/sticker.ts`)은 지웠습니다.
+   *
+   * 🔴 **GPU 워커가 떠 있어야 그림이 나옵니다.** 워커가 없으면 낙서는 접수되지만
+   *    아무도 집어가지 않아 15분 뒤(`sticker.pending-timeout`) 실패로 떨어집니다.
+   *    서버의 `STICKER_INTERNAL_API_KEY` 와 워커 키가 같아야 하고, 다르면 워커가
+   *    401 만 받습니다. 둘 중 하나라도 어긋나면 사용자에게는 "실패" 로 보입니다.
+   *
+   * ── 다시 닫아야 한다면 (false) ────────────────────────────
+   * 내 포카 머리말의 버튼과 `/my/stickers/*` 라우트가 함께 사라집니다.
    */
-  sticker: IS_DEV_BUILD,
+  sticker: true,
 
   /**
    * 얼굴 등록·본인확인 (`features/face`).

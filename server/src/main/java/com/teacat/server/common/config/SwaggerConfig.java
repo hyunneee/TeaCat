@@ -186,4 +186,16 @@ public class SwaggerConfig {
                 .packagesToScan(BASE_PACKAGE + ".reward")
                 .build();
     }
+
+    // /users/me/stickers 도 이 그룹이다. 그룹은 경로가 아니라 도메인 패키지로 나눈다.
+    // 🔴 번호는 15 다 — 머지 시점에 dev 가 12~14(취소표·알림·보상)를 이미 쓰고 있었고,
+    //    양쪽이 12 를 잡아 충돌했다. 번호는 드롭다운 정렬용이라 뒤로 미루면 그만이다.
+    @Bean
+    public GroupedOpenApi stickerApi() {
+        return GroupedOpenApi.builder()
+                .group("15-sticker")
+                .displayName("AI 스티커")
+                .packagesToScan(BASE_PACKAGE + ".sticker")
+                .build();
+    }
 }

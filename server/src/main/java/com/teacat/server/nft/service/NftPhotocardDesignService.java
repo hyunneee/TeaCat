@@ -49,6 +49,7 @@ public class NftPhotocardDesignService {
     private final PerformanceGeneralRepository performanceRepository;
     private final NftDesignChainWriter writer;
     private final NftDesignChainRegistrar registrar;
+    private final NftPhotocardImageStore imageStore;
 
     public NftPhotocardDesignResponse create(NftPhotocardDesignCreateRequest request) {
         /* 핀을 먼저 하면 잘못된 요청에도 IPFS 에 쓰레기가 남는다. 핀은 되돌릴 수 없으므로
@@ -84,8 +85,9 @@ public class NftPhotocardDesignService {
                 PhotocardNftMetadata.of(request.name(), request.description(), imageCid);
         String metadataCid = ipfsPinService.pinJson(METADATA_FILENAME, metadata);
 
-        // ipfs:// 는 브라우저가 못 연다. 화면 코드가 그대로 쓰도록 게이트웨이 주소를 넣는다
-        String imageUrl = ipfsPinService.gatewayUrl(imageCid);
+        /* 화면이 쓸 주소는 MinIO 사본을 가리킨다 (NftPhotocardImageStore 주석).
+           게이트웨이 주소는 MinIO 가 실패했을 때의 폴백으로만 쓴다. */
+        String imageUrl = imageStore.store(request.image(), imageCid, ipfsPinService.gatewayUrl(imageCid));
         /* 2026-09-11: 같은 이유로 writer.createDrawPool 분기도 빠졌다.
         NftPhotocardDesign design = drawPool
                 ? writer.createDrawPool(...)
