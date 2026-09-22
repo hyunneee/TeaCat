@@ -370,11 +370,13 @@ public class AdminPerformanceService {
                 performanceDetailRepository.findByPerformanceIdOrderByPerformanceNumAsc(concertId);
 
         // 관리 화면도 같은 기준으로 매진을 봐야 한다 — 다르면 운영자와 관람객이 다른 상태를 본다
-        Set<Long> soldOut = seatAvailability.findSoldOut(
-                details.stream().map(PerformanceDetail::getId).toList());
+        List<Long> scheduleIds = details.stream().map(PerformanceDetail::getId).toList();
+        Set<Long> soldOut = seatAvailability.findSoldOut(scheduleIds);
+        Set<Long> waitlistOpen = seatAvailability.findWithSoldOutArea(scheduleIds);
 
         List<ScheduleSummaryResponse> schedules = details.stream()
-                .map(detail -> ScheduleSummaryResponse.of(detail, now, soldOut.contains(detail.getId())))
+                .map(detail -> ScheduleSummaryResponse.of(detail, now,
+                        soldOut.contains(detail.getId()), waitlistOpen.contains(detail.getId())))
                 .toList();
 
         // 판매량은 티켓에서 센다. 수정 화면이 이 값으로 "이미 판 구역" 을 잠그므로 정확해야 한다
