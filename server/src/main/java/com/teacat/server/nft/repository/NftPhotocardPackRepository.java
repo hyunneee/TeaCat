@@ -2,8 +2,10 @@ package com.teacat.server.nft.repository;
 
 import com.teacat.server.nft.entity.NftPhotocardPack;
 import com.teacat.server.nft.entity.NftPhotocardPackSource;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,7 +17,7 @@ import java.util.UUID;
 public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPack, Long> {
 
     /**
-     * 안 쓴 팩 하나를 잠근다. 지금 열 수 있는 것만 대상이다.
+     * 지금 열 수 있고 실제로 뽑을 도안도 있는 팩 하나를 잠근다.
      *
      * <p>개봉 시각은 저장돼 있지 않다 — 회차의 공연 일시에서 계산한다. 그래서 공연을 연기하면
      * 개봉도 함께 밀리고, 예매 취소 마감과 어긋나지 않는다.
@@ -29,39 +31,82 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
     @Query(value = """
             SELECT p.* FROM nft_photocard_packs p
               LEFT JOIN performance_details d ON d.id = p.performance_detail_id
-             WHERE p.user_id = :userId AND p.consumed_at IS NULL
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
                AND (p.performance_detail_id IS NULL
                     OR d.performance_date - (:leadSeconds * interval '1 second') <= now())
+               AND EXISTS (
+                    SELECT 1 FROM nft_photocard_designs design
+                     WHERE design.draw_pool
+                       AND design.chain_status = 'REGISTERED'
+                       AND design.issued_supply < design.total_supply
+                       AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                            OR (p.performance_detail_id IS NOT NULL
+                                AND design.performance_general_id = d.performance_general_id))
+               )
              ORDER BY p.id
              LIMIT 1
              FOR UPDATE OF p SKIP LOCKED
             """, nativeQuery = true)
-    Optional<NftPhotocardPack> lockOneAvailable(@Param("userId") Long userId,
-                                                @Param("leadSeconds") long leadSeconds);
+    Optional<NftPhotocardPack> lockOneDrawable(@Param("userId") Long userId,
+                                               @Param("leadSeconds") long leadSeconds);
 
     /** 같은 키로 이미 뽑았나. 있으면 그 팩의 photocardId 가 그때 준 카드다 */
     Optional<NftPhotocardPack> findByUserIdAndIdempotencyKey(Long userId, UUID idempotencyKey);
+
+    /** 관리자 무효화와 개봉이 동시에 성립하지 않도록 같은 팩 행을 잠근다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from NftPhotocardPack p where p.id = :packId and p.userId = :userId")
+    Optional<NftPhotocardPack> lockByIdAndUserId(@Param("packId") Long packId,
+                                                @Param("userId") Long userId);
 
     /* 2026-09-11: countOpenable 로 대체했다. 개봉 시각이 생겨 "안 쓴 팩" 과 "지금 열 수 있는 팩" 이
        달라졌고, 파생 쿼리로는 available_at 조건을 붙일 수 없다.
     long countByUserIdAndConsumedAtIsNull(Long userId);
     */
 
-    /** 지금 열 수 있는 팩 수. 회차가 없는 팩(이벤트)은 언제나 열 수 있다 */
+    /** 지금 열 수 있고 실제로 뽑을 도안도 있는 팩 수 */
     @Query(value = """
             SELECT count(*) FROM nft_photocard_packs p
               LEFT JOIN performance_details d ON d.id = p.performance_detail_id
-             WHERE p.user_id = :userId AND p.consumed_at IS NULL
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
                AND (p.performance_detail_id IS NULL
                     OR d.performance_date - (:leadSeconds * interval '1 second') <= now())
+               AND EXISTS (
+                    SELECT 1 FROM nft_photocard_designs design
+                     WHERE design.draw_pool
+                       AND design.chain_status = 'REGISTERED'
+                       AND design.issued_supply < design.total_supply
+                       AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                            OR (p.performance_detail_id IS NOT NULL
+                                AND design.performance_general_id = d.performance_general_id))
+               )
             """, nativeQuery = true)
     long countOpenable(@Param("userId") Long userId, @Param("leadSeconds") long leadSeconds);
+
+    /** 개봉 시각은 지났지만 등록 완료된 잔여 도안이 없어 기다리는 팩 수 */
+    @Query(value = """
+            SELECT count(*) FROM nft_photocard_packs p
+              LEFT JOIN performance_details d ON d.id = p.performance_detail_id
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
+               AND (p.performance_detail_id IS NULL
+                    OR d.performance_date - (:leadSeconds * interval '1 second') <= now())
+               AND NOT EXISTS (
+                    SELECT 1 FROM nft_photocard_designs design
+                     WHERE design.draw_pool
+                       AND design.chain_status = 'REGISTERED'
+                       AND design.issued_supply < design.total_supply
+                       AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                            OR (p.performance_detail_id IS NOT NULL
+                                AND design.performance_general_id = d.performance_general_id))
+               )
+            """, nativeQuery = true)
+    long countPreparing(@Param("userId") Long userId, @Param("leadSeconds") long leadSeconds);
 
     /** 아직 안 열린 팩 수. 결제 직후 "카드팩 1개 · 오픈 예정" 이 이 값이다 */
     @Query(value = """
             SELECT count(*) FROM nft_photocard_packs p
               JOIN performance_details d ON d.id = p.performance_detail_id
-             WHERE p.user_id = :userId AND p.consumed_at IS NULL
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
                AND d.performance_date - (:leadSeconds * interval '1 second') > now()
             """, nativeQuery = true)
     long countScheduled(@Param("userId") Long userId, @Param("leadSeconds") long leadSeconds);
@@ -71,7 +116,7 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
             SELECT min(d.performance_date - (:leadSeconds * interval '1 second'))
               FROM nft_photocard_packs p
               JOIN performance_details d ON d.id = p.performance_detail_id
-             WHERE p.user_id = :userId AND p.consumed_at IS NULL
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
                AND d.performance_date - (:leadSeconds * interval '1 second') > now()
             """, nativeQuery = true)
     LocalDateTime findNextOpenAt(@Param("userId") Long userId, @Param("leadSeconds") long leadSeconds);
@@ -96,15 +141,43 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
                    pg.title                     AS performanceTitle,
                    ev.name                      AS eventName,
                    d.performance_date - (:leadSeconds * interval '1 second') AS openAt,
-                   (p.performance_detail_id IS NULL
-                    OR d.performance_date - (:leadSeconds * interval '1 second') <= now()) AS openable
+                   CASE
+                     WHEN p.performance_detail_id IS NOT NULL
+                          AND d.performance_date - (:leadSeconds * interval '1 second') > now()
+                       THEN 'SCHEDULED'
+                     WHEN EXISTS (
+                          SELECT 1 FROM nft_photocard_designs design
+                           WHERE design.draw_pool
+                             AND design.chain_status = 'REGISTERED'
+                             AND design.issued_supply < design.total_supply
+                             AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                                  OR (p.performance_detail_id IS NOT NULL
+                                      AND design.performance_general_id = d.performance_general_id))
+                       ) THEN 'OPENABLE'
+                     ELSE 'PREPARING'
+                   END AS status
               FROM nft_photocard_packs p
               LEFT JOIN performance_details d ON d.id = p.performance_detail_id
               LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
               LEFT JOIN nft_photocard_pack_events ev
                      ON p.source = 'EVENT' AND ev.code = p.source_ref
-             WHERE p.user_id = :userId AND p.consumed_at IS NULL
-             ORDER BY d.performance_date - (:leadSeconds * interval '1 second') NULLS FIRST, p.id
+             WHERE p.user_id = :userId AND p.consumed_at IS NULL AND p.invalidated_at IS NULL
+             ORDER BY CASE
+                        WHEN p.performance_detail_id IS NOT NULL
+                             AND d.performance_date - (:leadSeconds * interval '1 second') > now() THEN 2
+                        WHEN EXISTS (
+                             SELECT 1 FROM nft_photocard_designs design
+                              WHERE design.draw_pool
+                                AND design.chain_status = 'REGISTERED'
+                                AND design.issued_supply < design.total_supply
+                                AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                                     OR (p.performance_detail_id IS NOT NULL
+                                         AND design.performance_general_id = d.performance_general_id))
+                          ) THEN 0
+                        ELSE 1
+                      END,
+                      d.performance_date - (:leadSeconds * interval '1 second') NULLS FIRST,
+                      p.id
              LIMIT :limit
             """, nativeQuery = true)
     List<PackRow> findUnconsumedPacks(@Param("userId") Long userId,
@@ -124,7 +197,58 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
         /** 개봉 시각. 회차가 없는 팩(이벤트)은 null */
         java.time.LocalDateTime getOpenAt();
 
-        boolean getOpenable();
+        String getStatus();
+    }
+
+    /** 관리자 회원 상세용. 소비·무효화된 팩까지 이력으로 보여준다. */
+    @Query(value = """
+            SELECT p.id                           AS packId,
+                   p.source::text                 AS source,
+                   COALESCE(pg.title, ev.name,
+                            CASE WHEN p.source = 'EVENT' THEN '이벤트 카드팩' END) AS title,
+                   d.performance_date - (:leadSeconds * interval '1 second') AS openAt,
+                   p.consumed_at                  AS consumedAt,
+                   p.invalidated_at               AS invalidatedAt,
+                   p.invalidated_reason           AS invalidatedReason,
+                   p.invalidated_by               AS invalidatedBy,
+                   CASE
+                     WHEN p.invalidated_at IS NOT NULL THEN 'INVALIDATED'
+                     WHEN p.consumed_at IS NOT NULL THEN 'CONSUMED'
+                     WHEN p.performance_detail_id IS NOT NULL
+                          AND d.performance_date - (:leadSeconds * interval '1 second') > now()
+                       THEN 'SCHEDULED'
+                     WHEN EXISTS (
+                          SELECT 1 FROM nft_photocard_designs design
+                           WHERE design.draw_pool
+                             AND design.chain_status = 'REGISTERED'
+                             AND design.issued_supply < design.total_supply
+                             AND ((p.performance_detail_id IS NULL AND design.performance_general_id IS NULL)
+                                  OR (p.performance_detail_id IS NOT NULL
+                                      AND design.performance_general_id = d.performance_general_id))
+                       ) THEN 'OPENABLE'
+                     ELSE 'PREPARING'
+                   END AS status
+              FROM nft_photocard_packs p
+              LEFT JOIN performance_details d ON d.id = p.performance_detail_id
+              LEFT JOIN performance_general pg ON pg.id = d.performance_general_id
+              LEFT JOIN nft_photocard_pack_events ev
+                     ON p.source = 'EVENT' AND ev.code = p.source_ref
+             WHERE p.user_id = :userId
+             ORDER BY p.id DESC
+            """, nativeQuery = true)
+    List<AdminPackRow> findAdminPacks(@Param("userId") Long userId,
+                                      @Param("leadSeconds") long leadSeconds);
+
+    interface AdminPackRow {
+        Long getPackId();
+        String getSource();
+        String getTitle();
+        LocalDateTime getOpenAt();
+        LocalDateTime getConsumedAt();
+        LocalDateTime getInvalidatedAt();
+        String getInvalidatedReason();
+        Long getInvalidatedBy();
+        String getStatus();
     }
 
     boolean existsByUserIdAndSourceAndSourceRef(Long userId, NftPhotocardPackSource source, String sourceRef);
@@ -155,7 +279,7 @@ public interface NftPhotocardPackRepository extends JpaRepository<NftPhotocardPa
     @Query("""
             delete from NftPhotocardPack p
              where p.userId = :userId and p.source = :source and p.sourceRef = :sourceRef
-               and p.consumedAt is null
+               and p.consumedAt is null and p.invalidatedAt is null
             """)
     int deleteUnconsumed(@Param("userId") Long userId,
                          @Param("source") NftPhotocardPackSource source,

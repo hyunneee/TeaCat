@@ -147,6 +147,33 @@ class NftPhotocardPoolIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 앞의_준비중_팩을_건너뛰고_뒤의_정상_팩을_연다() {
+        Long userId = insertUser("skip-pack@test.com", "팩건너뛰기");
+        insertWallet(userId);
+        Fixture empty = insertPerformanceFixture();
+        Fixture drawable = insertPerformanceFixture();
+
+        Long emptyPackId = packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, insertTicket(userId, empty), empty.performanceDetailId())).getId();
+        Long drawablePackId = packRepository.save(NftPhotocardPack.grantForTicket(
+                userId, insertTicket(userId, drawable), drawable.performanceDetailId())).getId();
+        Long templateId = insertTemplate("정상 카드", "서울 5반", "SPECIAL");
+        insertPoolDesign(drawable.performanceId(), templateId, 20);
+        setPerformanceDatePast(empty.performanceDetailId());
+        setPerformanceDatePast(drawable.performanceDetailId());
+
+        DrawOutcome outcome = writer.draw(userId, UUID.randomUUID());
+
+        assertThat(outcome.designName()).contains("정상 카드");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT consumed_at IS NULL FROM nft_photocard_packs WHERE id = ?",
+                Boolean.class, emptyPackId)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT consumed_at IS NOT NULL FROM nft_photocard_packs WHERE id = ?",
+                Boolean.class, drawablePackId)).isTrue();
+    }
+
+    @Test
     void 카드를_안_넣은_공연은_뽑기가_실패한다() {
         Long userId = insertUser("empty@test.com", "빈풀");
         insertWallet(userId);

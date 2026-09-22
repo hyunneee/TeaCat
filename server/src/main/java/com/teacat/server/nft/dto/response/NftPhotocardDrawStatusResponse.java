@@ -10,6 +10,8 @@ public record NftPhotocardDrawStatusResponse(
         @Schema(description = "지금 뽑을 수 있는가 (remaining > 0)") boolean available,
         @Schema(description = "지금 열 수 있는 카드팩 수", example = "1") long remaining,
         @Schema(description = "아직 안 열린 카드팩 수. 결제 직후부터 여기에 잡힌다", example = "1") long scheduled,
+        @Schema(description = "개봉 시각은 지났지만 등록 완료된 잔여 카드가 없어 준비 중인 팩 수", example = "1")
+        long preparing,
         @Schema(description = "가장 빨리 열리는 시각. 잠긴 팩이 없으면 null. `packs` 의 잠긴 팩 중 가장 이른 `openAt` 과 같다")
         LocalDateTime nextOpenAt,
         @Schema(description = """
@@ -35,7 +37,16 @@ public record NftPhotocardDrawStatusResponse(
                     example = "테아캣 단독 콘서트") String title,
             @Schema(description = "개봉 시각(계산값). 이벤트 팩처럼 회차가 없어 언제든 열 수 있으면 null",
                     example = "2026-10-08T18:50:00") LocalDateTime openAt,
-            @Schema(description = "지금 열 수 있는가. 서버가 DB 시계로 판정한다", example = "false") boolean openable
+            @Schema(description = "OPENABLE 개봉 가능 · SCHEDULED 개봉 예정 · PREPARING 카드 준비 중")
+            PackStatus status,
+            @Schema(description = "지금 열 수 있는가. status가 OPENABLE이면 true", example = "false")
+            boolean openable
     ) {
+    }
+
+    public enum PackStatus {
+        OPENABLE,
+        SCHEDULED,
+        PREPARING
     }
 }
