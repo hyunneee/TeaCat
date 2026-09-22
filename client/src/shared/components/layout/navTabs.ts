@@ -23,7 +23,7 @@ export const TABS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: ROUTES.NFT_MARKET, label: '포카', icon: Sparkles },
   /* 내 포카는 탭에서 뺐습니다 — '포카' 와 '내 포카' 두 칸이 나란히 있으면 작게 봤을 때
      글자만 다른 같은 자리로 읽힙니다. 진입은 포카 머리말의 '내 포카' 버튼 하나입니다. */
-  { to: ROUTES.TOKEN, label: '캣플레이', icon: PawPrint },
+  { to: ROUTES.TOKEN, label: '캣치', icon: PawPrint },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
 ];
 

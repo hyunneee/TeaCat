@@ -358,7 +358,7 @@ const routes: RouteObject[] = [
           { path: ROUTES.MY_TICKETS, element: withMask(withBoundary(<MyTicketsPage />)) },
           { path: ROUTES.MY_RESALE, element: withBoundary(<MyResalePage />) },
           { path: ROUTES.MY_NFTS, element: withBoundary(<MyNftsPage />) },
-          /* 캣플레이 — 하단 탭의 목적지라 탭이 보이는 레이아웃에 있어야 합니다.
+          /* 캣치 — 하단 탭의 목적지라 탭이 보이는 레이아웃에 있어야 합니다.
              게임 화면(/token/game·/token/songpyeon)은 전체화면이라 PlainLayout 에 그대로 둡니다. */
           { path: ROUTES.TOKEN, element: withBoundary(<TokenPage />) },
         ],
