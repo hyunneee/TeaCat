@@ -1,5 +1,7 @@
 package com.teacat.server.nft.entity;
 
+import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.nft.exception.NftErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -71,6 +73,17 @@ public class NftPhotocardPack {
     @Column(name = "performance_detail_id", updatable = false)
     private Long performanceDetailId;
 
+    /** 잘못 지급되어 운영에서 제외된 시각. 행은 지급 이력과 중복 지급 방지를 위해 남긴다. */
+    @Column(name = "invalidated_at")
+    private LocalDateTime invalidatedAt;
+
+    @Column(name = "invalidated_reason", length = 500)
+    private String invalidatedReason;
+
+    /** 무효화한 관리자 users.id */
+    @Column(name = "invalidated_by")
+    private Long invalidatedBy;
+
     private NftPhotocardPack(Long userId, NftPhotocardPackSource source, String sourceRef,
                              Long performanceDetailId) {
         this.userId = userId;
@@ -103,6 +116,19 @@ public class NftPhotocardPack {
         this.photocardId = photocardId;
         this.idempotencyKey = idempotencyKey;
         this.consumedAt = now;
+    }
+
+    /** 지급 이력은 남기고 이후 개봉 대상에서 제외한다. */
+    public void invalidate(Long adminId, String reason, LocalDateTime now) {
+        if (consumedAt != null) {
+            throw new BusinessException(NftErrorCode.PACK_ALREADY_CONSUMED);
+        }
+        if (invalidatedAt != null) {
+            throw new BusinessException(NftErrorCode.PACK_ALREADY_INVALIDATED);
+        }
+        this.invalidatedAt = now;
+        this.invalidatedReason = reason;
+        this.invalidatedBy = adminId;
     }
 
     public boolean isConsumed() {

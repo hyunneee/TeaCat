@@ -2,6 +2,7 @@ import { http } from '@/shared/api';
 import type { CursorPage } from '@/shared/types';
 import { ticketApi } from '@/features/ticket';
 import type { MyPhotocard, PurchaseHistory, SaleHistory } from '@/features/nft';
+import type { AdminPhotocardPack } from '../model/adminPhotocardPack.types';
 
 /**
  * 회원 상세의 기록 탭 (Model 레이어).
@@ -35,6 +36,13 @@ export const adminUserRecordsApi = {
   photocards: (userId: number, params: RecordPageParams) =>
     http.get<CursorPage<MyPhotocard>>(`/admin/users/${userId}/photocards`, { params }),
 
+  /** 지급 이력 보존을 위해 소비·무효화된 팩까지 함께 받습니다 */
+  photocardPacks: (userId: number) =>
+    http.get<AdminPhotocardPack[]>(`/admin/users/${userId}/photocard-packs`),
+
+  invalidatePhotocardPack: (userId: number, packId: number, reason: string) =>
+    http.post<void>(`/admin/users/${userId}/photocard-packs/${packId}/invalidation`, { reason }),
+
   /** 구매자로 체결한 거래. 보유 목록과 다릅니다 — 샀다가 되판 카드도 남습니다 */
   purchases: (userId: number, params: RecordPageParams) =>
     http.get<CursorPage<PurchaseHistory>>(`/admin/users/${userId}/photocards/purchases`, {
@@ -52,6 +60,8 @@ export const adminUserRecordKeys = {
   ofUser: (userId: number) => [...adminUserRecordKeys.all, userId] as const,
   tickets: (userId: number) => [...adminUserRecordKeys.ofUser(userId), 'tickets'] as const,
   photocards: (userId: number) => [...adminUserRecordKeys.ofUser(userId), 'photocards'] as const,
+  photocardPacks: (userId: number) =>
+    [...adminUserRecordKeys.ofUser(userId), 'photocard-packs'] as const,
   purchases: (userId: number) => [...adminUserRecordKeys.ofUser(userId), 'purchases'] as const,
   sales: (userId: number) => [...adminUserRecordKeys.ofUser(userId), 'sales'] as const,
 };

@@ -17,10 +17,21 @@ import { SectionNavigation } from './SectionNavigation';
  * 항목이 탭에 가리고, 폰에서 화면 맨 아래는 엄지가 닿기 어려워 누르기도 힘듭니다.
  * 데스크톱에는 하단 탭이 없으므로 그 여백을 걷습니다(`lg:pb-0`).
  */
-export function AppLayout() {
+interface AppLayoutProps {
+  /**
+   * 데스크톱 상단 내비의 MY 왼쪽에 놓을 것 (지금은 캣머니 칩).
+   *
+   * 🔴 슬롯으로 받는 이유: 잔액은 `features/token` 이 주인인데 이 레이아웃과 상단 내비는
+   * `shared` 라 도메인을 import 할 수 없습니다(CLAUDE.md 3-2, ESLint 가 막음).
+   * 두 feature 를 다 아는 자리는 라우터(`app` 레이어)이므로 거기서 넣어 줍니다.
+   */
+  navAction?: React.ReactNode;
+}
+
+export function AppLayout({ navAction }: AppLayoutProps = {}) {
   return (
     <div className="app-frame app-shell with-topnav mx-auto flex min-h-dvh w-full flex-col">
-      <TopNav />
+      <TopNav action={navAction} />
 
       {/* `overflow-x-clip` — 홈의 초록 배경판처럼 본문 폭을 뚫고 화면 끝까지 가는
           요소(`w-screen`)가 가로 스크롤을 만들지 않게 잡아 둡니다.

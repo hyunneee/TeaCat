@@ -202,8 +202,24 @@ public class SeatDraw {
 
     public void markFailed(String reason) {
         this.status = SeatDrawStatus.FAILED;
-        this.failureReason = reason == null ? null
-                : reason.substring(0, Math.min(reason.length(), 200));
+        this.failureReason = truncate(reason);
+    }
+
+    /**
+     * 커밋을 보내지 못했다. <b>상태는 PENDING 그대로</b> 두고 사유만 남긴다.
+     *
+     * <p>이 한 줄이 두 가지를 한다. 하나는 왜 멈췄는지 DB 에서 바로 보이게 하는 것
+     * ({@code select status, failure_reason from seat_draws}), 다른 하나는 {@code @UpdateTimestamp}
+     * 로 {@code updated_at} 을 올려 스위퍼의 재시도 간격이 실제로 지켜지게 하는 것이다 —
+     * 예전에는 실패해도 행이 그대로라 {@code updated_at} 이 안 올라가, 한번 막히면 스위퍼 주기마다
+     * (5초) 블록체인 API 를 두드렸다.
+     */
+    public void recordOpenFailure(String reason) {
+        this.failureReason = truncate(reason);
+    }
+
+    private static String truncate(String reason) {
+        return reason == null ? null : reason.substring(0, Math.min(reason.length(), 200));
     }
 
     private static String join(List<Long> ids) {

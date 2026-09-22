@@ -85,6 +85,17 @@ public interface NftPhotocardDesignRepository extends JpaRepository<NftPhotocard
             """, nativeQuery = true)
     Optional<NftPhotocardDesign> lockRandomDrawCandidate();
 
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM nft_photocard_designs
+                 WHERE draw_pool
+                   AND performance_general_id IS NULL
+                   AND chain_status = 'REGISTERED'
+                   AND issued_supply < total_supply
+            )
+            """, nativeQuery = true)
+    boolean existsDrawableEventCandidate();
+
     /**
      * 티켓 팩이 뽑을 후보 하나를 잠근다 — <b>그 회차가 속한 공연의 도안만</b>이다.
      *
@@ -107,6 +118,18 @@ public interface NftPhotocardDesignRepository extends JpaRepository<NftPhotocard
             """, nativeQuery = true)
     Optional<NftPhotocardDesign> lockRandomDrawCandidateForSchedule(
             @Param("performanceDetailId") Long performanceDetailId);
+
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM nft_photocard_designs d
+                  JOIN performance_details pd ON pd.performance_general_id = d.performance_general_id
+                 WHERE pd.id = :performanceDetailId
+                   AND d.draw_pool
+                   AND d.chain_status = 'REGISTERED'
+                   AND d.issued_supply < d.total_supply
+            )
+            """, nativeQuery = true)
+    boolean existsDrawableCandidateForSchedule(@Param("performanceDetailId") Long performanceDetailId);
 
     /** 확정 감시가 훑을 대상: 트랜잭션은 보냈는데 아직 결과를 못 본 도안 */
     @Query(value = """

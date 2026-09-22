@@ -141,6 +141,7 @@ export const ROUTES = {
   ADMIN_INQUIRIES: '/admin/inquiries',
   /** 이상거래 심사 · 거래 내역 (server/AUCTION_FRAUD_DESIGN.md) */
   ADMIN_TRADE_REVIEWS: '/admin/trade-reviews',
+  ADMIN_AUCTIONS: '/admin/auctions',
   ADMIN_BANNERS: '/admin/banners',
   /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
   ADMIN_POCA_TEMPLATES: '/admin/poca-templates',

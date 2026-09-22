@@ -52,6 +52,13 @@ export interface ScheduleSummary {
   bookingStatus: BookingOpenStatus;
   /** 지금 예매할 수 있는가 — 서버가 판단한 값 */
   bookable: boolean;
+  /**
+   * 취소표 대기를 받을 수 있는가 — **구역이 하나라도 매진**됐고 티켓팅이 열려 있으면 true.
+   *
+   * 회차 전체 매진(`bookingStatus === 'SOLDOUT'`)과 기준이 다릅니다. 대기는 구역 단위라
+   * A구역만 팔려도 그 구역 대기는 받고, 반대로 모든 구역에 자리가 남아 있으면 받지 않습니다.
+   */
+  waitlistOpen: boolean;
 }
 
 /**
@@ -148,6 +155,8 @@ export interface ScheduleDetail {
   concertTitle: string;
   stadiumName: string;
   ticketingStartAt: string;
+  /** 취소표 대기를 받을 수 있는가. `ScheduleSummary.waitlistOpen` 과 같은 기준입니다 */
+  waitlistOpen: boolean;
 }
 
 /**

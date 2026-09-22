@@ -22,6 +22,7 @@ import com.teacat.server.user.entity.User;
 import com.teacat.server.user.repository.UserRepository;
 import com.teacat.server.wallet.client.BlockchainProperties;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +44,7 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class NftPhotocardDrawWriter {
 
     private final NftPhotocardPackRepository packRepository;
@@ -75,9 +77,12 @@ public class NftPhotocardDrawWriter {
             return replay(done.get());
         }
 
-        NftPhotocardPack pack = packRepository
-                .lockOneAvailable(userId, bookingPolicy.cancelDeadlineLead().toSeconds())
-                .orElseThrow(() -> new BusinessException(NftErrorCode.PACK_NOT_AVAILABLE));
+        long leadSeconds = bookingPolicy.cancelDeadlineLead().toSeconds();
+        NftPhotocardPack pack = packRepository.lockOneDrawable(userId, leadSeconds)
+                .orElseThrow(() -> new BusinessException(
+                        packRepository.countPreparing(userId, leadSeconds) > 0
+                                ? NftErrorCode.DRAW_POOL_EMPTY
+                                : NftErrorCode.PACK_NOT_AVAILABLE));
 
         // 지갑은 도안을 잠그기 전에 본다 — 없으면 도안 잠금을 잡을 이유가 없다
         UserWalletRow wallet = queryRepository
@@ -87,10 +92,18 @@ public class NftPhotocardDrawWriter {
 
         // 팩이 회차를 들고 있으면 그 공연의 도안에서, 이벤트 팩(회차 없음)이면 이벤트 풀에서 고른다.
         // 공연에 카드를 안 넣었으면 이벤트 풀로 떨어지지 않고 실패한다 — 그건 이벤트 팩의 재고다
-        NftPhotocardDesign design = (pack.getPerformanceDetailId() == null
+        Optional<NftPhotocardDesign> candidate = pack.getPerformanceDetailId() == null
                 ? designRepository.lockRandomDrawCandidate()
-                : designRepository.lockRandomDrawCandidateForSchedule(pack.getPerformanceDetailId()))
-                .orElseThrow(() -> new BusinessException(NftErrorCode.DRAW_POOL_EMPTY));
+                : designRepository.lockRandomDrawCandidateForSchedule(pack.getPerformanceDetailId());
+        NftPhotocardDesign design = candidate.orElseThrow(() -> {
+            boolean stillExists = pack.getPerformanceDetailId() == null
+                    ? designRepository.existsDrawableEventCandidate()
+                    : designRepository.existsDrawableCandidateForSchedule(pack.getPerformanceDetailId());
+            NftErrorCode error = stillExists ? NftErrorCode.DRAW_POOL_BUSY : NftErrorCode.DRAW_POOL_EMPTY;
+            log.warn("카드팩 도안 선택 실패 userId={} packId={} performanceDetailId={} errorCode={}",
+                    userId, pack.getId(), pack.getPerformanceDetailId(), error.getCode());
+            return new BusinessException(error);
+        });
         User owner = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.PHOTOCARD_OWNER_NOT_FOUND));
 
@@ -140,7 +153,7 @@ public class NftPhotocardDrawWriter {
     }
 
     /** 팩 개수 한 묶음. 상태 응답이 이걸 그대로 편다 */
-    public record PackCounts(long openable, long scheduled, LocalDateTime nextOpenAt) {
+    public record PackCounts(long openable, long scheduled, long preparing, LocalDateTime nextOpenAt) {
     }
 
     /* 2026-09-11: counts() 로 대체했다. 개봉 시각이 생겨 "안 쓴 팩" 만으로는 화면을 못 그린다.
@@ -157,6 +170,7 @@ public class NftPhotocardDrawWriter {
         return new PackCounts(
                 packRepository.countOpenable(userId, leadSeconds),
                 packRepository.countScheduled(userId, leadSeconds),
+                packRepository.countPreparing(userId, leadSeconds),
                 packRepository.findNextOpenAt(userId, leadSeconds));
     }
 
@@ -180,12 +194,19 @@ public class NftPhotocardDrawWriter {
                                         ? (row.getEventName() != null ? row.getEventName() : "이벤트 카드팩")
                                         : null,
                         row.getOpenAt(),
-                        row.getOpenable()))
+                        PackStatus.valueOf(row.getStatus())))
                 .toList();
     }
 
     /** 팩 한 개. 응답 DTO 와 같은 모양이지만 서비스 계층이 web DTO 를 알지 않게 따로 둔다 */
-    public record PackView(Long packId, String source, String title, LocalDateTime openAt, boolean openable) {
+    public record PackView(Long packId, String source, String title, LocalDateTime openAt,
+                           PackStatus status) {
+    }
+
+    public enum PackStatus {
+        OPENABLE,
+        SCHEDULED,
+        PREPARING
     }
 
     private DrawOutcome replay(NftPhotocardPack pack) {

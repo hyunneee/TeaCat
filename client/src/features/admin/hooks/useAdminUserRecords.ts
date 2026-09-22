@@ -1,4 +1,6 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { ApiError, queryClient } from '@/shared/api';
+import { toast } from '@/shared/stores';
 import type { CursorPage } from '@/shared/types';
 import { adminUserRecordKeys, adminUserRecordsApi } from '../api/adminUserRecordsApi';
 
@@ -52,6 +54,27 @@ export function useAdminUserPhotocards(userId: number) {
   return useRecordPages(adminUserRecordKeys.photocards(userId), (cursor) =>
     adminUserRecordsApi.photocards(userId, { cursor, size: PAGE_SIZE }),
   );
+}
+
+export function useAdminUserPhotocardPacks(userId: number) {
+  return useQuery({
+    queryKey: adminUserRecordKeys.photocardPacks(userId),
+    queryFn: () => adminUserRecordsApi.photocardPacks(userId),
+    enabled: Number.isInteger(userId) && userId > 0,
+  });
+}
+
+export function useInvalidateAdminPhotocardPack(userId: number) {
+  return useMutation({
+    mutationFn: ({ packId, reason }: { packId: number; reason: string }) =>
+      adminUserRecordsApi.invalidatePhotocardPack(userId, packId, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminUserRecordKeys.photocardPacks(userId) });
+      toast.success('카드팩을 무효화했어요.');
+    },
+    onError: (error) =>
+      toast.error(ApiError.isApiError(error) ? error.message : '카드팩을 무효화하지 못했어요.'),
+  });
 }
 
 export function useAdminUserPurchases(userId: number) {

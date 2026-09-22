@@ -225,11 +225,14 @@ public class PerformanceService {
 
         /* 매진 여부는 좌석을 세서 판정한다. 회차 수만큼 세면 N+1 이라 한 번에 묻는다.
            (회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다) */
-        Set<Long> soldOut = seatAvailability.findSoldOut(
-                details.stream().map(PerformanceDetail::getId).toList());
+        List<Long> scheduleIds = details.stream().map(PerformanceDetail::getId).toList();
+        Set<Long> soldOut = seatAvailability.findSoldOut(scheduleIds);
+        // 취소표 대기는 구역 단위라 기준이 다르다 — 구역 하나만 매진돼도 그 구역 대기는 받는다
+        Set<Long> waitlistOpen = seatAvailability.findWithSoldOutArea(scheduleIds);
 
         return details.stream()
-                .map(detail -> ScheduleSummaryResponse.of(detail, now, soldOut.contains(detail.getId())))
+                .map(detail -> ScheduleSummaryResponse.of(detail, now,
+                        soldOut.contains(detail.getId()), waitlistOpen.contains(detail.getId())))
                 .toList();
     }
 

@@ -6,6 +6,7 @@ import {
   ChartLine,
   ClipboardList,
   GalleryHorizontalEnd,
+  Gavel,
   Gift,
   LayoutDashboard,
   MessagesSquare,
@@ -146,6 +147,13 @@ const ADMIN_MENU: AdminMenuItem[] = [
     visible: can.reviewTrades,
     matchNested: true,
   },
+  {
+    to: ROUTES.ADMIN_AUCTIONS,
+    label: '경매 관리',
+    icon: Gavel,
+    visible: can.manageAuctions,
+    matchNested: true,
+  },
 ];
 
 const GROUPS = [
@@ -164,6 +172,7 @@ const GROUPS = [
       ROUTES.ADMIN_PACK_EVENTS,
       ROUTES.ADMIN_POCA_DESIGNS,
       ROUTES.ADMIN_TRADE_REVIEWS,
+      ROUTES.ADMIN_AUCTIONS,
     ],
   },
 ];
