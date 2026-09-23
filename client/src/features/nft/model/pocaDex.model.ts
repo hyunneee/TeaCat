@@ -10,12 +10,12 @@ import { pocaRole, type PocaRole } from './pocaDraw.model';
  * 깔고 내가 가진 것을 얹습니다.
  */
 export interface PocaDexEntry {
-  designId: number;
+  templateId: number;
   name: string;
   imageUrl: string | null;
   group: string | null;
   grade: PocaGrade | null;
-  acquisition: DrawPoolCard['acquisition'];
+  acquisitions: DrawPoolCard['acquisitions'];
   /** 코치·교육생·개발자. 소속 꼬리표가 없는 옛 도안은 null */
   role: PocaRole | null;
   /** 몇 장 가졌는가. 0 이면 아직 없는 칸 */
@@ -81,12 +81,12 @@ export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
 export function buildPocaDex(pool: DrawPoolCard[]): PocaDexEntry[] {
   return pool.map((design) => {
     return {
-      designId: design.designId,
+      templateId: design.templateId,
       name: design.name ?? '???',
       imageUrl: design.imageUrl,
       group: design.group,
       grade: design.grade,
-      acquisition: design.acquisition,
+      acquisitions: design.acquisitions,
       /* 🔴 소속이 없으면 역할을 **추측하지 않습니다.** `pocaRole` 은 문자열을 전제로 하고,
          없는 값으로 부르면 터집니다. 옛 도안은 역할 필터에서 빠지는 편이 낫습니다 —
          틀린 칸에 넣는 것보다 안 보이는 쪽이 고치기 쉽습니다. */
@@ -119,7 +119,7 @@ export function filterPocaDex(
     return (
       entry.name.toLowerCase().includes(keyword) ||
       (entry.group?.toLowerCase().includes(keyword) ?? false) ||
-      entry.acquisition.name.toLowerCase().includes(keyword)
+      entry.acquisitions.some((source) => source.name.toLowerCase().includes(keyword))
     );
   });
 }

@@ -99,6 +99,9 @@ public class NftPhotocardPoolService {
         for (NftPoolAddRequest.Item item : request.items()) {
             NftPhotocardTemplate template = templateRepository.findById(item.templateId())
                     .orElseThrow(() -> new BusinessException(NftErrorCode.TEMPLATE_NOT_FOUND));
+        if (template.isHidden()) {
+            throw new BusinessException(NftErrorCode.TEMPLATE_HIDDEN);
+        }
             if (designRepository.existsByPerformanceIdAndTemplateId(performanceId, template.getId())) {
                 throw new BusinessException(NftErrorCode.TEMPLATE_ALREADY_IN_POOL);
             }
@@ -162,6 +165,9 @@ public class NftPhotocardPoolService {
         for (NftPoolAddRequest.Item item : request.items()) {
             NftPhotocardTemplate template = templateRepository.findById(item.templateId())
                     .orElseThrow(() -> new BusinessException(NftErrorCode.TEMPLATE_NOT_FOUND));
+        if (template.isHidden()) {
+            throw new BusinessException(NftErrorCode.TEMPLATE_HIDDEN);
+        }
             if (designRepository.existsByPerformanceIdIsNullAndTemplateId(template.getId())) {
                 throw new BusinessException(NftErrorCode.TEMPLATE_ALREADY_IN_POOL);
             }

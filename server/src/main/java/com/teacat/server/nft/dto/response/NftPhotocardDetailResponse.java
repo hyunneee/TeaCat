@@ -18,6 +18,9 @@ public record NftPhotocardDetailResponse(
         @Schema(description = "도안 ID. 내가 가진 같은 도안 카드를 물을 때 쓴다", example = "11")
         Long designId,
 
+        @Schema(description = "원본 템플릿 ID. 레거시 도안은 null", nullable = true)
+        Long templateId,
+
         @Schema(description = "도안명")
         String designName,
 

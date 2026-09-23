@@ -96,8 +96,8 @@ class HalliGalliEngineTests {
     @Test
     void 종을_맞게_치면_펼쳐진_카드를_모두_가져간다() {
         HalliGalliState state = handMade();
-        state.piles.get(0).addFirst(new HalliGalliCard("PLUM", 2));
-        state.piles.get(1).addFirst(new HalliGalliCard("PLUM", 3));
+        state.piles.get(0).addFirst(new HalliGalliCard("GRAPE", 2));
+        state.piles.get(1).addFirst(new HalliGalliCard("GRAPE", 3));
         int before = state.hands.get(1).size();
 
         Map<String, Object> next = engine.apply(codec.write(state), 1, new GameAction("BELL", null, null));
@@ -111,7 +111,7 @@ class HalliGalliEngineTests {
     @Test
     void 종을_틀리게_치면_남은_사람에게_한_장씩_물어준다() {
         HalliGalliState state = handMade();
-        state.piles.get(0).addFirst(new HalliGalliCard("PLUM", 1));
+        state.piles.get(0).addFirst(new HalliGalliCard("GRAPE", 1));
         int mine = state.hands.get(1).size();
         int theirs = state.hands.get(0).size();
 
@@ -124,9 +124,9 @@ class HalliGalliEngineTests {
     }
 
     @Test
-    void 뒤집을_카드가_없으면_탈락하고_마지막_한_명이_일등이다() {
+    void 손패도_펼친_카드도_없어야_탈락이다() {
         HalliGalliState state = handMade();
-        state.hands.get(0).clear();
+        state.hands.get(0).clear();   // 펼친 카드도 handMade 가 비워 둔다
 
         Map<String, Object> next = engine.apply(codec.write(state), 0, new GameAction("FLIP", null, null));
 
@@ -134,6 +134,50 @@ class HalliGalliEngineTests {
         assertThat(after.isAlive(0)).isFalse();
         assertThat(after.finished).isTrue();
         assertThat(engine.ranking(next)).containsExactly(1, 0);
+    }
+
+    /**
+     * 🔴 손패가 비어도 <b>펼쳐 둔 카드가 남아 있으면 아직 판에 있다.</b> 종을 맞게 치면
+     * 되찾아 오므로, 여기서 빼면 되살아날 길이 사라진다.
+     */
+    @Test
+    void 손패가_비어도_펼친_카드가_있으면_탈락하지_않는다() {
+        HalliGalliState state = handMade();
+        state.hands.get(0).clear();
+        state.piles.get(0).addFirst(new HalliGalliCard("LIME", 2));
+
+        Map<String, Object> next = engine.apply(codec.write(state), 0, new GameAction("FLIP", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.isAlive(0)).isTrue();
+        assertThat(after.finished).isFalse();
+        // 뒤집지는 못하므로 차례만 넘어간다
+        assertThat(after.turn).isEqualTo(1);
+    }
+
+    @Test
+    void 손패가_비어도_펼친_카드가_있으면_종을_칠_수_있다() {
+        HalliGalliState state = handMade();
+        state.hands.get(0).clear();
+        state.piles.get(0).addFirst(new HalliGalliCard("LIME", 3));
+        state.piles.get(1).addFirst(new HalliGalliCard("LIME", 2));
+
+        Map<String, Object> next = engine.apply(codec.write(state), 0, new GameAction("BELL", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.lastBellCorrect).isTrue();
+        // 되찾아 왔다
+        assertThat(after.hands.get(0)).hasSize(2);
+    }
+
+    @Test
+    void 손패도_펼친_카드도_없으면_종을_칠_수_없다() {
+        HalliGalliState state = handMade();
+        state.hands.get(0).clear();
+        Map<String, Object> raw = codec.write(state);
+
+        assertThatThrownBy(() -> engine.apply(raw, 0, new GameAction("BELL", null, null)))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test

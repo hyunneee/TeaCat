@@ -20,6 +20,19 @@ public record DailyRewardStatusResponse(
         @Schema(description = "기준 날짜 (Asia/Seoul)", example = "2026-09-21")
         LocalDate date,
 
+        /**
+         * 연속 출석 일수.
+         *
+         * <p>출석 카드 옆에 바로 띄우려고 여기 함께 싣는다. 달력 조회(한 달치)를 따로
+         * 부르게 하면 숫자 하나를 위해 한 달을 받아오게 된다.
+         *
+         * <p>🔴 <b>화면에서 세지 않는다.</b> 자정 경계·시간대 때문에 기기 시계로 세면
+         * 사람마다 다르게 나오고, 한 달치 응답만으로는 월초에 지난달에서 이어온 것이 빠진다.
+         * 마지막 출석이 어제보다 예전이면 0 이다.
+         */
+        @Schema(description = "연속 출석 일수. 마지막 출석이 어제보다 예전이면 0", example = "3")
+        long streak,
+
         @Schema(description = "보상 종류별 상태")
         List<RewardStateResponse> rewards
 ) {

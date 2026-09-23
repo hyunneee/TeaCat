@@ -32,14 +32,39 @@ export function useDailyRewards() {
   const isLoggedIn = useIsLoggedIn();
 
   return useQuery({
-    queryKey: tokenKeys.dailyRewards(),
-    queryFn: tokenApi.dailyRewards,
-    enabled: isLoggedIn,
-    staleTime: STALE_TIME.SHORT,
-    refetchOnWindowFocus: true,
+    ...dailyRewardsQuery(isLoggedIn),
     select: (data): DailyRewards =>
       Object.fromEntries(data.rewards.map((reward) => [reward.type, reward])),
   });
+}
+
+/**
+ * 연속 출석 일수.
+ *
+ * 🔴 **서버가 셉니다.** 자정 경계·시간대 때문에 기기 시계로 세면 사람마다 다르게 나오고,
+ * 마지막 출석이 어제보다 예전이면 서버가 0 을 줍니다.
+ *
+ * 위 `useDailyRewards` 와 **같은 요청을 나눠 씁니다** — 쿼리 키가 같아 TanStack Query 가
+ * 한 번만 받아오고 `select` 만 다릅니다. 숫자 하나 때문에 달력(한 달치)을 부르지 않습니다.
+ */
+export function useAttendanceStreak() {
+  const isLoggedIn = useIsLoggedIn();
+
+  return useQuery({
+    ...dailyRewardsQuery(isLoggedIn),
+    select: (data) => data.streak,
+  });
+}
+
+/** 위 둘이 공유하는 요청. 한쪽만 고쳐 설정이 갈라지는 것을 막습니다 */
+function dailyRewardsQuery(enabled: boolean) {
+  return {
+    queryKey: tokenKeys.dailyRewards(),
+    queryFn: tokenApi.dailyRewards,
+    enabled,
+    staleTime: STALE_TIME.SHORT,
+    refetchOnWindowFocus: true,
+  };
 }
 
 /**
@@ -97,12 +122,15 @@ export function useClaimSongpyeon() {
 export function useAttendance() {
   const { data, isLoading } = useDailyRewards();
   const claim = useClaimDailyReward('ATTENDANCE');
+  const { data: streak } = useAttendanceStreak();
   const attendance = data?.ATTENDANCE;
 
   return {
     /** 받으면 들어오는 금액. 아직 못 받아왔으면 null — 화면이 금액 대신 다른 말을 합니다 */
     amount: attendance?.amount ?? null,
     claimed: attendance?.claimed ?? false,
+    /** 연속 출석 일수. 서버가 셉니다 — 화면에서 날짜를 세지 마세요 */
+    streak: streak ?? 0,
     loading: isLoading,
     claiming: claim.isPending,
     check: claim.mutate,

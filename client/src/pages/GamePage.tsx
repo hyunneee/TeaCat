@@ -36,7 +36,7 @@ const GAMES: { type: GameType; name: string; description: string; icon: typeof D
  */
 export function GamePage() {
   const navigate = useNavigate();
-  const { data: policy } = useGamePolicy();
+  const { data: policy, isPending: policyLoading, isError: policyFailed } = useGamePolicy();
   const { data: myRoom } = useMyGameRoom();
 
   const [gameType, setGameType] = useState<GameType>('YUT');
@@ -47,12 +47,25 @@ export function GamePage() {
   const create = useCreateGameRoom();
   const join = useJoinGameRoom();
 
-  const betChoices = policy?.betChoices ?? [0];
+  /**
+   * 고를 수 있는 판돈.
+   *
+   * 🔴 **서버에서 못 받아왔을 때 `[0]`(연습)으로 때우지 않습니다.** 예전에는 그랬는데,
+   * 서버가 죽어 있으면 화면에 "연습" 한 칸만 남아서 **원래 판돈을 걸 수 없는 기능처럼**
+   * 보였습니다. 금액이 안 보이는 것과 서버가 답을 안 하는 것은 사용자가 할 일이 서로
+   * 다르므로(기다리기 / 새로고침) 구분해서 말해 줍니다.
+   */
+  const betChoices = policy?.betChoices ?? [];
   const solo = maxPlayers === 1;
+  /* 판돈 목록을 모르면 만들어도 서버가 거절합니다. 눌러서 실패하게 두지 않습니다 */
+  const canCreate = !policyLoading && !policyFailed && betChoices.length > 0;
 
   return (
     <>
-      <Header title="같이 하기" />
+      {/* 캣치에서 들어오는 자리라 나갈 길이 있어야 합니다. navigate(-1) 대신 목적지를
+          못박는 이유는 방을 만들고 들어왔다가 뒤로 누르면 기록 한 칸 앞이 대기실이라
+          자기 방으로 되돌아가기 때문입니다 */}
+      <Header title="같이 하기" showBack onBack={() => navigate(ROUTES.TOKEN)} />
 
       <div className="space-y-4 p-4">
         {myRoom && (
@@ -145,22 +158,36 @@ export function GamePage() {
 
           <div className="space-y-2">
             <p className="text-muted text-xs">1인당 판돈</p>
-            <div className="grid grid-cols-4 gap-2">
-              {betChoices.map((amount) => (
-                <button
-                  key={amount}
-                  type="button"
-                  disabled={solo && amount > 0}
-                  onClick={() => setBetAmount(amount)}
-                  className={[
-                    'rounded-xl py-2 text-sm font-bold disabled:opacity-40',
-                    betAmount === amount ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
-                  ].join(' ')}
-                >
-                  {amount === 0 ? '연습' : amount.toLocaleString()}
-                </button>
-              ))}
-            </div>
+
+            {policyLoading ? (
+              <div className="grid grid-cols-4 gap-2">
+                {[0, 1, 2, 3].map((slot) => (
+                  <div key={slot} className="surface-2 h-9 animate-pulse rounded-xl" />
+                ))}
+              </div>
+            ) : policyFailed ? (
+              <p className="text-danger text-xs">
+                판돈 정보를 불러오지 못했어요. 잠시 후 새로고침해 주세요.
+              </p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {betChoices.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    disabled={solo && amount > 0}
+                    onClick={() => setBetAmount(amount)}
+                    className={[
+                      'rounded-xl py-2 text-sm font-bold disabled:opacity-40',
+                      betAmount === amount ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
+                    ].join(' ')}
+                  >
+                    {amount === 0 ? '연습' : amount.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {solo ? (
               <p className="text-muted text-xs">혼자 하는 방은 연습으로만 할 수 있어요.</p>
             ) : (
@@ -181,7 +208,8 @@ export function GamePage() {
             variant="primary"
             size="lg"
             fullWidth
-            loading={create.isPending}
+            disabled={!canCreate}
+            loading={create.isPending || policyLoading}
             onClick={() => create.mutate({ gameType, betAmount, maxPlayers })}
           >
             방 만들기

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EyeOff, Plus } from 'lucide-react';
+import { Eye, EyeOff, Plus } from 'lucide-react';
 import { Badge, Button, Card, Skeleton } from '@/shared/components/ui';
 import { EmptyState } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
@@ -19,7 +19,8 @@ import {
  * 페이지는 조립만 합니다 (CLAUDE.md 3-6). 접근 제어는 라우터의 `RequireRole(['ADMIN'])`.
  */
 export function AdminPocaTemplatesPage() {
-  const { data: templates, isPending } = useAdminPocaTemplates();
+  const [showHidden, setShowHidden] = useState(false);
+  const { data: templates, isPending, isError, refetch } = useAdminPocaTemplates(showHidden);
   const create = useCreatePocaTemplate();
   const hide = useSetTemplateHidden();
   const { open } = useModal();
@@ -32,8 +33,8 @@ export function AdminPocaTemplatesPage() {
       title: `'${name}' 을 목록에서 감출까요?`,
       message:
         usedCount > 0
-          ? `이미 ${usedCount}곳에 쓰였습니다. 감춰도 그 카드들은 그대로 동작하고, 앞으로 새로 고를 수만 없게 됩니다.`
-          : '앞으로 풀에 넣을 때 목록에 나오지 않습니다.',
+          ? `이미 ${usedCount}곳에 쓰였습니다. 기존 카드는 유지되며, 도감과 새 풀 등록 목록에서 숨겨집니다.`
+          : '도감과 풀 등록 목록에서 숨겨집니다.',
       confirmText: '감추기',
       onConfirm: () => hide.mutate({ templateId, hidden: true }),
     });
@@ -53,7 +54,13 @@ export function AdminPocaTemplatesPage() {
         </Button>
       </div>
 
-      {isPending ? (
+      <div className="flex gap-2" role="group" aria-label="템플릿 표시 상태">
+        <Button variant={!showHidden ? 'dark' : 'soft'} aria-pressed={!showHidden} onClick={() => setShowHidden(false)}>사용 중</Button>
+        <Button variant={showHidden ? 'dark' : 'soft'} aria-pressed={showHidden} onClick={() => setShowHidden(true)}>숨김</Button>
+      </div>
+      {isError ? (
+        <div role="alert"><p>카드 그림 목록을 불러오지 못했어요.</p><Button variant="soft" onClick={() => void refetch()}>다시 시도</Button></div>
+      ) : isPending ? (
         <div className="grid grid-cols-4 gap-3">
           <Skeleton className="h-44" />
           <Skeleton className="h-44" />
@@ -62,8 +69,8 @@ export function AdminPocaTemplatesPage() {
         </div>
       ) : !templates || templates.length === 0 ? (
         <EmptyState
-          title="등록된 카드 그림이 없어요"
-          description="그림을 올려야 공연이나 이벤트 뽑기 풀에 카드를 넣을 수 있습니다."
+          title={showHidden ? "숨김 처리된 카드 그림이 없어요" : "등록된 카드 그림이 없어요"}
+          description={showHidden ? "숨긴 그림은 여기에서 복원할 수 있습니다." : "그림을 올려야 공연이나 이벤트 뽑기 풀에 카드를 넣을 수 있습니다."}
         />
       ) : (
         <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -94,10 +101,13 @@ export function AdminPocaTemplatesPage() {
                   variant="soft"
                   size="sm"
                   fullWidth
-                  leftIcon={<EyeOff size={14} />}
-                  onClick={() => askToHide(template.templateId, template.name, template.usedCount)}
+                  leftIcon={showHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  disabled={hide.isPending}
+                  onClick={() => showHidden
+                    ? hide.mutate({ templateId: template.templateId, hidden: false })
+                    : askToHide(template.templateId, template.name, template.usedCount)}
                 >
-                  목록에서 감추기
+                  {showHidden ? "복원" : "목록에서 감추기"}
                 </Button>
               </Card>
             </li>

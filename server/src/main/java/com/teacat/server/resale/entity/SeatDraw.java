@@ -115,9 +115,17 @@ public class SeatDraw {
     /**
      * 첫 추첨. 참가자는 <b>오름차순</b>이어야 한다 — 체인이 순서를 검사하고 inputsHash 가 순서에 민감하다.
      */
+    /**
+     * 이 좌석의 {@code drawNo} 회차를 연다.
+     *
+     * <p>🔴 <b>회차 번호를 부르는 쪽이 정한다.</b> 여기서 1 로 고정하면, 한 번 추첨이 돌았던
+     * 좌석은 두 번째 취소에서 {@code draw_key} 가 겹쳐 취소가 통째로 실패한다 — 당첨자가 산
+     * 좌석을 그 사람이 다시 취소하는 평범한 흐름에서 바로 터진다.
+     * 지금까지의 최대 회차 + 1 을 넘겨라 ({@code SeatDrawRepository.maxDrawNo}).
+     */
     public static SeatDraw open(Long performanceId, Long performanceDetailId, Long areaId, Long seatId,
-                                List<Long> participantIds, Long sourceTicketOrderId) {
-        return new SeatDraw(performanceId, performanceDetailId, areaId, seatId, 1, participantIds,
+                                int drawNo, List<Long> participantIds, Long sourceTicketOrderId) {
+        return new SeatDraw(performanceId, performanceDetailId, areaId, seatId, drawNo, participantIds,
                 sourceTicketOrderId);
     }
 

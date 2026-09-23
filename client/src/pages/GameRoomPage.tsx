@@ -1,7 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { WifiOff } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Card, Spinner } from '@/shared/components/ui';
+import { ROUTES } from '@/shared/constants/routes';
 import {
   GameLobbyPanel,
   GameResultCard,
@@ -24,6 +25,12 @@ import type { HalliGalliState, YutState } from '@/features/game';
 export function GameRoomPage() {
   const { roomId: raw } = useParams<{ roomId: string }>();
   const roomId = Number(raw);
+  const navigate = useNavigate();
+
+  /* 🔴 뒤로 가기는 **방을 나가는 것이 아닙니다.** 화면만 벗어나고 방은 그대로 있어서,
+     같이 하기 화면의 "참여 중인 방이 있어요" 로 다시 들어올 수 있습니다. 판돈을 걸고
+     시작한 뒤에 뒤로 눌렀다고 판돈을 잃으면 사고입니다 — 포기는 아래 버튼으로만 합니다. */
+  const goBack = () => navigate(ROUTES.GAME);
 
   const { data: room, isLoading, connected } = useGameRoom(Number.isFinite(roomId) ? roomId : undefined);
   const ready = useGameReady(roomId);
@@ -34,7 +41,7 @@ export function GameRoomPage() {
   if (isLoading || !room) {
     return (
       <>
-        <Header title="같이 하기" />
+        <Header title="같이 하기" showBack onBack={goBack} />
         <div className="flex justify-center p-10">
           <Spinner />
         </div>
@@ -47,7 +54,7 @@ export function GameRoomPage() {
 
   return (
     <>
-      <Header title={title} />
+      <Header title={title} showBack onBack={goBack} />
 
       <div className="space-y-4 p-4">
         {/* 연결이 끊기면 조용히 폴링으로 버팁니다. 다만 느려진 이유는 알려줍니다 */}

@@ -152,13 +152,23 @@ public enum NftErrorCode implements ErrorCode {
     DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다."),
 
     /*
+     * ⚠️ 처음에 NFT_065 로 적었다가 dev 가 먼저 065~067(포카 꾸미기)을 가져가서 068 로 옮겼다.
+     *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
+     */
+    TEMPLATE_HIDDEN(HttpStatus.CONFLICT, "NFT_068", "숨김 처리된 카드 그림은 풀에 추가할 수 없습니다."),
+
+    /*
      * 스티커 소모 (2026-09-23). 🔴 붙이면 못 뗀다.
      * 프론트는 이 코드들로 갈라 안내 문구를 다르게 보여준다.
+     *
+     * ⚠️ 처음에 068~071 로 적었다가 dev 가 068(TEMPLATE_HIDDEN)을 먼저 가져가서 한 칸씩 밀었다.
+     *    아직 나가지 않은 코드라 옮겼다. `client/src/features/nft/model/decoration.types.ts`
+     *    의 DECORATION_ERROR 와 **한 쌍**이라 한쪽만 고치면 프론트 분기가 조용히 빗나간다.
      */
-    DECORATION_PLACEMENTS_INVALID(HttpStatus.BAD_REQUEST, "NFT_068", "스티커 배치 정보를 읽을 수 없습니다."),
-    DECORATION_STICKER_NOT_USABLE(HttpStatus.BAD_REQUEST, "NFT_069", "쓸 수 없는 스티커가 있습니다."),
-    DECORATION_STICKER_ALREADY_USED(HttpStatus.CONFLICT, "NFT_070", "이미 사용한 스티커입니다."),
-    DECORATION_STICKER_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_071", "이미 붙인 스티커는 뗄 수 없습니다.");
+    DECORATION_PLACEMENTS_INVALID(HttpStatus.BAD_REQUEST, "NFT_069", "스티커 배치 정보를 읽을 수 없습니다."),
+    DECORATION_STICKER_NOT_USABLE(HttpStatus.BAD_REQUEST, "NFT_070", "쓸 수 없는 스티커가 있습니다."),
+    DECORATION_STICKER_ALREADY_USED(HttpStatus.CONFLICT, "NFT_071", "이미 사용한 스티커입니다."),
+    DECORATION_STICKER_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_072", "이미 붙인 스티커는 뗄 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -88,13 +88,23 @@ export function MemoryRankingCard({ ranking, loading = false }: Props) {
         </ul>
       )}
 
-      {ranking?.yesterdayWinner && (
+      {/* 🔴 어제 1등이 없어도 이 줄은 그립니다. 예전에는 winner 가 null 이면 통째로 빠져서
+          "어제 1등을 보여준다" 는 기능이 있는지조차 알 수 없었습니다 — 순위표가 비었을 때와
+          기능이 없을 때가 화면에서 똑같이 보입니다. */}
+      {!loading && (
         <div className="border-line text-subtle flex items-center gap-1.5 border-t px-4 py-2.5 text-xs">
           <Crown size={13} className="shrink-0" aria-hidden />
-          어제 1등 <span className="text-ink-muted font-semibold">
-            {ranking.yesterdayWinner.nickname}
-          </span>
-          <span className="tabular-nums">{formatClock(ranking.yesterdayWinner.elapsedMs)}</span>
+          {ranking?.yesterdayWinner ? (
+            <>
+              어제 1등
+              <span className="text-ink-muted font-semibold">
+                {ranking.yesterdayWinner.nickname}
+              </span>
+              <span className="tabular-nums">{formatClock(ranking.yesterdayWinner.elapsedMs)}</span>
+            </>
+          ) : (
+            <>어제는 아무도 못 깼어요</>
+          )}
         </div>
       )}
     </Card>
