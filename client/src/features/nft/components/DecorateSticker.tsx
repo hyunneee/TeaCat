@@ -29,6 +29,11 @@ interface Props {
  * 카드가 폭 300px 남짓이라 네 귀퉁이에 회전까지 달면 스티커보다 손잡이가 커집니다.
  *   ✕ 왼쪽 위 — 지우기
  *   ↘ 오른쪽 아래 — 크기 + 회전 **동시에**
+ *
+ * ── 🔴 잠긴 스티커 (2026-09-23) ────────────────────────────
+ * `placed.locked` 가 켜진 것은 **이미 저장돼 카드에 붙은** 스티커입니다. 스티커는 한 번
+ * 붙이면 뗄 수 없어서 끌기·손잡이·선택을 전부 막습니다 — 손잡이만 숨기면 끌어서 옮길 수
+ * 있고, 그러면 저장할 때 서버가 `NFT_071` 로 거절합니다.
  */
 export function DecorateSticker({
   placed,
@@ -132,10 +137,12 @@ export function DecorateSticker({
         width: `${placed.scale * 100}%`,
         transform: `translate(-50%, -50%) rotate(${placed.rotation}deg)`,
       }}
-      onPointerDown={startDrag}
-      onPointerMove={moveDrag}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      /* 🔴 잠긴 것은 집히지도 않습니다. 핸들러를 안 달아 이벤트가 카드로 넘어가고,
+         빈 곳을 누른 것처럼 선택이 풀립니다 */
+      onPointerDown={placed.locked ? undefined : startDrag}
+      onPointerMove={placed.locked ? undefined : moveDrag}
+      onPointerUp={placed.locked ? undefined : endDrag}
+      onPointerCancel={placed.locked ? undefined : endDrag}
     >
       <img
         ref={registerImg}
@@ -150,7 +157,7 @@ export function DecorateSticker({
         )}
       />
 
-      {selected && (
+      {selected && !placed.locked && (
         <>
           <button
             type="button"
