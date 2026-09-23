@@ -31,7 +31,9 @@ class TradeRiskRulesTests {
     private final NftTradeRiskScreener screener = new NftTradeRiskScreener(null, List.of(
             new TradeRiskSameDeviceRule(), new TradeRiskSamePhoneRule(), new TradeRiskRepeatedPairRule(),
             new TradeRiskPriceOutlierRule(), new TradeRiskNewAccountRushRule(), new TradeRiskVolumeSpikeRule(),
-            new TradeRiskHoardingRule(), new TradeRiskAccountTakeoverRule()), PROPS);
+            new TradeRiskHoardingRule(), new TradeRiskAccountTakeoverRule()), PROPS,
+            // 모델 파일 없이 만든 채점기 — 점수를 내지 않는다. 이 테스트는 규칙만 본다
+            new TradeRiskModelScorer(tools.jackson.databind.json.JsonMapper.builder().build(), false, "fds/none.json"));
 
     @Test
     void 정상_거래는_아무_신호도_없다() {
@@ -103,9 +105,9 @@ class TradeRiskRulesTests {
 
     @Test
     void R4_시세_대비_4배_이상이면_MEDIUM_이고_표본이_적으면_판단하지_않는다() {
-        var outlier = screener.evaluate(normal().price(4_000).medianPrice(1_000L).priceSamples(3).build());
-        var fewSamples = screener.evaluate(normal().price(9_000).medianPrice(1_000L).priceSamples(2).build());
-        var fair = screener.evaluate(normal().price(3_999).medianPrice(1_000L).priceSamples(10).build());
+        var outlier = screener.evaluate(normal().price(4_000).medianPrice(1_000L).designTradesInWindow(3).build());
+        var fewSamples = screener.evaluate(normal().price(9_000).medianPrice(1_000L).designTradesInWindow(2).build());
+        var fair = screener.evaluate(normal().price(3_999).medianPrice(1_000L).designTradesInWindow(10).build());
 
         assertThat(only(outlier, TradeRiskPriceOutlierRule.CODE).evidence()).containsEntry("ratio", 4.0);
         assertThat(fewSamples.signals()).isEmpty();
@@ -187,7 +189,7 @@ class TradeRiskRulesTests {
     void MEDIUM_두_개면_보류하고_규칙_순서는_코드순으로_고정된다() {
         var result = screener.evaluate(normal()
                 .pairTradeCount(3)                                        // R3 MEDIUM
-                .price(4_000).medianPrice(1_000L).priceSamples(5)         // R4 MEDIUM
+                .price(4_000).medianPrice(1_000L).designTradesInWindow(5)         // R4 MEDIUM
                 .build());
 
         assertThat(result.flagged()).isTrue();
@@ -222,7 +224,6 @@ class TradeRiskRulesTests {
         private int pairTradeCount = 0;
         private boolean photocardCycled = false;
         private Long medianPrice = 1_000L;
-        private int priceSamples = 10;
         private int recentVolume = 2;
         private int recentVolumeWithParties = 1;
         private int baselineVolume = 8;
@@ -242,7 +243,6 @@ class TradeRiskRulesTests {
         ContextBuilder pairTradeCount(int v) { pairTradeCount = v; return this; }
         ContextBuilder photocardCycled(boolean v) { photocardCycled = v; return this; }
         ContextBuilder medianPrice(Long v) { medianPrice = v; return this; }
-        ContextBuilder priceSamples(int v) { priceSamples = v; return this; }
         ContextBuilder recentVolume(int v) { recentVolume = v; return this; }
         ContextBuilder recentVolumeWithParties(int v) { recentVolumeWithParties = v; return this; }
         ContextBuilder baselineVolume(int v) { baselineVolume = v; return this; }
@@ -258,7 +258,7 @@ class TradeRiskRulesTests {
         TradeRiskContext build() {
             return new TradeRiskContext(7L, TradeRiskContext.Source.AUCTION, 11L, null, price, 501L, 31L,
                     seller, buyer, runnerUp, NOW.minusMinutes(1),
-                    pairTradeCount, photocardCycled, medianPrice, priceSamples,
+                    pairTradeCount, photocardCycled, medianPrice,
                     recentVolume, recentVolumeWithParties, baselineVolume,
                     designIssuedSupply, buyerOwnedOfDesign, designTradesInWindow, buyerBuysOfDesignInWindow,
                     buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow,

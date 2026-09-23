@@ -90,7 +90,8 @@ public class NftTradeSettlementWriter {
         //    지나간 거래의 피처는 복구할 수 없으므로 지금부터 쌓는 것 말고는 방법이 없다.
         if (assessment.hasFeatures() && !featureRepository.existsByTradeId(tradeId)) {
             featureRepository.save(NftTradeRiskFeature.of(trade, assessment.features(), assessment.signals(),
-                    assessment.maxSeverity(), assessment.flagged(), review));
+                    assessment.maxSeverity(), assessment.flagged(), review,
+                    assessment.modelScore(), assessment.modelVersion()));
         }
         if (hold) {
             trade.holdForRiskReview();

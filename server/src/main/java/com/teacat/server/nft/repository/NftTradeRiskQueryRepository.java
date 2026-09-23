@@ -104,7 +104,7 @@ public class NftTradeRiskQueryRepository {
                 base.auctionId, base.listingId, base.price, base.photocardId, base.designId,
                 seller, buyer, runnerUp, requestAt,
                 pair.count, pair.cycled,
-                price.median, price.samples,
+                price.median,
                 volume.recent, volume.recentWithParties, volume.baseline,
                 base.issuedSupply, buyerOwned, price.samples, price.buyerBuys,
                 firstDeposit,

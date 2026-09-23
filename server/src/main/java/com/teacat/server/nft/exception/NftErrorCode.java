@@ -122,7 +122,9 @@ public enum NftErrorCode implements ErrorCode {
     INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요."),
 
     // 이상거래 시뮬레이터. 배포본에서는 설정이 꺼져 있어 항상 이 코드로 거절된다 (AUCTION_FRAUD_DESIGN.md 14-2)
-    SIMULATOR_DISABLED(HttpStatus.FORBIDDEN, "NFT_060", "이상거래 시뮬레이터가 꺼져 있습니다.");
+    // ⚠️ 처음에 NFT_060 으로 적었다가 dev 가 060~072 를 먼저 가져가서 073 으로 옮겼다.
+    //    아직 배포되지 않은 코드라 옮겨도 된다 — 한 번 나간 코드는 바꾸지 않는다(CLAUDE.md 3-2)
+    SIMULATOR_DISABLED(HttpStatus.FORBIDDEN, "NFT_073", "이상거래 시뮬레이터가 꺼져 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

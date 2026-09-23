@@ -12,23 +12,28 @@ import java.util.Map;
  *
  * @param features 학습용 피처 벡터(AUCTION_FRAUD_DESIGN.md 14-2). 맥락 없이 신호만 평가했으면 빈 맵이다.
  *                 <b>신호가 없어도 채워진다</b> — 통과한 거래의 피처가 모델의 정상 사례가 된다
+ * @param modelScore   섀도우 모델의 부정 확률 0~1 (14-3). 모델이 없거나 채점이 실패하면 null.
+ *                     <b>아무 분기도 이 값을 읽지 않는다</b> — 저장만 된다
+ * @param modelVersion 그 점수를 낸 모델 판. 모델을 바꾼 뒤 예전 점수와 섞이지 않게 한다
  */
 public record TradeRiskAssessment(List<NftTradeRiskSignal> signals, NftReviewSeverity maxSeverity, boolean flagged,
-                                  Map<String, Object> features) {
+                                  Map<String, Object> features, Double modelScore, String modelVersion) {
 
-    private static final TradeRiskAssessment CLEAR = new TradeRiskAssessment(List.of(), null, false, Map.of());
+    private static final TradeRiskAssessment CLEAR =
+            new TradeRiskAssessment(List.of(), null, false, Map.of(), null, null);
 
     public static TradeRiskAssessment clear() {
         return CLEAR;
     }
 
     public static TradeRiskAssessment of(List<NftTradeRiskSignal> signals) {
-        return of(signals, Map.of());
+        return of(signals, Map.of(), null, null);
     }
 
-    public static TradeRiskAssessment of(List<NftTradeRiskSignal> signals, Map<String, Object> features) {
+    public static TradeRiskAssessment of(List<NftTradeRiskSignal> signals, Map<String, Object> features,
+                                         Double modelScore, String modelVersion) {
         if (signals == null || signals.isEmpty()) {
-            return new TradeRiskAssessment(List.of(), null, false, features);
+            return new TradeRiskAssessment(List.of(), null, false, features, modelScore, modelVersion);
         }
         NftReviewSeverity max = null;
         int mediums = 0;
@@ -39,7 +44,7 @@ public record TradeRiskAssessment(List<NftTradeRiskSignal> signals, NftReviewSev
             }
         }
         boolean flagged = max == NftReviewSeverity.HIGH || mediums >= 2;
-        return new TradeRiskAssessment(List.copyOf(signals), max, flagged, features);
+        return new TradeRiskAssessment(List.copyOf(signals), max, flagged, features, modelScore, modelVersion);
     }
 
     public List<String> ruleCodes() {

@@ -65,6 +65,18 @@ public class NftTradeRiskFeature {
     @Column(name = "flagged", nullable = false, updatable = false)
     private boolean flagged;
 
+    /**
+     * 섀도우 모델의 부정 확률 0~1 (AUCTION_FRAUD_DESIGN.md 14-3).
+     * <b>어떤 분기도 이 값을 읽지 않는다</b> — 관리자 판정과 맞춰 보기 위해 저장만 한다.
+     * 모델이 없거나 채점이 실패하면 null 이고, 그건 정상 상태다.
+     */
+    @Column(name = "model_score", updatable = false)
+    private Double modelScore;
+
+    /** 그 점수를 낸 모델 판. 모델을 바꾼 뒤 예전 점수와 섞이지 않게 한다 */
+    @Column(name = "model_version", length = 40, updatable = false)
+    private String modelVersion;
+
     /** 심사 행이 생겼으면 그것. 통과한 거래는 null */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_id", updatable = false)
@@ -76,19 +88,28 @@ public class NftTradeRiskFeature {
 
     private NftTradeRiskFeature(NftPhotocardTrade trade, Map<String, Object> features,
                                 List<NftTradeRiskSignal> signals, NftReviewSeverity maxSeverity,
-                                boolean flagged, NftTradeReview review) {
+                                boolean flagged, NftTradeReview review,
+                                Double modelScore, String modelVersion) {
         this.trade = trade;
         this.features = features;
         this.signals = List.copyOf(signals);
         this.maxSeverity = maxSeverity;
         this.flagged = flagged;
         this.review = review;
+        this.modelScore = modelScore;
+        this.modelVersion = modelVersion;
     }
 
-    /** @param review 심사 행. 규칙에 걸리지 않았으면 null */
+    /**
+     * @param review       심사 행. 규칙에 걸리지 않았으면 null
+     * @param modelScore   섀도우 모델 점수. 모델이 없으면 null
+     * @param modelVersion 그 점수를 낸 모델 판
+     */
     public static NftTradeRiskFeature of(NftPhotocardTrade trade, Map<String, Object> features,
                                          List<NftTradeRiskSignal> signals, NftReviewSeverity maxSeverity,
-                                         boolean flagged, NftTradeReview review) {
-        return new NftTradeRiskFeature(trade, features, signals, maxSeverity, flagged, review);
+                                         boolean flagged, NftTradeReview review,
+                                         Double modelScore, String modelVersion) {
+        return new NftTradeRiskFeature(trade, features, signals, maxSeverity, flagged, review,
+                modelScore, modelVersion);
     }
 }

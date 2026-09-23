@@ -50,7 +50,7 @@ public class NftTradeReviewAdminController {
                     응답은 대본(정답) 대비 규칙의 성적표입니다.
 
                     🔴 로컬·개발 DB 전용입니다. 만들어진 거래는 COMPLETED 로 들어가 시세·거래량·인기 순위에
-                    그대로 섞입니다. nft.trade.simulator.enabled 가 기본 false 라 배포본에서는 NFT_060 으로 거절됩니다.
+                    그대로 섞입니다. nft.trade.simulator.enabled 가 기본 false 라 배포본에서는 NFT_073 으로 거절됩니다.
                     """)
     @PostMapping("/simulate")
     public ResponseEntity<BaseResponse<TradeSimulationResponse>> simulate(

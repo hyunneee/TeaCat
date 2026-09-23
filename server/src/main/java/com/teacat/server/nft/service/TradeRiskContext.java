@@ -14,13 +14,15 @@ import java.util.Objects;
  * @param pairTradeCount             기간 안 판매자·구매자(순서 무관) 사이의 완료 거래 수
  * @param photocardCycled            이 카드가 이미 같은 두 계정 사이를 오간 적이 있나 (A→B→A)
  * @param medianPrice                같은 도안 최근 완료 거래가 중앙값. 표본 없으면 null
- * @param priceSamples               그 표본 수
  * @param recentVolume               같은 도안 최근 기간(volume-window) 완료 거래 수
  * @param recentVolumeWithParties    그중 판매자 또는 구매자가 낀 것
  * @param baselineVolume             그 이전 기준 기간(volume-baseline-weeks) 완료 거래 수
  * @param designIssuedSupply         도안 발행량
  * @param buyerOwnedOfDesign         구매자가 지금 가진 같은 도안 카드 수 (이 거래 전)
- * @param designTradesInWindow       같은 도안 최근 기간(price-window) 완료 거래 수
+ * @param designTradesInWindow       같은 도안 최근 기간(price-window) 완료 거래 수.
+ *                                   <b>중앙값의 표본 수이기도 하다</b> — 같은 조회에서 나온 같은 값이라
+ *                                   {@code priceSamples} 라는 이름으로 한 번 더 들고 있었는데, 모델을
+ *                                   학습시켜 보니 두 피처의 계수가 완전히 같게 나와 중복이 드러났다
  * @param buyerBuysOfDesignInWindow  그중 구매자가 산 것
  * @param buyerFirstDepositAt        구매자의 첫 원화 충전(DEPOSIT) 시각. 없으면 null. ADMIN_GRANT 는 세지 않는다
  * @param buyerPriorDeviceLogins     요청 전 기간 안, 요청 단말과 <b>다른</b> 단말에서의 로그인 수
@@ -43,7 +45,6 @@ public record TradeRiskContext(
         int pairTradeCount,
         boolean photocardCycled,
         Long medianPrice,
-        int priceSamples,
         int recentVolume,
         int recentVolumeWithParties,
         int baselineVolume,

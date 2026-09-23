@@ -49,7 +49,6 @@ final class TradeRiskFeatureVector {
 
         // 시세
         f.put("medianPrice", ctx.medianPrice());
-        f.put("priceSamples", ctx.priceSamples());
         f.put("priceRatio", ratio(ctx.price(), ctx.medianPrice()));
 
         // 거래량
@@ -62,6 +61,8 @@ final class TradeRiskFeatureVector {
         f.put("designIssuedSupply", ctx.designIssuedSupply());
         f.put("buyerOwnedOfDesign", ctx.buyerOwnedOfDesign());
         f.put("ownedShareAfter", share(ctx.buyerOwnedOfDesignAfter(), ctx.designIssuedSupply()));
+        // 중앙값의 표본 수이기도 하다. 예전에는 priceSamples 라는 이름으로 한 번 더 내보냈는데,
+        // 학습해 보니 두 계수가 완전히 같아 중복이 드러났다 — 같은 값을 두 번 주면 가중치만 쪼개진다
         f.put("designTradesInWindow", ctx.designTradesInWindow());
         f.put("buyerBuysOfDesignInWindow", ctx.buyerBuysOfDesignInWindow());
         f.put("buyShareAfter", share(ctx.buyerBuysOfDesignInWindow() + 1, ctx.designTradesInWindow() + 1));

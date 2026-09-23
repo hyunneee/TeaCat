@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 이상거래 규칙 R1~R8 을 거래 하나에 돌려 {@link TradeRiskAssessment} 를 만든다 (AUCTION_FRAUD_DESIGN.md 5장).
@@ -23,9 +24,11 @@ public class NftTradeRiskScreener {
     private final NftTradeRiskQueryRepository queryRepository;
     private final List<TradeRiskRule> rules;
     private final NftTradeReviewProperties properties;
+    private final TradeRiskModelScorer modelScorer;
 
     public NftTradeRiskScreener(NftTradeRiskQueryRepository queryRepository, List<TradeRiskRule> rules,
-                                NftTradeReviewProperties properties) {
+                                NftTradeReviewProperties properties, TradeRiskModelScorer modelScorer) {
+        this.modelScorer = modelScorer;
         this.queryRepository = queryRepository;
         // 규칙 순서가 결정적이어야 signals 배열 순서가 재현된다 (테스트·화면)
         this.rules = rules.stream().sorted(Comparator.comparing(TradeRiskRule::code)).toList();
@@ -55,6 +58,10 @@ public class NftTradeRiskScreener {
         for (TradeRiskRule rule : rules) {
             signals.addAll(rule.evaluate(context, properties));
         }
-        return TradeRiskAssessment.of(signals, TradeRiskFeatureVector.of(context));
+        Map<String, Object> features = TradeRiskFeatureVector.of(context);
+        // 🔴 섀도우 — 점수를 내되 아래 어디에서도 읽지 않는다 (AUCTION_FRAUD_DESIGN.md 14-3).
+        //    규칙 결과(signals)는 모델에 넣지 않는다. 넣으면 모델이 규칙을 베끼고 끝난다
+        Double score = modelScorer.score(features);
+        return TradeRiskAssessment.of(signals, features, score, score == null ? null : modelScorer.version());
     }
 }
