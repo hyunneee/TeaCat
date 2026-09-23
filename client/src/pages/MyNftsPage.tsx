@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sparkles, Check } from 'lucide-react';
+import { Search, Sparkles, Book, BookOpen } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
@@ -156,12 +156,20 @@ export function MyNftsPage() {
                 className="peer sr-only"
               />
               <span className="text-ink-muted peer-checked:text-accent-800 peer-focus-visible:outline-brand-900 flex items-center gap-1.5 rounded-lg px-1 py-1 transition-colors peer-checked:font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
-                <Check
-                  size={15}
-                  aria-hidden="true"
-                  className={`shrink-0 transition-colors ${!ownedOnly ? 'text-accent-800' : 'text-ink-subtle'}`}
-                />
-                전체 보기
+                {!ownedOnly ? (
+                  <BookOpen
+                    size={15}
+                    aria-hidden="true"
+                    className="text-accent-800 shrink-0 transition-colors"
+                  />
+                ) : (
+                  <Book
+                    size={15}
+                    aria-hidden="true"
+                    className="text-ink-subtle shrink-0 transition-colors"
+                  />
+                )}
+                도감 보기
               </span>
             </label>
           </div>
@@ -244,7 +252,7 @@ export function MyNftsPage() {
                   title="찾는 카드가 없어요"
                   description={
                     ownedOnly
-                      ? '전체 보기를 선택하거나 다른 이름·역할로 찾아보세요.'
+                      ? '도감 보기를 선택하거나 다른 이름·역할로 찾아보세요.'
                       : '다른 이름이나 역할로 찾아보세요.'
                   }
                 />
