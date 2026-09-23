@@ -7,7 +7,7 @@ import { EmptyState, PageLoader } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { useAuth } from '@/features/auth';
-import { blobToBase64, useMyStickers, useUnusedStickers, type Sticker } from '@/features/sticker';
+import { blobToBase64, useUnusedStickers, type Sticker } from '@/features/sticker';
 import {
   DecorateCanvas,
   StickerDrawer,
@@ -36,7 +36,8 @@ import {
  *    (`composeDecorated` 주석).
  *
  * 기존 꾸밈이 있으면 배치를 복원해 **이어서 고칩니다.** 그때 스티커 그림 주소는 저장된
- * 것이 아니라 지금 내 스티커 목록에서 새로 찾습니다 (`parsePlacements`).
+ * 것이 아니라 **서버가 꾸밈과 함께 내려준 것**을 씁니다 (`Decoration.stickerImageUrls`) —
+ * presigned 라 만료되고, 무엇보다 물려받은 카드의 스티커는 내 목록에 없습니다.
  */
 export function PocaDecoratePage() {
   const { photocardId: raw = '' } = useParams();
@@ -48,12 +49,6 @@ export function PocaDecoratePage() {
   /* 🔴 서랍에는 **안 쓴 것만** 옵니다. 스티커는 한 번 붙이면 뗄 수 없어서, 이미 쓴 것을
      보여주면 눌러도 서버가 거절하는 칸이 됩니다 (2026-09-23). */
   const stickers = useUnusedStickers();
-
-  /* 🔴 **복원은 전체 목록으로 합니다.** 이미 붙인 스티커는 소모돼서 서랍 목록(unused)에
-     없는데, 배치에는 stickerId 만 있고 그림 주소는 없습니다(만료되므로 저장하지 않습니다).
-     전체 목록에서 찾지 않으면 **저장한 꾸밈이 화면에 안 그려집니다** — 실제로 그렇게 됐다가
-     브라우저에서 잡았습니다. */
-  const allStickers = useMyStickers();
 
   const mine = !!card && isOwner(card, user?.nickname);
   const decoration = useDecoration(photocardId, mine);
@@ -78,26 +73,33 @@ export function PocaDecoratePage() {
     if (notMine) navigate(ROUTES.NFT_DETAIL(raw), { replace: true });
   }, [notMine, navigate, raw]);
 
-  /* 저장해 둔 배치 복원 — 스티커 목록이 있어야 그림 주소를 찾을 수 있습니다 */
+  /*
+   * 저장해 둔 배치 복원.
+   *
+   * 🔴 그림 주소는 **서버가 꾸밈과 함께 준 것**(`stickerImageUrls`)에서 찾습니다.
+   *    내 스티커 목록에서 찾으면 안 됩니다 — 물려받은 카드의 스티커는 **판 사람 것**이라
+   *    내 목록에 없고, 그래서 **산 사람에게는 꾸밈이 통째로 안 보였습니다** (2026-09-23).
+   *    원래 주인일 때만 우연히 맞던 구조였습니다.
+   *
+   * 🔴 그래서 스티커 목록을 **기다리지 않습니다.** 복원에 필요한 건 꾸밈 응답 하나뿐입니다.
+   */
   const decorationReady = mine && !decoration.isPending;
-  const stickersReady = !stickers.isPending && !allStickers.isPending;
   const decorationData = decoration.data;
-  const stickerList = allStickers.data;
   useEffect(() => {
-    if (restored || !decorationReady || !stickersReady) return;
+    if (restored || !decorationReady) return;
     if (decorationData) {
-      const list = stickerList ?? [];
+      const urls = decorationData.stickerImageUrls ?? {};
       /* 🔴 서버에서 받은 배치는 **전부 잠긴 것**입니다. 이미 소모돼 카드에 붙어 있어
          뗄 수도 옮길 수도 없습니다. 이번에 새로 얹는 것만 자유입니다 (2026-09-23). */
       setPlaced(
-        parsePlacements(
-          decorationData.placements,
-          (id) => list.find((s: Sticker) => s.id === id)?.imageUrl,
-        ).map((p) => ({ ...p, locked: true })),
+        parsePlacements(decorationData.placements, (id) => urls[id]).map((p) => ({
+          ...p,
+          locked: true,
+        })),
       );
     }
     setRestored(true);
-  }, [restored, decorationReady, stickersReady, decorationData, stickerList]);
+  }, [restored, decorationReady, decorationData]);
 
   const invalidId = !Number.isInteger(photocardId) || photocardId <= 0;
   if (!invalidId && isPending) return <PageLoader />;
