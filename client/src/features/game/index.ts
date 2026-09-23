@@ -24,6 +24,7 @@ export {
   useJoinGameRoom,
   useGameReady,
   usePickPieceStyle,
+  useGameChat,
   useStartGame,
   useGameAction,
   useLeaveGameRoom,
@@ -31,6 +32,7 @@ export {
 
 export { GameLobbyPanel } from './components/GameLobbyPanel';
 export { GameResultCard } from './components/GameResultCard';
+export { GameChatPanel } from './components/GameChatPanel';
 export { YutPanel } from './components/YutPanel';
 export { HalliGalliPanel } from './components/HalliGalliPanel';
 export { FruitCard } from './components/FruitCard';

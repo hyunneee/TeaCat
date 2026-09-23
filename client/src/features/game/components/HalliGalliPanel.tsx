@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { BellRing } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ConciergeBell } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Button } from '@/shared/components/ui';
 import { cn } from '@/shared/lib';
@@ -13,6 +14,8 @@ interface Props {
   state: HalliGalliState;
   onAction: (body: { action: 'FLIP' | 'BELL' }) => void;
   pending: boolean;
+  /** 기록 대신 들어가는 채팅 창. 페이지가 만들어 내려줍니다 */
+  chat: ReactNode;
 }
 
 /** 종이 울린 자국이 화면에 머무는 시간 */
@@ -30,7 +33,7 @@ const BELL_FLASH_MS = 1100;
  * 게임이 됩니다. 맞았는지는 서버가 정합니다. 버튼을 잠그는 경우는 하나뿐입니다 —
  * 손패도 펼친 카드도 없어서 <b>규칙상 칠 수 없을 때</b>입니다.
  */
-export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
+export function HalliGalliPanel({ room, state, onAction, pending, chat }: Props) {
   const myTurn = state.turn === room.mySeatNo;
   const alive = !state.eliminated[room.mySeatNo];
   /* 손패가 비어도 펼쳐 둔 카드가 남아 있으면 칠 수 있습니다. 되찾아 올 카드가 있으니까요.
@@ -39,7 +42,7 @@ export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
   const canRing = alive && myCards > 0;
   const canFlip = myTurn && alive && (state.handCounts[room.mySeatNo] ?? 0) > 0;
 
-  const bell = useBellFlash(state.lastBellSeat, state.lastBellCorrect, state.log.length);
+  const bell = useBellFlash(state.lastBellSeat, state.lastBellCorrect, state.bellSeq);
   const reduce = useReducedMotion();
   useBellHotkey(canRing, onAction);
 
@@ -59,24 +62,46 @@ export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
           />
         ))}
 
-        {/* 가운데 종 */}
+        {/* 가운데 종 — 탁상종(누르는 종)입니다. 손잡이를 흔드는 종보다 "손바닥으로
+            내리치는" 이 게임의 동작에 가깝고, 위에서 눌린다는 것이 그림으로 읽힙니다 */}
         <div className="col-start-2 row-start-2 flex items-center justify-center">
-          <motion.div
-            animate={
-              bell && !reduce
-                ? { rotate: [0, -18, 14, -10, 6, 0], scale: [1, 1.25, 1.1, 1] }
-                : { rotate: 0, scale: 1 }
-            }
-            transition={{ duration: 0.6 }}
-            className={cn(
-              'flex size-14 items-center justify-center rounded-full transition-colors',
-              bell?.correct === true && 'bg-emerald-100 text-emerald-600',
-              bell?.correct === false && 'bg-rose-100 text-rose-600',
-              !bell && 'surface text-ink-subtle',
+          <div className="relative flex items-center justify-center">
+            {/* 종소리 — 퍼져 나가는 물결. 🔴 누가 쳤든 방에 있는 모두가 봅니다.
+                서버가 bellSeq 를 올려 주므로 같은 사람이 연달아 쳐도 매번 새로 돕니다 */}
+            {bell && !reduce && (
+              <>
+                {[0, 1].map((ring) => (
+                  <motion.span
+                    key={`${bell.seq}-${ring}`}
+                    initial={{ scale: 0.6, opacity: 0.55 }}
+                    animate={{ scale: 2.6, opacity: 0 }}
+                    transition={{ duration: 0.9, delay: ring * 0.18, ease: 'easeOut' }}
+                    className={cn(
+                      'absolute size-14 rounded-full border-2',
+                      bell.correct ? 'border-emerald-500' : 'border-rose-500',
+                    )}
+                  />
+                ))}
+              </>
             )}
-          >
-            <BellRing size={26} strokeWidth={2.2} aria-hidden />
-          </motion.div>
+
+            <motion.div
+              animate={
+                bell && !reduce
+                  ? { y: [0, 5, -2, 0], scale: [1, 0.92, 1.08, 1] }
+                  : { y: 0, scale: 1 }
+              }
+              transition={{ duration: 0.5 }}
+              className={cn(
+                'relative flex size-14 items-center justify-center rounded-full transition-colors',
+                bell?.correct === true && 'bg-emerald-100 text-emerald-600',
+                bell?.correct === false && 'bg-rose-100 text-rose-600',
+                !bell && 'surface text-ink-subtle',
+              )}
+            >
+              <ConciergeBell size={30} strokeWidth={2} aria-hidden />
+            </motion.div>
+          </div>
         </div>
 
         {/* 종이 울린 직후에만 뜨는 한 줄. 자리 위에 겹쳐 놓아 시선이 가운데에 머뭅니다 */}
@@ -124,18 +149,7 @@ export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
         </span>
       </p>
 
-      {state.log.length > 0 && (
-        <div className="surface-2 max-h-28 space-y-1 overflow-y-auto rounded-xl p-3">
-          {[...state.log]
-            .reverse()
-            .slice(0, 8)
-            .map((line, index) => (
-              <p key={index} className="text-muted text-xs">
-                {line}
-              </p>
-            ))}
-        </div>
-      )}
+      {chat}
     </div>
   );
 }
@@ -230,23 +244,22 @@ function useBellHotkey(enabled: boolean, onAction: (body: { action: 'BELL' }) =>
  * 방금 종이 울렸나.
  *
  * <p>서버 상태에는 "마지막 종" 만 남아 있어서, 그 값만 보면 <b>한 번 울린 뒤 계속</b>
- * 울린 것처럼 보입니다. 그래서 값이 <b>새로 바뀐 순간</b>에만 잠깐 켜고 스스로 끕니다.
- * 같은 사람이 연달아 두 번 칠 수도 있으므로 기록 길이까지 함께 봅니다.
+ * 울린 것처럼 보입니다. 그래서 `bellSeq` 가 <b>바뀐 순간</b>에만 잠깐 켜고 스스로 끕니다 —
+ * 같은 사람이 같은 결과로 연달아 쳐도 번호가 오르므로 새 종으로 알아봅니다.
  */
-function useBellFlash(seat: number | null, correct: boolean | null, logLength: number) {
-  const [flash, setFlash] = useState<{ seat: number; correct: boolean } | null>(null);
-  const seen = useRef<string | null>(null);
+function useBellFlash(seat: number | null, correct: boolean | null, seq: number) {
+  const [flash, setFlash] = useState<{ seat: number; correct: boolean; seq: number } | null>(null);
+  const seen = useRef<number | null>(null);
 
   useEffect(() => {
-    if (seat === null || correct === null) return;
-    const key = `${seat}:${correct}:${logLength}`;
-    if (seen.current === key) return;
-    seen.current = key;
+    if (seat === null || correct === null || seq === 0) return;
+    if (seen.current === seq) return;
+    seen.current = seq;
 
-    setFlash({ seat, correct });
+    setFlash({ seat, correct, seq });
     const timer = setTimeout(() => setFlash(null), BELL_FLASH_MS);
     return () => clearTimeout(timer);
-  }, [seat, correct, logLength]);
+  }, [seat, correct, seq]);
 
   return flash;
 }

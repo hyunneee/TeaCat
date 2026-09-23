@@ -78,6 +78,8 @@ export interface HalliGalliState {
   eliminationOrder: number[];
   lastBellSeat: number | null;
   lastBellCorrect: boolean | null;
+  /** 종을 칠 때마다 하나씩 오릅니다. 같은 사람이 연달아 쳐도 화면이 새 종으로 알아봅니다 */
+  bellSeq: number;
   log: string[];
   finished: boolean;
 }
@@ -104,8 +106,12 @@ export interface GameRoom {
 }
 
 export interface GamePolicy {
-  /** 고를 수 있는 판돈. `0` 은 연습 모드입니다 */
+  /** 화면에 띄울 빠른 선택 금액. `0` 은 연습 모드이고, 직접 입력해도 됩니다 */
   betChoices: number[];
+  /** 걸 수 있는 최대 금액. 0부터 이 값까지는 직접 입력해도 서버가 받습니다 */
+  maxBet: number;
+  /** 보조금을 받으려면 최소 이만큼 걸어야 합니다. 그보다 적으면 판만 돌고 보조금은 없습니다 */
+  subsidyMinBet: number;
   subsidyPerPlayer: number;
   /** 오늘 내가 아직 받을 수 있는 보조금 */
   remainingSubsidyToday: number;
@@ -119,6 +125,20 @@ export interface CreateGameRoomRequest {
   maxPlayers: number;
   /** 1인당 말 수 1~4. 윷놀이만 씁니다 */
   piecesPerPlayer?: number;
+}
+
+/**
+ * 방 채팅 한 줄.
+ *
+ * 🔴 **서버 메모리에만 있습니다.** 새로고침·재접속에는 살아남지만 서버를 다시 띄우면
+ * 사라지고, 판이 끝나면 지워집니다. 나중에 다시 꺼내 볼 화면이 없어서 그렇게 두었습니다.
+ */
+export interface GameChatMessage {
+  id: number;
+  seatNo: number;
+  nickname: string;
+  message: string;
+  sentAt: string;
 }
 
 export interface GameActionRequest {

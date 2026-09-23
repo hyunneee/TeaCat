@@ -1,5 +1,6 @@
 import { Check, Copy, Crown, Users } from 'lucide-react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Button, Card } from '@/shared/components/ui';
 import { toast } from '@/shared/stores';
 import { seatColor } from '../model/yutBoard';
@@ -12,10 +13,12 @@ interface Props {
   onPickPieceStyle: (style: GamePieceStyle) => void;
   onStart: () => void;
   busy: boolean;
+  /** 대기실에서도 말을 겁니다 — 사람을 모으는 동안 할 일이 이것뿐입니다 */
+  chat: ReactNode;
 }
 
 /** 시작 전 대기실 — 초대 코드를 나눠주고 사람이 모이길 기다립니다 */
-export function GameLobbyPanel({ room, onReady, onPickPieceStyle, onStart, busy }: Props) {
+export function GameLobbyPanel({ room, onReady, onPickPieceStyle, onStart, busy, chat }: Props) {
   const [copied, setCopied] = useState(false);
   const me = room.participants.find((p) => p.me);
   const yut = room.gameType === 'YUT';
@@ -134,6 +137,8 @@ export function GameLobbyPanel({ room, onReady, onPickPieceStyle, onStart, busy 
           </p>
         </Card>
       )}
+
+      {chat}
 
       {room.host ? (
         <Button variant="primary" size="lg" fullWidth loading={busy} onClick={onStart}>

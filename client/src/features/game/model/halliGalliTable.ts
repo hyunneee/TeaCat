@@ -8,13 +8,27 @@ import type { HalliGalliCard } from './game.types';
  * 여기 그림이 있기 때문입니다 — lucide 에 딸기·자두가 없어서, 이름을 맞추지 않으면
  * "딸기라는데 체리가 그려진" 카드가 됩니다.
  */
-export const FRUITS: Record<HalliGalliCard['fruit'], { icon: LucideIcon; label: string; tone: string }> =
-  {
-    CHERRY: { icon: Cherry, label: '체리', tone: 'text-rose-500' },
-    BANANA: { icon: Banana, label: '바나나', tone: 'text-amber-500' },
-    LIME: { icon: Citrus, label: '라임', tone: 'text-lime-600' },
-    GRAPE: { icon: Grape, label: '포도', tone: 'text-violet-500' },
-  };
+interface Fruit {
+  icon: LucideIcon;
+  label: string;
+  /** 선 색 */
+  tone: string;
+  /**
+   * 속을 채우는 색.
+   *
+   * 🔴 선 색보다 **한 단계 연하게** 잡습니다. 같은 색으로 채우면 lucide 아이콘의 안쪽
+   * 선(체리의 줄기, 포도알의 경계)이 면에 묻혀 덩어리 하나로 보입니다. 그러면 정작
+   * 세어야 하는 **개수**가 안 보입니다.
+   */
+  fill: string;
+}
+
+export const FRUITS: Record<HalliGalliCard['fruit'], Fruit> = {
+  CHERRY: { icon: Cherry, label: '체리', tone: 'text-rose-600', fill: 'fill-rose-300' },
+  BANANA: { icon: Banana, label: '바나나', tone: 'text-amber-600', fill: 'fill-amber-200' },
+  LIME: { icon: Citrus, label: '라임', tone: 'text-lime-700', fill: 'fill-lime-300' },
+  GRAPE: { icon: Grape, label: '포도', tone: 'text-violet-600', fill: 'fill-violet-300' },
+};
 
 /**
  * 자리 방향. **나는 언제나 남(아래)** 이고, 나머지는 차례 순서대로 시계방향으로 앉습니다.

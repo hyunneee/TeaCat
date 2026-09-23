@@ -168,6 +168,7 @@ public class HalliGalliEngine implements GameEngine {
         boolean correct = s.bellIsCorrect();
         s.lastBellSeat = seat;
         s.lastBellCorrect = correct;
+        s.bellSeq++;
 
         if (correct) {
             collectAllPiles(s, seat);

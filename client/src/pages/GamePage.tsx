@@ -29,6 +29,18 @@ const GAMES: { type: GameType; name: string; description: string; icon: typeof D
 ];
 
 /**
+ * 직접 입력한 판돈을 서버가 받는 범위로 맞춥니다.
+ *
+ * 🔴 여기서 막는 이유는 **눌러서 실패하게 두지 않으려는 것**뿐입니다. 진짜 판정은
+ * 서버가 합니다 — 상한을 넘겨 보내면 GAME_011 로 거절됩니다.
+ */
+function clampBet(raw: string, max: number) {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(max, Math.floor(parsed)));
+}
+
+/**
  * 같이 하는 게임 입구 — 방을 만들거나 초대 코드로 들어갑니다.
  *
  * <p>🔴 이미 들어가 있는 방이 있으면 <b>그리로 돌려보냅니다.</b> 한 사람이 두 방에 있을 수
@@ -199,34 +211,66 @@ export function GamePage() {
                 판돈 정보를 불러오지 못했어요. 잠시 후 새로고침해 주세요.
               </p>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {betChoices.map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    disabled={solo && amount > 0}
-                    onClick={() => setBetAmount(amount)}
-                    className={[
-                      'rounded-xl py-2 text-sm font-bold disabled:opacity-40',
-                      betAmount === amount ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
-                    ].join(' ')}
-                  >
-                    {amount === 0 ? '연습' : amount.toLocaleString()}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-4 gap-2">
+                  {betChoices.map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      disabled={solo && amount > 0}
+                      onClick={() => setBetAmount(amount)}
+                      className={[
+                        'rounded-xl py-2 text-sm font-bold disabled:opacity-40',
+                        betAmount === amount ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
+                      ].join(' ')}
+                    >
+                      {amount === 0 ? '연습' : amount.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 직접 입력. 위 버튼은 자주 쓰는 금액을 빨리 고르는 길일 뿐이고,
+                    0부터 상한까지 어떤 값이든 서버가 받습니다 — 0이면 연습 판입니다 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={policy?.maxBet ?? 0}
+                    value={betAmount}
+                    disabled={solo}
+                    aria-label="1인당 판돈 직접 입력"
+                    onChange={(e) => setBetAmount(clampBet(e.target.value, policy?.maxBet ?? 0))}
+                    className="surface border-border text-ink min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm font-bold tabular-nums outline-none focus:border-accent-600 disabled:opacity-40"
+                  />
+                  <span className="text-muted shrink-0 text-xs">캣머니</span>
+                </div>
+              </>
             )}
 
             {solo ? (
               <p className="text-muted text-xs">혼자 하는 방은 연습으로만 할 수 있어요.</p>
+            ) : betAmount === 0 ? (
+              <p className="text-muted text-xs">0이면 연습 판이에요. 캣머니가 오가지 않아요.</p>
             ) : (
-              policy && betAmount > 0 && (
+              policy && (
                 <p className="text-muted text-xs">
-                  티캣이 인원수마다 {policy.subsidyPerPlayer.toLocaleString()} 캣머니를 상금에 얹어줘요.
-                  등수대로 나눠 가져요 (
-                  {(policy.prizeShares[maxPlayers - 1] ?? []).map((share) => `${share}%`).join(' · ')}).
-                  {policy.remainingSubsidyToday < policy.subsidyPerPlayer * maxPlayers && (
-                    <> 오늘 받을 수 있는 보조금이 {policy.remainingSubsidyToday.toLocaleString()} 남았어요.</>
+                  {betAmount >= policy.subsidyMinBet ? (
+                    <>
+                      티캣이 인원수마다 {policy.subsidyPerPlayer.toLocaleString()} 캣머니를 상금에 얹어줘요.
+                      등수대로 나눠 가져요 (
+                      {(policy.prizeShares[maxPlayers - 1] ?? []).map((share) => `${share}%`).join(' · ')}).
+                      {policy.remainingSubsidyToday < policy.subsidyPerPlayer * maxPlayers && (
+                        <> 오늘 받을 수 있는 보조금이 {policy.remainingSubsidyToday.toLocaleString()} 남았어요.</>
+                      )}
+                    </>
+                  ) : (
+                    /* 얹어주지 않는 이유를 말해 줍니다. 조용히 빼면 "상금이 왜 적지?" 가 됩니다 */
+                    <>
+                      {policy.subsidyMinBet.toLocaleString()} 캣머니부터 티캣이 상금을 얹어줘요. 지금은 걸린
+                      판돈만 등수대로 나눠 가져요 (
+                      {(policy.prizeShares[maxPlayers - 1] ?? []).map((share) => `${share}%`).join(' · ')}).
+                    </>
                   )}
                 </p>
               )

@@ -2,6 +2,7 @@ import { http } from '@/shared/api';
 import type {
   CreateGameRoomRequest,
   GameActionRequest,
+  GameChatMessage,
   GamePieceStyle,
   GamePolicy,
   GameRoom,
@@ -46,6 +47,11 @@ export const gameApi = {
   act: (roomId: number, body: GameActionRequest) =>
     http.post<GameRoom>(`/games/rooms/${roomId}/actions`, body),
 
+  chat: (roomId: number) => http.get<GameChatMessage[]>(`/games/rooms/${roomId}/chat`),
+
+  sendChat: (roomId: number, message: string) =>
+    http.post<GameChatMessage>(`/games/rooms/${roomId}/chat`, { message }),
+
   leave: (roomId: number) => http.post<void>(`/games/rooms/${roomId}/leave`, {}),
 };
 
@@ -54,4 +60,5 @@ export const gameKeys = {
   policy: () => [...gameKeys.all, 'policy'] as const,
   myRoom: () => [...gameKeys.all, 'myRoom'] as const,
   room: (roomId: number) => [...gameKeys.all, 'room', roomId] as const,
+  chat: (roomId: number) => [...gameKeys.all, 'chat', roomId] as const,
 };

@@ -2,6 +2,7 @@ import { Trophy } from 'lucide-react';
 import { Button, Card } from '@/shared/components/ui';
 import { seatColor } from '../model/yutBoard';
 import type { GameRoom } from '../model/game.types';
+import { PrizeSplitBar } from './PrizeSplitBar';
 
 interface Props {
   room: GameRoom;
@@ -60,11 +61,15 @@ export function GameResultCard({ room, onLeave, busy }: Props) {
       {practice ? (
         <p className="text-muted text-xs">연습 판이라 캣머니는 오가지 않았어요.</p>
       ) : (
-        <p className="text-muted text-xs">
-          상금 {room.prizePool.toLocaleString()} 캣머니
-          {room.subsidy > 0 && ` (그중 ${room.subsidy.toLocaleString()}은 티캣이 얹어준 금액)`}
-          {' · '}반영까지 잠깐 걸릴 수 있어요.
-        </p>
+        <>
+          <PrizeSplitBar
+            ranked={ranked}
+            prizePool={room.prizePool}
+            betAmount={room.betAmount}
+            subsidy={room.subsidy}
+          />
+          <p className="text-muted text-xs">잔액에 반영되기까지 잠깐 걸릴 수 있어요.</p>
+        </>
       )}
 
       <Button variant="primary" size="lg" fullWidth loading={busy} onClick={onLeave}>

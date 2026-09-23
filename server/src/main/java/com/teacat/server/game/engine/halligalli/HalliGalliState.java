@@ -47,9 +47,16 @@ public class HalliGalliState {
 
     public boolean finished;
 
-    /** 방금 종이 울렸나 — 화면에서 효과를 주기 위해서만 쓴다 */
+    /**
+     * 방금 종이 울렸나 — 화면에서 효과를 주기 위해서만 쓴다.
+     *
+     * <p>{@link #bellSeq} 가 필요한 이유는 같은 사람이 같은 결과로 연달아 칠 수 있기
+     * 때문이다. 자리와 성패만 보면 화면이 "새로 울렸다" 를 알아보지 못해서, 종소리가
+     * 한 번만 울리고 만다. 칠 때마다 번호가 하나씩 오른다.
+     */
     public Integer lastBellSeat;
     public Boolean lastBellCorrect;
+    public int bellSeq;
 
     public static HalliGalliState start(int players, Random random) {
         HalliGalliState state = new HalliGalliState();

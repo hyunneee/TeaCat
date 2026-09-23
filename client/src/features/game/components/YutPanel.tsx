@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Flag, Home } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Button } from '@/shared/components/ui';
@@ -7,6 +8,7 @@ import { YUT_GOAL, YUT_HOME, YUT_THROW_NAMES, seatColor, yutAdvance } from '../m
 import { pieceStyleOf } from '../model/yutPieces';
 import type { GameParticipant, GameRoom, YutState } from '../model/game.types';
 import { YutBoardView } from './YutBoardView';
+import { YutSticks } from './YutSticks';
 import type { Destination } from './YutBoardView';
 
 interface Props {
@@ -14,6 +16,8 @@ interface Props {
   state: YutState;
   onAction: (body: { action: 'THROW' | 'MOVE'; piece?: number; value?: number }) => void;
   pending: boolean;
+  /** 기록 대신 들어가는 채팅 창. 페이지가 만들어 내려줍니다 */
+  chat: ReactNode;
 }
 
 /** 던진 결과가 화면 한가운데에 머무는 시간 */
@@ -30,7 +34,7 @@ const THROW_FLASH_MS = 1600;
  * <p>고른 결과로 <b>갈 수 있는 자리를 판 위에 띄웁니다.</b> 지름길은 모서리에 정확히
  * 멈춰야 타는 규칙이라, 어디까지 가는지가 눈으로 계산되지 않습니다.
  */
-export function YutPanel({ room, state, onAction, pending }: Props) {
+export function YutPanel({ room, state, onAction, pending, chat }: Props) {
   const [value, setValue] = useState<number | null>(null);
 
   const myTurn = state.turn === room.mySeatNo;
@@ -76,17 +80,21 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
         onPickPiece={myTurn && waiting ? move : undefined}
       />
 
-      {/* 던진 결과 — 화면 한가운데에 크게. 던진 사람만이 아니라 모두가 봅니다 */}
+      {/* 던진 결과 — 판 한가운데에 윷가락이 실제로 떨어집니다. 던진 사람만이 아니라
+          방에 있는 모두가 같은 것을 봅니다 (서버가 lastThrow 를 내려주기 때문입니다) */}
       {flash && (
         <motion.div
           initial={{ opacity: 0, scale: 0.6 }}
           animate={{ opacity: 1, scale: 1 }}
-
           transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-          className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center"
+          /* 🔴 판과 <b>같은 상자</b>여야 가운데가 맞습니다. 판은 max-w-[22rem] 로 가운데
+             정렬돼 있어서, 여기에 폭 제한이 없으면 정사각형이 판보다 커지고 윷가락이
+             판 아래(버튼 위)로 내려앉습니다 */
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 mx-auto flex aspect-square w-full max-w-[22rem] items-center justify-center"
         >
-          <div className="surface flex flex-col items-center gap-1 rounded-3xl px-8 py-5 shadow-xl">
-            <span className={cn('text-5xl font-black', seatColor(flash.seat).text)}>
+          <div className="surface flex flex-col items-center gap-2 rounded-3xl px-6 py-4 shadow-xl">
+            <YutSticks result={flash.result} seq={flash.seq} />
+            <span className={cn('text-3xl font-black leading-none', seatColor(flash.seat).text)}>
               {YUT_THROW_NAMES[flash.result]}
             </span>
             <span className="text-muted text-xs">
@@ -162,16 +170,7 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
         </p>
       )}
 
-      {/* 최근 기록. 뒤집힌 순서로 보여야 방금 일어난 일이 위에 옵니다 */}
-      {state.log.length > 0 && (
-        <div className="surface-2 max-h-28 space-y-1 overflow-y-auto rounded-xl p-3">
-          {[...state.log].reverse().slice(0, 8).map((line, index) => (
-            <p key={index} className="text-muted text-xs">
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
+      {chat}
     </div>
   );
 }
@@ -253,7 +252,7 @@ function dedupe(list: Destination[]): Destination[] {
  * 같은 값이 연달아 나와도(모, 모) 번호가 오르므로 새 던지기로 알아봅니다.
  */
 function useThrowFlash(result: number | null, seat: number | null, seq: number) {
-  const [flash, setFlash] = useState<{ result: number; seat: number } | null>(null);
+  const [flash, setFlash] = useState<{ result: number; seat: number; seq: number } | null>(null);
   const seen = useRef<number | null>(null);
 
   useEffect(() => {
@@ -261,7 +260,7 @@ function useThrowFlash(result: number | null, seat: number | null, seq: number) 
     if (seen.current === seq) return;
     seen.current = seq;
 
-    setFlash({ result, seat });
+    setFlash({ result, seat, seq });
     const timer = setTimeout(() => setFlash(null), THROW_FLASH_MS);
     return () => clearTimeout(timer);
   }, [result, seat, seq]);

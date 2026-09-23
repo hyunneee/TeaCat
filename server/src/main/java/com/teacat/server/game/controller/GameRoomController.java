@@ -4,9 +4,11 @@ import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.game.dto.request.CreateGameRoomRequest;
 import com.teacat.server.game.dto.request.GameActionRequest;
+import com.teacat.server.game.dto.request.GameChatRequest;
 import com.teacat.server.game.dto.request.GamePieceStyleRequest;
 import com.teacat.server.game.dto.request.GameReadyRequest;
 import com.teacat.server.game.dto.request.JoinGameRoomRequest;
+import com.teacat.server.game.dto.response.GameChatMessageResponse;
 import com.teacat.server.game.dto.response.GamePolicyResponse;
 import com.teacat.server.game.dto.response.GameRoomResponse;
 import com.teacat.server.game.service.GameRoomService;
@@ -28,6 +30,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.List;
 
 @Tag(name = "같이 하는 게임", description = "초대 코드로 모여 캣머니를 걸고 겨루는 게임 (윷놀이 · 할리갈리)")
 @RestController
@@ -94,7 +98,7 @@ public class GameRoomController {
                     사람마다 가려야 하는 정보가 있어 일부러 이렇게 나눴습니다.
 
                     이벤트 이름: room(사람이 드나듦) · start(시작) · state(판이 바뀜) ·
-                    finished(끝남) · ping(연결 유지).
+                    chat(누가 말했음) · finished(끝남) · ping(연결 유지).
                     """)
     @GetMapping(value = "/rooms/{roomId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter events(
@@ -147,6 +151,32 @@ public class GameRoomController {
             @PathVariable Long roomId,
             @Valid @RequestBody GameActionRequest request) {
         return ResponseEntity.ok(BaseResponse.success(gameRoomService.act(authUser.id(), roomId, request)));
+    }
+
+    @Operation(summary = "방 채팅 읽기",
+            description = """
+                    같은 방 사람들이 주고받은 말입니다. 오래된 것이 앞이고 최근 100줄만 남습니다.
+
+                    🔴 <b>서버 메모리에만 있습니다.</b> 새로고침·재접속에는 살아남지만 서버를
+                    다시 띄우면 사라지고, 판이 끝나면 지웁니다. 나중에 다시 꺼내 볼 화면이
+                    없어서 일부러 이렇게 두었습니다.
+                    """)
+    @GetMapping("/rooms/{roomId}/chat")
+    public ResponseEntity<BaseResponse<List<GameChatMessageResponse>>> chatHistory(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long roomId) {
+        return ResponseEntity.ok(BaseResponse.success(gameRoomService.chatHistory(authUser.id(), roomId)));
+    }
+
+    @Operation(summary = "방 채팅 보내기",
+            description = "보내면 같은 방 사람들에게 chat 이벤트가 갑니다. 200자까지입니다.")
+    @PostMapping("/rooms/{roomId}/chat")
+    public ResponseEntity<BaseResponse<GameChatMessageResponse>> chat(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long roomId,
+            @Valid @RequestBody GameChatRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(
+                gameRoomService.chat(authUser.id(), roomId, request.message())));
     }
 
     @Operation(summary = "방 나가기",
