@@ -6,10 +6,12 @@ import com.teacat.server.nft.entity.NftAuction;
 import com.teacat.server.nft.entity.NftPhotocardTrade;
 import com.teacat.server.nft.entity.NftTradeChainStatus;
 import com.teacat.server.nft.entity.NftTradeReview;
+import com.teacat.server.nft.entity.NftTradeRiskFeature;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardRepository;
 import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
 import com.teacat.server.nft.repository.NftTradeReviewRepository;
+import com.teacat.server.nft.repository.NftTradeRiskFeatureRepository;
 import com.teacat.server.wallet.client.BlockchainProperties;
 import com.teacat.server.wallet.entity.CatMoneyHoldRefType;
 import com.teacat.server.wallet.entity.Wallet;
@@ -39,6 +41,7 @@ public class NftTradeSettlementWriter {
     private final NftTradeRiskScreener riskScreener;
     private final NftTradeReviewRepository reviewRepository;
     private final NftTradeReviewProperties reviewProperties;
+    private final NftTradeRiskFeatureRepository featureRepository;
 
     @Transactional(readOnly = true)
     public SettlementCommand command(Long tradeId) {
@@ -76,11 +79,18 @@ public class NftTradeSettlementWriter {
         }
         TradeRiskAssessment assessment = riskScreener.screen(tradeId);
         boolean hold = assessment.flagged() && reviewProperties.holds();
+        NftTradeReview review = null;
         if (!assessment.signals().isEmpty()) {
-            reviewRepository.save(NftTradeReview.open(
+            review = reviewRepository.save(NftTradeReview.open(
                     trade, assessment.signals(), assessment.maxSeverity(), assessment.flagged(), hold));
             log.info("NFT 거래 이상거래 신호 tradeId={} severity={} flagged={} held={} rules={}",
                     tradeId, assessment.maxSeverity(), assessment.flagged(), hold, assessment.ruleCodes());
+        }
+        // 🔴 통과한 거래도 피처를 남긴다 — 정상 사례가 없으면 나중에 모델이 정상을 배울 수 없다 (설계 14-2).
+        //    지나간 거래의 피처는 복구할 수 없으므로 지금부터 쌓는 것 말고는 방법이 없다.
+        if (assessment.hasFeatures() && !featureRepository.existsByTradeId(tradeId)) {
+            featureRepository.save(NftTradeRiskFeature.of(trade, assessment.features(), assessment.signals(),
+                    assessment.maxSeverity(), assessment.flagged(), review));
         }
         if (hold) {
             trade.holdForRiskReview();

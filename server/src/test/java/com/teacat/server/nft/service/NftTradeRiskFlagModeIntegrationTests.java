@@ -7,14 +7,18 @@ import com.teacat.server.nft.dto.request.NftBidRequest;
 import com.teacat.server.nft.entity.NftReviewDecision;
 import com.teacat.server.nft.entity.NftReviewSeverity;
 import com.teacat.server.nft.entity.NftTradeReview;
+import com.teacat.server.nft.entity.NftTradeRiskFeature;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftTradeReviewRepository;
+import com.teacat.server.nft.repository.NftTradeRiskFeatureRepository;
 import com.teacat.server.support.PostgresIntegrationTest;
 import com.teacat.server.user.entity.UserRole;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,6 +34,7 @@ class NftTradeRiskFlagModeIntegrationTests extends PostgresIntegrationTest {
 
     private static final ClientRequest SELLER_DEVICE = ClientRequest.of("10.0.0.7", "Mozilla/5.0 (seller)");
     private static final ClientRequest SAME_IP_OTHER_BROWSER = ClientRequest.of("10.0.0.7", "Mozilla/5.0 (other)");
+    private static final ClientRequest OTHER_DEVICE = ClientRequest.of("203.0.113.5", "Mozilla/5.0 (other-device)");
 
     @Override
     protected Long insertPhotocardOwnedBy(Long ownerId) {
@@ -43,6 +48,7 @@ class NftTradeRiskFlagModeIntegrationTests extends PostgresIntegrationTest {
     @Autowired private NftTradeSettlementWriter writer;
     @Autowired private NftTradeReviewService reviewService;
     @Autowired private NftTradeReviewRepository reviewRepository;
+    @Autowired private NftTradeRiskFeatureRepository featureRepository;
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtTokenProvider jwtTokenProvider;
 
@@ -71,6 +77,63 @@ class NftTradeRiskFlagModeIntegrationTests extends PostgresIntegrationTest {
         assertThat(review.isHeld()).isFalse();
         assertThat(review.getMaxSeverity()).isEqualTo(NftReviewSeverity.HIGH);
         assertThat(review.getSignals()).anyMatch(s -> s.rule().equals(TradeRiskSameDeviceRule.CODE));
+    }
+
+    @Test
+    void 규칙에_걸리지_않은_거래도_피처를_남긴다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        insertWallet(sellerId);
+        Long buyer = insertFundedUser("b@test.com", "구매자", 10_000);
+        distinctPhones(sellerId, buyer);
+        Long auctionId = insertAuctionWithDevice(insertPhotocardOwnedBy(sellerId), sellerId, SELLER_DEVICE);
+        auctionService.placeBid(buyer, auctionId, new NftBidRequest(2_000L), OTHER_DEVICE);
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
+        closer.close(auctionId);
+        Long tradeId = tradeIdOf(auctionId);
+
+        assertThat(writer.screen(tradeId)).isFalse();
+
+        // 신호가 없으니 심사 행은 없다 — 관리자 화면에는 안 뜬다
+        assertThat(reviewRepository.findByTradeId(tradeId)).isEmpty();
+        // 그래도 피처는 남는다. 이게 모델의 정상 사례가 된다
+        NftTradeRiskFeature feature = featureRepository.findByTradeId(tradeId).orElseThrow();
+        assertThat(feature.isFlagged()).isFalse();
+        assertThat(feature.getMaxSeverity()).isNull();
+        assertThat(feature.getSignals()).isEmpty();
+        assertThat(feature.getReview()).isNull();
+
+        Map<String, Object> f = feature.getFeatures();
+        assertThat(f).containsEntry("isAuction", true)
+                .containsEntry("sellerBuyerSameIp", false)
+                .containsEntry("price", 2_000);
+        // 🔴 개인정보는 들어가지 않는다 — 이 표는 나중에 파이썬으로 그대로 빠져나간다
+        assertThat(f).doesNotContainKeys("buyerIp", "sellerIp", "buyerPhone", "sellerPhone", "userAgentHash");
+        assertThat(f.values()).noneMatch(v -> String.valueOf(v).contains(OTHER_DEVICE.ip()));
+    }
+
+    @Test
+    void 걸린_거래의_피처는_심사_행과_이어진다() {
+        Long sellerId = insertUser("s@test.com", "판매자");
+        insertWallet(sellerId);
+        Long alt = insertFundedUser("alt@test.com", "부계정", 10_000);
+        distinctPhones(sellerId, alt);
+        Long auctionId = insertAuctionWithDevice(insertPhotocardOwnedBy(sellerId), sellerId, SELLER_DEVICE);
+        auctionService.placeBid(alt, auctionId, new NftBidRequest(2_000L), SELLER_DEVICE);
+        jdbcTemplate.update("UPDATE nft_auctions SET ends_at = now() - interval '1 second' WHERE id = ?", auctionId);
+        closer.close(auctionId);
+        Long tradeId = tradeIdOf(auctionId);
+
+        writer.screen(tradeId);
+
+        NftTradeRiskFeature feature = featureRepository.findByTradeId(tradeId).orElseThrow();
+        assertThat(feature.isFlagged()).isTrue();
+        assertThat(feature.getMaxSeverity()).isEqualTo(NftReviewSeverity.HIGH);
+        // 라벨은 심사 행의 판정을 조인해서 읽는다 — 여기 복사하지 않는다
+        assertThat(feature.getReview()).isNotNull();
+        assertThat(feature.getReview().getId())
+                .isEqualTo(reviewRepository.findByTradeId(tradeId).orElseThrow().getId());
+        assertThat(feature.getFeatures()).containsEntry("sellerBuyerSameIp", true)
+                .containsEntry("sellerBuyerSameUserAgent", true);
     }
 
     @Test

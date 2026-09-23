@@ -44,12 +44,17 @@ public class NftTradeRiskScreener {
         return evaluate(context);
     }
 
-    /** 맥락이 이미 있을 때(단위 테스트·시뮬레이션). 규칙만 돌린다 */
+    /**
+     * 맥락이 이미 있을 때(단위 테스트·시뮬레이션). 규칙을 돌리고 <b>학습용 피처도 함께</b> 만든다.
+     *
+     * <p>피처를 여기서 만드는 이유는 규칙과 같은 맥락 객체를 쓰기 위해서다. 학습용 조회를 따로 짜면
+     * 서빙 때 쓰는 값과 어긋난다(AUCTION_FRAUD_DESIGN.md 14-2).
+     */
     public TradeRiskAssessment evaluate(TradeRiskContext context) {
         List<NftTradeRiskSignal> signals = new ArrayList<>();
         for (TradeRiskRule rule : rules) {
             signals.addAll(rule.evaluate(context, properties));
         }
-        return TradeRiskAssessment.of(signals);
+        return TradeRiskAssessment.of(signals, TradeRiskFeatureVector.of(context));
     }
 }
