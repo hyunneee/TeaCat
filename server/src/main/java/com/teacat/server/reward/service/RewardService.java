@@ -1,6 +1,7 @@
 package com.teacat.server.reward.service;
 
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.reward.dto.response.AttendanceCalendarResponse;
 import com.teacat.server.reward.dto.response.DailyRewardStatusResponse;
 import com.teacat.server.reward.dto.response.RewardClaimResponse;
 import com.teacat.server.reward.dto.response.RewardStateResponse;
@@ -63,11 +64,17 @@ public class RewardService {
             claimed.put(row.getRewardType(), row);
         }
 
+        /* 누를 수 있는 것만 내려보낸다. 짝 맞추기 1등 보상(MEMORY_RANK)은 스케줄러가 넣는 것이라
+           목록에 띄우면 "눌러도 안 받아지는 줄" 이 된다 (RewardType.MEMORY_RANK 주석) */
         List<RewardStateResponse> rewards = Arrays.stream(RewardType.values())
+                .filter(RewardType::claimable)
                 .map(type -> RewardStateResponse.of(type, claimed.get(type)))
                 .toList();
 
-        return new DailyRewardStatusResponse(today, rewards);
+        return new DailyRewardStatusResponse(
+                today,
+                dailyRewardRepository.countStreakUntil(userId, today),
+                rewards);
     }
 
     /**
@@ -82,6 +89,10 @@ public class RewardService {
      * 재시도하는 위 경로가 두 번 지급으로 이어지지 않는 마지막 방어선이다.
      */
     public RewardClaimResponse claim(Long userId, RewardType type) {
+        if (!type.claimable()) {
+            // 컨트롤러가 타입을 고정해 부르므로 여기까지 올 일은 없다. 경로가 생기면 여기서 막힌다
+            throw new BusinessException(RewardErrorCode.NOT_CLAIMABLE);
+        }
         if (!userRepository.existsById(userId)) {
             throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
         }
@@ -140,6 +151,38 @@ public class RewardService {
      */
     private LocalDate today() {
         return LocalDate.now();
+    }
+
+    /**
+     * 한 달치 출석 기록.
+     *
+     * <p>🔴 <b>연속 출석 일수를 화면에서 세지 않는다.</b> 이 응답은 한 달만 담고 있어서
+     * 월초에 보면 지난달에 이어온 것이 안 보이고, 날짜 계산을 기기 시계로 하면 자정
+     * 근처에서 사람마다 다르게 나온다. 서버가 전체 기록으로 한 번 세서 내려준다.
+     *
+     * @param month 조회할 달의 아무 날. 없으면 이번 달
+     */
+    public AttendanceCalendarResponse attendanceCalendar(Long userId, LocalDate month) {
+        LocalDate today = today();
+        LocalDate firstDay = (month == null ? today : month).withDayOfMonth(1);
+
+        List<AttendanceCalendarResponse.AttendanceDayResponse> days =
+                dailyRewardRepository.findMonth(userId, RewardType.ATTENDANCE, firstDay).stream()
+                        .map(row -> new AttendanceCalendarResponse.AttendanceDayResponse(
+                                row.getRewardDate(), row.getAmount()))
+                        .toList();
+
+        long totalAmount = days.stream()
+                .mapToLong(AttendanceCalendarResponse.AttendanceDayResponse::amount)
+                .sum();
+
+        return new AttendanceCalendarResponse(
+                firstDay,
+                days,
+                days.size(),
+                totalAmount,
+                dailyRewardRepository.countStreakUntil(userId, today),
+                today);
     }
 
     /** 멱등 키. 비밀값을 넣지 않는다 — 해시가 체인에 영구히 남는다 */

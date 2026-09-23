@@ -4,7 +4,7 @@ import { UserRound } from 'lucide-react';
 import { Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { cn } from '@/shared/lib';
-import { TABS, useActiveIndex } from './navTabs';
+import { DESKTOP_TABS, useActiveDesktopTo } from './navTabs';
 import { SearchEntryButton, TrendingSearchInput } from '@/shared/search';
 import { useScrollNavigation } from './useScrollNavigation';
 import { sectionNavigation } from './sectionNavigation.model';
@@ -12,11 +12,16 @@ import { sectionNavigation } from './sectionNavigation.model';
 /** 본문과 같은 폭으로 맞춥니다 — 로고가 본문 왼쪽 끝과 한 줄로 서야 기둥이 하나로 보입니다 */
 const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
 
-/** 데스크톱에서는 오른쪽 위 계정 링크와 겹치는 MY만 둘째 줄에서 뺍니다. */
-const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
+
+
 
 /**
- * 데스크톱(lg 이상)의 상단 내비. 폰의 하단 탭과 **같은 목록**(navTabs)을 위로 올린 것입니다.
+ * 데스크톱(lg 이상)의 상단 내비.
+ *
+ * 🔴 **폰의 하단 탭과 목록이 다릅니다** (`navTabs` 의 `DESKTOP_TABS`). 가로로 늘어선 글자
+ * 탭은 칸이 훨씬 넓어서, 폰에서 한 칸으로 합쳐 둔 **마켓과 내 포카가 여기서는 둘로
+ * 나뉩니다.** 탭을 고칠 때 두 배열을 다 보세요 — 한쪽만 고치면 화면 크기에 따라 메뉴가
+ * 달라집니다.
  *
  * 배치는 티켓 예매 사이트(NOL)의 머리말을 따릅니다 — 두 줄입니다.
  *
@@ -31,7 +36,17 @@ const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
  * 스크롤을 따라옵니다. 목록을 한참 내린 뒤 다른 곳으로 가려고 맨 위까지 되돌아가야 하면
  * 아무도 안 옮깁니다 — 폰에서 하단 탭이 늘 붙어 있는 것과 같은 이유입니다.
  */
-export function TopNav() {
+interface TopNavProps {
+  /**
+   * MY 링크 **왼쪽**에 놓을 것 (지금은 캣머니 칩).
+   *
+   * 🔴 이 자리에 들어갈 것이 `features` 에 있어도 여기서 직접 부를 수 없습니다 — `shared` 는
+   * 도메인을 모릅니다(CLAUDE.md 3-2). 넣어 주는 쪽은 `AppLayout` 을 렌더하는 라우터입니다.
+   */
+  action?: React.ReactNode;
+}
+
+export function TopNav({ action }: TopNavProps = {}) {
   const { headerRef, hidden, reveal } = useScrollNavigation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,8 +61,9 @@ export function TopNav() {
       replace: true,
     });
   };
-  const activeIndex = useActiveIndex();
-  const activeTo = activeIndex >= 0 ? TABS[activeIndex]!.to : null;
+  const activeTo = useActiveDesktopTo();
+  /* MY 는 탭 줄에 없으므로 따로 봅니다 — 마이페이지에서 머리말이 전부 회색이 되지 않게 */
+  const myActive = location.pathname.startsWith(ROUTES.MY) && activeTo === null;
 
   return (
     <header
@@ -85,19 +101,25 @@ export function TopNav() {
           />
         )}
 
-        {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
-            어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
-        <Link
-          to={ROUTES.MY}
-          aria-current={activeTo === ROUTES.MY ? 'page' : undefined}
-          className={cn(
-            'ml-auto flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
-            activeTo === ROUTES.MY ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
-          )}
-        >
-          <UserRound size={18} />
-          MY
-        </Link>
+        {/* 캣머니 칩. 로그인했을 때만 자리를 차지합니다 (없으면 null 이라 MY 가 그대로 오른쪽 끝).
+            `ml-auto` 가 여기로 옮겨 왔습니다 — 칩이 있을 때 둘이 함께 오른쪽에 붙어야 합니다. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          {action}
+
+          {/* 탭 줄에서 뺀 MY 의 "지금 여기" 표시를 이 링크가 이어받습니다.
+              어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
+          <Link
+            to={ROUTES.MY}
+            aria-current={myActive ? 'page' : undefined}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
+              myActive ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
+            )}
+          >
+            <UserRound size={18} />
+            MY
+          </Link>
+        </div>
       </div>
 
       {/* ── 2줄 — 가로 탭. 줄 폭을 **똑같이 나눠** 가집니다 ── */}
@@ -111,7 +133,7 @@ export function TopNav() {
 
           return (
             /* NavLink 를 쓰지 않는 이유는 하단 탭과 같습니다 — 자체 접두사 매칭이
-               useActiveIndex 와 어긋납니다 (`/my/tickets` 에서 `/my` 도 켜짐) */
+               activeIndexOf 와 어긋납니다 (`/my/tickets` 에서 `/my` 도 켜짐) */
             <Link
               key={to}
               to={to}

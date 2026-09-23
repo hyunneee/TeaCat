@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Coins, Gavel, Search, Sparkles } from 'lucide-react';
+import { Coins, Gavel, Images, Search, Sparkles } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
-import { Input, Segmented, Select } from '@/shared/components/ui';
+import { Button, Input, Segmented, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { useCursorPagination } from '@/shared/hooks/useCursorPagination';
@@ -73,7 +73,24 @@ export function NftMarketPage() {
 
   return (
     <>
-      <Header title="포토카드 마켓" />
+      {/* 내 포카는 하단 탭에서 뺐습니다 — '포카' 와 '내 포카' 두 칸이 나란히 있으면 작게 봤을 때
+          글자만 다른 같은 자리로 읽힙니다. 대신 **진입은 이 버튼 하나**입니다.
+          로그인해야 볼 수 있는 화면이라 비로그인에는 띄우지 않습니다 (눌러서 로그인으로 튕기지 않게). */}
+      <Header
+        title="포토카드 마켓"
+        right={
+          isLoggedIn ? (
+            <Button
+              variant="soft"
+              size="sm"
+              leftIcon={<Images size={15} />}
+              onClick={() => navigate(ROUTES.MY_NFTS)}
+            >
+              내 포카
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* ── 고정 영역 ──
           방향·검색·정렬은 **스크롤을 따라옵니다.** 카드를 한참 내려간 뒤에
@@ -176,7 +193,7 @@ export function NftMarketPage() {
                   <NftCard
                     photocardId={card.photocardId}
                     designName={card.designName}
-                    imageUrl={card.imageUrl}
+                    imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                     performanceTitle={card.performanceTitle}
                     eventName={card.eventName}
                     price={card.price}
@@ -191,7 +208,7 @@ export function NftMarketPage() {
                   <AuctionCard
                     photocardId={item.photocardId}
                     designName={item.designName}
-                    imageUrl={item.imageUrl}
+                    imageUrl={item.decoratedImageUrl ?? item.imageUrl}
                     performanceTitle={item.performanceTitle}
                     currentPrice={item.currentPrice}
                     bidCount={item.bidCount}

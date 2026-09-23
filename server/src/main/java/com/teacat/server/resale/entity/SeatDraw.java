@@ -115,9 +115,17 @@ public class SeatDraw {
     /**
      * 첫 추첨. 참가자는 <b>오름차순</b>이어야 한다 — 체인이 순서를 검사하고 inputsHash 가 순서에 민감하다.
      */
+    /**
+     * 이 좌석의 {@code drawNo} 회차를 연다.
+     *
+     * <p>🔴 <b>회차 번호를 부르는 쪽이 정한다.</b> 여기서 1 로 고정하면, 한 번 추첨이 돌았던
+     * 좌석은 두 번째 취소에서 {@code draw_key} 가 겹쳐 취소가 통째로 실패한다 — 당첨자가 산
+     * 좌석을 그 사람이 다시 취소하는 평범한 흐름에서 바로 터진다.
+     * 지금까지의 최대 회차 + 1 을 넘겨라 ({@code SeatDrawRepository.maxDrawNo}).
+     */
     public static SeatDraw open(Long performanceId, Long performanceDetailId, Long areaId, Long seatId,
-                                List<Long> participantIds, Long sourceTicketOrderId) {
-        return new SeatDraw(performanceId, performanceDetailId, areaId, seatId, 1, participantIds,
+                                int drawNo, List<Long> participantIds, Long sourceTicketOrderId) {
+        return new SeatDraw(performanceId, performanceDetailId, areaId, seatId, drawNo, participantIds,
                 sourceTicketOrderId);
     }
 
@@ -202,8 +210,24 @@ public class SeatDraw {
 
     public void markFailed(String reason) {
         this.status = SeatDrawStatus.FAILED;
-        this.failureReason = reason == null ? null
-                : reason.substring(0, Math.min(reason.length(), 200));
+        this.failureReason = truncate(reason);
+    }
+
+    /**
+     * 커밋을 보내지 못했다. <b>상태는 PENDING 그대로</b> 두고 사유만 남긴다.
+     *
+     * <p>이 한 줄이 두 가지를 한다. 하나는 왜 멈췄는지 DB 에서 바로 보이게 하는 것
+     * ({@code select status, failure_reason from seat_draws}), 다른 하나는 {@code @UpdateTimestamp}
+     * 로 {@code updated_at} 을 올려 스위퍼의 재시도 간격이 실제로 지켜지게 하는 것이다 —
+     * 예전에는 실패해도 행이 그대로라 {@code updated_at} 이 안 올라가, 한번 막히면 스위퍼 주기마다
+     * (5초) 블록체인 API 를 두드렸다.
+     */
+    public void recordOpenFailure(String reason) {
+        this.failureReason = truncate(reason);
+    }
+
+    private static String truncate(String reason) {
+        return reason == null ? null : reason.substring(0, Math.min(reason.length(), 200));
     }
 
     private static String join(List<Long> ids) {

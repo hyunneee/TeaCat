@@ -48,15 +48,22 @@ public record ScheduleDetailResponse(
         String stadiumName,
 
         @Schema(description = "티켓팅 오픈 시각")
-        LocalDateTime ticketingStartAt
+        LocalDateTime ticketingStartAt,
+
+        @Schema(description = """
+                취소표 대기를 받을 수 있는지. **구역이 하나라도 매진됐고** 티켓팅이 열려 있으면 true 다.
+                대기는 구역 단위라 회차 전체 매진과 기준이 다르다.""", example = "false")
+        boolean waitlistOpen
 ) {
 
     /**
-     * @param soldOut 좌석이 다 팔렸는가 ({@code ScheduleSeatAvailability} 가 판정).
-     *                회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다
+     * @param soldOut        좌석이 다 팔렸는가 ({@code ScheduleSeatAvailability} 가 판정).
+     *                       회차 상태의 SOLD_OUT 은 운영자가 손으로 바꾸는 값이라 믿을 수 없다
+     * @param anyAreaSoldOut 구역이 하나라도 매진됐는가. 취소표 대기 화면의 진입 판정에 쓴다
      */
     public static ScheduleDetailResponse of(PerformanceDetail detail, LocalDateTime now,
-                                            Duration cancelDeadlineLead, boolean soldOut) {
+                                            Duration cancelDeadlineLead, boolean soldOut,
+                                            boolean anyAreaSoldOut) {
         PerformanceGeneral performance = detail.getPerformance();
         BookingOpenStatus bookingStatus = detail.bookingStatus(now).soldOutIf(soldOut);
 
@@ -72,7 +79,8 @@ public record ScheduleDetailResponse(
                 performance.getId(),
                 performance.getTitle(),
                 performance.getStadium().getName(),
-                performance.getTicketingStartAt()
+                performance.getTicketingStartAt(),
+                anyAreaSoldOut && bookingStatus.acceptsWaitlist()
         );
     }
 }

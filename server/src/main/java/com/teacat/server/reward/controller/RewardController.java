@@ -2,6 +2,7 @@ package com.teacat.server.reward.controller;
 
 import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
+import com.teacat.server.reward.dto.response.AttendanceCalendarResponse;
 import com.teacat.server.reward.dto.response.DailyRewardStatusResponse;
 import com.teacat.server.reward.dto.response.RewardClaimResponse;
 import com.teacat.server.reward.entity.RewardType;
@@ -17,8 +18,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.YearMonth;
 
 /**
  * 캣머니 벌기 — 하루 한 번 보상.
@@ -91,5 +95,27 @@ public class RewardController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
         return ResponseEntity.ok(BaseResponse.success("송편 잡기 보상을 지급했습니다.",
                 rewardService.claim(authUser.id(), RewardType.SONGPYEON)));
+    }
+
+    @Operation(
+            summary = "출석 달력",
+            description = """
+                    한 달치 출석 기록입니다.
+
+                    - `month` 는 `YYYY-MM` 입니다. 안 주면 이번 달입니다.
+                    - `today` 는 **서버(Asia/Seoul) 기준 오늘**입니다. 화면이 기기 시계로 오늘을
+                      정하면 자정 근처에서 도장이 하루 어긋나 보입니다.
+                    - `streak`(연속 출석)는 **서버가 셉니다.** 이 응답은 한 달만 담고 있어서
+                      화면에서 세면 월초에 지난달에서 이어온 것이 빠집니다.
+                    """
+    )
+    @ApiResponses(@ApiResponse(responseCode = "200", description = "조회 성공"))
+    @GetMapping("/attendance/calendar")
+    public ResponseEntity<BaseResponse<AttendanceCalendarResponse>> attendanceCalendar(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @Parameter(description = "조회할 달 (YYYY-MM). 없으면 이번 달", example = "2026-09")
+            @RequestParam(required = false) YearMonth month) {
+        return ResponseEntity.ok(BaseResponse.success(
+                rewardService.attendanceCalendar(authUser.id(), month == null ? null : month.atDay(1))));
     }
 }

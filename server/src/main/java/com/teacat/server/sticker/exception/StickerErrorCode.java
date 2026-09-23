@@ -28,6 +28,13 @@ public enum StickerErrorCode implements ErrorCode {
     STICKER_NOT_FOUND(HttpStatus.NOT_FOUND, "STICKER_005", "존재하지 않는 스티커입니다."),
     NOT_OWNED(HttpStatus.FORBIDDEN, "STICKER_006", "본인의 스티커가 아닙니다."),
     INVALID_INTERNAL_KEY(HttpStatus.UNAUTHORIZED, "STICKER_007", "내부 API 키가 올바르지 않습니다."),
+    /**
+     * 하루 무료 몫을 넘겼는데 캣머니가 모자라다 (2026-09-23).
+     *
+     * <p>🔴 {@link #DAILY_LIMIT_EXCEEDED} 와 다르다 — 그쪽은 "오늘은 끝" 이고 이쪽은
+     * "돈만 있으면 된다" 다. 화면이 보여줄 안내가 완전히 다르므로 코드를 나눈다.
+     */
+    NOT_ENOUGH_CAT(HttpStatus.PAYMENT_REQUIRED, "STICKER_010", "캣머니가 모자랍니다."),
     INVALID_IDEMPOTENCY_KEY(HttpStatus.BAD_REQUEST, "STICKER_010", "Idempotency-Key 헤더가 올바르지 않습니다."),
 
     /* ── 워커 전용. 프론트에는 나가지 않는다 ───────────────────────────────── */

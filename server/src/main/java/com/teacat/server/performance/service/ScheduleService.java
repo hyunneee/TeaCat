@@ -30,7 +30,8 @@ public class ScheduleService {
     /** 회차 단건 조회 (API-203) */
     public ScheduleDetailResponse getSchedule(Long scheduleId) {
         return ScheduleDetailResponse.of(getDetail(scheduleId), LocalDateTime.now(),
-                bookingPolicy.cancelDeadlineLead(), seatAvailability.isSoldOut(scheduleId));
+                bookingPolicy.cancelDeadlineLead(), seatAvailability.isSoldOut(scheduleId),
+                seatAvailability.hasSoldOutArea(scheduleId));
     }
 
     /**

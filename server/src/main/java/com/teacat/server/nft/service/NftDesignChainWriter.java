@@ -64,6 +64,9 @@ public class NftDesignChainWriter {
                                                  int totalSupply, String metadataCid) {
         NftPhotocardTemplate template = templateRepository.findById(templateId)
                 .orElseThrow(() -> new BusinessException(NftErrorCode.TEMPLATE_NOT_FOUND));
+        if (template.isHidden()) {
+            throw new BusinessException(NftErrorCode.TEMPLATE_HIDDEN);
+        }
         return designRepository.save(NftPhotocardDesign.fromTemplate(
                 template, performanceId, name, totalSupply, metadataCid));
     }

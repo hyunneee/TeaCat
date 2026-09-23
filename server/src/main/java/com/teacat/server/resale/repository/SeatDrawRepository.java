@@ -31,6 +31,37 @@ public interface SeatDrawRepository extends JpaRepository<SeatDraw, Long> {
     Optional<SeatDraw> findByDrawKey(String drawKey);
 
     /**
+     * 이 좌석에 지금까지 열린 추첨 회차 중 가장 큰 번호. 한 번도 없으면 0.
+     *
+     * <p>🔴 <b>새 추첨은 이 값 + 1 이다.</b> 언제나 1 로 시작하면, 한 번 추첨이 돌았던 좌석은
+     * 두 번째 취소에서 {@code uq_seat_draws_draw_key} 에 걸려 <b>취소 자체가 500 으로 터진다</b>
+     * (당첨자가 산 좌석을 그 사람이 다시 취소하는, 아주 평범한 흐름이다 — 2026-09-23 재현).
+     * 상태와 무관하게 센다. 끝난 추첨도 키는 영구히 남기 때문이다.
+     */
+    @Query("""
+            select coalesce(max(d.drawNo), 0) from SeatDraw d
+             where d.performanceDetailId = :performanceDetailId and d.seatId = :seatId
+            """)
+    int maxDrawNo(@Param("performanceDetailId") Long performanceDetailId, @Param("seatId") Long seatId);
+
+    @Query("""
+            select d from SeatDraw d
+             where d.performanceDetailId = :performanceDetailId and d.seatId = :seatId
+               and d.status in :statuses
+            """)
+    Optional<SeatDraw> findBySeatAndStatusIn(@Param("performanceDetailId") Long performanceDetailId,
+            @Param("seatId") Long seatId, @Param("statuses") List<SeatDrawStatus> statuses);
+
+    /**
+     * 이 좌석에서 <b>지금 돌고 있는</b> 추첨. 좌석마다 하나뿐이다
+     * ({@code uq_seat_draws_active_seat} 가 강제한다).
+     */
+    default Optional<SeatDraw> findActiveBySeat(Long performanceDetailId, Long seatId) {
+        return findBySeatAndStatusIn(performanceDetailId, seatId,
+                List.of(SeatDrawStatus.PENDING, SeatDrawStatus.OPEN, SeatDrawStatus.REVEALED));
+    }
+
+    /**
      * 난수는 있는데 구매권을 쥔 사람이 <b>없는</b> 추첨 — 1순위에게 좌석을 넘겨야 한다.
      *
      * <p>구매권을 쥔 당첨자(WON)가 있는 추첨은 최대 12시간 REVEALED 로 머무른다. 그것까지 훑으면

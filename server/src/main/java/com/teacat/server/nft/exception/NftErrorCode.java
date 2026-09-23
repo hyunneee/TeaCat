@@ -121,6 +121,55 @@ public enum NftErrorCode implements ErrorCode {
     TRADE_REVIEW_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_058", "거절 사유를 입력해 주세요."),
     INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요."),
 
+    /** 후보 도안은 있지만 다른 개봉 요청이 잠근 상태. 서비스가 짧게 재시도한 뒤에만 노출된다 */
+    DRAW_POOL_BUSY(HttpStatus.CONFLICT, "NFT_060", "다른 카드팩을 처리하고 있어요. 잠시 후 다시 시도해 주세요."),
+    PACK_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_061", "존재하지 않는 카드팩입니다."),
+    PACK_ALREADY_CONSUMED(HttpStatus.CONFLICT, "NFT_062", "이미 개봉한 카드팩은 무효화할 수 없습니다."),
+    PACK_ALREADY_INVALIDATED(HttpStatus.CONFLICT, "NFT_063", "이미 무효화된 카드팩입니다."),
+
+    /*
+     * 어드민 강제 취소 전용.
+     *
+     * 🔴 AUCTION_NOT_ACTIVE 로 뭉개지 않는 이유는 어드민이 할 일이 다르기 때문이다.
+     *    이 코드는 "곧 스위퍼가 닫는다, 잠시 뒤 다시 보라" 이고, NOT_ACTIVE 는
+     *    "이미 끝난 경매다" 다. 같은 메시지를 주면 어드민이 새로고침을 포기한다.
+     *
+     * ⚠️ 처음에 NFT_060 으로 적었다가 dev 가 먼저 060~063 을 가져가서 064 로 옮겼다.
+     *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
+     */
+    AUCTION_CLOSING(HttpStatus.CONFLICT, "NFT_064",
+            "마감 시각이 지나 정산을 기다리는 경매입니다. 마감이 끝난 뒤 거래 심사에서 처리해 주세요."),
+
+    /*
+     * 포카 꾸미기 (2026-09-22).
+     *
+     * 🔴 카드가 없거나 남의 것일 때는 **새 코드를 만들지 않는다** — 위의
+     *    PHOTOCARD_NOT_FOUND(NFT_001) · PHOTOCARD_NOT_OWNED(NFT_003) 를 그대로 쓴다.
+     *    같은 뜻에 코드가 둘이면 프론트가 어느 쪽으로 분기할지 알 수 없다.
+     */
+    DECORATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_065", "꾸민 카드가 없습니다."),
+    DECORATION_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "NFT_066", "꾸민 이미지를 읽을 수 없습니다."),
+    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다."),
+
+    /*
+     * ⚠️ 처음에 NFT_065 로 적었다가 dev 가 먼저 065~067(포카 꾸미기)을 가져가서 068 로 옮겼다.
+     *    이 코드는 아직 나가지 않았으므로 옮기는 것이 맞다 — 이미 나간 코드는 바꾸지 않는다.
+     */
+    TEMPLATE_HIDDEN(HttpStatus.CONFLICT, "NFT_068", "숨김 처리된 카드 그림은 풀에 추가할 수 없습니다."),
+
+    /*
+     * 스티커 소모 (2026-09-23). 🔴 붙이면 못 뗀다.
+     * 프론트는 이 코드들로 갈라 안내 문구를 다르게 보여준다.
+     *
+     * ⚠️ 처음에 068~071 로 적었다가 dev 가 068(TEMPLATE_HIDDEN)을 먼저 가져가서 한 칸씩 밀었다.
+     *    아직 나가지 않은 코드라 옮겼다. `client/src/features/nft/model/decoration.types.ts`
+     *    의 DECORATION_ERROR 와 **한 쌍**이라 한쪽만 고치면 프론트 분기가 조용히 빗나간다.
+     */
+    DECORATION_PLACEMENTS_INVALID(HttpStatus.BAD_REQUEST, "NFT_069", "스티커 배치 정보를 읽을 수 없습니다."),
+    DECORATION_STICKER_NOT_USABLE(HttpStatus.BAD_REQUEST, "NFT_070", "쓸 수 없는 스티커가 있습니다."),
+    DECORATION_STICKER_ALREADY_USED(HttpStatus.CONFLICT, "NFT_071", "이미 사용한 스티커입니다."),
+    DECORATION_STICKER_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_072", "이미 붙인 스티커는 뗄 수 없습니다."),
+
     // 이상거래 시뮬레이터. 배포본에서는 설정이 꺼져 있어 항상 이 코드로 거절된다 (AUCTION_FRAUD_DESIGN.md 14-2)
     // ⚠️ 처음에 NFT_060 으로 적었다가 dev 가 060~072 를 먼저 가져가서 073 으로 옮겼다.
     //    아직 배포되지 않은 코드라 옮겨도 된다 — 한 번 나간 코드는 바꾸지 않는다(CLAUDE.md 3-2)

@@ -149,6 +149,10 @@ public class NftTradeSettlementWriter {
 
         LocalDateTime now = LocalDateTime.now();
         photocard.transferTo(trade.getBuyer(), buyerWallet.walletId());
+        /* 🔴 꾸밈은 **지우지 않는다.** 카드의 일부라 사는 사람이 그대로 받는다 (2026-09-23).
+           ⚠️ 2026-09-22 에는 여기서 판 사람의 꾸밈을 지웠다. 마켓에 꾸민 모습을 보여주기로
+              하면서 뒤집혔다 — 보여준 것과 받는 것이 달라지면 사는 사람이 속는다.
+              꾸밈 행은 photocard_id 로만 묶여 있어 소유자가 바뀌어도 따라간다. */
         if (trade.getListing() != null) {
             trade.getListing().sold(now);
         } else {

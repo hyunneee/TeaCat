@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Lock } from 'lucide-react';
+import { Clock3, Lock } from 'lucide-react';
 import { Badge } from '@/shared/components/ui';
 import { PocaGridTile } from './PocaGridTile';
 import { packOpenAtLabel } from '../model/nft.model';
@@ -15,6 +15,8 @@ interface Props {
    * 대신 언제 열리는지를 칸에 적습니다.
    */
   openAt?: string | null;
+  /** 개봉 시각은 지났지만 서버가 카드 풀을 준비 중인 팩 */
+  preparing?: boolean;
   onClick: () => void;
 }
 
@@ -32,8 +34,8 @@ interface Props {
  *
  * 서버를 모릅니다 — props 로 받은 것만 씁니다. (CLAUDE.md 4-3)
  */
-export function PocaPackTile({ count, openAt, onClick }: Props) {
-  const locked = !!openAt;
+export function PocaPackTile({ count, openAt, preparing = false, onClick }: Props) {
+  const locked = !!openAt || preparing;
 
   return (
     <motion.button
@@ -68,11 +70,15 @@ export function PocaPackTile({ count, openAt, onClick }: Props) {
         }
         label={
           <span className="inline-flex items-center gap-1">
-            {locked && <Lock size={11} className="shrink-0" />}
+            {preparing ? (
+              <Clock3 size={11} className="shrink-0" />
+            ) : (
+              locked && <Lock size={11} className="shrink-0" />
+            )}
             카드팩
           </span>
         }
-        caption={openAt ? `${packOpenAtLabel(openAt)}부터` : '눌러서 열어보기'}
+        caption={preparing ? '카드 준비 중' : openAt ? `${packOpenAtLabel(openAt)}부터` : '눌러서 열어보기'}
       />
     </motion.button>
   );

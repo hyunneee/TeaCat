@@ -36,6 +36,25 @@ public abstract class PostgresIntegrationTest {
             .withDatabaseName("teacat_test")
             .withUsername("teacat")
             .withPassword("teacat_test_pw")
+            /*
+             * 🔴 커넥션 한도를 올린다. 기본값 100 으로는 전체 테스트가 중간에 무너진다 —
+             *    `FATAL: sorry, too many clients already` 로 무관한 테스트가 무더기로 깨진다.
+             *
+             * 왜 부족하냐면, 스프링은 **목(@MockitoBean) 구성이 다르면 컨텍스트를 새로 만들고**
+             * 만든 뒤에는 테스트가 끝날 때까지 캐시에 두기 때문이다. 컨텍스트마다 Hikari 가
+             * 기본 10개를 쥐고 안 놓는다. 지금 목을 쓰는 테스트 클래스가 18개가 넘어
+             * 18 × 10 = 180 > 100 이다.
+             *
+             * ⚠️ **테스트가 늘어날수록 다시 부딪힌다.** 근본 해결은 목 구성을 맞춰 컨텍스트 수를
+             *    줄이는 것이지만, 그건 테스트 18개를 손봐야 하는 일이라 따로 다룬다.
+             *
+             * ⚠️ 풀 크기를 줄이는 방법(`maximum-pool-size`)도 있으나 쓰지 않았다. 한 테스트가
+             *    동시에 여러 연결을 쓰면 **실패가 아니라 멈춘다** — 타임아웃까지 가서 원인을 찾기
+             *    어렵다. 여기서는 상한만 올려 동작을 바꾸지 않는 쪽을 택했다.
+             *
+             * 임시 컨테이너라 운영과 무관하고, 상한만 올리는 것이라 실제로 안 쓰면 메모리도 안 든다.
+             */
+            .withCommand("postgres", "-c", "max_connections=300")
             .withStartupTimeout(Duration.ofMinutes(2));
 
     static {

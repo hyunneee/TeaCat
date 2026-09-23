@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
@@ -56,14 +57,15 @@ public class NftPhotocardTemplateAdminController {
     @Operation(
             summary = "템플릿 목록",
             description = """
-                    ADMIN 또는 공연 기획자 API입니다. 감춘 템플릿은 빠집니다. 최신순입니다.
+                    ADMIN 또는 공연 기획자 API입니다. hidden=false(기본)는 공개 목록, hidden=true는 숨김 목록입니다. 최신순입니다.
 
                     `usedCount`는 이 템플릿으로 만든 도안 수입니다(공연 + 이벤트 합계).
                     """
     )
     @GetMapping
-    public ResponseEntity<BaseResponse<List<NftPhotocardTemplateResponse>>> findAll() {
-        return ResponseEntity.ok(BaseResponse.success(templateService.findAll()));
+    public ResponseEntity<BaseResponse<List<NftPhotocardTemplateResponse>>> findAll(
+            @RequestParam(defaultValue = "false") boolean hidden) {
+        return ResponseEntity.ok(BaseResponse.success(templateService.findAll(hidden)));
     }
 
     @Operation(

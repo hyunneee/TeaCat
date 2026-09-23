@@ -90,6 +90,8 @@ public class NftService {
     private final NftPocaDexQueryRepository pocaDexQueryRepository;
     private final UserRepository userRepository;
     private final NftCursorCodec cursorCodec;
+    /** 상세·마켓 응답의 decoratedImageUrl 을 채운다. 사는 사람이 그대로 받으므로 남의 카드에도 채운다 */
+    private final NftDecorationService decorationService;
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyHoldService holdService;
 
@@ -105,10 +107,15 @@ public class NftService {
                 performanceId, normalizedKeyword, effectiveSort, decoded.value(), decoded.id(), size + 1);
         boolean hasNext = rows.size() > size;
         List<NftMarketQueryRepository.MarketRow> pageRows = takePage(rows, size);
+        /* 꾸민 그림을 한 번에 가져온다 (카드마다 부르면 N+1). 마켓에도 꾸민 모습이 보인다 —
+           사는 사람이 그대로 받으므로 속이는 것이 아니다 (2026-09-23). */
+        Map<Long, String> marketDecorated = decorationService.imageUrlsOf(
+                pageRows.stream().map(NftMarketQueryRepository.MarketRow::photocardId).toList());
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(), row.viewCount()))
+                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(),
+                        row.viewCount(), marketDecorated.get(row.photocardId())))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -159,10 +166,13 @@ public class NftService {
                         isOwner ? row.rowLabel() : null,
                         isOwner ? row.seatNumber() : null)
                 : null;
+        /* 🔴 **누구에게나** 준다. 꾸밈은 카드의 일부라 사는 사람도 그대로 받는다 (2026-09-23).
+           ⚠️ 2026-09-22 에는 isOwner 일 때만 채웠다. 그때는 꾸밈이 만든 사람 것이었다. */
+        String decoratedImageUrl = decorationService.imageUrlOf(photocardId);
         return new NftPhotocardDetailResponse(
-                row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
+                row.photocardId(), row.designId(), row.templateId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
-                row.groupName(), row.grade(), row.averagePrice(), row.viewCount(), isOwner);
+                row.groupName(), row.grade(), row.averagePrice(), row.viewCount(), isOwner, decoratedImageUrl);
     }
 
     /**
@@ -178,8 +188,16 @@ public class NftService {
      */
     @Transactional(readOnly = true)
     public List<MyDesignPhotocardResponse> getMyPhotocardsOfDesign(Long userId, Long designId) {
-        return queryRepository.findMyPhotocardsOfDesign(userId, designId, DESIGN_COPY_LIMIT)
-                .stream()
+        return toCopies(queryRepository.findMyPhotocardsOfDesign(userId, designId, DESIGN_COPY_LIMIT));
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyDesignPhotocardResponse> getMyPhotocardsOfTemplate(Long userId, Long templateId) {
+        return toCopies(queryRepository.findMyPhotocardsOfTemplate(userId, templateId));
+    }
+
+    private List<MyDesignPhotocardResponse> toCopies(List<NftMarketQueryRepository.DesignCopyRow> rows) {
+        return rows.stream()
                 .map(row -> new MyDesignPhotocardResponse(
                         row.photocardId(),
                         row.issuedAt(),
@@ -467,6 +485,10 @@ public class NftService {
                 userId, listed, timeCursor.at(), timeCursor.id(), size + 1);
         boolean hasNext = rows.size() > size;
         List<NftMarketQueryRepository.OwnedRow> pageRows = takePage(rows, size);
+        /* 🔴 꾸민 그림은 **한 번에** 가져온다. 카드마다 따로 부르면 N+1 이고, 도감이 수십 장이라
+           그대로 드러난다. 꾸미지 않은 카드는 맵에 없어 null 이 들어간다. */
+        Map<Long, String> decorated = decorationService.imageUrlsOf(
+                pageRows.stream().map(NftMarketQueryRepository.OwnedRow::photocardId).toList());
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
@@ -475,7 +497,8 @@ public class NftService {
                                 : MyNftPhotocardResponse.MarketType.valueOf(row.marketType()),
                         row.marketStatus() == null ? null
                                 : MyNftPhotocardResponse.MarketStatus.valueOf(row.marketStatus()),
-                        row.groupName(), row.grade(), row.averagePrice()))
+                        row.groupName(), row.grade(), row.averagePrice(),
+                        decorated.get(row.photocardId())))
                 .toList();
         String nextCursor = hasNext
                 ? cursorCodec.encode(OWNED_SCOPE, pageRows.getLast().createdAt().toString(),

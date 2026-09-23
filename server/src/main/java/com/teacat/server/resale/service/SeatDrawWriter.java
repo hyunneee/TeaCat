@@ -85,6 +85,16 @@ public class SeatDrawWriter {
      * 취소된 좌석을 추첨 대상으로 잡는다. <b>예매 취소 트랜잭션 안에서</b> 부른다 — 좌석을 풀지
      * 않는 결정과 추첨 행이 같이 커밋돼야 한다.
      *
+     * <h4>참가자는 여기서, 이 순간에 굳는다</h4>
+     *
+     * 난수가 확정되기까지 약 15초가 걸리지만(다음 블록 + 스위퍼) 그 사이에 들어온 대기 신청은
+     * <b>이 추첨에 끼지 못한다.</b> 참가자 목록을 취소 트랜잭션 안에서 읽어 {@code participantIds} 에
+     * 박아 두고, 체인 커밋도 그 목록의 {@code inputsHash} 로 나가기 때문이다. 늦게 온 사람은
+     * 다음 취소표의 추첨 풀에 들어간다.
+     *
+     * <p>이건 공정성 문제이기도 하다 — 목록이 커밋 뒤에도 바뀔 수 있으면, 결과를 보고 참가자를
+     * 끼워 넣는 것이 가능해진다. 체인에 박힌 해시가 그걸 막는다.
+     *
      * @return 대기자가 한 명도 없으면 empty. 그때는 부르는 쪽이 좌석을 그냥 푼다
      */
     @Transactional
@@ -94,8 +104,24 @@ public class SeatDrawWriter {
         if (participants.isEmpty()) {
             return Optional.empty();
         }
+
+        /* 🔴 이 좌석에 이미 도는 추첨이 있으면 새로 만들지 않는다. 좌석마다 하나뿐이고
+           (uq_seat_draws_active_seat) 둘째를 넣으려 하면 취소가 통째로 실패한다.
+           정상 흐름에서는 생기지 않지만, 그 전제가 깨졌을 때 사용자에게 500 을 보여주는 것보다
+           돌고 있는 추첨을 그대로 쓰는 편이 낫다 */
+        Optional<SeatDraw> running = seatDrawRepository.findActiveBySeat(performanceDetailId, seatId);
+        if (running.isPresent()) {
+            log.warn("이미 도는 추첨이 있어 그대로 씁니다 drawId={} seatId={}", running.get().getId(), seatId);
+            return Optional.of(running.get().getId());
+        }
+
+        /* 🔴 회차는 **이어서** 센다. 늘 1 로 시작하면 한 번 추첨이 돌았던 좌석의 두 번째 취소가
+           draw_key UNIQUE 에 걸려 500 이 된다 — 당첨자가 산 좌석을 그 사람이 다시 취소하는,
+           아주 평범한 흐름이다 (2026-09-23 재현). 끝난 추첨도 키는 영구히 남는다 */
+        int drawNo = seatDrawRepository.maxDrawNo(performanceDetailId, seatId) + 1;
+
         SeatDraw draw = seatDrawRepository.save(SeatDraw.open(
-                performanceId, performanceDetailId, areaId, seatId, participants, ticketOrderId));
+                performanceId, performanceDetailId, areaId, seatId, drawNo, participants, ticketOrderId));
         log.info("취소표 추첨 생성 drawId={} key={} participants={}", draw.getId(), draw.getDrawKey(),
                 participants.size());
         return Optional.of(draw.getId());
@@ -121,6 +147,16 @@ public class SeatDrawWriter {
         }
         draw.markOpened(txHash, inputsHash);
         log.info("취소표 추첨 커밋 drawId={} tx={}", drawId, txHash);
+    }
+
+    /** 커밋을 보내지 못했다. 사유만 적고 PENDING 으로 둔다 — 스위퍼가 간격을 두고 다시 보낸다 */
+    @Transactional
+    public void applyOpenFailed(Long drawId, String reason) {
+        SeatDraw draw = lockDraw(drawId);
+        if (!draw.isPending()) {
+            return;
+        }
+        draw.recordOpenFailure(reason);
     }
 
     /** 커밋 트랜잭션이 체인에 실리지 않았다. 다시 보내게 되돌린다 */

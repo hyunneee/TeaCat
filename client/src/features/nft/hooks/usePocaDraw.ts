@@ -35,11 +35,8 @@ const REVEAL_MS = 2200;
 export function usePocaDraw() {
   const [phase, setPhase] = useState<DrawPhase>('sealed');
   const [card, setCard] = useState<PocaDrawResult | null>(null);
-  /**
-   * 이미 뽑아서 더는 못 뽑는 상태 — 서버가 그렇게 답했을 때만 세웁니다.
-   * 🔴 프론트가 세지 않습니다. 새로고침 한 번이면 풀리는 잠금은 잠금이 아닙니다.
-   */
-  const [usedUp, setUsedUp] = useState<string | null>(null);
+  /** 서버가 현재 개봉을 막은 확정 사유. 409 전체를 한 상태로 묶지 않습니다. */
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
 
   /* 멱등키는 한 번 만들어 재시도에도 재사용합니다. 매번 새로 만들면 의미가 없습니다. */
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -71,6 +68,7 @@ export function usePocaDraw() {
     /* 뽑기는 재시도 금지 — 자동 재시도가 붙으면 두 장이 나갈 수 있습니다 */
     retry: false,
     onSuccess: async (result) => {
+      setBlockedMessage(null);
       /* 카드가 뒤집히는 순간 이미지가 없으면 흰 면이 한 프레임 보입니다.
          뜯는 동안 미리 받아 둡니다. 실패해도 연출은 그대로 진행합니다. */
       if (result.imageUrl) {
@@ -84,10 +82,16 @@ export function usePocaDraw() {
     onError: (error) => {
       const failure = ApiError.isApiError(error) ? error : null;
 
-      /* 뽑기는 계정당 한 번뿐입니다. '실패' 가 아니라 '이미 받았다' 이므로
-         빨간 토스트로 스쳐 지나가게 두지 않고 화면에 남깁니다. */
-      if (failure?.status === 409) setUsedUp(failure.message);
-      else toast.error(failure?.message ?? '뽑기에 실패했어요.');
+      /* 팩 없음·풀 준비 중·지갑 없음만 화면을 막습니다. 잠금 경합(NFT_060)은
+         잠시 뒤 같은 멱등키로 다시 뜯을 수 있어야 하므로 토스트만 보여줍니다. */
+      if (failure && ['NFT_040', 'NFT_041', 'NFT_036'].includes(failure.code)) {
+        setBlockedMessage(failure.message);
+      } else if (failure?.code === 'NFT_060') {
+        toast.info(failure.message);
+      } else {
+        toast.error(failure?.message ?? '뽑기에 실패했어요.');
+      }
+      void queryClient.invalidateQueries({ queryKey: nftKeys.drawAvailability() });
 
       /* 실패했으면 다시 뜯어볼 수 있어야 합니다 */
       requested.current = false;
@@ -128,6 +132,7 @@ export function usePocaDraw() {
     requested.current = false;
     draw.reset();
     setCard(null);
+    setBlockedMessage(null);
     setPhase('sealed');
   }, [draw]);
 
@@ -175,7 +180,7 @@ export function usePocaDraw() {
     startCut,
     finishCut,
     reset,
-    /** 이미 뽑은 계정이면 그 사유. 없으면 null */
-    usedUp,
+    /** 현재 개봉을 막는 서버 사유. 없으면 null */
+    blockedMessage,
   };
 }

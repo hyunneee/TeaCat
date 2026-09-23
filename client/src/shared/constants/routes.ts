@@ -73,6 +73,11 @@ export const ROUTES = {
   NFT_DRAW: '/nft/draw',
   /** 서버 photocardId(숫자)를 문자열로 넘긴다 — `ROUTES.NFT_DETAIL(String(id))` */
   NFT_DETAIL: (photocardId: string) => `/nft/${photocardId}`,
+  /**
+   * 포카 꾸미기 — 내 카드에 AI 스티커를 얹습니다. 상세 화면의 곁가지라 그 아래 둡니다.
+   * 🔴 **내 카드에서만** 들어갑니다. 라우트는 `FEATURE.sticker` 가 켜져 있을 때만 등록됩니다.
+   */
+  NFT_DECORATE: (photocardId: string) => `/nft/${photocardId}/decorate`,
   /** 경매 상세. 비로그인도 구경할 수 있어야 해서 가드 밖에 둡니다 */
   AUCTION_DETAIL: (auctionId: string) => `/auctions/${auctionId}`,
   MY_AUCTIONS: '/my/auctions',
@@ -94,6 +99,13 @@ export const ROUTES = {
   /* 게임은 머리말만 남기고 화면을 꽉 쓰므로 잔액 화면과 **길을 나눕니다** —
      마이페이지에서 잔액을 보러 눌렀는데 게임이 시작되면 안 됩니다. */
   TOKEN_GAME: '/token/game',
+  /* 출석 달력. 출석 체크를 마치면 그 자리의 버튼이 여기로 옵니다 */
+  TOKEN_ATTENDANCE: '/token/attendance',
+  /* 같이 하는 게임(윷놀이·할리갈리). 방을 만들거나 초대 코드로 들어갑니다 */
+  GAME: '/token/together',
+  /* 방 하나. 대기실과 게임판이 한 화면입니다 — 판이 끝나면 다시 대기실로 돌아오지 않고
+     결과를 그 자리에서 보여줍니다. */
+  GAME_ROOM: '/token/together/:roomId',
   /* 송편 잡기(추석 이벤트). 짝 맞추기와 같은 이유로 잔액 화면과 길을 나눕니다 —
      게임 화면은 머리말만 남기고 화면을 꽉 씁니다. */
   TOKEN_SONGPYEON: '/token/songpyeon',
@@ -141,6 +153,7 @@ export const ROUTES = {
   ADMIN_INQUIRIES: '/admin/inquiries',
   /** 이상거래 심사 · 거래 내역 (server/AUCTION_FRAUD_DESIGN.md) */
   ADMIN_TRADE_REVIEWS: '/admin/trade-reviews',
+  ADMIN_AUCTIONS: '/admin/auctions',
   ADMIN_BANNERS: '/admin/banners',
   /** 카드 그림(템플릿) — 그림만 올립니다. 수량은 풀에 넣을 때 정합니다 */
   ADMIN_POCA_TEMPLATES: '/admin/poca-templates',

@@ -21,7 +21,12 @@ public record MyNftPhotocardResponse(
         @Schema(description = "판매 상태. 판매 중이 아니면 null", example = "SETTLING") MarketStatus marketStatus,
         @Schema(description = "소속 (뽑기 풀 도안만)", example = "서울 5반") String group,
         @Schema(description = "연출 등급 (뽑기 풀 도안만)", example = "SPECIAL") NftPhotocardGrade grade,
-        @Schema(description = "같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null", example = "1500") Long averagePrice
+        @Schema(description = "같은 도안의 지난 거래 평균가(CAT). 거래가 없으면 null", example = "1500") Long averagePrice,
+        /* 🔴 위의 imageUrl 을 **바꿔치우지 않고 따로 둔다.** imageUrl 은 마켓·경매·거래내역
+           DTO 에도 같은 이름으로 있어, 거기까지 꾸민 그림으로 바뀌면 사는 사람이 꾸며진
+           그림을 보고 샀는데 맨 카드를 받는다. 이 필드는 내 카드 응답에만 있다. */
+        @Schema(description = "꾸민 카드 이미지 URL. 꾸미지 않았으면 null 입니다")
+        String decoratedImageUrl
 ) {
     public enum MarketType {
         FIXED_PRICE,

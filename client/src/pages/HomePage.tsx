@@ -585,7 +585,7 @@ export function HomePage() {
                       <NftCard
                         photocardId={card.photocardId}
                         designName={card.designName}
-                        imageUrl={card.imageUrl}
+                        imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                         performanceTitle={card.performanceTitle}
                         price={card.price}
                         onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
@@ -610,7 +610,7 @@ export function HomePage() {
                     <AuctionCard
                       photocardId={auction.photocardId}
                       designName={auction.designName}
-                      imageUrl={auction.imageUrl}
+                      imageUrl={auction.decoratedImageUrl ?? auction.imageUrl}
                       performanceTitle={auction.performanceTitle}
                       currentPrice={auction.currentPrice}
                       bidCount={auction.bidCount}

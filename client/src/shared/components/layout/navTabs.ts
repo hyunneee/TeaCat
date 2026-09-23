@@ -1,10 +1,33 @@
 import { useLocation } from 'react-router-dom';
-import { House, Images, Music, Sparkles, UserRound, type LucideIcon } from 'lucide-react';
+import {
+  House,
+  Music,
+  PawPrint,
+  Sparkles,
+  Store,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react';
 import { ROUTES } from '@/shared/constants';
 
+export interface NavTab {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  /**
+   * 이 탭이 함께 받는 경로들.
+   *
+   * 접두사 규칙만으로는 안 되는 화면을 적습니다 — 예를 들어 내 포카(`/my/nfts`)는
+   * `/my` 에도 걸려서, 적어 두지 않으면 포카를 보고 있는데 `마이` 탭이 켜집니다.
+   */
+  alsoMatches?: string[];
+}
+
+/** 내 포카에 딸린 화면들. 어느 탭이 받든 이 묶음은 같이 움직입니다 */
+const MY_POCA_PATHS = [ROUTES.MY_AUCTIONS, ROUTES.MY_BIDS, ROUTES.MY_STICKERS];
+
 /**
- * 하단 탭(폰)과 사이드 내비(데스크톱)가 **같은 목록**을 씁니다.
- * 탭을 추가하려면 이 배열에 한 줄만 넣으면 둘 다 따라옵니다.
+ * 폰 하단 탭.
  *
  * ⚠️ **탭마다 아이콘은 하나입니다.** 활성/비활성에 서로 다른 글리프를 쓰지 마세요.
  *    같은 자리의 그림이 눌렀을 때 다른 그림으로 바뀌면, 밀도가 올라가는 게 아니라
@@ -17,12 +40,39 @@ import { ROUTES } from '@/shared/constants';
  *    색·굵기만으로는 분간이 안 됩니다 (짙은 초록 vs 회색은 둘 다 '어두운 글리프').
  *    **면이 있고/없고**는 흘긋 봐도 보이고, 색을 못 보는 사람에게도 그대로 보입니다.
  */
-export const TABS: { to: string; label: string; icon: LucideIcon }[] = [
+export const TABS: NavTab[] = [
   { to: ROUTES.HOME, label: '홈', icon: House },
   { to: ROUTES.CONCERTS, label: '공연', icon: Music },
-  { to: ROUTES.NFT_MARKET, label: '포카', icon: Sparkles },
-  { to: ROUTES.MY_NFTS, label: '내 포카', icon: Images },
+  /* 폰에서는 마켓과 내 포카가 **한 칸**입니다. 다섯 칸에 여섯 번째를 끼우면 글자가
+     줄어들고, '마켓' 과 '포카' 처럼 뜻이 가까운 두 칸이 나란히 있으면 작게 봤을 때
+     글자만 다른 같은 자리로 읽힙니다. 내 포카 진입은 포카 머리말의 버튼 하나입니다. */
+  {
+    to: ROUTES.NFT_MARKET,
+    label: '포카',
+    icon: Sparkles,
+    alsoMatches: [ROUTES.MY_NFTS, ...MY_POCA_PATHS],
+  },
+  { to: ROUTES.TOKEN, label: '캣치', icon: PawPrint },
   { to: ROUTES.MY, label: '마이', icon: UserRound },
+];
+
+/**
+ * 데스크톱 상단 탭.
+ *
+ * 🔴 **폰과 목록이 다릅니다.** 예전에는 같은 배열에서 MY 만 빼서 썼는데, 가로로 늘어선
+ * 글자 탭은 칸이 훨씬 넓어서 폰의 제약(다섯 칸)을 그대로 따를 이유가 없습니다.
+ * 그래서 폰에서 한 칸으로 합쳐 둔 **마켓과 내 포카를 여기서는 둘로 나눕니다.**
+ * 탭을 추가할 때 **두 배열을 다 보세요** — 한쪽만 고치면 화면 크기에 따라 메뉴가 달라집니다.
+ *
+ * `마이` 가 없는 것은 1줄의 계정 링크(MY)가 그 자리를 대신하기 때문입니다.
+ * 둘 다 두면 같은 곳으로 가는 링크가 머리말에 두 번 뜹니다.
+ */
+export const DESKTOP_TABS: NavTab[] = [
+  { to: ROUTES.HOME, label: '홈', icon: House },
+  { to: ROUTES.CONCERTS, label: '공연', icon: Music },
+  { to: ROUTES.NFT_MARKET, label: '마켓', icon: Store },
+  { to: ROUTES.MY_NFTS, label: '포카', icon: Sparkles, alsoMatches: MY_POCA_PATHS },
+  { to: ROUTES.TOKEN, label: '캣치', icon: PawPrint },
 ];
 
 /**
@@ -33,28 +83,41 @@ export const TABS: { to: string; label: string; icon: LucideIcon }[] = [
 export const ICON_BOX = 'size-10';
 
 /**
- * 현재 경로에 해당하는 탭 하나를 고릅니다. (없으면 -1)
+ * 지금 경로가 어느 탭인지. (없으면 -1)
  *
- * 기본은 경로 접두사로 찾고, 포카 거래 내역·경매·입찰은 모두 `내 포카` 활동이므로
- * `/my/nfts` 와 경로 모양이 달라도 같은 탭으로 묶습니다.
+ * 규칙은 하나입니다 — **가장 길게 맞는 경로를 가진 탭이 이깁니다.** `to` 와
+ * `alsoMatches` 를 같은 자격으로 견주므로, `/my/nfts`(9자)가 `/my`(3자)를 이겨
+ * 내 포카 화면에서 `마이` 탭이 켜지지 않습니다.
  *
- * `/my/nfts` 는 `/my` 에도 접두사로 걸리지만 더 긴 `내 포카` 탭 하나만 활성화합니다.
- * 내 티켓·설정·문의 등 나머지 `/my/*` 화면은 `마이` 탭이 받습니다.
+ * 홈만 예외로 **정확히 일치**해야 합니다. `/` 는 모든 경로의 접두사라 그냥 두면 늘 켜집니다.
  */
-export function useActiveIndex(): number {
-  const { pathname } = useLocation();
+export function activeIndexOf(tabs: NavTab[], pathname: string): number {
+  let best = -1;
+  let bestLength = -1;
 
-  return TABS.reduce((best, tab, index) => {
-    const matched =
-      tab.to === ROUTES.HOME
-        ? pathname === ROUTES.HOME
-        : tab.to === ROUTES.MY_NFTS
-          ? pathname.startsWith(ROUTES.MY_NFTS) ||
-            pathname.startsWith(ROUTES.MY_AUCTIONS) ||
-            pathname.startsWith(ROUTES.MY_BIDS)
-          : pathname.startsWith(tab.to);
-    if (!matched) return best;
-    if (best < 0) return index;
-    return tab.to.length > TABS[best]!.to.length ? index : best;
-  }, -1);
+  tabs.forEach((tab, index) => {
+    const patterns = [tab.to, ...(tab.alsoMatches ?? [])];
+    for (const pattern of patterns) {
+      const matched =
+        pattern === ROUTES.HOME ? pathname === ROUTES.HOME : pathname.startsWith(pattern);
+      if (matched && pattern.length > bestLength) {
+        best = index;
+        bestLength = pattern.length;
+      }
+    }
+  });
+
+  return best;
+}
+
+/** 폰 하단 탭에서 지금 켜져 있는 칸 */
+export function useActiveIndex(): number {
+  return activeIndexOf(TABS, useLocation().pathname);
+}
+
+/** 데스크톱 상단 탭에서 지금 켜져 있는 칸 */
+export function useActiveDesktopTo(): string | null {
+  const { pathname } = useLocation();
+  const index = activeIndexOf(DESKTOP_TABS, pathname);
+  return index >= 0 ? DESKTOP_TABS[index]!.to : null;
 }
