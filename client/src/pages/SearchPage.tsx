@@ -137,7 +137,7 @@ export function SearchPage() {
                       <NftCard
                         photocardId={card.photocardId}
                         designName={card.designName}
-                        imageUrl={card.imageUrl}
+                        imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                         performanceTitle={card.performanceTitle}
                         price={card.price}
                         onClick={() => navigate(ROUTES.NFT_DETAIL(String(card.photocardId)))}
@@ -157,7 +157,7 @@ export function SearchPage() {
                       <NftCard
                         photocardId={auction.photocardId}
                         designName={auction.designName}
-                        imageUrl={auction.imageUrl}
+                        imageUrl={auction.decoratedImageUrl ?? auction.imageUrl}
                         performanceTitle={auction.performanceTitle}
                         price={auction.currentPrice}
                         state="AUCTION"

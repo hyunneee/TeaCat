@@ -57,6 +57,16 @@ export interface Decoration {
   imageUrl: string;
   /** JSON 배열 문자열. 파싱하면 `PlacedRecord[]` 입니다 */
   placements: string;
+  /**
+   * 붙어 있는 스티커의 그림 주소 — 키는 `stickerId` 입니다 (2026-09-23).
+   *
+   * 🔴 **배치에는 그림 주소가 없어서** 이것으로 복원합니다. 예전에는 "내 스티커 목록" 에서
+   *    찾아 썼는데, 그 스티커들은 **판 사람 것**이라 카드를 산 사람의 목록에는 없습니다 —
+   *    물려받은 꾸밈이 통째로 빈 화면이 됐습니다. 원래 주인일 때만 우연히 맞던 구조입니다.
+   *
+   * 🔴 presigned 라 만료됩니다. `imageUrl` 과 같은 규칙입니다.
+   */
+  stickerImageUrls: Record<number, string>;
 }
 
 /** 스티커 기본 크기 — 카드 폭의 30% */

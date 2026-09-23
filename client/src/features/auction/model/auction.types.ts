@@ -32,6 +32,13 @@ export interface AuctionSummary {
   /** 내 경매 목록에서만 의미가 있습니다 */
   closedAt?: string | null;
   winnerNickname?: string | null;
+  /**
+   * 꾸민 모습. 꾸미지 않았으면 null 입니다 (2026-09-23).
+   *
+   * 🔴 마켓 목록(`MarketPhotocard.decoratedImageUrl`)과 **한 쌍**입니다. 한쪽만 쓰면
+   *    "고정가에는 보이는데 경매에는 안 보이는" 상태가 됩니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /** 경매 상세 (`GET /auctions/{id}`) */

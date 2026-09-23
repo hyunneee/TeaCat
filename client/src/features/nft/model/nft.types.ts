@@ -31,6 +31,14 @@ export interface MarketPhotocard {
   price: number;
   sellerNickname: string;
   viewCount: number;
+  /**
+   * 꾸민 모습. 꾸미지 않았으면 null 입니다 (2026-09-23).
+   *
+   * 🔴 **마켓에서도 꾸민 모습으로 보여줍니다.** 꾸밈은 카드를 따라 사는 사람에게 그대로
+   *    넘어가므로, 사기 전에 보이지 않으면 **뭘 사는지 모르고** 사게 됩니다.
+   * 🔴 `imageUrl` 을 덮어쓰지 않고 따로 둡니다 — 도안 그림이 필요한 곳이 따로 있습니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /**

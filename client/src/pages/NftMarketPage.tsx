@@ -193,7 +193,7 @@ export function NftMarketPage() {
                   <NftCard
                     photocardId={card.photocardId}
                     designName={card.designName}
-                    imageUrl={card.imageUrl}
+                    imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                     performanceTitle={card.performanceTitle}
                     eventName={card.eventName}
                     price={card.price}
@@ -208,7 +208,7 @@ export function NftMarketPage() {
                   <AuctionCard
                     photocardId={item.photocardId}
                     designName={item.designName}
-                    imageUrl={item.imageUrl}
+                    imageUrl={item.decoratedImageUrl ?? item.imageUrl}
                     performanceTitle={item.performanceTitle}
                     currentPrice={item.currentPrice}
                     bidCount={item.bidCount}
