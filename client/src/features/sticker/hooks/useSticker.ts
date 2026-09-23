@@ -74,6 +74,20 @@ export function useMyStickers() {
   });
 }
 
+/**
+ * 꾸미기 서랍용 — **아직 안 쓴 스티커만**.
+ *
+ * 🔴 전체 목록을 서랍에 쓰면 이미 쓴 것이 보이고, 눌러도 서버가 거절합니다.
+ *    스티커는 한 번 붙이면 뗄 수 없어서 되돌아오지 않습니다.
+ */
+export function useUnusedStickers() {
+  return useQuery({
+    queryKey: stickerKeys.unused(),
+    queryFn: stickerApi.unused,
+    staleTime: STALE_TIME.SHORT,
+  });
+}
+
 /** 삭제 — 되돌릴 수 없는 동작이라 화면이 확인 모달을 먼저 띄웁니다 (CLAUDE.md 4-7) */
 export function useDeleteSticker() {
   return useMutation({
@@ -119,6 +133,20 @@ export function useStickerMaker() {
       );
     },
     onError: (e) => {
+      /* 유료 생성은 지갑을 탑니다. 지갑이 아직 없으면 스티커가 아니라 지갑 코드가 옵니다 */
+      if (
+        ApiError.isApiError(e) &&
+        (e.code === STICKER_ERROR.WALLET_PROVISIONING || e.code === STICKER_ERROR.WALLET_NOT_FOUND)
+      ) {
+        toast.error('지갑을 준비하고 있어요. 잠시 후 다시 시도해 주세요');
+        return;
+      }
+      /* 🔴 "오늘은 끝" 과 "돈이 모자람" 은 사용자가 할 일이 다릅니다 — 안내를 갈라야 합니다 */
+      if (ApiError.isApiError(e) && e.code === STICKER_ERROR.NOT_ENOUGH_CAT) {
+        toast.error('캣머니가 모자라요. 충전한 뒤 다시 시도해 주세요');
+        queryClient.invalidateQueries({ queryKey: stickerKeys.quota() });
+        return;
+      }
       if (ApiError.isApiError(e) && e.code === STICKER_ERROR.DAILY_LIMIT) {
         toast.error('오늘 만들 수 있는 스티커를 다 썼어요. 내일 다시 만들어 주세요');
         queryClient.invalidateQueries({ queryKey: stickerKeys.quota() });
@@ -131,7 +159,11 @@ export function useStickerMaker() {
   /* DONE 이 된 순간 내 스티커 목록을 새로 받게 표시합니다 — 작업당 한 번 */
   const done = job.data?.status === 'DONE';
   useEffect(() => {
-    if (done) queryClient.invalidateQueries({ queryKey: stickerKeys.mine() });
+    if (done) {
+      queryClient.invalidateQueries({ queryKey: stickerKeys.mine() });
+      /* 🔴 서랍(안 쓴 목록)도 함께 텁니다 — 새로 만든 스티커가 바로 보여야 합니다 */
+      queryClient.invalidateQueries({ queryKey: stickerKeys.unused() });
+    }
   }, [done, jobId]);
 
   const start = useCallback(

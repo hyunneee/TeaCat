@@ -86,8 +86,16 @@ class StickerCreateIntegrationTests extends PostgresIntegrationTest {
         verify(fileStorageService, times(1)).uploadBytes(any(), any(), any());
     }
 
+    /**
+     * 🔴 <b>2026-09-23 에 뜻이 바뀌었다.</b> 예전에는 하루 몫을 다 쓰면 {@code STICKER_001} 로
+     * 거절했지만, 이제는 <b>1장당 캣머니를 내면 계속 만들 수 있다.</b> 상한은 "오늘은 끝" 이
+     * 아니라 "공짜로 몇 장" 이다.
+     *
+     * <p>여기서는 <b>남은 몫이 0 이 되는 것</b>까지만 본다. 그 뒤의 과금·환불은
+     * {@code StickerPaidCreateIntegrationTests} 가 본다 — 잔액을 목으로 다뤄야 해서 나눴다.
+     */
     @Test
-    void 오늘_몫을_다_쓰면_거절한다() {
+    void 오늘_몫을_다_쓰면_남은_몫이_0_이_된다() {
         Long userId = insertUser("sticker-limit@test.com", "상한");
 
         for (int i = 0; i < 5; i++) {
@@ -95,10 +103,6 @@ class StickerCreateIntegrationTests extends PostgresIntegrationTest {
         }
 
         assertThat(stickerService.quota(userId).remaining()).isZero();
-        assertThatThrownBy(() -> stickerService.create(userId, request(), newKey()))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(StickerErrorCode.DAILY_LIMIT_EXCEEDED);
     }
 
     /**

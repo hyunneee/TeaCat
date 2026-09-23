@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ImageOff, TriangleAlert } from 'lucide-react';
-import { useModal } from '@/app/providers';
 import { BottomBar, Header } from '@/shared/components/layout';
 import { Button } from '@/shared/components/ui';
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { ROUTES } from '@/shared/constants';
 import { toast } from '@/shared/stores';
 import { useAuth } from '@/features/auth';
-import { blobToBase64, useMyStickers, type Sticker } from '@/features/sticker';
+import { blobToBase64, useMyStickers, useUnusedStickers, type Sticker } from '@/features/sticker';
 import {
   DecorateCanvas,
   StickerDrawer,
@@ -18,7 +17,6 @@ import {
   parsePlacements,
   serializePlacements,
   useDecoration,
-  useDeleteDecoration,
   usePhotocardDetail,
   useSaveDecoration,
   PLACED_DEFAULT_SCALE,
@@ -44,16 +42,22 @@ export function PocaDecoratePage() {
   const { photocardId: raw = '' } = useParams();
   const photocardId = Number(raw);
   const navigate = useNavigate();
-  const { open } = useModal();
   const { user } = useAuth();
 
   const { data: card, isPending, isError } = usePhotocardDetail(photocardId);
-  const stickers = useMyStickers();
+  /* 🔴 서랍에는 **안 쓴 것만** 옵니다. 스티커는 한 번 붙이면 뗄 수 없어서, 이미 쓴 것을
+     보여주면 눌러도 서버가 거절하는 칸이 됩니다 (2026-09-23). */
+  const stickers = useUnusedStickers();
+
+  /* 🔴 **복원은 전체 목록으로 합니다.** 이미 붙인 스티커는 소모돼서 서랍 목록(unused)에
+     없는데, 배치에는 stickerId 만 있고 그림 주소는 없습니다(만료되므로 저장하지 않습니다).
+     전체 목록에서 찾지 않으면 **저장한 꾸밈이 화면에 안 그려집니다** — 실제로 그렇게 됐다가
+     브라우저에서 잡았습니다. */
+  const allStickers = useMyStickers();
 
   const mine = !!card && isOwner(card, user?.nickname);
   const decoration = useDecoration(photocardId, mine);
   const save = useSaveDecoration(photocardId);
-  const remove = useDeleteDecoration(photocardId);
 
   const [placed, setPlaced] = useState<Placed[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -76,15 +80,20 @@ export function PocaDecoratePage() {
 
   /* 저장해 둔 배치 복원 — 스티커 목록이 있어야 그림 주소를 찾을 수 있습니다 */
   const decorationReady = mine && !decoration.isPending;
-  const stickersReady = !stickers.isPending;
+  const stickersReady = !stickers.isPending && !allStickers.isPending;
   const decorationData = decoration.data;
-  const stickerList = stickers.data;
+  const stickerList = allStickers.data;
   useEffect(() => {
     if (restored || !decorationReady || !stickersReady) return;
     if (decorationData) {
       const list = stickerList ?? [];
+      /* 🔴 서버에서 받은 배치는 **전부 잠긴 것**입니다. 이미 소모돼 카드에 붙어 있어
+         뗄 수도 옮길 수도 없습니다. 이번에 새로 얹는 것만 자유입니다 (2026-09-23). */
       setPlaced(
-        parsePlacements(decorationData.placements, (id) => list.find((s) => s.id === id)?.imageUrl),
+        parsePlacements(
+          decorationData.placements,
+          (id) => list.find((s: Sticker) => s.id === id)?.imageUrl,
+        ).map((p) => ({ ...p, locked: true })),
       );
     }
     setRestored(true);
@@ -173,40 +182,19 @@ export function PocaDecoratePage() {
     }
   };
 
-  /* 꾸밈 지우기 — 되돌릴 수 없는 동작이라 확인 모달 (CLAUDE.md 4-7) */
-  const confirmRemoveDecoration = () =>
-    open('common/confirm', {
-      title: '꾸민 걸 지울까요?',
-      message: '원본 카드만 남고 되돌릴 수 없어요.',
-      confirmText: '지우기',
-      danger: true,
-      onConfirm: () =>
-        remove.mutate(undefined, {
-          onSuccess: () => {
-            setPlaced([]);
-            setSelectedId(null);
-            stickerImgs.current.clear();
-          },
-        }),
-    });
+  /*
+   * 🔴 "꾸밈 지우기" 는 **없앴습니다** (2026-09-23).
+   *
+   * 스티커는 한 번 붙이면 뗄 수 없는데 꾸밈을 통째로 지울 수 있으면 **그 스티커들이
+   * 증발합니다.** 되돌릴 방법이 없는 소모라 지우는 길 자체를 두지 않습니다.
+   * 서버의 DELETE 도 함께 없앴습니다.
+   */
 
   return (
     <>
       <Header
         title="포카 꾸미기"
         showBack
-        right={
-          decoration.data ? (
-            <Button
-              variant="danger-ghost"
-              size="sm"
-              loading={remove.isPending}
-              onClick={confirmRemoveDecoration}
-            >
-              꾸밈 지우기
-            </Button>
-          ) : undefined
-        }
       />
 
       <div className="px-4 py-5">

@@ -9,14 +9,18 @@ import java.util.Optional;
 /**
  * 포카 꾸밈 조회.
  *
- * <p>🔴 <b>카드만으로 찾는 메서드를 만들지 마라.</b> 주인이 바뀐 뒤 그렇게 읽으면 새 주인
- * 화면에 예전 주인의 그림이 뜬다. 여기 있는 메서드가 전부 {@code userId} 를 함께 받는 것은
- * 실수로 그렇게 쓰지 못하게 하려는 것이다.
+ * <p>🔴 <b>카드 하나에 꾸밈 하나다</b> ({@code uq_photocard_decorations_card}).
+ * 꾸밈은 <b>카드의 일부</b>라 카드가 팔리면 함께 넘어간다 — 그래서 사람으로 거르지 않는다.
+ *
+ * <p>⚠️ 2026-09-22 에는 {@code findByPhotocardIdAndUserId} 였다. 그때는 꾸밈이 <b>만든 사람의
+ * 것</b>이어서 새 주인에게 안 보이게 사람으로 걸렀다. 2026-09-23 에 "마켓에도 꾸민 모습을
+ * 보여주고 사는 사람이 그대로 받는다" 로 바뀌며 뒤집혔다 — 보이는 것과 받는 것이 달라
+ * 사는 사람이 속는 문제를 없애기 위해서다.
  */
 public interface NftPhotocardDecorationRepository extends JpaRepository<NftPhotocardDecoration, Long> {
 
-    Optional<NftPhotocardDecoration> findByPhotocardIdAndUserId(Long photocardId, Long userId);
+    Optional<NftPhotocardDecoration> findByPhotocardId(Long photocardId);
 
     /** 목록 화면용 — 카드마다 따로 부르면 N+1 이다 */
-    List<NftPhotocardDecoration> findByUserIdAndPhotocardIdIn(Long userId, List<Long> photocardIds);
+    List<NftPhotocardDecoration> findByPhotocardIdIn(List<Long> photocardIds);
 }

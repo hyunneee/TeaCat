@@ -29,7 +29,15 @@ public record NftMarketPhotocardResponse(
         String sellerNickname,
 
         @Schema(description = "상세 조회 수", example = "42")
-        long viewCount
+        long viewCount,
+
+        /* 🔴 꾸민 카드는 **마켓에서도 꾸민 모습**으로 보인다 (2026-09-23).
+           사는 사람이 그 꾸밈을 **그대로 받기** 때문에 보여줘도 속이는 것이 아니다.
+           ⚠️ 2026-09-22 에는 "마켓에는 절대 넣지 마라" 였다. 그때는 팔릴 때 꾸밈을 지워
+              보여준 것과 받는 것이 달랐다. 그 규칙이 바뀌면서 이 필드가 들어왔다 —
+              **둘은 한 쌍이다.** 다시 "꾸미기 전 모습으로 판매" 로 돌아간다면 이 필드부터 빼야 한다. */
+        @Schema(description = "꾸민 카드 이미지 URL. 꾸미지 않았으면 null 입니다")
+        String decoratedImageUrl
 ) {
 }
 

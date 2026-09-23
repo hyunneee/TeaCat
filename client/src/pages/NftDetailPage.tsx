@@ -193,30 +193,61 @@ export function NftDetailPage() {
       <PhotocardDetailLayout
         image={
           <>
-            {mine ? (
-              <button
-                type="button"
-                onClick={() => setZoomed(true)}
-                aria-label={`${card.designName} 포토카드 — 눌러서 크게 보기`}
-                className="mx-auto block w-48 lg:w-full lg:max-w-72"
-              >
-                <PocaLiveCard
-                  photocardId={card.photocardId}
-                  designName={card.designName}
-                  imageUrl={shownImageUrl}
-                  glow={card.grade === undefined || isSpecial(card.grade)}
-                  motes
-                  className="aspect-[2/3] w-full"
+            {/* 🔴 `relative` 는 **꾸미기 버튼의 기준**입니다. 카드 폭이 화면마다 달라서
+                (w-48 → lg:max-w-72) 버튼을 화면 기준으로 밀면 모서리에서 어긋납니다. */}
+            <div className="relative mx-auto w-48 lg:w-full lg:max-w-72">
+              {mine ? (
+                <button
+                  type="button"
+                  onClick={() => setZoomed(true)}
+                  aria-label={`${card.designName} 포토카드 — 눌러서 크게 보기`}
+                  className="block w-full"
+                >
+                  <PocaLiveCard
+                    photocardId={card.photocardId}
+                    designName={card.designName}
+                    imageUrl={shownImageUrl}
+                    glow={card.grade === undefined || isSpecial(card.grade)}
+                    motes
+                    className="aspect-[2/3] w-full"
+                  />
+                </button>
+              ) : (
+                <PocaShowcase
+                  className="w-full"
+                  seed={pocaSeed(card.photocardId)}
+                  imageUrl={card.imageUrl}
+                  alt={`${card.designName} 포토카드`}
                 />
-              </button>
-            ) : (
-              <PocaShowcase
-                className="mx-auto w-48 lg:w-full lg:max-w-72"
-                seed={pocaSeed(card.photocardId)}
-                imageUrl={card.imageUrl}
-                alt={`${card.designName} 포토카드`}
-              />
-            )}
+              )}
+
+              {/* 🔴 **내 카드일 때만** 보입니다. 이 화면은 마켓에서 들어온 **남의 카드도**
+                  그리기 때문에, 조건 없이 달면 남의 그림을 꾸며 가져가는 길이 열립니다.
+
+                  ── 왜 카드 오른쪽 위인가 (2026-09-23) ────────────────────
+                  예전에는 카드 **아래 가운데**의 흐린(soft) 버튼이었습니다. 세로로 흐르는
+                  자리라 "카드를 눌러 자세히 봐요" 안내에 묻혔습니다. 카드 모서리로 올리면
+                  **무엇을 꾸미는지**가 위치로 드러나고, 아래 초록 버튼(사기/팔기)과 **다른
+                  층**에 있어 진하게 해도 안 싸웁니다 — 한 화면의 primary 는 하나라는
+                  규칙(DESIGN.md 1장)을 지키면서도 눈에 띕니다.
+
+                  ⚠️ 카드를 누르면 확대라, 이 버튼은 카드 **밖으로** 조금 나가 있어야
+                     손가락이 겹치지 않습니다. */}
+              {FEATURE.sticker && mine && (
+                <button
+                  type="button"
+                  onClick={() => navigate(ROUTES.NFT_DECORATE(String(card.photocardId)))}
+                  /* 🔴 카드 **밖으로 더 내보냅니다.** 모서리에 반쯤 걸치면 카드 그림과
+                     겹쳐 글자가 묻히고, 카드를 누르려다 버튼이 눌립니다.
+                     ⚠️ 휴대폰(375px)에서 카드 오른쪽에 남는 공간이 약 90px 입니다.
+                        이보다 더 내보내면 화면 밖으로 잘립니다. */
+                  className="bg-ink absolute -top-3 -right-7 z-10 flex items-center gap-1.5 rounded-full py-2 pr-3.5 pl-3 text-sm font-bold text-white shadow-lg transition active:scale-95"
+                >
+                  <Sparkles size={15} strokeWidth={2.5} />
+                  꾸미기
+                </button>
+              )}
+            </div>
 
             {/* 누를 수 있다는 걸 알려 줍니다 — 그림은 눌러도 눌리는 티가 안 납니다.
               누를 수 없는 남의 카드에는 띄우지 않습니다(거짓말이 됩니다). */}
@@ -227,21 +258,6 @@ export function NftDetailPage() {
               </p>
             )}
 
-            {/* 🔴 **내 카드일 때만** 보입니다. 이 화면은 마켓에서 들어온 **남의 카드도**
-                그리기 때문에, 조건 없이 달면 남의 그림을 꾸며 가져가는 길이 열립니다.
-                하단 초록 버튼(사기/팔기)과 겹치지 않게 `soft` 로 둡니다 — 한 화면의
-                primary 는 하나입니다 (DESIGN.md 1장). */}
-            {FEATURE.sticker && mine && (
-              <div className="mt-3 flex justify-center">
-                <Button
-                  variant="soft"
-                  leftIcon={<Sparkles size={16} />}
-                  onClick={() => navigate(ROUTES.NFT_DECORATE(String(card.photocardId)))}
-                >
-                  스티커로 꾸미기
-                </Button>
-              </div>
-            )}
           </>
         }
       >

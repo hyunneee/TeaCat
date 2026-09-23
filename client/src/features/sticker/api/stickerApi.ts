@@ -28,6 +28,10 @@ export const stickerApi = {
   /** 내 스티커 목록 (최근 것 먼저) */
   mine: () => http.get<Sticker[]>('/users/me/stickers'),
 
+  /* 🔴 꾸미기 서랍 전용 — **아직 안 쓴 것만** 옵니다. 전체 목록(mine)을 서랍에 쓰면
+     이미 쓴 스티커가 보이고, 눌러도 서버가 거절하는 칸이 됩니다. */
+  unused: () => http.get<Sticker[]>('/users/me/stickers/unused'),
+
   /** 삭제 — 서버는 소프트 삭제 (설계 6-1) */
   remove: (stickerId: number) => http.delete<void>(`/stickers/${stickerId}`),
 };
@@ -37,4 +41,5 @@ export const stickerKeys = {
   job: (jobId: number) => [...stickerKeys.all, 'job', jobId] as const,
   quota: () => [...stickerKeys.all, 'quota'] as const,
   mine: () => [...stickerKeys.all, 'mine'] as const,
+  unused: () => [...stickerKeys.all, 'unused'] as const,
 };

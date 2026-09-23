@@ -7,34 +7,29 @@ import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardDecorationRepository;
 import com.teacat.server.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 포카 꾸미기 — 남의 그림이 새지 않는가.
+ * 포카 꾸미기 — <b>꾸밈은 카드의 일부이고, 스티커는 붙이면 못 뗀다.</b>
  *
- * <p>🔴 이 테스트가 지키는 것은 <b>두 가지가 서로 다른 장치</b>라는 점이다:
- * <ul>
- *   <li><b>유출 방지</b> — 꾸밈 조회가 언제나 {@code user_id} 로 함께 거른다.
- *       이것 때문에 주인이 바뀌어도 새 주인에게 안 보인다.</li>
- *   <li><b>저장공간 정리</b> — 실제로 팔릴 때 판 사람의 행과 MinIO 객체를 지운다.</li>
- * </ul>
- * 앞의 것이 깨지면 남의 그림이 노출되고, 뒤의 것이 깨지면 쓰레기가 쌓인다. 증상이 다르므로
- * 따로 확인한다.
+ * <p>🔴 <b>2026-09-22 의 테스트를 뒤집은 것이다.</b> 그때는 꾸밈이 만든 사람 것이어서
+ * "새 주인에게 안 보인다 / 팔리면 사라진다" 를 지켰다. 2026-09-23 에 마켓에도 꾸민 모습을
+ * 보여주기로 하면서 반대가 됐다 — <b>보여준 것과 받는 것이 달라지면 사는 사람이 속는다.</b>
  *
- * <p>🔴 <b>판매 "등록" 과 "팔림" 은 다르다.</b> 등록은 소유자를 바꾸지 않으므로 꾸밈이 그대로
- * 남아야 한다 — 안 팔리고 돌아왔을 때 사용자가 꾸민 것을 잃지 않는다.
+ * <p>그래서 이 파일이 지키는 것은 정반대다: <b>주인이 바뀌어도 남아 있고, 새 주인에게 보인다.</b>
  */
 class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
 
@@ -48,7 +43,7 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
     @Autowired private NftPhotocardDecorationRepository decorationRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
 
-    /** 🔴 MinIO 는 띄우지 않는다. 올리고 지우는 "호출" 만 확인하면 되는 시험이다 */
+    /** 🔴 MinIO 는 띄우지 않는다. 올리고 지우는 "호출" 만 보면 되는 시험이다 */
     @MockitoBean private FileStorageService fileStorageService;
 
     @BeforeEach
@@ -58,8 +53,39 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
         when(fileStorageService.presignedUrl(anyString())).thenReturn("https://example.test/signed.png");
     }
 
-    private NftDecorationSaveRequest request() {
-        return new NftDecorationSaveRequest(TINY_PNG, "[{\"id\":\"a\",\"stickerId\":1}]");
+    // ───────────────────────── 픽스처
+
+    private Long insertSticker(Long userId) {
+        Long jobId = jdbcTemplate.queryForObject("""
+                INSERT INTO sticker_jobs (user_id, status, idempotency_key, sketch_key, seed)
+                VALUES (?, 'DONE', ?, 'sticker/sketch/a.png', 1)
+                RETURNING id
+                """, Long.class, userId, UUID.randomUUID().toString());
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO stickers (job_id, user_id, image_key)
+                VALUES (?, ?, 'sticker/result/a.png')
+                RETURNING id
+                """, Long.class, jobId, userId);
+    }
+
+    private boolean isStickerUsed(Long stickerId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT used_at IS NOT NULL FROM stickers WHERE id = ?", Boolean.class, stickerId));
+    }
+
+    /** 배치 JSON — 서버는 stickerId 만 읽는다 */
+    private String placements(Long... stickerIds) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < stickerIds.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append("{\"id\":\"p").append(i).append("\",\"stickerId\":").append(stickerIds[i])
+              .append(",\"x\":0.5,\"y\":0.5,\"scale\":0.3,\"rotation\":0}");
+        }
+        return sb.append(']').toString();
+    }
+
+    private NftDecorationSaveRequest request(Long... stickerIds) {
+        return new NftDecorationSaveRequest(TINY_PNG, placements(stickerIds));
     }
 
     private void insertListing(Long photocardId, Long sellerId, Long price) {
@@ -70,144 +96,240 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
                 """, photocardId, sellerId, price);
     }
 
-    // ───────────────────────── 저장·덮어쓰기·소유
+    /** 팔릴 때까지 태운다 — 세 테스트가 같은 흐름을 쓴다 */
+    private void sell(Long buyerId, Long photocardId) {
+        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
+        settlementWriter.catConfirmed(trade.tradeId());
+        settlementWriter.nftSubmitted(trade.tradeId(), null);
+        settlementWriter.complete(trade.tradeId());
+    }
+
+    // ───────────────────────── 꾸밈은 카드를 따라간다 (2026-09-23 뒤집힘)
 
     @Test
-    void 다시_꾸미면_행이_늘지_않고_덮어쓴다() {
-        Long userId = insertUser("deco1@test.com", "꾸미는사람");
-        Long photocardId = insertPhotocardOwnedBy(userId);
+    @DisplayName("카드가 팔려도 꾸밈이 남는다 — 사는 사람이 그대로 받는다")
+    void decorationSurvivesSale() {
+        Long sellerId = insertFundedUser("deco-seller@test.com", "판매자", 10_000L);
+        Long buyerId = insertFundedUser("deco-buyer@test.com", "구매자", 10_000L);
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "판매 후 꾸밈 유지", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        decorationService.save(sellerId, photocardId, request(insertSticker(sellerId)));
 
-        decorationService.save(userId, photocardId, request());
-        decorationService.save(userId, photocardId, request());
+        insertListing(photocardId, sellerId, 3_000L);
+        sell(buyerId, photocardId);
+
+        assertThat(decorationRepository.findByPhotocardId(photocardId)).isPresent();
+    }
+
+    @Test
+    @DisplayName("새 주인 화면에 꾸민 모습이 보인다")
+    void decorationVisibleToNewOwner() {
+        Long sellerId = insertFundedUser("vis-seller@test.com", "판매자", 10_000L);
+        Long buyerId = insertFundedUser("vis-buyer@test.com", "구매자", 10_000L);
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "새 주인에게 보임", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        decorationService.save(sellerId, photocardId, request(insertSticker(sellerId)));
+
+        insertListing(photocardId, sellerId, 3_000L);
+        sell(buyerId, photocardId);
+
+        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
+                .singleElement()
+                .satisfies(card -> assertThat(card.decoratedImageUrl()).isNotNull());
+    }
+
+    @Test
+    @DisplayName("남의 카드 상세에서도 꾸민 모습이 보인다")
+    void decorationVisibleToStranger() {
+        Long ownerId = insertUser("pub-owner@test.com", "주인");
+        Long strangerId = insertUser("pub-stranger@test.com", "남");
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "남에게도 보임", 1),
+                insertTicket(ownerId, fixture), ownerId);
+        decorationService.save(ownerId, photocardId, request(insertSticker(ownerId)));
+        // 남이 상세를 열려면 마켓에 올라와 있어야 한다 (비공개 카드는 애초에 안 열린다)
+        insertListing(photocardId, ownerId, 3_000L);
+
+        assertThat(nftService.getPhotocard(photocardId, strangerId).decoratedImageUrl()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("새 주인이 물려받은 꾸밈을 덮어쓸 수 있다")
+    void newOwnerCanOverwrite() {
+        Long sellerId = insertFundedUser("ow-seller@test.com", "판매자", 10_000L);
+        Long buyerId = insertFundedUser("ow-buyer@test.com", "구매자", 10_000L);
+        Fixture fixture = insertPerformanceFixture();
+        Long photocardId = insertPhotocard(
+                insertDesign(fixture.performanceId(), "덮어쓰기", 1),
+                insertTicket(sellerId, fixture), sellerId);
+        Long sellerSticker = insertSticker(sellerId);
+        decorationService.save(sellerId, photocardId, request(sellerSticker));
+        insertListing(photocardId, sellerId, 3_000L);
+        sell(buyerId, photocardId);
+
+        /* 판 사람의 스티커는 그대로 붙어 있어야 하고(못 뗀다), 산 사람은 거기에 얹는다.
+           🔴 UNIQUE 가 (photocard_id, user_id) 였다면 여기서 행이 둘이 되려다 막혔다. */
+        decorationService.save(buyerId, photocardId, request(sellerSticker, insertSticker(buyerId)));
 
         assertThat(decorationRepository.findAll()).hasSize(1);
     }
 
-    /** 🔴 안 지우면 다시 꾸밀 때마다 안 쓰는 이미지가 한 장씩 쌓인다 */
+    // ───────────────────────── 스티커는 붙이면 못 뗀다
+
     @Test
-    void 덮어쓸_때_예전_이미지를_지운다() {
-        Long userId = insertUser("deco2@test.com", "덮어쓰는사람");
+    @DisplayName("저장하면 스티커가 소모된다")
+    void savingConsumesStickers() {
+        Long userId = insertUser("consume@test.com", "꾸미는사람");
         Long photocardId = insertPhotocardOwnedBy(userId);
+        Long stickerId = insertSticker(userId);
 
-        decorationService.save(userId, photocardId, request());
-        String firstKey = decorationRepository.findByPhotocardIdAndUserId(photocardId, userId)
-                .orElseThrow().getImageKey();
-        decorationService.save(userId, photocardId, request());
+        decorationService.save(userId, photocardId, request(stickerId));
 
-        verify(fileStorageService).delete(firstKey);
+        assertThat(isStickerUsed(stickerId)).isTrue();
     }
 
     @Test
-    void 남의_카드는_꾸밀_수_없다() {
-        Long ownerId = insertUser("owner@test.com", "주인");
-        Long strangerId = insertUser("stranger@test.com", "남");
+    @DisplayName("🔴 이미 붙인 스티커를 빼면 거절한다")
+    void cannotRemovePlacedSticker() {
+        Long userId = insertUser("remove@test.com", "빼려는사람");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+        Long first = insertSticker(userId);
+        Long second = insertSticker(userId);
+        decorationService.save(userId, photocardId, request(first, second));
+
+        // first 를 빼고 저장 시도
+        assertThatThrownBy(() -> decorationService.save(userId, photocardId, request(second)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(NftErrorCode.DECORATION_STICKER_NOT_REMOVABLE));
+    }
+
+    @Test
+    @DisplayName("자리만 옮겨 다시 저장하는 것은 된다")
+    void canRearrangeWithoutRemoving() {
+        Long userId = insertUser("move@test.com", "옮기는사람");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+        Long stickerId = insertSticker(userId);
+        decorationService.save(userId, photocardId, request(stickerId));
+
+        decorationService.save(userId, photocardId, request(stickerId));
+
+        assertThat(decorationRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("다른 카드에 이미 쓴 스티커는 못 쓴다")
+    void cannotReuseStickerOnAnotherCard() {
+        Long userId = insertUser("reuse@test.com", "재사용하려는사람");
+        Long firstCard = insertPhotocardOwnedBy(userId);
+        Long secondCard = insertPhotocardOwnedBy(userId);
+        Long stickerId = insertSticker(userId);
+        decorationService.save(userId, firstCard, request(stickerId));
+
+        assertThatThrownBy(() -> decorationService.save(userId, secondCard, request(stickerId)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(NftErrorCode.DECORATION_STICKER_ALREADY_USED));
+    }
+
+    @Test
+    @DisplayName("같은 스티커를 한 카드에 두 번 올리면 거절한다")
+    void cannotPlaceSameStickerTwice() {
+        Long userId = insertUser("twice@test.com", "두번올리는사람");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+        Long stickerId = insertSticker(userId);
+
+        assertThatThrownBy(() ->
+                decorationService.save(userId, photocardId, request(stickerId, stickerId)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(NftErrorCode.DECORATION_STICKER_ALREADY_USED));
+    }
+
+    @Test
+    @DisplayName("남의 스티커는 못 쓴다")
+    void cannotUseOthersSticker() {
+        Long userId = insertUser("mine@test.com", "나");
+        Long otherId = insertUser("others@test.com", "남");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+
+        assertThatThrownBy(() ->
+                decorationService.save(userId, photocardId, request(insertSticker(otherId))))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(NftErrorCode.DECORATION_STICKER_NOT_USABLE));
+    }
+
+    @Test
+    @DisplayName("스티커가 거절되면 이미지가 올라가지 않는다")
+    void rejectedSaveUploadsNothing() {
+        Long userId = insertUser("noupload@test.com", "나");
+        Long otherId = insertUser("noupload-other@test.com", "남");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+
+        assertThatThrownBy(() ->
+                decorationService.save(userId, photocardId, request(insertSticker(otherId))))
+                .isInstanceOf(BusinessException.class);
+
+        // 🔴 거절이 업로드보다 **먼저** 돌아야 MinIO 에 쓰레기가 안 남는다
+        org.mockito.Mockito.verify(fileStorageService, org.mockito.Mockito.never())
+                .uploadBytes(any(), anyString(), anyString());
+    }
+
+    // ───────────────────────── 소유·입력 검사
+
+    @Test
+    @DisplayName("남의 카드는 꾸밀 수 없다")
+    void cannotDecorateOthersCard() {
+        Long ownerId = insertUser("card-owner@test.com", "주인");
+        Long strangerId = insertUser("card-stranger@test.com", "남");
         Long photocardId = insertPhotocardOwnedBy(ownerId);
 
-        assertThatThrownBy(() -> decorationService.save(strangerId, photocardId, request()))
+        assertThatThrownBy(() ->
+                decorationService.save(strangerId, photocardId, request(insertSticker(strangerId))))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(NftErrorCode.PHOTOCARD_NOT_OWNED));
     }
 
     @Test
-    void 꾸민_적이_없으면_조회가_404다() {
-        Long userId = insertUser("deco3@test.com", "안꾸민사람");
+    @DisplayName("배치 JSON 이 깨져 있으면 거절한다")
+    void rejectsBrokenPlacements() {
+        Long userId = insertUser("broken@test.com", "나");
         Long photocardId = insertPhotocardOwnedBy(userId);
 
-        assertThatThrownBy(() -> decorationService.find(userId, photocardId))
+        assertThatThrownBy(() -> decorationService.save(userId, photocardId,
+                new NftDecorationSaveRequest(TINY_PNG, "이건 JSON 이 아니다")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
+                        .isEqualTo(NftErrorCode.DECORATION_PLACEMENTS_INVALID));
+    }
+
+    @Test
+    @DisplayName("꾸민 적이 없으면 조회가 404 다")
+    void findReturns404WhenMissing() {
+        Long userId = insertUser("none@test.com", "안꾸민사람");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+
+        assertThatThrownBy(() -> decorationService.find(photocardId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode())
                         .isEqualTo(NftErrorCode.DECORATION_NOT_FOUND));
     }
 
-    // ───────────────────────── 판매 등록은 꾸밈을 건드리지 않는다
-
-    /** 🔴 등록은 소유자를 안 바꾼다. 안 팔리고 돌아오면 꾸민 것이 그대로 있어야 한다 */
     @Test
-    void 판매_등록만_해서는_꾸밈이_사라지지_않는다() {
-        Long sellerId = insertUser("listing@test.com", "등록만한사람");
-        Fixture fixture = insertPerformanceFixture();
-        Long photocardId = insertPhotocard(
-                insertDesign(fixture.performanceId(), "등록 테스트 카드", 1),
-                insertTicket(sellerId, fixture), sellerId);
+    @DisplayName("목록 조회는 카드 여러 장을 한 번에 가져온다")
+    void listsManyAtOnce() {
+        Long userId = insertUser("many@test.com", "여러장");
+        Long first = insertPhotocardOwnedBy(userId);
+        Long second = insertPhotocardOwnedBy(userId);
+        decorationService.save(userId, first, request(insertSticker(userId)));
 
-        decorationService.save(sellerId, photocardId, request());
-        insertListing(photocardId, sellerId, 3_000L);
-
-        assertThat(decorationRepository.findByPhotocardIdAndUserId(photocardId, sellerId)).isPresent();
-    }
-
-    // ───────────────────────── 실제로 팔렸을 때
-
-    @Test
-    void 정산이_끝나면_판_사람의_꾸밈이_사라진다() {
-        /* 🔴 거래를 타는 시험은 **지갑과 잔액이 있어야** 한다 — insertUser 만 쓰면
-           purchase 가 "지갑이 없습니다" 로 끊긴다 (실제로 한 번 걸렸다). */
-        Long sellerId = insertFundedUser("seller-deco@test.com", "판매자", 10_000L);
-        Long buyerId = insertFundedUser("buyer-deco@test.com", "구매자", 10_000L);
-        Fixture fixture = insertPerformanceFixture();
-        Long photocardId = insertPhotocard(
-                insertDesign(fixture.performanceId(), "정산 테스트 카드", 1),
-                insertTicket(sellerId, fixture), sellerId);
-        decorationService.save(sellerId, photocardId, request());
-        insertListing(photocardId, sellerId, 3_000L);
-
-        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
-        settlementWriter.catConfirmed(trade.tradeId());
-        settlementWriter.nftSubmitted(trade.tradeId(), null);
-        settlementWriter.complete(trade.tradeId());
-
-        assertThat(decorationRepository.findByPhotocardIdAndUserId(photocardId, sellerId)).isEmpty();
-    }
-
-    /**
-     * 🔴 <b>유출을 막는 건 조회의 {@code user_id} 조건이다.</b> 삭제가 빠져도 이건 통과해야 한다 —
-     * 두 장치를 따로 확인하려고 나눠 둔 시험이다.
-     */
-    @Test
-    void 주인이_바뀌면_새_주인에게는_예전_꾸밈이_안_보인다() {
-        Long sellerId = insertFundedUser("seller-leak@test.com", "판매자", 10_000L);
-        Long buyerId = insertFundedUser("buyer-leak@test.com", "구매자", 10_000L);
-        Fixture fixture = insertPerformanceFixture();
-        Long photocardId = insertPhotocard(
-                insertDesign(fixture.performanceId(), "유출 테스트 카드", 1),
-                insertTicket(sellerId, fixture), sellerId);
-        decorationService.save(sellerId, photocardId, request());
-        insertListing(photocardId, sellerId, 3_000L);
-
-        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
-        settlementWriter.catConfirmed(trade.tradeId());
-        settlementWriter.nftSubmitted(trade.tradeId(), null);
-        settlementWriter.complete(trade.tradeId());
-
-        assertThat(decorationService.imageUrlsOf(buyerId, java.util.List.of(photocardId))).isEmpty();
-        assertThat(nftService.getMyPhotocards(buyerId, null, null, 20).items())
-                .singleElement()
-                .satisfies(card -> assertThat(card.decoratedImageUrl()).isNull());
-    }
-
-    /**
-     * 🔴 UNIQUE 가 {@code photocard_id} 한 칸이었다면 여기서 막힌다 — 남의 행이 자리를
-     * 차지해 <b>새 주인이 자기 카드를 영영 못 꾸민다.</b> 제약이 두 칸인지 지키는 시험이다.
-     */
-    @Test
-    void 새_주인도_그_카드를_꾸밀_수_있다() {
-        Long sellerId = insertFundedUser("seller-new@test.com", "판매자", 10_000L);
-        Long buyerId = insertFundedUser("buyer-new@test.com", "구매자", 10_000L);
-        Fixture fixture = insertPerformanceFixture();
-        Long photocardId = insertPhotocard(
-                insertDesign(fixture.performanceId(), "새주인 테스트 카드", 1),
-                insertTicket(sellerId, fixture), sellerId);
-        decorationService.save(sellerId, photocardId, request());
-        insertListing(photocardId, sellerId, 3_000L);
-
-        var trade = nftService.purchase(buyerId, photocardId, UUID.randomUUID().toString());
-        settlementWriter.catConfirmed(trade.tradeId());
-        settlementWriter.nftSubmitted(trade.tradeId(), null);
-        settlementWriter.complete(trade.tradeId());
-
-        decorationService.save(buyerId, photocardId, request());
-
-        assertThat(decorationRepository.findByPhotocardIdAndUserId(photocardId, buyerId)).isPresent();
+        assertThat(decorationService.imageUrlsOf(List.of(first, second))).hasSize(1);
     }
 }

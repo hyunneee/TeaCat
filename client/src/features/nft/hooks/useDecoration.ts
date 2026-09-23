@@ -70,14 +70,10 @@ export function useSaveDecoration(photocardId: number) {
   });
 }
 
-/** 꾸밈 지우기 — 되돌릴 수 없는 동작이라 화면이 확인 모달을 먼저 띄웁니다 (CLAUDE.md 4-7) */
-export function useDeleteDecoration(photocardId: number) {
-  return useMutation({
-    mutationFn: () => decorationApi.remove(photocardId),
-    onSuccess: () => {
-      invalidateDecorated(photocardId);
-      toast.success('꾸밈을 지웠어요');
-    },
-    onError: () => toast.error('지우지 못했어요. 잠시 후 다시 시도해 주세요'),
-  });
-}
+/*
+ * 🔴 꾸밈 지우기(`useDeleteDecoration`)는 **없앴습니다** (2026-09-23).
+ *
+ * 스티커는 한 번 붙이면 뗄 수 없는데, 꾸밈을 통째로 지울 수 있으면 **그 스티커들이 증발합니다.**
+ * 되돌릴 방법이 없는 소모라 지우는 길 자체를 두지 않습니다.
+ * 서버의 `DELETE /photocards/{id}/decoration` 도 함께 없앴으므로 부르면 404 입니다.
+ */

@@ -30,10 +30,26 @@ export interface Placed {
   scale: number;
   /** 도(degree) */
   rotation: number;
+  /**
+   * 이미 저장돼 **잠긴** 스티커인가 (2026-09-23).
+   *
+   * 🔴 **스티커는 한 번 붙이면 뗄 수 없습니다.** "완료하기" 를 누르는 순간 소모가 확정되고
+   *    그 배치는 잠깁니다. 잠긴 것에는 지우기 손잡이를 달지 않고, 옮기지도 못하게 합니다.
+   *
+   * 🔴 **저장하지 않습니다** (`PlacedRecord` 에 없습니다). 무엇이 잠겼는지는 서버가 압니다 —
+   *    다시 열 때 서버에서 받은 배치는 전부 잠긴 것이고, 이번에 새로 얹은 것만 자유입니다.
+   *
+   * ⚠️ 이 값이 새면 사용자가 뗄 수 있다고 착각하고, 저장할 때 `NFT_072` 로 거절당합니다.
+   */
+  locked?: boolean;
 }
 
-/** 서버 `placements` 에 실제로 담기는 모양 — `Placed` 에서 `url` 만 뺀 것입니다 */
-export type PlacedRecord = Omit<Placed, 'url'>;
+/**
+ * 서버 `placements` 에 실제로 담기는 모양 — `Placed` 에서 화면 전용 필드를 뺀 것입니다.
+ *
+ * 🔴 `url`(만료됨)과 `locked`(서버가 앎)는 담지 않습니다.
+ */
+export type PlacedRecord = Omit<Placed, 'url' | 'locked'>;
 
 /** 서버 `NftDecorationResponse` 와 1:1 입니다 */
 export interface Decoration {
@@ -56,4 +72,20 @@ export const DECORATION_ERROR = {
   NOT_FOUND: 'NFT_065',
   IMAGE_INVALID: 'NFT_066',
   IMAGE_TOO_LARGE: 'NFT_067',
+
+  /* 스티커 소모 (2026-09-23). 🔴 **한 번 붙이면 뗄 수 없습니다.**
+     ⚠️ 069~072 입니다 — dev 가 068(숨김 도안)을 먼저 가져가서 한 칸씩 밀렸습니다.
+        서버 `NftErrorCode` 와 한 쌍이라 한쪽만 고치면 분기가 조용히 빗나갑니다. */
+  PLACEMENTS_INVALID: 'NFT_069',
+  /** 남의 스티커이거나 없는 스티커 */
+  STICKER_NOT_USABLE: 'NFT_070',
+  /** 다른 카드에 이미 쓴 스티커 */
+  STICKER_ALREADY_USED: 'NFT_071',
+  /**
+   * 이미 붙어 있던 스티커를 빼고 저장하려 했다.
+   *
+   * 🔴 **화면이 먼저 막아야 하는 것**입니다. 잠긴 스티커에는 지우기 손잡이를 안 답니다.
+   *    여기까지 왔다면 잠금 처리가 샌 것이니, 안내만 하고 넘기지 말고 원인을 찾아야 합니다.
+   */
+  STICKER_NOT_REMOVABLE: 'NFT_072',
 } as const;

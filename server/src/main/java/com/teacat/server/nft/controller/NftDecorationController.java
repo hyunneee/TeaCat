@@ -54,15 +54,11 @@ public class NftDecorationController {
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
             @PathVariable Long photocardId) {
         return ResponseEntity.ok(BaseResponse.success(
-                decorationService.find(authUser.id(), photocardId)));
+                decorationService.find(photocardId)));
     }
 
-    @Operation(summary = "꾸밈 지우기", description = "원본 카드만 남습니다. 되돌릴 수 없습니다.")
-    @DeleteMapping
-    public ResponseEntity<BaseResponse<Void>> delete(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
-            @PathVariable Long photocardId) {
-        decorationService.delete(authUser.id(), photocardId);
-        return ResponseEntity.ok(BaseResponse.success("지웠습니다."));
-    }
+    /*
+     * 🔴 꾸밈 지우기(DELETE)는 **없앴다** (2026-09-23).
+     *    스티커는 붙이면 못 떼는데 꾸밈을 통째로 지울 수 있으면 그 스티커들이 증발한다.
+     */
 }

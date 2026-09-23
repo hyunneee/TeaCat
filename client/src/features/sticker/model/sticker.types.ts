@@ -83,6 +83,15 @@ export interface Sticker {
   /** 투명 PNG (presigned URL, 배너와 같은 패턴) */
   imageUrl: string;
   createdAt: string;
+  /**
+   * 꾸미기에 이미 썼는가 (2026-09-23).
+   *
+   * 🔴 **되돌릴 수 없습니다.** 한 번 붙이면 뗄 수 없고, 카드가 팔리면 카드를 따라갑니다.
+   *    목록에서는 회색 "사용됨" 으로 보이고, 꾸미기 서랍에는 아예 나오지 않습니다.
+   */
+  used: boolean;
+  /** 붙어 있는 카드 id. 안 썼으면 null */
+  usedPhotocardId: number | null;
 }
 
 export interface StickerJob {
@@ -125,11 +134,29 @@ export interface StickerQuota {
   limit: number;
   used: number;
   remaining: number;
+  /**
+   * 남은 몫을 다 쓴 뒤 1장당 드는 캣머니 (2026-09-23).
+   *
+   * 🔴 **화면에 숫자를 박지 마세요.** 서버 설정(STICKER_EXTRA_PRICE_CAT)으로 바뀌는 값이라,
+   *    박아 두면 버튼에 적힌 금액과 실제로 빠지는 금액이 달라집니다.
+   */
+  extraPriceCat: number;
 }
 
 /** 서버가 일일 상한에서 내는 에러 코드 (429) */
 export const STICKER_ERROR = {
+  /* 🔴 이제 거의 안 납니다 — 하루 몫을 넘겨도 캣머니로 더 만들 수 있습니다 (2026-09-23) */
   DAILY_LIMIT: 'STICKER_001',
+  /** 무료 몫을 다 썼는데 캣머니도 모자람 */
+  NOT_ENOUGH_CAT: 'STICKER_010',
+
+  /*
+   * 🔴 유료 생성은 **지갑을 탑니다.** 지갑이 없거나 아직 만들어지는 중이면 스티커 코드가
+   *    아니라 지갑 코드가 옵니다 (실제로 로컬에서 WALLET_010 을 받고 확인했습니다).
+   *    가르지 않으면 "만들기를 시작하지 못했어요" 만 떠서 사용자가 할 일을 모릅니다.
+   */
+  WALLET_PROVISIONING: 'WALLET_010',
+  WALLET_NOT_FOUND: 'WALLET_003',
 } as const;
 
 /** 주제 입력 상한 (설계 9-2) */

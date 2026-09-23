@@ -441,6 +441,9 @@ sticker:
   # 워커 장애로 사용자 몫이 깎이면 안 된다. 경계는 KST 자정이며 자바가 계산한다
   # (DB 는 UTC, 앱은 Asia/Seoul 이라 now()::date 로 세면 매일 09시까지 어제 몫이 된다)
   daily-limit: ${STICKER_DAILY_LIMIT:5}
+  # 하루 몫을 넘겨 만들 때 1장당 태우는 캣머니 (2026-09-23).
+  # 🔴 넘겼다고 거절하지 않는다 — 돈을 내면 계속 만들 수 있다. 상한은 "공짜로 몇 장" 이다.
+  extra-price-cat: ${STICKER_EXTRA_PRICE_CAT:100}
   # 워커(GPU 노트북)가 /internal/ai-jobs/** 를 부를 때 쓰는 키 (X-Internal-Api-Key).
   # 🔴 비워 두면 그 엔드포인트가 전부 401 이다. 스티커 생성만 멈출 뿐 다른 기능에는 영향이 없다.
   #    "비었으면 통과" 로 만들지 말 것 — /internal/** 은 스프링 시큐리티를 그냥 지나간다.
