@@ -79,6 +79,17 @@ final class TradeRiskFeatureVector {
         f.put("buyerMaxSpendInWindow", ctx.buyerMaxSpendInWindow());
         f.put("spendRatio", ratio(ctx.price(), ctx.buyerMaxSpendInWindow()));
 
+        // 그래프 — 거래를 이어 놓아야 보이는 것 (14-2-2). 규칙 R1~R8 은 이 값을 읽지 않는다
+        TradeRiskContext.Graph g = ctx.graph();
+        f.put("buyerPreviouslyOwnedCard", g.buyerPreviouslyOwnedCard());
+        f.put("cardTradesInWindow", g.cardTradesInWindow());
+        f.put("cardDistinctOwnersInWindow", g.cardDistinctOwnersInWindow());
+        // 손바뀜은 잦은데 주인이 적으면 같은 사람들 사이를 도는 것이다. 1에 가까울수록 고리
+        f.put("cardOwnerReuseRatio", g.cardTradesInWindow() == 0 ? null
+                : round(1.0 - (double) g.cardDistinctOwnersInWindow() / g.cardTradesInWindow()));
+        f.put("buyerToSellerHops", g.buyerToSellerHops());
+        f.put("buyerReachesSeller", g.buyerToSellerHops() != null);
+
         return f;
     }
 

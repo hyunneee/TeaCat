@@ -67,6 +67,32 @@ class NftTradeRiskSimulatorIntegrationTests extends PostgresIntegrationTest {
         assertThat(report.falseNegatives()).isPositive();
     }
 
+    /**
+     * 🔴 14-2-2 의 핵심. 규칙은 3단 순환을 못 잡지만, <b>피처에는 정보가 있어야</b> 모델이 배울 수 있다.
+     *
+     * <p>고리가 닫히는 마지막 구간에서 구매자는 이 카드를 전에 가졌던 사람이다. 고리가 몇 단이든 성립한다.
+     * 정상 표본에는 이 값이 하나도 없어야 한다 — 있으면 피처가 정상까지 같이 가리켜 쓸모가 없다.
+     */
+    @Test
+    void 삼단_순환의_닫히는_구간은_그래프_피처에_드러난다() {
+        TradeSimulationResponse report = run();
+
+        Boolean ringClosing = jdbcTemplate.queryForObject("""
+                SELECT bool_and((f.features->>'buyerPreviouslyOwnedCard')::boolean)
+                  FROM simulation_labels l JOIN nft_trade_risk_features f ON f.trade_id = l.trade_id
+                 WHERE l.batch_id = ? AND l.scenario = ? AND l.note LIKE '3단 순환 3/3%'
+                """, Boolean.class, report.batchId(), NftTradeRiskSimulator.CIRCULAR_RING);
+        assertThat(ringClosing).isTrue();
+
+        Integer normalWithSignal = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM simulation_labels l
+                  JOIN nft_trade_risk_features f ON f.trade_id = l.trade_id
+                 WHERE l.batch_id = ? AND l.scenario = ?
+                   AND (f.features->>'buyerPreviouslyOwnedCard')::boolean
+                """, Integer.class, report.batchId(), NftTradeRiskSimulator.NORMAL);
+        assertThat(normalWithSignal).isZero();
+    }
+
     @Test
     void 만든_거래는_모두_피처를_남긴다() {
         TradeSimulationResponse report = run();

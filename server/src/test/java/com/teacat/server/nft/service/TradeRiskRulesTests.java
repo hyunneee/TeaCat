@@ -261,7 +261,9 @@ class TradeRiskRulesTests {
                     pairTradeCount, photocardCycled, medianPrice, priceSamples,
                     recentVolume, recentVolumeWithParties, baselineVolume,
                     designIssuedSupply, buyerOwnedOfDesign, designTradesInWindow, buyerBuysOfDesignInWindow,
-                    buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow, NOW);
+                    buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow,
+                    // 규칙 R1~R8 은 그래프 값을 읽지 않는다 — 피처 전용이다 (AUCTION_FRAUD_DESIGN.md 14-2-2)
+                    TradeRiskContext.Graph.EMPTY, NOW);
         }
     }
 }

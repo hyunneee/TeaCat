@@ -571,6 +571,7 @@ Java SDK 의 클래스 기반 `outputConfig(TradeRiskAnalysis.class)` 를 쓰면
 | M5 ✅ 2026-09-19 | 관리자 콘솔 `/admin/trade-reviews` — 통계 타일, 심사 대기·완료 탭, **전체 거래 내역 탭**(새 API `GET /admin/nft/trade-reviews/trades`), 상세 모달(규칙 근거·판매자/구매자 비교·입찰 타임라인·최근 거래·AI 칸), 승인·거절(확인 모달). `can.reviewTrades`, 사이드바 "거래 심사" | `client/features/admin`, `routes.ts`, `router.tsx`, `permission.ts` |
 | 피처 저장 ✅ 2026-09-23 | 마이그레이션 `V20260923_1000`, `NftTradeRiskFeature`·`TradeRiskFeatureVector`, `Writer.screen` 에서 **통과한 거래까지** 피처 저장. 통합 테스트 2개 추가 | `Writer.screen` |
 | 시뮬레이터 ✅ 2026-09-23 | 마이그레이션 `V20260923_1010`(`simulation_labels`), `NftTradeRiskSimulator`, 관리자 API `POST /admin/nft/trade-reviews/simulate`, 설정 `nft.trade.simulator.enabled`(기본 false). 통합 테스트 7개(대본 검증 5 + 안전장치 2) | 없음 — 심사 경로를 그대로 호출 |
+| 그래프 피처 ✅ 2026-09-23 | `TradeRiskContext.Graph`(카드 소유 이력·거래 그래프 최단 경로, 재귀 CTE 3홉), `TradeRiskFeatureVector` 에 6개 추가. 시뮬레이터로 판별력 확인 — 고리가 닫히는 거래 100%, 정상 0%. 통합 테스트 1개 추가 | `NftTradeRiskQueryRepository.loadContext` |
 | M6 | 선행 작업 세 개(증분·연장·rate limit) — 별 브랜치 | `validateBiddable` |
 
 M1~M3 만으로 기능이 닫힌다. M4 는 그 위에 얹는 것이라 API 키 없이도 M3 까지 시연할 수 있다.
@@ -670,6 +671,65 @@ M1~M3 만으로 기능이 닫힌다. M4 는 그 위에 얹는 것이라 API 키 
 `NftTradeRiskSimulatorIntegrationTests.삼단_순환은_규칙이_못_잡는다` 가 이 구멍을 테스트로 고정한다 — 언젠가 잡히게 되면 규칙이 바뀐 것이고, 그때 모델의 역할도 다시 따져야 한다.
 
 ⚠️ R5(신규 계정 급행)는 어느 대본도 노리지 않아 적중이 0이다. 필요하면 대본을 하나 더 넣는다.
+
+### 14-2-2. 그래프 피처 ✅ 2026-09-23 구현
+
+시뮬레이터를 돌려 보고 나서 추가했다. **순서가 중요하다** — 먼저 측정했고, 측정이 이 작업을 지시했다.
+
+#### 왜 필요했나
+
+3단 순환(A→B→C→A)의 마지막 거래 피처를 열어 보니 정상 거래와 구별할 근거가 **하나도 없었다.**
+
+```
+pairTradeCount: 0          ← 이 둘은 처음 거래
+photocardCycled: false     ← R3 이 두 사람 사이만 보니까
+priceRatio: 0.75           ← 시세보다 오히려 쌈
+sellerBuyerSameIp: false   ← 단말도 전화번호도 다름
+buyerDeviceSeenBefore: false
+```
+
+기존 피처 34개 어디에도 "이 카드가 한 바퀴 돌았다" 는 정보가 없었다. **모델을 바꿔서 될 일이 아니다** —
+LightGBM 이든 무엇이든 입력에 없는 것은 배울 수 없다. 그대로 학습시키면 규칙을 다시 학습할 뿐이다.
+
+#### 무엇을 넣었나
+
+`TradeRiskContext.Graph` — 거래를 **한 건씩** 보면 안 보이고 **이어 놓아야** 보이는 값들.
+
+| 피처 | 뜻 |
+|---|---|
+| `buyerPreviouslyOwnedCard` | 구매자가 이 카드를 전에 가진 적 있나. **고리 길이와 무관**하게 되돌아옴을 잡는다 |
+| `buyerToSellerHops` · `buyerReachesSeller` | 거래 그래프(판매자→구매자)에서 구매자가 판매자에게 닿는 최단 경로. 재귀 CTE, 3홉에서 끊는다 |
+| `cardTradesInWindow` · `cardDistinctOwnersInWindow` | 카드의 손바뀜 횟수와 거쳐 간 주인 수 |
+| `cardOwnerReuseRatio` | 손바뀜 대비 주인이 적은 정도 |
+
+#### 판별력 (기본 규모 한 판, 거래 132건)
+
+| 대본 | n | `buyerPreviouslyOwnedCard` | `buyerReachesSeller` |
+|---|---|---|---|
+| **3단 순환 — 닫히는 구간** | 5 | **5 (100%)** | 5 (100%) |
+| 3단 순환 — 앞 구간 | 10 | 0 | 5 |
+| 2단 순환 | 10 | 5 (닫히는 구간) | 5 |
+| 정상 | 60 | **0 (0%)** | 5 (8%) |
+| 자전 입찰 · 매집 · 계정 탈취 | 47 | 0 | 0 |
+
+`buyerPreviouslyOwnedCard` 는 고리가 닫히는 거래를 **100% 집어내면서 정상은 하나도 건드리지 않는다.**
+`buyerReachesSeller` 는 정상에서도 8% 가 켜져 혼자서는 약하지만, 두 값을 함께 보면 갈라진다.
+
+⚠️ `cardOwnerReuseRatio` 는 현재 대본 전부에서 0이다. 고리가 **두 바퀴 이상** 돌아야 켜지는 값이라
+지금 데이터로는 모델에 도움이 되지 않는다. 반복 워시 트레이딩 대본을 넣을 때 살아난다.
+
+#### 🔴 규칙으로 승격하지 않는다
+
+`buyerPreviouslyOwnedCard` 만 보면 "R9 순환 탐지" 규칙을 당장 만들 수 있다. 일부러 안 했다.
+
+- 규칙으로 막으면 공격자는 **고리를 늘린다.** 3홉을 막으면 4홉, 5홉으로 간다. 경로 탐색 깊이를 늘리면
+  정산 트랜잭션이 그만큼 느려진다 — 마감 직전에 몰리는 구간이라 늘릴 여유가 없다.
+- 이 값들은 **혼자서는 약하다.** 경로 도달은 정상의 8% 에서도 켜진다. 여러 약한 신호를 묶어 가중치를
+  주는 일은 규칙 엔진이 아니라 모델이 잘하는 일이다.
+- 피처로 두면 고리 길이가 바뀌어도 **재학습만** 하면 된다. 규칙이면 코드를 고쳐 배포해야 한다.
+
+⚠️ 경로 탐색은 정산 트랜잭션 안에서 돈다. `MAX_HOPS = 3` 과 volume-window 로 이중으로 끊어 두었다.
+거래량이 크게 늘면 여기가 먼저 느려진다 — `completed_at` 부분 인덱스를 보고 다시 재야 한다.
 
 ### 14-3. 3단계 — 섀도우 모델
 
