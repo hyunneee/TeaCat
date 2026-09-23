@@ -30,17 +30,13 @@ export function StickerGrid({ stickers, onDelete, deletingId, className }: Stick
           <img
             src={s.imageUrl}
             alt="내 스티커"
-            className={cn('h-full w-full object-contain', s.used && 'opacity-40 grayscale')}
+            className="h-full w-full object-contain"
             loading="lazy"
           />
 
-          {/* 🔴 쓴 스티커는 **되돌릴 수 없습니다.** 왜 못 쓰는지 화면이 말해 줘야 합니다 —
-              안 그러면 "왜 서랍에 안 보이지?" 가 됩니다 (2026-09-23) */}
-          {s.used && (
-            <span className="bg-ink/70 absolute bottom-1.5 left-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white">
-              사용됨
-            </span>
-          )}
+          {/* ⚠️ 쓴 스티커를 흐리게 + "사용됨" 배지로 남겨 뒀다가 **뺐습니다** (2026-09-23).
+              부르는 쪽이 안 쓴 것만 넘기므로 여기 올 일이 없고, 다시 쓸 수 없는 칸이
+              목록을 채우는 것보다 아예 사라지는 편이 낫다고 정했습니다. */}
           <IconButton
             label="스티커 지우기"
             variant="danger-ghost"

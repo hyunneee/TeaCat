@@ -301,7 +301,7 @@ public class NftAuctionService {
         return new NftAuctionDetailResponse(
                 row.auctionId(), row.status(),
                 new NftAuctionDetailResponse.Photocard(row.photocardId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle()),
+                        row.performanceTitle(), decorationService.imageUrlOf(row.photocardId())),
                 row.sellerNickname(), row.startPrice(), row.currentPrice(), row.buyNowPrice(), row.bidCount(),
                 row.topBidderNickname(), row.createdAt(), row.endsAt(), row.closedAt(), row.winnerNickname(),
                 finalPrice, viewer);

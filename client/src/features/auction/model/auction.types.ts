@@ -50,6 +50,8 @@ export interface AuctionDetail {
     designName: string;
     imageUrl: string | null;
     performanceTitle: string;
+    /** 꾸민 모습. 목록의 `AuctionSummary.decoratedImageUrl` 과 **한 쌍**입니다 */
+    decoratedImageUrl?: string | null;
   };
   sellerNickname: string;
   startPrice: number;
