@@ -13,12 +13,19 @@ public record StickerQuotaResponse(
         int used,
 
         @Schema(description = "남은 장수", example = "4")
-        int remaining
+        int remaining,
+
+        /*
+         * 🔴 가격을 **서버가 알려준다.** 화면에 100 을 박아 두면 설정(STICKER_EXTRA_PRICE_CAT)을
+         *    바꿨을 때 버튼만 옛 가격을 보여주고, 사용자는 적힌 값과 다른 금액을 내게 된다.
+         */
+        @Schema(description = "남은 장수를 다 쓴 뒤 1장당 드는 캣머니", example = "100")
+        int extraPriceCat
 ) {
 
-    public static StickerQuotaResponse of(int limit, long used) {
+    public static StickerQuotaResponse of(int limit, long used, int extraPriceCat) {
         int usedCount = (int) Math.min(used, Integer.MAX_VALUE);
         // 상한을 낮추면 음수가 될 수 있어 바닥을 깐다
-        return new StickerQuotaResponse(limit, usedCount, Math.max(0, limit - usedCount));
+        return new StickerQuotaResponse(limit, usedCount, Math.max(0, limit - usedCount), extraPriceCat);
     }
 }

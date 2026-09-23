@@ -144,7 +144,8 @@ public class StickerService {
 
     @Transactional(readOnly = true)
     public StickerQuotaResponse quota(Long userId) {
-        return StickerQuotaResponse.of(properties.dailyLimit(), usedToday(userId));
+        return StickerQuotaResponse.of(properties.dailyLimit(), usedToday(userId),
+                properties.extraPriceCat());
     }
 
     /**
