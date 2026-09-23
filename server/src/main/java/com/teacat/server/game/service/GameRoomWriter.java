@@ -4,7 +4,10 @@ import com.teacat.server.common.config.GamePolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.engine.GameAction;
 import com.teacat.server.game.engine.GameEngine;
+import com.teacat.server.game.engine.GameOptions;
+import com.teacat.server.game.engine.yut.YutState;
 import com.teacat.server.game.entity.GameParticipant;
+import com.teacat.server.game.entity.GamePieceStyle;
 import com.teacat.server.game.entity.GameRoom;
 import com.teacat.server.game.entity.GameRoomStatus;
 import com.teacat.server.game.entity.GameType;
@@ -20,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -61,11 +65,14 @@ public class GameRoomWriter {
     }
 
     @Transactional
-    public GameRoom create(Long userId, GameType gameType, long betAmount, int maxPlayers) {
+    public GameRoom create(Long userId, GameType gameType, long betAmount, int maxPlayers, int piecesPerPlayer) {
         if (!policy.allowsBet(betAmount)) {
             throw new BusinessException(GameErrorCode.BET_NOT_ALLOWED);
         }
         if (!gameType.supports(maxPlayers)) {
+            throw new BusinessException(GameErrorCode.INVALID_ACTION);
+        }
+        if (piecesPerPlayer < 1 || piecesPerPlayer > YutState.DEFAULT_PIECES) {
             throw new BusinessException(GameErrorCode.INVALID_ACTION);
         }
         // 혼자 걸고 혼자 다 받으면 보조금이 공짜 돈이 된다. 혼자 하는 방은 연습뿐이다
@@ -75,7 +82,7 @@ public class GameRoomWriter {
         requireNoOtherRoom(userId);
 
         GameRoom room = roomRepository.save(
-                GameRoom.open(newInviteCode(), gameType, userId, betAmount, maxPlayers));
+                GameRoom.open(newInviteCode(), gameType, userId, betAmount, maxPlayers, piecesPerPlayer));
         seat(room, userId, 0);
         return room;
     }
@@ -113,6 +120,28 @@ public class GameRoomWriter {
     }
 
     /**
+     * 말 모양을 고른다. 대기실에서만 바꿀 수 있다.
+     *
+     * <p>이미 남이 쓰는 모양이면 거절한다. 시작한 뒤에 바꾸면 판 위의 말이 중간에
+     * 다른 그림으로 변해서 보는 사람이 자기 말을 놓친다.
+     */
+    @Transactional
+    public Outcome setPieceStyle(Long userId, Long roomId, GamePieceStyle style) {
+        GameRoom room = lock(roomId);
+        if (!room.getStatus().isOpen()) {
+            throw new BusinessException(GameErrorCode.ROOM_ALREADY_STARTED);
+        }
+        GameParticipant me = participant(room.getId(), userId);
+        boolean taken = participantRepository.findByRoomIdOrderBySeatNo(room.getId()).stream()
+                .anyMatch(p -> !p.getId().equals(me.getId()) && style == p.getPieceStyle());
+        if (taken) {
+            throw new BusinessException(GameErrorCode.PIECE_STYLE_TAKEN);
+        }
+        me.choosePieceStyle(style);
+        return Outcome.of(room.getId());
+    }
+
+    /**
      * 게임을 시작한다.
      *
      * <p>판돈은 <b>방에 들어올 때</b> 이미 묶여 있다. 여기서는 그것을 참가 기록에 베껴
@@ -137,7 +166,7 @@ public class GameRoomWriter {
 
         GameEngine engine = engines.of(room.getGameType());
         seated.forEach(p -> p.startPlaying(room.getBetAmount()));
-        room.start(engine.start(seated.size()), engine.turnLimit());
+        room.start(engine.start(seated.size(), new GameOptions(room.getPiecesPerPlayer())), engine.turnLimit());
         return Outcome.of(room.getId());
     }
 
@@ -237,12 +266,26 @@ public class GameRoomWriter {
     private void seat(GameRoom room, Long userId, int seatNo) {
         GameParticipant participant = participantRepository.save(
                 GameParticipant.join(room.getId(), userId, seatNo));
+        // 들어오는 순간 남은 모양 하나를 채워 둔다. 안 고르고 시작해도 판 위에서 서로
+        // 구분돼야 하고, 바꾸고 싶으면 대기실에서 고르면 된다
+        participant.choosePieceStyle(firstFreeStyle(room.getId()));
 
         if (!room.isPractice()) {
             // 방에 들어오는 순간 판돈을 묶는다. 시작할 때 묶으면 그 사이에 다 써버린 사람
             // 때문에 시작 자체가 실패한다. 나가면 그대로 풀린다
             holdService.hold(userId, room.getBetAmount(), CatMoneyHoldRefType.GAME_BET, participant.getId());
         }
+    }
+
+    /** 이 방에서 아직 아무도 안 쓰는 첫 모양. 모양이 자리 수보다 많으므로 늘 하나는 남는다 */
+    private GamePieceStyle firstFreeStyle(Long roomId) {
+        List<GamePieceStyle> taken = participantRepository.findByRoomIdOrderBySeatNo(roomId).stream()
+                .map(GameParticipant::getPieceStyle)
+                .toList();
+        return Arrays.stream(GamePieceStyle.values())
+                .filter(style -> !taken.contains(style))
+                .findFirst()
+                .orElse(GamePieceStyle.CAT);
     }
 
     private GameRoom lock(Long roomId) {

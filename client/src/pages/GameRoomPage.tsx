@@ -12,6 +12,7 @@ import {
   useGameReady,
   useGameRoom,
   useLeaveGameRoom,
+  usePickPieceStyle,
   useStartGame,
 } from '@/features/game';
 import type { HalliGalliState, YutState } from '@/features/game';
@@ -34,6 +35,7 @@ export function GameRoomPage() {
 
   const { data: room, isLoading, connected } = useGameRoom(Number.isFinite(roomId) ? roomId : undefined);
   const ready = useGameReady(roomId);
+  const pieceStyle = usePickPieceStyle(roomId);
   const start = useStartGame(roomId);
   const action = useGameAction(roomId);
   const leave = useLeaveGameRoom(roomId);
@@ -68,8 +70,9 @@ export function GameRoomPage() {
           <GameLobbyPanel
             room={room}
             onReady={(value) => ready.mutate(value)}
+            onPickPieceStyle={(style) => pieceStyle.mutate(style)}
             onStart={() => start.mutate()}
-            busy={ready.isPending || start.isPending}
+            busy={ready.isPending || start.isPending || pieceStyle.isPending}
           />
         )}
 

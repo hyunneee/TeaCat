@@ -27,6 +27,9 @@ public record GameRoomResponse(
         @Schema(description = "최대 인원", example = "4")
         int maxPlayers,
 
+        @Schema(description = "1인당 말 수 (윷놀이)", example = "4")
+        int piecesPerPlayer,
+
         @Schema(description = "내 자리 번호", example = "0")
         int mySeatNo,
 

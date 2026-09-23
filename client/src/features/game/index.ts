@@ -14,6 +14,8 @@
  */
 export { gameApi, gameKeys } from './api/gameApi';
 
+export { PIECE_COUNTS, PIECE_STYLES, pieceStyleOf } from './model/yutPieces';
+
 export {
   useGamePolicy,
   useMyGameRoom,
@@ -21,6 +23,7 @@ export {
   useCreateGameRoom,
   useJoinGameRoom,
   useGameReady,
+  usePickPieceStyle,
   useStartGame,
   useGameAction,
   useLeaveGameRoom,
@@ -38,6 +41,7 @@ export type {
   GameRoomStatus,
   GameParticipant,
   GameParticipantStatus,
+  GamePieceStyle,
   GamePolicy,
   GameState,
   YutState,

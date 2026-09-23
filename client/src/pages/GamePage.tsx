@@ -9,6 +9,7 @@ import {
   useGamePolicy,
   useJoinGameRoom,
   useMyGameRoom,
+  PIECE_COUNTS,
 } from '@/features/game';
 import type { GameType } from '@/features/game';
 
@@ -42,6 +43,7 @@ export function GamePage() {
   const [gameType, setGameType] = useState<GameType>('YUT');
   const [betAmount, setBetAmount] = useState(0);
   const [maxPlayers, setMaxPlayers] = useState(2);
+  const [piecesPerPlayer, setPiecesPerPlayer] = useState(4);
   const [code, setCode] = useState('');
 
   const create = useCreateGameRoom();
@@ -156,6 +158,33 @@ export function GamePage() {
             </div>
           </div>
 
+          {/* 말 수는 윷놀이에만 있습니다. 할리갈리에 띄워 두면 안 쓰는 칸이 됩니다 */}
+          {gameType === 'YUT' && (
+            <div className="space-y-2">
+              <p className="text-muted flex items-center gap-1 text-xs">
+                <Dices size={12} /> 1인당 말 수
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {PIECE_COUNTS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => setPiecesPerPlayer(count)}
+                    className={[
+                      'rounded-xl py-2 text-sm font-bold',
+                      piecesPerPlayer === count ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
+                    ].join(' ')}
+                  >
+                    {count}개
+                  </button>
+                ))}
+              </div>
+              <p className="text-muted text-xs">
+                말이 적을수록 빨리 끝나요. 1개면 먼저 한 바퀴 도는 사람이 이겨요.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <p className="text-muted text-xs">1인당 판돈</p>
 
@@ -210,7 +239,7 @@ export function GamePage() {
             fullWidth
             disabled={!canCreate}
             loading={create.isPending || policyLoading}
-            onClick={() => create.mutate({ gameType, betAmount, maxPlayers })}
+            onClick={() => create.mutate({ gameType, betAmount, maxPlayers, piecesPerPlayer })}
           >
             방 만들기
           </Button>

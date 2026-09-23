@@ -9,6 +9,7 @@ import com.teacat.server.game.dto.response.GamePolicyResponse;
 import com.teacat.server.game.dto.response.GameRoomResponse;
 import com.teacat.server.game.engine.GameAction;
 import com.teacat.server.game.entity.GameParticipant;
+import com.teacat.server.game.entity.GamePieceStyle;
 import com.teacat.server.game.entity.GameRoom;
 import com.teacat.server.game.entity.GameType;
 import com.teacat.server.game.exception.GameErrorCode;
@@ -52,7 +53,8 @@ public class GameRoomService {
     /* ── 방 ───────────────────────────────────────────────── */
 
     public GameRoomResponse create(Long userId, CreateGameRoomRequest request) {
-        GameRoom room = writer.create(userId, request.gameType(), request.betAmount(), request.maxPlayers());
+        GameRoom room = writer.create(userId, request.gameType(), request.betAmount(),
+                request.maxPlayers(), request.piecesOrDefault());
         return view(userId, room.getId());
     }
 
@@ -64,6 +66,10 @@ public class GameRoomService {
 
     public GameRoomResponse setReady(Long userId, Long roomId, boolean ready) {
         return after(userId, writer.setReady(userId, roomId, ready), "room");
+    }
+
+    public GameRoomResponse setPieceStyle(Long userId, Long roomId, GamePieceStyle style) {
+        return after(userId, writer.setPieceStyle(userId, roomId, style), "room");
     }
 
     public GameRoomResponse start(Long userId, Long roomId) {
@@ -109,6 +115,7 @@ public class GameRoomService {
                         room.isHost(p.getUserId()),
                         p.getUserId().equals(userId),
                         p.isReady(),
+                        p.getPieceStyle(),
                         p.getStatus(),
                         p.getRank(),
                         p.getPayout()))
@@ -119,7 +126,8 @@ public class GameRoomService {
 
         return new GameRoomResponse(
                 room.getId(), room.getInviteCode(), room.getGameType(), room.getStatus(),
-                room.getBetAmount(), room.getMaxPlayers(), me.getSeatNo(), room.isHost(userId),
+                room.getBetAmount(), room.getMaxPlayers(), room.getPiecesPerPlayer(),
+                me.getSeatNo(), room.isHost(userId),
                 seats, redact(room), room.getTurnExpiresAt(), pool, grant);
     }
 

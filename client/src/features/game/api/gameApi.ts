@@ -2,6 +2,7 @@ import { http } from '@/shared/api';
 import type {
   CreateGameRoomRequest,
   GameActionRequest,
+  GamePieceStyle,
   GamePolicy,
   GameRoom,
 } from '../model/game.types';
@@ -28,6 +29,10 @@ export const gameApi = {
 
   ready: (roomId: number, ready: boolean) =>
     http.patch<GameRoom>(`/games/rooms/${roomId}/ready`, { ready }),
+
+  /** 말 모양 고르기. 남이 쓰는 모양이면 서버가 GAME_015 로 거절합니다 */
+  pieceStyle: (roomId: number, pieceStyle: GamePieceStyle) =>
+    http.patch<GameRoom>(`/games/rooms/${roomId}/piece-style`, { pieceStyle }),
 
   start: (roomId: number) => http.post<GameRoom>(`/games/rooms/${roomId}/start`, {}),
 

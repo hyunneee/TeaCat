@@ -6,12 +6,17 @@ export type GameRoomStatus = 'WAITING' | 'PLAYING' | 'FINISHED' | 'ABORTED';
 
 export type GameParticipantStatus = 'JOINED' | 'PLAYING' | 'RETIRED' | 'FINISHED';
 
+/** 말 모양. 한 방에서 겹치지 않습니다 */
+export type GamePieceStyle = 'CAT' | 'DOG' | 'RABBIT' | 'BIRD' | 'FISH' | 'TURTLE';
+
 export interface GameParticipant {
   seatNo: number;
   nickname: string;
   host: boolean;
   me: boolean;
   ready: boolean;
+  /** 고른 말 모양. 들어오는 순간 남은 것 하나가 자동으로 채워집니다 */
+  pieceStyle: GamePieceStyle | null;
   status: GameParticipantStatus;
   /** 정산 전에는 null */
   rank: number | null;
@@ -27,13 +32,26 @@ export interface GameParticipant {
 export interface YutState {
   turn: number;
   players: number;
+  /** 이 판에서 한 사람이 쓰는 말 수. 방을 만들 때 정합니다 */
+  piecesPerPlayer: number;
   pieces: number[][];
+  /**
+   * 방금 던져 나온 값.
+   *
+   * 🔴 `pending` 으로는 알 수 없습니다 — 도가 나오자마자 말을 옮기면 `pending` 이 비어
+   * 화면에 아무것도 안 남습니다. 화면 한가운데에 크게 띄워 **다른 사람도 보게** 하려고
+   * 서버가 따로 남겨 줍니다.
+   */
+  lastThrow: number | null;
+  lastThrowSeat: number | null;
+  /** 던질 때마다 하나씩 오릅니다. 같은 값이 연달아 나와도 새 던지기로 알아봅니다 */
+  throwSeq: number;
   /** 던질 수 있나. 윷·모가 나오거나 말을 잡으면 다시 true 가 됩니다 */
   canThrow: boolean;
   /** 던져 놓고 아직 안 쓴 결과들. 윷이 연달아 나오면 여러 개가 쌓입니다 */
   pending: number[];
   retired: boolean[];
-  /** 말 4개를 모두 뺀 순서. 이게 곧 등수입니다 */
+  /** 말을 모두 뺀 순서. 이게 곧 등수입니다 */
   finishOrder: number[];
   log: string[];
   finished: boolean;
@@ -73,6 +91,8 @@ export interface GameRoom {
   status: GameRoomStatus;
   betAmount: number;
   maxPlayers: number;
+  /** 1인당 말 수 (윷놀이) */
+  piecesPerPlayer: number;
   mySeatNo: number;
   host: boolean;
   participants: GameParticipant[];
@@ -97,6 +117,8 @@ export interface CreateGameRoomRequest {
   gameType: GameType;
   betAmount: number;
   maxPlayers: number;
+  /** 1인당 말 수 1~4. 윷놀이만 씁니다 */
+  piecesPerPlayer?: number;
 }
 
 export interface GameActionRequest {

@@ -54,6 +54,16 @@ public class GameRoom {
     @Column(name = "max_players", nullable = false)
     private int maxPlayers;
 
+    /**
+     * 한 사람이 쓰는 말 수 1~4 (윷놀이).
+     *
+     * <p>게임판 안(`state.piecesPerPlayer`)에도 같은 값이 들어가지만 여기에도 둔다 —
+     * 판이 아직 없는 <b>대기실에서</b> "말 3개로 하는 방" 이라고 보여줘야 하고,
+     * 시작할 때 엔진에 넘길 값을 읽어올 곳이 필요하다.
+     */
+    @Column(name = "pieces_per_player", nullable = false)
+    private int piecesPerPlayer;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", nullable = false, columnDefinition = "game_room_status")
@@ -93,17 +103,20 @@ public class GameRoom {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    private GameRoom(String inviteCode, GameType gameType, Long hostUserId, long betAmount, int maxPlayers) {
+    private GameRoom(String inviteCode, GameType gameType, Long hostUserId, long betAmount, int maxPlayers,
+                     int piecesPerPlayer) {
         this.inviteCode = inviteCode;
         this.gameType = gameType;
         this.hostUserId = hostUserId;
         this.betAmount = betAmount;
         this.maxPlayers = maxPlayers;
+        this.piecesPerPlayer = piecesPerPlayer;
         this.status = GameRoomStatus.WAITING;
     }
 
-    public static GameRoom open(String inviteCode, GameType gameType, Long hostUserId, long betAmount, int maxPlayers) {
-        return new GameRoom(inviteCode, gameType, hostUserId, betAmount, maxPlayers);
+    public static GameRoom open(String inviteCode, GameType gameType, Long hostUserId, long betAmount, int maxPlayers,
+                                int piecesPerPlayer) {
+        return new GameRoom(inviteCode, gameType, hostUserId, betAmount, maxPlayers, piecesPerPlayer);
     }
 
     public void start(Map<String, Object> initialState, Duration turnLimit) {

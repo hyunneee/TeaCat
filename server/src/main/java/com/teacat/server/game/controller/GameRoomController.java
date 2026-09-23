@@ -4,6 +4,7 @@ import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.game.dto.request.CreateGameRoomRequest;
 import com.teacat.server.game.dto.request.GameActionRequest;
+import com.teacat.server.game.dto.request.GamePieceStyleRequest;
 import com.teacat.server.game.dto.request.GameReadyRequest;
 import com.teacat.server.game.dto.request.JoinGameRoomRequest;
 import com.teacat.server.game.dto.response.GamePolicyResponse;
@@ -110,6 +111,18 @@ public class GameRoomController {
             @Valid @RequestBody GameReadyRequest request) {
         return ResponseEntity.ok(BaseResponse.success(
                 gameRoomService.setReady(authUser.id(), roomId, request.ready())));
+    }
+
+    @Operation(summary = "말 모양 고르기",
+            description = "윷놀이에서 내 말로 쓸 그림입니다. 한 방에서 겹칠 수 없고(GAME_015), "
+                    + "시작한 뒤에는 바꿀 수 없습니다. 들어올 때 남은 모양 하나가 자동으로 채워져 있습니다.")
+    @PatchMapping("/rooms/{roomId}/piece-style")
+    public ResponseEntity<BaseResponse<GameRoomResponse>> pieceStyle(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long roomId,
+            @Valid @RequestBody GamePieceStyleRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(
+                gameRoomService.setPieceStyle(authUser.id(), roomId, request.pieceStyle())));
     }
 
     @Operation(summary = "게임 시작", description = "방장만 할 수 있습니다. 시작하면 더 들어올 수 없습니다.")

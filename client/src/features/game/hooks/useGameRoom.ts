@@ -8,7 +8,7 @@ import { ROUTES } from '@/shared/constants/routes';
 import { toast } from '@/shared/stores';
 import { tokenKeys } from '@/features/token';
 import { gameApi, gameKeys } from '../api/gameApi';
-import type { CreateGameRoomRequest, GameActionRequest } from '../model/game.types';
+import type { CreateGameRoomRequest, GameActionRequest, GamePieceStyle } from '../model/game.types';
 import { useGameEvents } from './useGameEvents';
 
 /**
@@ -88,6 +88,14 @@ export function useJoinGameRoom() {
 export function useGameReady(roomId: number) {
   return useMutation({
     mutationFn: (ready: boolean) => gameApi.ready(roomId, ready),
+    onSuccess: (room) => queryClient.setQueryData(gameKeys.room(roomId), room),
+    onError: (error: ApiError) => toast.error(error.message),
+  });
+}
+
+export function usePickPieceStyle(roomId: number) {
+  return useMutation({
+    mutationFn: (style: GamePieceStyle) => gameApi.pieceStyle(roomId, style),
     onSuccess: (room) => queryClient.setQueryData(gameKeys.room(roomId), room),
     onError: (error: ApiError) => toast.error(error.message),
   });

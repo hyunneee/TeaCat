@@ -3,6 +3,7 @@ package com.teacat.server.game.engine.yut;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.engine.GameAction;
 import com.teacat.server.game.engine.GameEngine;
+import com.teacat.server.game.engine.GameOptions;
 import com.teacat.server.game.engine.GameStateCodec;
 import com.teacat.server.game.entity.GameType;
 import com.teacat.server.game.exception.GameErrorCode;
@@ -24,7 +25,7 @@ import java.util.Map;
  * ({@link YutState#pending}) 어느 결과로 어느 말을 움직일지는 사람이 고른다.
  *
  * <p>구현한 규칙 — 업기(같은 칸의 내 말은 함께 움직인다), 잡기(남의 말을 처음으로
- * 돌려보내고 한 번 더 던진다), 지름길({@link YutBoard}), 말 4개를 다 빼면 완주.
+ * 돌려보내고 한 번 더 던진다), 지름길({@link YutBoard}), 말을 다 빼면 완주.
  *
  * <p>⚠️ 백도(뒤로 한 칸)는 넣지 않았다. 갈림길에서 "뒤" 가 하나로 정해지지 않아
  * (중앙에서 뒤로 가면 어느 지름길로 돌아가야 하는가) 규칙을 먼저 정해야 한다.
@@ -50,8 +51,8 @@ public class YutEngine implements GameEngine {
     }
 
     @Override
-    public Map<String, Object> start(int players) {
-        return codec.write(YutState.start(players));
+    public Map<String, Object> start(int players, GameOptions options) {
+        return codec.write(YutState.start(players, options.piecesPerPlayer()));
     }
 
     @Override
@@ -140,6 +141,11 @@ public class YutEngine implements GameEngine {
         }
         int result = roll();
         s.pending.add(result);
+        // 방금 뭐가 나왔는지 남긴다. 쓴 결과는 pending 에서 빠지므로 그것만으로는
+        // 화면 한가운데에 "모!" 를 띄울 수가 없다 (YutState.lastThrow 주석)
+        s.lastThrow = result;
+        s.lastThrowSeat = s.turn;
+        s.throwSeq++;
         // 윷·모는 한 번 더. 그 외에는 이제 말을 움직여야 한다
         s.canThrow = result >= 4;
         s.addLog(s.turn + "번 자리 " + NAMES[result]);
@@ -163,7 +169,7 @@ public class YutEngine implements GameEngine {
         }
         int pieceIndex = action.piece();
         int steps = action.value();
-        if (pieceIndex < 0 || pieceIndex >= YutState.PIECES || !s.pending.contains(steps)) {
+        if (pieceIndex < 0 || pieceIndex >= s.piecesPerPlayer || !s.pending.contains(steps)) {
             throw new BusinessException(GameErrorCode.INVALID_ACTION);
         }
 
@@ -177,7 +183,7 @@ public class YutEngine implements GameEngine {
 
         // 업기 — 같은 칸의 내 말은 전부 함께 옮긴다
         int moved = 0;
-        for (int i = 0; i < YutState.PIECES; i++) {
+        for (int i = 0; i < s.piecesPerPlayer; i++) {
             if (mine.get(i) == from && (from != YutBoard.HOME || i == pieceIndex)) {
                 mine.set(i, to);
                 moved++;
@@ -221,7 +227,7 @@ public class YutEngine implements GameEngine {
                 continue;
             }
             List<Integer> theirs = s.pieces.get(seat);
-            for (int i = 0; i < YutState.PIECES; i++) {
+            for (int i = 0; i < s.piecesPerPlayer; i++) {
                 if (theirs.get(i) == landing) {
                     theirs.set(i, YutBoard.HOME);
                     captured = true;
@@ -238,7 +244,7 @@ public class YutEngine implements GameEngine {
 
         int best = -1;
         int bestTo = -2;
-        for (int i = 0; i < YutState.PIECES; i++) {
+        for (int i = 0; i < s.piecesPerPlayer; i++) {
             if (mine.get(i) == YutBoard.GOAL) {
                 continue;
             }

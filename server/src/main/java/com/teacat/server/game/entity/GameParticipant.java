@@ -52,6 +52,11 @@ public class GameParticipant {
     @Column(name = "ready", nullable = false)
     private boolean ready;
 
+    /** 고른 말 모양. 아직 안 골랐으면 null 이고, 시작할 때 남은 모양 중 하나가 채워진다 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "piece_style", length = 20)
+    private GamePieceStyle pieceStyle;
+
     @Column(name = "bet", nullable = false)
     private long bet;
 
@@ -91,6 +96,10 @@ public class GameParticipant {
 
     public void toggleReady(boolean value) {
         this.ready = value;
+    }
+
+    public void choosePieceStyle(GamePieceStyle style) {
+        this.pieceStyle = style;
     }
 
     /** 방의 판돈을 베껴 온다. 시작 뒤에 방 설정이 바뀌어도 이 판의 판돈은 그대로여야 한다 */

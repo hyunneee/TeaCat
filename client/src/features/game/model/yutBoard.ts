@@ -80,6 +80,63 @@ export function yutCellOf(position: number): YutCell | null {
 /** 던지기 결과 이름. 인덱스가 곧 칸 수라 0번은 비어 있습니다 */
 export const YUT_THROW_NAMES = ['', '도', '개', '걸', '윷', '모'] as const;
 
+/* ── 길 ───────────────────────────────────────────────────
+ *
+ * 서버 `YutBoard` 의 경로표를 그대로 옮긴 것입니다. 옮긴 이유는 하나뿐입니다 —
+ * **"이 말로 여기 갑니다" 를 판 위에 미리 보여주려고** 요.
+ *
+ * 🔴 규칙의 정답은 여전히 서버입니다. 여기 계산이 서버와 달라도 말은 서버가 말한
+ * 자리로 갑니다. 화면의 미리보기만 틀립니다.
+ *
+ * 🔴 지름길은 **모서리에 정확히 멈췄을 때만** 탑니다. 그래서 "다음 밭" 함수가 아니라
+ * 출발 밭마다 도착까지의 전체 경로로 적습니다 — 중앙(21)에서 갈림길이 생기는데,
+ * 지나가는 중이면 22로 이어지고 멈춰 섰으면 26으로 빠지기 때문입니다.
+ */
+
+const OUTER_LAST = 18;
+
+/** start 부터 바깥 마지막 밭까지, 그리고 도착 */
+function outerFrom(start: number): number[] {
+  const route: number[] = [];
+  for (let i = start; i <= OUTER_LAST; i++) route.push(i);
+  route.push(YUT_GOAL);
+  return route;
+}
+
+/** ROUTES[from] = from 에서 출발했을 때 지나갈 밭들. 마지막은 항상 도착입니다 */
+const ROUTES: number[][] = (() => {
+  const routes: number[][] = [];
+  for (let i = 0; i <= OUTER_LAST; i++) {
+    routes[i] =
+      i === 4
+        ? [19, 20, YUT_CENTER, 22, 23, ...outerFrom(14)]
+        : i === 9
+          ? [24, 25, YUT_CENTER, 26, 27, YUT_GOAL]
+          : outerFrom(i + 1);
+  }
+  routes[19] = [20, YUT_CENTER, 22, 23, ...outerFrom(14)];
+  routes[20] = [YUT_CENTER, 22, 23, ...outerFrom(14)];
+  routes[22] = [23, ...outerFrom(14)];
+  routes[23] = outerFrom(14);
+  routes[24] = [25, YUT_CENTER, 26, 27, YUT_GOAL];
+  routes[25] = [YUT_CENTER, 26, 27, YUT_GOAL];
+  routes[26] = [27, YUT_GOAL];
+  routes[27] = [YUT_GOAL];
+  // 중앙에 멈춰 섰으면 언제나 짧은 쪽으로 나갑니다
+  routes[YUT_CENTER] = [26, 27, YUT_GOAL];
+  return routes;
+})();
+
+/** `from` 에서 `steps` 칸 간 자리. 도착을 지나쳐도 완주입니다 */
+export function yutAdvance(from: number, steps: number): number {
+  const route = ROUTES[from === YUT_HOME ? 0 : from];
+  if (!route) return YUT_GOAL;
+  // 판 밖에서 출발하면 첫 밭(0)이 1걸음입니다. ROUTES[0] 은 0 다음부터라 한 칸 당깁니다
+  const index = from === YUT_HOME ? steps - 2 : steps - 1;
+  if (index < 0) return 0;
+  return route[index] ?? YUT_GOAL;
+}
+
 /** 자리별 말 색. 자리 번호가 곧 인덱스입니다 */
 export const SEAT_COLORS = [
   { chip: 'bg-rose-500', ring: 'ring-rose-300', text: 'text-rose-600' },
