@@ -216,6 +216,28 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
         String getStatus();
     }
 
+    /* ── 🔴 취소표 당첨 좌석은 일반 선점 경로가 건드리지 않는다 ──────────────
+       추첨이 당첨자에게 넘긴 좌석은 평범한 선점과 <b>행 모양이 똑같다</b>
+       (status=HELD · held_by=당첨자 · held_until=결제 기한). 상태 값을 늘리지 않으려고 그렇게
+       뒀는데, 그래서 아래 네 쿼리가 그것을 자기 것인 줄 알고 가져가 버렸다:
+
+         releaseHold          당첨자가 예매 화면에 들어가면 프론트가 "쥔 것 먼저 놓기" 로
+                              당첨 좌석을 놓았다 → AVAILABLE → 매진이 풀려 아무나 예약 (2026-09-23 운영)
+         releaseAllExpiredHolds  기한이 지난 뒤 "내 선점" 화면만 열어도 좌석이 풀렸다
+         releaseExpiredHold   같은 이유로 새 좌석을 잡기 직전에 풀렸다
+         hold                 기한 직후 몇 초 사이에 남이 그 좌석을 그냥 가져갔다
+
+       한 번 풀리면 되돌릴 길이 없다 — 재추첨은 좌석을 HELD → SOLD 로 되찾아야 여는데
+       (SeatDrawWriter.redraw) 이미 남의 것이 됐거나 팔려서 실패하고, 기다리던 사람들은
+       그 자리를 영영 못 받는다.
+
+       그래서 네 쿼리 모두에 "이 좌석에 진행 중인 추첨이 없을 것" 을 건다. 상태 목록은
+       uq_seat_draws_active_seat 의 조건과 같다 — 그 인덱스가 곧 "좌석이 추첨의 것인 동안" 이다.
+       당첨 좌석을 풀 수 있는 곳은 추첨 자신뿐이다 (reclaimWinnerHold · release).
+
+       ⚠️ booking 의 SQL 이 resale 의 표를 읽는다. 도메인을 넘지만 컬럼을 새로 만들지 않는
+          쪽을 골랐다 — 같은 사실을 두 군데 적으면 한쪽만 바뀌어 방어가 조용히 풀린다. */
+
     /**
      * 같은 회차에서 이 유저가 쥐고 있던 <b>만료된</b> 선점을 해제한다. 새 좌석을 선점하기 직전에 호출한다.
      *
@@ -239,6 +261,12 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
                AND held_by = :userId
                AND status = 'HELD'
                AND held_until < now()
+               AND NOT EXISTS (
+                     SELECT 1
+                       FROM seat_draws d
+                      WHERE d.performance_detail_id = performance_seats.performance_detail_id
+                        AND d.seat_id = performance_seats.seat_id
+                        AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
             """, nativeQuery = true)
     int releaseExpiredHold(@Param("performanceDetailId") Long performanceDetailId,
                            @Param("userId") Long userId);
@@ -269,6 +297,12 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
                AND seat_id = :seatId
                AND (status = 'AVAILABLE'
                     OR (status = 'HELD' AND held_until < now()))
+               AND NOT EXISTS (
+                     SELECT 1
+                       FROM seat_draws d
+                      WHERE d.performance_detail_id = performance_seats.performance_detail_id
+                        AND d.seat_id = performance_seats.seat_id
+                        AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
             """, nativeQuery = true)
     int hold(@Param("performanceDetailId") Long performanceDetailId,
              @Param("seatId") Long seatId,
@@ -406,6 +440,12 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
                AND status = 'HELD'
                AND held_by = :userId
                AND held_until >= now()
+               AND NOT EXISTS (
+                     SELECT 1
+                       FROM seat_draws d
+                      WHERE d.performance_detail_id = performance_seats.performance_detail_id
+                        AND d.seat_id = performance_seats.seat_id
+                        AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
             """, nativeQuery = true)
     int releaseHold(@Param("performanceDetailId") Long performanceDetailId,
                     @Param("seatId") Long seatId,
@@ -430,6 +470,12 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
              WHERE held_by = :userId
                AND status = 'HELD'
                AND held_until < now()
+               AND NOT EXISTS (
+                     SELECT 1
+                       FROM seat_draws d
+                      WHERE d.performance_detail_id = performance_seats.performance_detail_id
+                        AND d.seat_id = performance_seats.seat_id
+                        AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
             """, nativeQuery = true)
     int releaseAllExpiredHolds(@Param("userId") Long userId);
 
@@ -458,7 +504,16 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
                    s.row_label              AS "rowLabel",
                    s.seat_number            AS "seatNumber",
                    pa.grade                 AS "grade",
-                   pa.price                 AS "price"
+                   pa.price                 AS "price",
+                   /* 취소표 추첨이 맡긴 자리인가. 화면이 이것을 알아야 "자리 놓기" 를 감추고
+                      당첨이라고 적을 수 있다 — 안 알려주면 평범한 선점으로 보여서 사용자가
+                      스스로 놓으려 하고, 그 요청은 이제 ERR_BOOKING_014 로 거절된다 */
+                   EXISTS (SELECT 1
+                             FROM seat_draws d
+                            WHERE d.performance_detail_id = ps.performance_detail_id
+                              AND d.seat_id = ps.seat_id
+                              AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
+                                            AS "resaleWin"
               FROM performance_seats ps
               JOIN performance_details pd ON pd.id = ps.performance_detail_id
               JOIN performance_general pg ON pg.id = pd.performance_general_id
@@ -522,6 +577,9 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
 
         /** performance_areas.price — 가격이 설정되지 않았으면 null */
         Integer getPrice();
+
+        /** 취소표 당첨으로 받은 자리인가. 화면이 "자리 놓기" 를 감추는 데 쓴다 */
+        boolean getResaleWin();
     }
 
     /** {@link #findTicketingWindow} 결과 프로젝션. */

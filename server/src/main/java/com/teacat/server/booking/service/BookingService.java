@@ -253,13 +253,23 @@ public class BookingService {
             // 결제까지 끝난 좌석에는 해제할 선점이 없다
             case SOLD -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
             case BLOCKED -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
-            // 남의 선점이면 권한 없음, 내 선점인데 UPDATE 가 실패했다면 만료된 것이다
+            // 남의 선점이면 권한 없음
             case HELD -> !userId.equals(seat.getHeldBy())
                     ? BookingErrorCode.NOT_SEAT_HOLDER
-                    : BookingErrorCode.SEAT_HOLD_EXPIRED;
+                    /* 내 선점인데 UPDATE 가 실패했다. 남은 이유는 둘뿐이라 기한으로 가른다 —
+                       아직 안 지났으면 취소표 추첨이 맡긴 좌석이라 쿼리가 막은 것이다
+                       (PerformanceSeatRepository 의 "당첨 좌석은 건드리지 않는다" 주석).
+                       추첨 표를 다시 읽지 않고 판별하려고 이렇게 둔다 */
+                    : isExpired(seat)
+                            ? BookingErrorCode.SEAT_HOLD_EXPIRED
+                            : BookingErrorCode.SEAT_HELD_BY_RESALE_DRAW;
             // 이미 풀려 있다 (만료 흡수 또는 다른 요청이 먼저 해제)
             case AVAILABLE -> BookingErrorCode.SEAT_HOLD_NOT_FOUND;
         };
+    }
+
+    private boolean isExpired(PerformanceSeat seat) {
+        return seat.getHeldUntil() == null || seat.getHeldUntil().isBefore(LocalDateTime.now());
     }
 
     /** 무결성 위반이 1인 1매 인덱스 위반인지 (held_by FK 위반 등 다른 원인과 구분한다) */

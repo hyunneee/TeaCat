@@ -80,6 +80,8 @@ interface ApiMyHold {
   seatNumber: number;
   grade: string | null;
   price: number | null;
+  /** 취소표 당첨으로 받은 자리인가 */
+  resaleWin: boolean;
 }
 
 /* ── 어댑터 (서버 → 화면) ───────────────────────────────────── */
@@ -148,6 +150,7 @@ const toMyHold = (api: ApiMyHold): MyHold => ({
   number: api.seatNumber,
   grade: api.grade,
   price: api.price,
+  resaleWin: api.resaleWin,
 });
 
 /* ── 호출 ───────────────────────────────────────────────────── */

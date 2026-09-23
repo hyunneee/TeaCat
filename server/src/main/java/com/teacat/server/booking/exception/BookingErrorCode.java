@@ -42,7 +42,17 @@ public enum BookingErrorCode implements ErrorCode {
     STANDING_AREA_NOT_AVAILABLE(HttpStatus.NOT_FOUND, "ERR_BOOKING_012",
             "해당 회차에서 판매 중인 스탠딩 구역이 아닙니다."),
     STANDING_AREA_SOLD_OUT(HttpStatus.CONFLICT, "ERR_BOOKING_013",
-            "선택한 스탠딩 구역의 입장권이 매진되었습니다.");
+            "선택한 스탠딩 구역의 입장권이 매진되었습니다."),
+
+    /**
+     * 취소표 추첨이 맡긴 좌석이라 일반 선점 해제로는 놓을 수 없다.
+     *
+     * 🔴 놓게 두면 그 좌석이 <b>일반 판매로 새어 나간다.</b> 되돌릴 길이 없다 — 재추첨은
+     * 좌석을 되찾아야 여는데 이미 남의 것이 된 뒤라, 기다리던 사람들이 그 자리를 영영 못 받는다.
+     * 놓고 싶으면 당첨 포기(취소표 화면)로 해야 하고, 그러면 좌석이 다음 대기자에게 돌아간다.
+     */
+    SEAT_HELD_BY_RESALE_DRAW(HttpStatus.CONFLICT, "ERR_BOOKING_014",
+            "취소표 당첨 좌석입니다. 놓으려면 취소표 화면에서 당첨을 포기해 주세요.");
 
     private final HttpStatus httpStatus;
     private final String code;
