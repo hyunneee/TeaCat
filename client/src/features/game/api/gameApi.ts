@@ -2,6 +2,8 @@ import { http } from '@/shared/api';
 import type {
   CreateGameRoomRequest,
   GameActionRequest,
+  GameChatMessage,
+  GamePieceStyle,
   GamePolicy,
   GameRoom,
 } from '../model/game.types';
@@ -29,6 +31,10 @@ export const gameApi = {
   ready: (roomId: number, ready: boolean) =>
     http.patch<GameRoom>(`/games/rooms/${roomId}/ready`, { ready }),
 
+  /** 말 모양 고르기. 남이 쓰는 모양이면 서버가 GAME_015 로 거절합니다 */
+  pieceStyle: (roomId: number, pieceStyle: GamePieceStyle) =>
+    http.patch<GameRoom>(`/games/rooms/${roomId}/piece-style`, { pieceStyle }),
+
   start: (roomId: number) => http.post<GameRoom>(`/games/rooms/${roomId}/start`, {}),
 
   /**
@@ -41,6 +47,11 @@ export const gameApi = {
   act: (roomId: number, body: GameActionRequest) =>
     http.post<GameRoom>(`/games/rooms/${roomId}/actions`, body),
 
+  chat: (roomId: number) => http.get<GameChatMessage[]>(`/games/rooms/${roomId}/chat`),
+
+  sendChat: (roomId: number, message: string) =>
+    http.post<GameChatMessage>(`/games/rooms/${roomId}/chat`, { message }),
+
   leave: (roomId: number) => http.post<void>(`/games/rooms/${roomId}/leave`, {}),
 };
 
@@ -49,4 +60,5 @@ export const gameKeys = {
   policy: () => [...gameKeys.all, 'policy'] as const,
   myRoom: () => [...gameKeys.all, 'myRoom'] as const,
   room: (roomId: number) => [...gameKeys.all, 'room', roomId] as const,
+  chat: (roomId: number) => [...gameKeys.all, 'chat', roomId] as const,
 };

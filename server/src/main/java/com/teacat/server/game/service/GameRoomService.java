@@ -4,11 +4,13 @@ import com.teacat.server.common.config.GamePolicyProperties;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.dto.request.CreateGameRoomRequest;
 import com.teacat.server.game.dto.request.GameActionRequest;
+import com.teacat.server.game.dto.response.GameChatMessageResponse;
 import com.teacat.server.game.dto.response.GameParticipantResponse;
 import com.teacat.server.game.dto.response.GamePolicyResponse;
 import com.teacat.server.game.dto.response.GameRoomResponse;
 import com.teacat.server.game.engine.GameAction;
 import com.teacat.server.game.entity.GameParticipant;
+import com.teacat.server.game.entity.GamePieceStyle;
 import com.teacat.server.game.entity.GameRoom;
 import com.teacat.server.game.entity.GameType;
 import com.teacat.server.game.exception.GameErrorCode;
@@ -44,6 +46,7 @@ public class GameRoomService {
     private final GameRoomWriter writer;
     private final GameSettlementService settlement;
     private final GameEventBroker broker;
+    private final GameChatService chatService;
     private final GameRoomRepository roomRepository;
     private final GameParticipantRepository participantRepository;
     private final UserRepository userRepository;
@@ -52,7 +55,8 @@ public class GameRoomService {
     /* ── 방 ───────────────────────────────────────────────── */
 
     public GameRoomResponse create(Long userId, CreateGameRoomRequest request) {
-        GameRoom room = writer.create(userId, request.gameType(), request.betAmount(), request.maxPlayers());
+        GameRoom room = writer.create(userId, request.gameType(), request.betAmount(),
+                request.maxPlayers(), request.piecesOrDefault());
         return view(userId, room.getId());
     }
 
@@ -64,6 +68,10 @@ public class GameRoomService {
 
     public GameRoomResponse setReady(Long userId, Long roomId, boolean ready) {
         return after(userId, writer.setReady(userId, roomId, ready), "room");
+    }
+
+    public GameRoomResponse setPieceStyle(Long userId, Long roomId, GamePieceStyle style) {
+        return after(userId, writer.setPieceStyle(userId, roomId, style), "room");
     }
 
     public GameRoomResponse start(Long userId, Long roomId) {
@@ -109,6 +117,7 @@ public class GameRoomService {
                         room.isHost(p.getUserId()),
                         p.getUserId().equals(userId),
                         p.isReady(),
+                        p.getPieceStyle(),
                         p.getStatus(),
                         p.getRank(),
                         p.getPayout()))
@@ -119,7 +128,8 @@ public class GameRoomService {
 
         return new GameRoomResponse(
                 room.getId(), room.getInviteCode(), room.getGameType(), room.getStatus(),
-                room.getBetAmount(), room.getMaxPlayers(), me.getSeatNo(), room.isHost(userId),
+                room.getBetAmount(), room.getMaxPlayers(), room.getPiecesPerPlayer(),
+                me.getSeatNo(), room.isHost(userId),
                 seats, redact(room), room.getTurnExpiresAt(), pool, grant);
     }
 
@@ -128,6 +138,35 @@ public class GameRoomService {
     public Optional<GameRoomResponse> myCurrentRoom(Long userId) {
         return participantRepository.findCurrentRoomOf(userId)
                 .map(p -> view(userId, p.getRoomId()));
+    }
+
+    /* ── 채팅 ─────────────────────────────────────────────── */
+
+    /**
+     * 한 줄 보낸다.
+     *
+     * <p>닉네임을 메시지에 <b>박아서</b> 넣는다. 나중에 닉네임을 바꾸면 지난 말의 이름도
+     * 같이 바뀌는 것이 자연스러울 것 같지만, 판이 도는 몇 분 동안 화면에서 사람이 바뀌는
+     * 편이 훨씬 헷갈린다. 조회 한 번을 아끼는 것은 덤이다.
+     */
+    @Transactional(readOnly = true)
+    public GameChatMessageResponse chat(Long userId, Long roomId, String message) {
+        GameParticipant me = participantRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(GameErrorCode.NOT_PARTICIPANT));
+
+        String nickname = userRepository.findById(userId).map(this::nicknameOf).orElse("알 수 없음");
+        GameChatMessageResponse line = chatService.post(roomId, me.getSeatNo(), nickname, message);
+
+        // 🔴 이벤트에 내용을 싣지 않는다. 다른 알림과 같은 규칙이다 — 받은 쪽이 다시 읽는다
+        broker.publish(roomId, "chat");
+        return line;
+    }
+
+    @Transactional(readOnly = true)
+    public List<GameChatMessageResponse> chatHistory(Long userId, Long roomId) {
+        participantRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new BusinessException(GameErrorCode.NOT_PARTICIPANT));
+        return chatService.history(roomId);
     }
 
     public SseEmitter subscribe(Long userId, Long roomId) {
@@ -142,6 +181,8 @@ public class GameRoomService {
     public GamePolicyResponse policy(Long userId) {
         return new GamePolicyResponse(
                 policy.betChoices(),
+                policy.maxBet(),
+                policy.subsidyMinBet(),
                 policy.subsidyPerPlayer(),
                 settlement.remainingSubsidyToday(userId),
                 policy.prizeShares());
@@ -171,6 +212,11 @@ public class GameRoomService {
             }
         }
         broker.publish(outcome.roomId(), outcome.finished() ? "finished" : event);
+
+        // 끝난 판의 대화는 더 볼 일이 없다. 결과 화면에서 나가면 방 자체가 사라진다
+        if (outcome.finished()) {
+            chatService.clear(outcome.roomId());
+        }
     }
 
     /**
@@ -202,7 +248,9 @@ public class GameRoomService {
     }
 
     private long expectedSubsidy(GameRoom room, List<GameParticipant> participants) {
-        if (room.isPractice() || participants.size() < 2) {
+        // 정산의 grantableSubsidy 와 조건이 같아야 한다. 여기서만 얹어 보여주면 대기실에서
+        // 본 상금과 실제로 나뉜 금액이 달라진다
+        if (room.isPractice() || participants.size() < 2 || room.getBetAmount() < policy.subsidyMinBet()) {
             return 0;
         }
         return policy.subsidyPerPlayer() * participants.size();

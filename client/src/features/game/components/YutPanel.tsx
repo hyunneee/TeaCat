@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Flag, Home } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Button } from '@/shared/components/ui';
-import { YUT_HOME, YUT_THROW_NAMES, seatColor } from '../model/yutBoard';
-import type { GameRoom, YutState } from '../model/game.types';
+import { cn } from '@/shared/lib';
+import { YUT_GOAL, YUT_HOME, YUT_THROW_NAMES, seatColor, yutAdvance } from '../model/yutBoard';
+import { pieceStyleOf } from '../model/yutPieces';
+import type { GameParticipant, GameRoom, YutState } from '../model/game.types';
 import { YutBoardView } from './YutBoardView';
+import { YutSticks } from './YutSticks';
+import type { Destination } from './YutBoardView';
 
 interface Props {
   room: GameRoom;
   state: YutState;
   onAction: (body: { action: 'THROW' | 'MOVE'; piece?: number; value?: number }) => void;
   pending: boolean;
+  /** 기록 대신 들어가는 채팅 창. 페이지가 만들어 내려줍니다 */
+  chat: ReactNode;
 }
+
+/** 던진 결과가 화면 한가운데에 머무는 시간 */
+const THROW_FLASH_MS = 1600;
 
 /**
  * 윷놀이 한 판.
@@ -18,18 +30,22 @@ interface Props {
  * 이어지면) 어느 결과로 어느 말을 옮길지 두 번 고르게 합니다. 결과를 먼저 고르고 말을
  * 고르는 순서인 이유는, 말을 먼저 고르면 "이 말로 갈 수 있는 결과" 를 다시 추려 보여줘야
  * 해서 화면이 복잡해지기 때문입니다.
+ *
+ * <p>고른 결과로 <b>갈 수 있는 자리를 판 위에 띄웁니다.</b> 지름길은 모서리에 정확히
+ * 멈춰야 타는 규칙이라, 어디까지 가는지가 눈으로 계산되지 않습니다.
  */
-export function YutPanel({ room, state, onAction, pending }: Props) {
+export function YutPanel({ room, state, onAction, pending, chat }: Props) {
   const [value, setValue] = useState<number | null>(null);
-  const [piece, setPiece] = useState<number | null>(null);
 
   const myTurn = state.turn === room.mySeatNo;
   const waiting = state.pending.length > 0;
+  const use = value ?? state.pending[0] ?? null;
+
+  const flash = useThrowFlash(state.lastThrow, state.lastThrowSeat, state.throwSeq);
+  const thrower = room.participants.find((p) => p.seatNo === flash?.seat);
 
   function move(pieceIndex: number) {
-    const use = value ?? state.pending[0];
-    if (use === undefined) return;
-    setPiece(null);
+    if (use === null) return;
     setValue(null);
     onAction({ action: 'MOVE', piece: pieceIndex, value: use });
   }
@@ -39,14 +55,66 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
     .map((position, index) => ({ position, index }))
     .filter((entry) => entry.position === YUT_HOME);
 
+  /**
+   * 지금 고른 결과로 갈 수 있는 자리들.
+   *
+   * 🔴 한 밭에 여럿이 겹쳐 서 있으면 **말 하나만** 넣습니다 — 업은 말은 어차피 함께
+   * 움직이고, 대기 중인 말도 한 번에 하나만 꺼냅니다.
+   */
+  const destinations: Destination[] =
+    myTurn && waiting && use !== null
+      ? dedupe(
+          myPieces
+            .map((position, pieceIndex) => ({ position, pieceIndex }))
+            .filter((entry) => entry.position !== YUT_GOAL)
+            .map(({ position, pieceIndex }) => ({ pieceIndex, to: yutAdvance(position, use) })),
+        )
+      : [];
+
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
       <YutBoardView
         state={state}
-        mySeatNo={room.mySeatNo}
-        selectedPiece={piece}
-        onPickPiece={myTurn && waiting ? (index) => { setPiece(index); move(index); } : undefined}
+        participants={room.participants}
+        destinations={destinations}
+        onPickPiece={myTurn && waiting ? move : undefined}
       />
+
+      {/* 던진 결과 — 판 한가운데에 윷가락이 실제로 떨어집니다. 던진 사람만이 아니라
+          방에 있는 모두가 같은 것을 봅니다 (서버가 lastThrow 를 내려주기 때문입니다) */}
+      {flash && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+          /* 🔴 판과 <b>같은 상자</b>여야 가운데가 맞습니다. 판은 max-w-[22rem] 로 가운데
+             정렬돼 있어서, 여기에 폭 제한이 없으면 정사각형이 판보다 커지고 윷가락이
+             판 아래(버튼 위)로 내려앉습니다 */
+          className="pointer-events-none absolute inset-x-0 top-0 z-10 mx-auto flex aspect-square w-full max-w-[22rem] items-center justify-center"
+        >
+          <div className="surface flex flex-col items-center gap-2 rounded-3xl px-6 py-4 shadow-xl">
+            <YutSticks result={flash.result} seq={flash.seq} />
+            <span className={cn('text-3xl font-black leading-none', seatColor(flash.seat).text)}>
+              {YUT_THROW_NAMES[flash.result]}
+            </span>
+            <span className="text-muted text-xs">
+              {thrower?.me ? '내가' : (thrower?.nickname ?? `${flash.seat + 1}번`)} 던졌어요
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* 사람별 말 현황 — 전체 / 대기 / 판 위 / 완주 */}
+      <div className="grid grid-cols-2 gap-2">
+        {room.participants.map((participant) => (
+          <SeatPieces
+            key={participant.seatNo}
+            participant={participant}
+            state={state}
+            turn={state.turn === participant.seatNo}
+          />
+        ))}
+      </div>
 
       {/* 던져 놓은 결과들 */}
       {state.pending.length > 0 && (
@@ -58,12 +126,10 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
               type="button"
               disabled={!myTurn}
               onClick={() => setValue(result)}
-              className={[
+              className={cn(
                 'rounded-full px-3 py-1 text-sm font-bold',
-                (value ?? state.pending[0]) === result
-                  ? 'bg-brand-500 text-white'
-                  : 'surface-2 text-muted',
-              ].join(' ')}
+                use === result ? 'bg-brand-500 text-white' : 'surface-2 text-muted',
+              )}
             >
               {YUT_THROW_NAMES[result]}
             </button>
@@ -78,7 +144,7 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
           </Button>
         ) : (
           <div className="space-y-2">
-            <p className="text-muted text-center text-sm">움직일 말을 고르세요</p>
+            <p className="text-muted text-center text-sm">판에서 갈 자리를 누르세요</p>
             {waitingPieces.length > 0 && (
               <Button
                 variant="secondary"
@@ -104,16 +170,100 @@ export function YutPanel({ room, state, onAction, pending }: Props) {
         </p>
       )}
 
-      {/* 최근 기록. 뒤집힌 순서로 보여야 방금 일어난 일이 위에 옵니다 */}
-      {state.log.length > 0 && (
-        <div className="surface-2 max-h-28 space-y-1 overflow-y-auto rounded-xl p-3">
-          {[...state.log].reverse().slice(0, 8).map((line, index) => (
-            <p key={index} className="text-muted text-xs">
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
+      {chat}
     </div>
   );
+}
+
+/**
+ * 한 사람의 말 현황.
+ *
+ * <p>전체 몇 개를 가지고 시작했고, 그중 <b>아직 안 꺼낸 것 · 판 위 · 완주</b>가 몇 개인지
+ * 셋으로 나눠 보여줍니다. 완주한 말은 회색이 아니라 <b>깃발</b>로 표시합니다 — 흐리게
+ * 두면 "없어진 말" 로 읽히는데 사실은 이겨서 나간 말입니다.
+ */
+function SeatPieces({
+  participant,
+  state,
+  turn,
+}: {
+  participant: GameParticipant;
+  state: YutState;
+  turn: boolean;
+}) {
+  const seat = participant.seatNo;
+  const mine = state.pieces[seat] ?? [];
+  const color = seatColor(seat);
+  const Icon = pieceStyleOf(participant.pieceStyle).icon;
+
+  const home = mine.filter((position) => position === YUT_HOME).length;
+  const done = mine.filter((position) => position === YUT_GOAL).length;
+  const onBoard = mine.length - home - done;
+  const out = state.retired[seat] === true;
+
+  return (
+    <div
+      className={cn(
+        'surface-2 flex items-center gap-2 rounded-xl p-2 transition',
+        turn && `ring-2 ${color.ring}`,
+        out && 'opacity-40',
+      )}
+    >
+      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-white', color.chip)}>
+        <Icon size={15} strokeWidth={2.4} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-bold">
+          {participant.me ? '나' : participant.nickname}
+          {out && <span className="text-muted"> · 나감</span>}
+        </p>
+        <p className="text-subtle flex items-center gap-1.5 text-[10px] tabular-nums">
+          <span className="flex items-center gap-0.5">
+            <Home size={9} aria-hidden />
+            {home}
+          </span>
+          <span aria-label="판 위">판 {onBoard}</span>
+          <span className="flex items-center gap-0.5 font-bold text-emerald-600">
+            <Flag size={9} aria-hidden />
+            {done}
+          </span>
+          <span className="text-subtle">/ {mine.length}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** 같은 밭으로 가는 말은 하나만 남깁니다 */
+function dedupe(list: Destination[]): Destination[] {
+  const seen = new Set<number>();
+  return list.filter(({ to }) => {
+    if (seen.has(to)) return false;
+    seen.add(to);
+    return true;
+  });
+}
+
+/**
+ * 방금 던진 결과.
+ *
+ * <p>서버 상태에는 "마지막 던지기" 만 남아 있어서, 그 값만 보면 <b>한 번 던진 뒤 계속</b>
+ * 떠 있게 됩니다. 그래서 `throwSeq` 가 <b>바뀐 순간</b>에만 잠깐 켜고 스스로 끕니다 —
+ * 같은 값이 연달아 나와도(모, 모) 번호가 오르므로 새 던지기로 알아봅니다.
+ */
+function useThrowFlash(result: number | null, seat: number | null, seq: number) {
+  const [flash, setFlash] = useState<{ result: number; seat: number; seq: number } | null>(null);
+  const seen = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (result === null || seat === null || seq === 0) return;
+    if (seen.current === seq) return;
+    seen.current = seq;
+
+    setFlash({ result, seat, seq });
+    const timer = setTimeout(() => setFlash(null), THROW_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [result, seat, seq]);
+
+  return flash;
 }

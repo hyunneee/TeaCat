@@ -14,6 +14,8 @@
  */
 export { gameApi, gameKeys } from './api/gameApi';
 
+export { PIECE_COUNTS, PIECE_STYLES, pieceStyleOf } from './model/yutPieces';
+
 export {
   useGamePolicy,
   useMyGameRoom,
@@ -21,6 +23,8 @@ export {
   useCreateGameRoom,
   useJoinGameRoom,
   useGameReady,
+  usePickPieceStyle,
+  useGameChat,
   useStartGame,
   useGameAction,
   useLeaveGameRoom,
@@ -28,6 +32,7 @@ export {
 
 export { GameLobbyPanel } from './components/GameLobbyPanel';
 export { GameResultCard } from './components/GameResultCard';
+export { GameChatPanel } from './components/GameChatPanel';
 export { YutPanel } from './components/YutPanel';
 export { HalliGalliPanel } from './components/HalliGalliPanel';
 export { FruitCard } from './components/FruitCard';
@@ -38,6 +43,7 @@ export type {
   GameRoomStatus,
   GameParticipant,
   GameParticipantStatus,
+  GamePieceStyle,
   GamePolicy,
   GameState,
   YutState,

@@ -11,8 +11,22 @@ import java.util.List;
  */
 public class YutState {
 
-    /** 한 사람이 가진 말 수 */
-    public static final int PIECES = 4;
+    /** 방을 만들 때 안 고르면 쓰는 말 수 */
+    public static final int DEFAULT_PIECES = 4;
+
+    /** 이 판에서 한 사람이 쓰는 말 수. 방을 만들 때 정한다 */
+    public int piecesPerPlayer = DEFAULT_PIECES;
+
+    /**
+     * 방금 던진 결과. 화면 한가운데에 크게 띄워 <b>다른 사람도 보게</b> 한다.
+     *
+     * <p>쓴 결과는 {@link #pending} 에서 빠지므로 그것만으로는 "방금 무엇이 나왔나" 를
+     * 알 수 없다 — 도가 나오자마자 말을 옮기면 화면에 아무것도 안 남는다.
+     */
+    public Integer lastThrow;
+    public Integer lastThrowSeat;
+    /** 던질 때마다 하나씩 오른다. 같은 값이 연달아 나와도 화면이 새 던지기로 알아본다 */
+    public int throwSeq;
 
     /** 지금 차례인 자리 번호 */
     public int turn;
@@ -32,7 +46,7 @@ public class YutState {
     /** 이 자리가 판을 떠났나. 남은 말은 그대로 두고 차례만 건너뛴다 */
     public List<Boolean> retired = new ArrayList<>();
 
-    /** 말 4개를 모두 뺀 순서대로 쌓이는 자리 번호. 이게 곧 등수다 */
+    /** 말을 모두 뺀 순서대로 쌓이는 자리 번호. 이게 곧 등수다 */
     public List<Integer> finishOrder = new ArrayList<>();
 
     /** 화면에 흘려줄 짧은 기록. 최근 것만 남긴다 */
@@ -40,19 +54,35 @@ public class YutState {
 
     public boolean finished;
 
-    public static YutState start(int players) {
+    public static YutState start(int players, int piecesPerPlayer) {
         YutState state = new YutState();
         state.players = players;
+        state.piecesPerPlayer = piecesPerPlayer;
         state.turn = 0;
         for (int seat = 0; seat < players; seat++) {
             List<Integer> mine = new ArrayList<>();
-            for (int i = 0; i < PIECES; i++) {
+            for (int i = 0; i < piecesPerPlayer; i++) {
                 mine.add(YutBoard.HOME);
             }
             state.pieces.add(mine);
             state.retired.add(false);
         }
         return state;
+    }
+
+    /** 이 자리가 아직 꺼내지 않은 말 수 */
+    public int waitingCount(int seat) {
+        return (int) pieces.get(seat).stream().filter(p -> p == YutBoard.HOME).count();
+    }
+
+    /** 이 자리가 완주시킨 말 수 */
+    public int finishedCount(int seat) {
+        return (int) pieces.get(seat).stream().filter(p -> p == YutBoard.GOAL).count();
+    }
+
+    /** 판 위에 나와 있는 말 수 */
+    public int onBoardCount(int seat) {
+        return (int) pieces.get(seat).stream().filter(YutBoard::isOnBoard).count();
     }
 
     public boolean isRetired(int seat) {

@@ -2,6 +2,7 @@ package com.teacat.server.game.engine.halligalli;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.engine.GameAction;
+import com.teacat.server.game.engine.GameOptions;
 import com.teacat.server.game.engine.GameStateCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class HalliGalliEngineTests {
+
+    /** 할리갈리는 말 수를 쓰지 않는다. 인터페이스가 요구해서 넣는 값이다 */
+    private static final GameOptions OPTIONS = new GameOptions(4);
 
     private GameStateCodec codec;
     private HalliGalliEngine engine;
@@ -28,7 +32,7 @@ class HalliGalliEngineTests {
     void 카드는_쉰여섯_장이고_고르게_나뉜다() {
         assertThat(HalliGalliState.newDeck()).hasSize(56);
 
-        HalliGalliState state = codec.read(engine.start(4), HalliGalliState.class);
+        HalliGalliState state = codec.read(engine.start(4, OPTIONS), HalliGalliState.class);
 
         assertThat(state.hands).hasSize(4);
         assertThat(state.hands.stream().mapToInt(List::size).sum()).isEqualTo(56);
@@ -47,7 +51,7 @@ class HalliGalliEngineTests {
 
     @Test
     void 내_차례가_아니면_뒤집지_못한다() {
-        Map<String, Object> state = engine.start(2);
+        Map<String, Object> state = engine.start(2, OPTIONS);
 
         assertThatThrownBy(() -> engine.apply(state, 1, new GameAction("FLIP", null, null)))
                 .isInstanceOf(BusinessException.class);
@@ -55,7 +59,7 @@ class HalliGalliEngineTests {
 
     @Test
     void 종은_차례가_아니어도_칠_수_있다() {
-        Map<String, Object> state = engine.start(2);
+        Map<String, Object> state = engine.start(2, OPTIONS);
 
         // 규칙에 어긋나지 않는다 — 틀렸으면 벌칙을 받을 뿐 예외가 아니다
         Map<String, Object> next = engine.apply(state, 1, new GameAction("BELL", null, null));
@@ -182,7 +186,7 @@ class HalliGalliEngineTests {
 
     @Test
     void 나간_사람은_꼴찌로_밀린다() {
-        Map<String, Object> state = engine.start(3);
+        Map<String, Object> state = engine.start(3, OPTIONS);
 
         Map<String, Object> next = engine.retire(state, 0);
 
@@ -191,7 +195,7 @@ class HalliGalliEngineTests {
 
     /** 카드를 마음대로 놓기 위한 2인 판 */
     private HalliGalliState handMade() {
-        HalliGalliState state = codec.read(engine.start(2), HalliGalliState.class);
+        HalliGalliState state = codec.read(engine.start(2, OPTIONS), HalliGalliState.class);
         state.piles.forEach(List::clear);
         return state;
     }

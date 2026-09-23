@@ -5,13 +5,16 @@ import { Button, Card, Spinner } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants/routes';
 import {
   GameLobbyPanel,
+  GameChatPanel,
   GameResultCard,
   HalliGalliPanel,
   YutPanel,
   useGameAction,
+  useGameChat,
   useGameReady,
   useGameRoom,
   useLeaveGameRoom,
+  usePickPieceStyle,
   useStartGame,
 } from '@/features/game';
 import type { HalliGalliState, YutState } from '@/features/game';
@@ -34,9 +37,24 @@ export function GameRoomPage() {
 
   const { data: room, isLoading, connected } = useGameRoom(Number.isFinite(roomId) ? roomId : undefined);
   const ready = useGameReady(roomId);
+  const pieceStyle = usePickPieceStyle(roomId);
   const start = useStartGame(roomId);
   const action = useGameAction(roomId);
   const leave = useLeaveGameRoom(roomId);
+  const chat = useGameChat(roomId, connected);
+
+  /* 채팅 창은 대기실과 두 게임판이 똑같이 씁니다. 여기서 한 번 만들어 내려주면 판
+     컴포넌트가 채팅을 전혀 몰라도 됩니다 — feature 안의 컴포넌트는 props 로 받은 것만
+     쓰고 서버를 모릅니다 (client/CLAUDE.md 4-3) */
+  const chatPanel = (
+    <GameChatPanel
+      messages={chat.messages}
+      participants={room?.participants ?? []}
+      mySeatNo={room?.mySeatNo ?? 0}
+      onSend={(message) => chat.send.mutate(message)}
+      sending={chat.send.isPending}
+    />
+  );
 
   if (isLoading || !room) {
     return (
@@ -68,8 +86,10 @@ export function GameRoomPage() {
           <GameLobbyPanel
             room={room}
             onReady={(value) => ready.mutate(value)}
+            onPickPieceStyle={(style) => pieceStyle.mutate(style)}
             onStart={() => start.mutate()}
-            busy={ready.isPending || start.isPending}
+            busy={ready.isPending || start.isPending || pieceStyle.isPending}
+            chat={chatPanel}
           />
         )}
 
@@ -81,6 +101,7 @@ export function GameRoomPage() {
                 state={room.state as YutState}
                 onAction={(body) => action.mutate(body)}
                 pending={action.isPending}
+                chat={chatPanel}
               />
             ) : (
               <HalliGalliPanel
@@ -88,6 +109,7 @@ export function GameRoomPage() {
                 state={room.state as HalliGalliState}
                 onAction={(body) => action.mutate(body)}
                 pending={action.isPending}
+                chat={chatPanel}
               />
             )}
 

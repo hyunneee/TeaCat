@@ -3,6 +3,7 @@ package com.teacat.server.game.engine.halligalli;
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.engine.GameAction;
 import com.teacat.server.game.engine.GameEngine;
+import com.teacat.server.game.engine.GameOptions;
 import com.teacat.server.game.engine.GameStateCodec;
 import com.teacat.server.game.entity.GameType;
 import com.teacat.server.game.exception.GameErrorCode;
@@ -47,7 +48,7 @@ public class HalliGalliEngine implements GameEngine {
     }
 
     @Override
-    public Map<String, Object> start(int players) {
+    public Map<String, Object> start(int players, GameOptions options) {
         return codec.write(HalliGalliState.start(players, random));
     }
 
@@ -167,6 +168,7 @@ public class HalliGalliEngine implements GameEngine {
         boolean correct = s.bellIsCorrect();
         s.lastBellSeat = seat;
         s.lastBellCorrect = correct;
+        s.bellSeq++;
 
         if (correct) {
             collectAllPiles(s, seat);

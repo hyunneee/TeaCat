@@ -1,6 +1,7 @@
 package com.teacat.server.game.dto.response;
 
 import com.teacat.server.game.entity.GameParticipantStatus;
+import com.teacat.server.game.entity.GamePieceStyle;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(description = "방에 앉은 사람")
@@ -20,6 +21,9 @@ public record GameParticipantResponse(
 
         @Schema(description = "준비했나", example = "true")
         boolean ready,
+
+        @Schema(description = "고른 말 모양. 한 방에서 겹치지 않습니다", example = "CAT")
+        GamePieceStyle pieceStyle,
 
         @Schema(description = "참가 상태", example = "PLAYING")
         GameParticipantStatus status,

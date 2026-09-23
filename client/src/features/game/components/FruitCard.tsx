@@ -56,7 +56,13 @@ export function FruitCard({ card, emptyLabel = '없음', className }: Props) {
         aria-hidden
       >
         {Array.from({ length: card.count }, (_, i) => (
-          <Icon key={i} className={cn('size-5 shrink-0', fruit.tone)} strokeWidth={2.2} />
+          <Icon
+            key={i}
+            /* 속을 채웁니다 — 선만 있으면 작은 칸에서 과일이 아니라 낙서로 보입니다.
+               채우는 색은 선보다 연합니다 (FRUITS 주석) */
+            className={cn('size-5 shrink-0', fruit.tone, fruit.fill)}
+            strokeWidth={2.2}
+          />
         ))}
       </div>
     </div>

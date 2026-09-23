@@ -20,8 +20,8 @@ public interface GameEngine {
 
     GameType type();
 
-    /** 시작 판. players 는 자리 수(1..4) */
-    Map<String, Object> start(int players);
+    /** 시작 판. players 는 자리 수(1..4), options 는 방을 만들 때 고른 값들 */
+    Map<String, Object> start(int players, GameOptions options);
 
     /**
      * 한 사람의 행동을 적용한다.

@@ -128,6 +128,12 @@ public class GameSettlementService {
         if (participants.size() < 2 || participants.stream().allMatch(p -> p.getBet() == 0)) {
             return 0;
         }
+        // 🔴 판돈이 너무 적은 판에도 얹어주면, 1 캣머니짜리 판을 계속 돌리는 것만으로
+        //    보조금이 순이익이 된다. 판돈을 자유 입력으로 연 대신 이 선을 그었다
+        //    (GamePolicyProperties.subsidyMinBet). 판은 그대로 돌아가고 보조금만 빠진다
+        if (participants.stream().anyMatch(p -> p.getBet() < policy.subsidyMinBet())) {
+            return 0;
+        }
 
         LocalDateTime from = LocalDate.now().atStartOfDay();
         LocalDateTime to = from.plusDays(1);

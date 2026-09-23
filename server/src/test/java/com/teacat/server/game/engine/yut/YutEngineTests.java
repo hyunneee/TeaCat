@@ -2,6 +2,7 @@ package com.teacat.server.game.engine.yut;
 
 import com.teacat.server.common.exception.BusinessException;
 import com.teacat.server.game.engine.GameAction;
+import com.teacat.server.game.engine.GameOptions;
 import com.teacat.server.game.engine.GameStateCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class YutEngineTests {
 
+    private static final GameOptions OPTIONS = new GameOptions(YutState.DEFAULT_PIECES);
+
     private GameStateCodec codec;
     private YutEngine engine;
 
@@ -26,7 +29,7 @@ class YutEngineTests {
 
     @Test
     void 시작하면_모두_판_밖에_있고_첫_자리가_던진다() {
-        YutState state = codec.read(engine.start(4), YutState.class);
+        YutState state = codec.read(engine.start(4, OPTIONS), YutState.class);
 
         assertThat(state.players).isEqualTo(4);
         assertThat(state.turn).isZero();
@@ -36,8 +39,31 @@ class YutEngineTests {
     }
 
     @Test
+    void 말_수를_줄여서_시작하면_그_수만큼만_가진다() {
+        YutState state = codec.read(engine.start(2, new GameOptions(2)), YutState.class);
+
+        assertThat(state.piecesPerPlayer).isEqualTo(2);
+        assertThat(state.pieces).allSatisfy(mine -> assertThat(mine).containsExactly(-1, -1));
+        // 있지도 않은 3번 말을 움직이라고 하면 거절해야 한다
+        Map<String, Object> thrown = engine.apply(codec.write(state), 0, new GameAction("THROW", null, null));
+        assertThatThrownBy(() -> engine.apply(thrown, 0, new GameAction("MOVE", 2, 1)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void 던지면_방금_나온_결과가_남는다() {
+        Map<String, Object> next = engine.apply(engine.start(2, OPTIONS), 0, new GameAction("THROW", null, null));
+        YutState state = codec.read(next, YutState.class);
+
+        // 화면 한가운데에 띄우려면 pending 이 아니라 이 값이 있어야 한다 — 쓴 결과는 pending 에서 빠진다
+        assertThat(state.lastThrow).isNotNull().isBetween(1, 5);
+        assertThat(state.lastThrowSeat).isZero();
+        assertThat(state.throwSeq).isEqualTo(1);
+    }
+
+    @Test
     void 차례가_아니면_던지지_못한다() {
-        Map<String, Object> state = engine.start(2);
+        Map<String, Object> state = engine.start(2, OPTIONS);
 
         assertThatThrownBy(() -> engine.apply(state, 1, new GameAction("THROW", null, null)))
                 .isInstanceOf(BusinessException.class);
@@ -45,7 +71,7 @@ class YutEngineTests {
 
     @Test
     void 던지기_전에는_말을_못_움직인다() {
-        Map<String, Object> state = engine.start(2);
+        Map<String, Object> state = engine.start(2, OPTIONS);
 
         assertThatThrownBy(() -> engine.apply(state, 0, new GameAction("MOVE", 0, 3)))
                 .isInstanceOf(BusinessException.class);
@@ -53,7 +79,7 @@ class YutEngineTests {
 
     @Test
     void 던지면_결과가_쌓이고_윷_모가_아니면_움직여야_한다() {
-        Map<String, Object> next = engine.apply(engine.start(2), 0, new GameAction("THROW", null, null));
+        Map<String, Object> next = engine.apply(engine.start(2, OPTIONS), 0, new GameAction("THROW", null, null));
 
         YutState state = codec.read(next, YutState.class);
         assertThat(state.pending).hasSize(1);
@@ -65,7 +91,7 @@ class YutEngineTests {
 
     @Test
     void 안_던진_값으로는_움직이지_못한다() {
-        YutState state = codec.read(engine.start(2), YutState.class);
+        YutState state = codec.read(engine.start(2, OPTIONS), YutState.class);
         state.pending = new java.util.ArrayList<>(List.of(3));
         state.canThrow = false;
         Map<String, Object> raw = codec.write(state);
@@ -158,14 +184,14 @@ class YutEngineTests {
 
     @Test
     void 판을_떠난_사람은_꼴찌로_밀린다() {
-        Map<String, Object> next = engine.retire(engine.start(3), 0);
+        Map<String, Object> next = engine.retire(engine.start(3, OPTIONS), 0);
 
         assertThat(engine.ranking(next).getLast()).isZero();
     }
 
     @Test
     void 시간을_넘기면_서버가_대신_둔다() {
-        Map<String, Object> state = engine.start(2);
+        Map<String, Object> state = engine.start(2, OPTIONS);
 
         YutState after = codec.read(engine.autoAdvance(state), YutState.class);
 
@@ -175,7 +201,7 @@ class YutEngineTests {
 
     /** 말을 마음대로 놓기 위해 던지기 전 상태로 되돌린 판 */
     private YutState handMade(int players) {
-        YutState state = codec.read(engine.start(players), YutState.class);
+        YutState state = codec.read(engine.start(players, OPTIONS), YutState.class);
         state.canThrow = false;
         return state;
     }

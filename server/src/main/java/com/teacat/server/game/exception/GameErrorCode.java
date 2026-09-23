@@ -54,7 +54,11 @@ public enum GameErrorCode implements ErrorCode {
 
     /** 게임판 JSON 이 엔진이 아는 모양이 아니다. 배포 중 스키마가 바뀐 판이 남아 있을 때 */
     STATE_CORRUPTED(HttpStatus.INTERNAL_SERVER_ERROR, "GAME_014",
-            "게임 상태를 읽지 못했습니다.");
+            "게임 상태를 읽지 못했습니다."),
+
+    /** 같은 방의 다른 사람이 이미 그 말 모양을 쓰고 있다 */
+    PIECE_STYLE_TAKEN(HttpStatus.CONFLICT, "GAME_015",
+            "다른 참가자가 쓰고 있는 말입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
