@@ -27,7 +27,20 @@ export function StickerGrid({ stickers, onDelete, deletingId, className }: Stick
               'repeating-conic-gradient(var(--color-surface-2) 0 25%, white 0 50%) 0 0 / 16px 16px',
           }}
         >
-          <img src={s.imageUrl} alt="내 스티커" className="h-full w-full object-contain" loading="lazy" />
+          <img
+            src={s.imageUrl}
+            alt="내 스티커"
+            className={cn('h-full w-full object-contain', s.used && 'opacity-40 grayscale')}
+            loading="lazy"
+          />
+
+          {/* 🔴 쓴 스티커는 **되돌릴 수 없습니다.** 왜 못 쓰는지 화면이 말해 줘야 합니다 —
+              안 그러면 "왜 서랍에 안 보이지?" 가 됩니다 (2026-09-23) */}
+          {s.used && (
+            <span className="bg-ink/70 absolute bottom-1.5 left-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white">
+              사용됨
+            </span>
+          )}
           <IconButton
             label="스티커 지우기"
             variant="danger-ghost"

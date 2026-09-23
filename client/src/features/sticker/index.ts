@@ -4,6 +4,7 @@ export {
   useStickerJob,
   useStickerQuota,
   useMyStickers,
+  useUnusedStickers,
   useDeleteSticker,
 } from './hooks/useSticker';
 export { DrawCanvas } from './components/DrawCanvas';
