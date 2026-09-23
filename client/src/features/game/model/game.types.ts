@@ -40,7 +40,7 @@ export interface YutState {
 }
 
 export interface HalliGalliCard {
-  fruit: 'STRAWBERRY' | 'BANANA' | 'LIME' | 'PLUM';
+  fruit: 'CHERRY' | 'BANANA' | 'LIME' | 'GRAPE';
   count: number;
 }
 

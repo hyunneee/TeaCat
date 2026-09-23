@@ -14,8 +14,14 @@ import java.util.Random;
  */
 public class HalliGalliState {
 
-    /** 과일 네 종류. 각 과일마다 1·2·3·4·5개짜리 카드가 있다 */
-    public static final List<String> FRUITS = List.of("STRAWBERRY", "BANANA", "LIME", "PLUM");
+    /**
+     * 과일 네 종류. 각 과일마다 1·2·3·4·5개짜리 카드가 있다.
+     *
+     * <p>이름이 체리·포도인 것은 <b>화면이 그릴 그림이 있기 때문</b>이다. 화면은 이모지를
+     * 박지 않고 아이콘 세트(lucide)를 쓰는데(client/CLAUDE.md 3-5), 거기에 딸기·자두가 없다.
+     * 이름과 그림이 어긋나면 "딸기라는데 체리가 그려진" 카드가 된다.
+     */
+    public static final List<String> FRUITS = List.of("CHERRY", "BANANA", "LIME", "GRAPE");
 
     /** 종을 칠 수 있는 개수 */
     public static final int BELL_COUNT = 5;
@@ -81,6 +87,21 @@ public class HalliGalliState {
 
     public boolean isAlive(int seat) {
         return seat >= 0 && seat < eliminated.size() && !Boolean.TRUE.equals(eliminated.get(seat));
+    }
+
+    /**
+     * 종을 칠 수 있나 — <b>손에 든 카드가 떨어져도 펼쳐 둔 카드가 남아 있으면 칠 수 있다.</b>
+     *
+     * <p>🔴 펼쳐 둔 카드는 아직 판 위에 있고, 종을 맞게 치면 되찾아 온다. 손패가 비었다고
+     * 종을 막으면 되살아날 길이 사라져 그 자리에서 사실상 끝난다. 둘 다 없을 때만 못 친다.
+     */
+    public boolean canRing(int seat) {
+        return isAlive(seat) && totalCards(seat) > 0;
+    }
+
+    /** 뒤집을 카드가 있나. 손패가 비면 차례를 넘길 뿐, 그것만으로 탈락은 아니다 */
+    public boolean canFlip(int seat) {
+        return isAlive(seat) && !hands.get(seat).isEmpty();
     }
 
     /** 펼쳐진 카드 중 맨 위만. 종을 칠 수 있는지는 이것들로만 판정한다 */

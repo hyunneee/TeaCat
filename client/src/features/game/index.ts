@@ -30,6 +30,7 @@ export { GameLobbyPanel } from './components/GameLobbyPanel';
 export { GameResultCard } from './components/GameResultCard';
 export { YutPanel } from './components/YutPanel';
 export { HalliGalliPanel } from './components/HalliGalliPanel';
+export { FruitCard } from './components/FruitCard';
 
 export type {
   GameType,

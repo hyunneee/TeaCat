@@ -77,6 +77,12 @@ public class HalliGalliEngine implements GameEngine {
             }
             flip(s, seat);
         } else if (action.is("BELL")) {
+            /* 🔴 손패가 비었어도 펼쳐 둔 카드가 남아 있으면 칠 수 있다. 그 카드는 아직 판
+               위에 있고, 맞게 치면 되찾아 온다 — 막으면 되살아날 길이 없어진다.
+               손패도 펼친 카드도 없을 때만 거절한다 */
+            if (!s.canRing(seat)) {
+                throw new BusinessException(GameErrorCode.INVALID_ACTION);
+            }
             bell(s, seat);
         } else {
             throw new BusinessException(GameErrorCode.INVALID_ACTION);
@@ -135,8 +141,14 @@ public class HalliGalliEngine implements GameEngine {
     private void flip(HalliGalliState s, int seat) {
         List<HalliGalliCard> hand = s.hands.get(seat);
         if (hand.isEmpty()) {
-            // 뒤집을 카드가 없으면 빠진다. 펼쳐 둔 카드는 남겨 둔다 — 종을 치면 누군가 가져간다
-            eliminate(s, seat, "카드가 떨어졌습니다");
+            /* 🔴 손패가 비었다고 바로 빼지 않는다. 펼쳐 둔 카드가 남아 있으면 아직 판 위에
+               있는 것이고, 종을 맞게 치면 되찾아 온다. 차례만 넘긴다.
+               손패도 펼친 카드도 없을 때가 진짜 끝이다 */
+            if (s.totalCards(seat) == 0) {
+                eliminate(s, seat, "카드가 다 떨어졌습니다");
+            } else {
+                s.addLog(seat + "번 자리는 뒤집을 카드가 없어 넘어갑니다");
+            }
             passTurn(s);
             checkGameOver(s);
             return;
@@ -225,12 +237,26 @@ public class HalliGalliEngine implements GameEngine {
     /** 혼자 남으면 끝. 연습 판(1인)은 카드를 다 뒤집어 빠질 때까지 돈다 */
     private void checkGameOver(HalliGalliState s) {
         long alive = 0;
+        boolean anyoneCanFlip = false;
         for (int seat = 0; seat < s.players; seat++) {
             if (s.isAlive(seat)) {
                 alive++;
+                anyoneCanFlip |= s.canFlip(seat);
             }
         }
         if (alive <= (s.players == 1 ? 0 : 1)) {
+            s.finished = true;
+            return;
+        }
+
+        /* 🔴 아무도 뒤집을 카드가 없으면 끝낸다. 손패가 비어도 남겨 두는 규칙이 생기면서
+           "모두 손패는 비었고 카드는 전부 펼쳐져 있는" 상태가 가능해졌는데, 그때는 종
+           말고는 판이 움직이지 않아서 아무도 안 치면 영원히 멈춘다(스위퍼가 대신 뒤집으려
+           해도 뒤집을 것이 없다). 아주 드물지만 멈춘 판은 판돈을 묶어 둔다.
+           그 순간 칠 수 있는 종이 있었을 수도 있는데, 등수는 남은 카드 수로 가리므로
+           한쪽으로 기울지 않는다. */
+        if (!anyoneCanFlip) {
+            s.addLog("아무도 뒤집을 카드가 없어 판을 마칩니다");
             s.finished = true;
         }
     }
