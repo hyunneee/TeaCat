@@ -48,7 +48,16 @@ public record MyHoldResponse(
         String grade,
 
         @Schema(description = "좌석 가격(원). 회차의 구역 정보가 없으면 null 로 내려간다", example = "154000")
-        Integer price
+        Integer price,
+
+        @Schema(description = """
+                취소표 추첨에 당첨돼 받은 자리인가.
+
+                🔴 true 면 화면이 <b>자리 놓기를 보여주면 안 됩니다.</b> 놓는 순간 그 좌석이 일반
+                판매로 새어 나가고 되돌릴 길이 없어서 서버가 ERR_BOOKING_014 로 거절합니다.
+                놓으려면 취소표 화면에서 당첨을 포기해야 다음 대기자에게 넘어갑니다.
+                """, example = "false")
+        boolean resaleWin
 ) {
 
     /**
@@ -73,6 +82,7 @@ public record MyHoldResponse(
                 hold.getRowLabel(),
                 hold.getSeatNumber(),
                 hold.getGrade(),
-                hold.getPrice());
+                hold.getPrice(),
+                hold.getResaleWin());
     }
 }

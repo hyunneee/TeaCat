@@ -504,7 +504,16 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
                    s.row_label              AS "rowLabel",
                    s.seat_number            AS "seatNumber",
                    pa.grade                 AS "grade",
-                   pa.price                 AS "price"
+                   pa.price                 AS "price",
+                   /* 취소표 추첨이 맡긴 자리인가. 화면이 이것을 알아야 "자리 놓기" 를 감추고
+                      당첨이라고 적을 수 있다 — 안 알려주면 평범한 선점으로 보여서 사용자가
+                      스스로 놓으려 하고, 그 요청은 이제 ERR_BOOKING_014 로 거절된다 */
+                   EXISTS (SELECT 1
+                             FROM seat_draws d
+                            WHERE d.performance_detail_id = ps.performance_detail_id
+                              AND d.seat_id = ps.seat_id
+                              AND d.status IN ('PENDING', 'OPEN', 'REVEALED'))
+                                            AS "resaleWin"
               FROM performance_seats ps
               JOIN performance_details pd ON pd.id = ps.performance_detail_id
               JOIN performance_general pg ON pg.id = pd.performance_general_id
@@ -568,6 +577,9 @@ public interface PerformanceSeatRepository extends JpaRepository<PerformanceSeat
 
         /** performance_areas.price — 가격이 설정되지 않았으면 null */
         Integer getPrice();
+
+        /** 취소표 당첨으로 받은 자리인가. 화면이 "자리 놓기" 를 감추는 데 쓴다 */
+        boolean getResaleWin();
     }
 
     /** {@link #findTicketingWindow} 결과 프로젝션. */

@@ -71,6 +71,42 @@ class ResaleWinnerSeatIntegrationTests extends PostgresIntegrationTest {
     }
 
     @Test
+    void 내_선점_목록은_당첨_자리를_당첨이라고_알려준다() {
+        Scene scene = openDrawAndReveal();
+        drawWriter.step(scene.drawId());
+
+        /* 화면이 이 값을 보고 "자리 놓기" 를 감춥니다. 안 알려주면 평범한 선점으로 보여서
+           사용자가 스스로 놓으려 하고, 그 요청은 이제 거절돼 영문 모를 에러가 됩니다 */
+        assertThat(bookingService.getMyHolds(scene.winnerId()))
+                .singleElement()
+                .satisfies(hold -> {
+                    assertThat(hold.seatId()).isEqualTo(scene.seatId());
+                    assertThat(hold.resaleWin()).isTrue();
+                });
+    }
+
+    @Test
+    void 평범한_선점은_당첨이_아니라고_알려준다() {
+        Fixture fixture = insertPerformanceFixture();
+        Long seatId = insertSeat(fixture);
+        jdbcTemplate.update("""
+                INSERT INTO performance_seats (performance_detail_id, seat_id, status)
+                VALUES (?, ?, 'AVAILABLE'::seat_booking_status)
+                """, fixture.performanceDetailId(), seatId);
+        Long userId = insertUserWithFace("plain-holder@test.com", "평범한 예매자");
+        // 공통 픽스처의 공연일이 오늘이라 예매가 이미 닫힌 것으로 판정된다. 미래로 민다
+        jdbcTemplate.update("""
+                UPDATE performance_details SET performance_date = now() + interval '30 days' WHERE id = ?
+                """, fixture.performanceDetailId());
+
+        bookingService.holdSeat(fixture.performanceDetailId(), seatId, userId);
+
+        assertThat(bookingService.getMyHolds(userId))
+                .singleElement()
+                .satisfies(hold -> assertThat(hold.resaleWin()).isFalse());
+    }
+
+    @Test
     void 결제_기한이_지나도_내_선점_조회가_당첨_좌석을_풀지_않는다() {
         Scene scene = openDrawAndReveal();
         drawWriter.step(scene.drawId());
