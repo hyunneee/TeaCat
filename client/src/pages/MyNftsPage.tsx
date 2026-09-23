@@ -83,6 +83,10 @@ export function MyNftsPage() {
       {/* 포카 꾸미기(AI 스티커) 진입점은 이 버튼 하나입니다 (구현 계획 1-3).
           `FEATURE.sticker` 가 꺼지면 버튼도 라우트도 없습니다.
 
+          🔴 라벨은 **"스티커 생성"** 입니다 (2026-09-23). "포카 꾸미기" 였는데, 누르면
+             꾸미기가 아니라 **스티커 목록**으로 가서 이름과 가는 곳이 어긋났습니다 —
+             꾸미기는 카드 상세의 "스티커로 꾸미기" 로 들어갑니다.
+
           🔴 **목록(`MY_STICKERS`)으로 보냅니다. 그리기 화면이 아닙니다.**
              예전엔 여기서 바로 `STICKER_CREATE` 로 갔는데, 그러면 목록으로 가는 길이
              "방금 만든 결과 화면의 버튼" 하나뿐이었습니다 — 어제 만든 스티커를 다시 보려면
@@ -97,7 +101,7 @@ export function MyNftsPage() {
               leftIcon={<Sparkles size={15} />}
               onClick={() => navigate(ROUTES.MY_STICKERS)}
             >
-              포카 꾸미기
+              스티커 생성
             </Button>
           ) : undefined
         }
