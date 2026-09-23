@@ -90,7 +90,7 @@ public class NftService {
     private final NftPocaDexQueryRepository pocaDexQueryRepository;
     private final UserRepository userRepository;
     private final NftCursorCodec cursorCodec;
-    /** 내 카드 응답의 decoratedImageUrl 을 채운다. 🔴 마켓·경매 응답에는 쓰지 않는다 */
+    /** 상세·마켓 응답의 decoratedImageUrl 을 채운다. 사는 사람이 그대로 받으므로 남의 카드에도 채운다 */
     private final NftDecorationService decorationService;
     private final BlockchainProperties blockchainProperties;
     private final CatMoneyHoldService holdService;
