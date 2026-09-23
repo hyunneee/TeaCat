@@ -266,6 +266,12 @@ nft:
       # 시한 자동 승인·기록 정리 스위퍼. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기
       maintenance-interval: ${NFT_TRADE_REVIEW_MAINTENANCE_INTERVAL:PT10M}
       maintenance-enabled: true
+    simulator:
+      # 이상거래 학습 데이터 시뮬레이터 (AUCTION_FRAUD_DESIGN.md 14-2). 관리자 API POST /admin/nft/trade-reviews/simulate.
+      # 🔴 기본값을 바꾸지 말 것. 만들어진 거래는 COMPLETED 로 들어가 시세 중앙값·거래량·인기 포토카드 순위에
+      #    그대로 섞인다. 운영에서 한 번 돌면 실거래와 합성이 뒤섞여 "실데이터 기준 정밀도" 를 말할 수 없게 된다.
+      #    docker/.env.dev · .env.prod 에 이 환경변수를 넣지 않는다 — 로컬에서만 켠다.
+      enabled: ${NFT_TRADE_SIMULATOR_ENABLED:false}
   design:
     # 도안 등록 트랜잭션의 확정을 훑는 주기. @Scheduled 가 그대로 읽으므로 ISO-8601(PT…) 표기여야 한다.
     #   블록체인 API 는 등록에 202 와 txHash 만 돌려주므로, 이 훑기가 없으면 도안이 영원히 REGISTERING 으로 남는다.

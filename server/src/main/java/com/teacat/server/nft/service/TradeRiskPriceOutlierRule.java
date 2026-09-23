@@ -24,7 +24,7 @@ public class TradeRiskPriceOutlierRule implements TradeRiskRule {
 
     @Override
     public List<NftTradeRiskSignal> evaluate(TradeRiskContext ctx, NftTradeReviewProperties p) {
-        if (ctx.medianPrice() == null || ctx.medianPrice() <= 0 || ctx.priceSamples() < p.priceMinSamples()) {
+        if (ctx.medianPrice() == null || ctx.medianPrice() <= 0 || ctx.designTradesInWindow() < p.priceMinSamples()) {
             return List.of();
         }
         double ratio = (double) ctx.price() / ctx.medianPrice();
@@ -32,7 +32,7 @@ public class TradeRiskPriceOutlierRule implements TradeRiskRule {
             return List.of();
         }
         return List.of(new NftTradeRiskSignal(CODE, NftReviewSeverity.MEDIUM,
-                Map.of("price", ctx.price(), "medianPrice", ctx.medianPrice(), "samples", ctx.priceSamples(),
+                Map.of("price", ctx.price(), "medianPrice", ctx.medianPrice(), "samples", ctx.designTradesInWindow(),
                         "ratio", Math.round(ratio * 100) / 100.0, "threshold", p.priceMultiplier(),
                         "windowDays", p.priceWindow().toDays())));
     }
