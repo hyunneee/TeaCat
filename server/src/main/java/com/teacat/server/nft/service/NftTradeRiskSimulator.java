@@ -168,7 +168,7 @@ public class NftTradeRiskSimulator {
             int tradeBudget = request.historyPerDesignOr() * request.designsOr() + request.normalTradesOr();
             int traderCount = Math.max(16, tradeBudget / 3);
             for (int i = 0; i < traderCount; i++) {
-                traders.add(newActor(now.minusDays(60 + random.nextInt(120))));
+                traders.add(newActor());
             }
             for (int d = 0; d < request.designsOr(); d++) {
                 long designId = newDesign("시장도안");
@@ -222,8 +222,8 @@ public class NftTradeRiskSimulator {
         private void shillCase() {
             Device shared = newDevice();
             String phone = newPhone();
-            Actor seller = newActor(now.minusDays(40), shared, phone);
-            Actor accomplice = newActor(now.minusDays(38), shared, phone);
+            Actor seller = newActor(shared, phone);
+            Actor accomplice = newActor(shared, phone);
             long designId = pick(designs);
             long cardId = pick(designCards.get(designId));
             Actor victim = pickCounterparty(cardOwner.get(cardId), cardId);
@@ -251,9 +251,9 @@ public class NftTradeRiskSimulator {
          */
         private void circularCase() {
             long designId = pick(designs);
-            Actor a = newActor(now.minusDays(50));
-            Actor b = newActor(now.minusDays(48));
-            Actor c = newActor(now.minusDays(46));
+            Actor a = newActor();
+            Actor b = newActor();
+            Actor c = newActor();
 
             long pairCard = pick(designCards.get(designId));
             pastTrade(pairCard, cardOwner.get(pairCard), a, jitter(BASE_PRICE), now.minusDays(20));
@@ -302,7 +302,7 @@ public class NftTradeRiskSimulator {
                 }
                 pastTrade(cardId, seller, buyer, jitter(BASE_PRICE), between(now.minusDays(29), now.minusDays(8)));
             }
-            Actor hoarder = newActor(now.minusDays(35));
+            Actor hoarder = newActor();
             for (int i = 0; i < HOARD_BUYS; i++) {
                 Long cardId = cards.stream()
                         .filter(id -> cardOwner.get(id).userId() != hoarder.userId())
@@ -324,10 +324,7 @@ public class NftTradeRiskSimulator {
          * 세 조건(다른 단말 이력 있음 · 새 단말 첫 로그인 30분 안 · 평소 최대 지출의 2배 이상)이 모두 맞아야 R8 이다.
          */
         private void takeoverCase() {
-            Actor victim = newActor(now.minusDays(120));
-            for (int i = 0; i < 12; i++) {
-                login(victim, victim.device(), between(now.minusDays(30), now.minusDays(1)));
-            }
+            Actor victim = newActor(); // 주 단말 로그인 이력은 newActor 가 이미 남긴다
             long designId = pick(designs);
             long warmupCard = pick(designCards.get(designId));
             // 평소 지출. 이게 없으면 R8 은 "몇 배" 를 말할 수 없어 빠진다
@@ -474,6 +471,26 @@ public class NftTradeRiskSimulator {
                     bidder.device().ip(), bidder.device().uaHash());
         }
 
+        /**
+         * 🔴 <b>모든</b> 배우가 로그인 이력을 갖는다 — 주 단말 여러 번에 부단말 한둘.
+         *
+         * <p>처음에는 계정 탈취 피해자에게만 로그인을 남겼더니, 모델이 "로그인 기록이 있으면 탈취" 를
+         * 배웠다(buyerPriorDeviceLogins 계수가 buyerDeviceSeenBefore 와 완전히 같게 나왔다).
+         * 현실에서는 누구나 로그인하므로, 여기서도 누구나 남겨야 탈취의 진짜 신호
+         * — <b>처음 보는 단말에서 방금</b> 로그인했다는 것 — 만 남는다.
+         */
+        private void seedLogins(Actor actor) {
+            for (int i = 0; i < 4 + random.nextInt(14); i++) {
+                login(actor, actor.device(), between(now.minusDays(60), now.minusDays(2)));
+            }
+            for (int d = 0; d < 1 + random.nextInt(2); d++) {
+                Device other = newDevice();
+                for (int i = 0; i < 1 + random.nextInt(4); i++) {
+                    login(actor, other, between(now.minusDays(60), now.minusDays(2)));
+                }
+            }
+        }
+
         private void login(Actor actor, Device device, LocalDateTime at) {
             jdbc.update("""
                     INSERT INTO user_login_events (user_id, client_ip, user_agent_hash, created_at)
@@ -483,11 +500,24 @@ public class NftTradeRiskSimulator {
 
         // ---------------------------------------------------------------- 재료 만들기
 
-        private Actor newActor(LocalDateTime createdAt) {
-            return newActor(createdAt, newDevice(), newPhone());
+        private Actor newActor() {
+            return newActor(newDevice(), newPhone());
         }
 
-        private Actor newActor(LocalDateTime createdAt, Device device, String phone) {
+        /**
+         * 🔴 가입 시각은 <b>대본과 무관하게</b> 같은 분포에서 뽑는다.
+         *
+         * <p>처음에는 대본마다 가입일을 박아 뒀다(매집범 35일 전, 순환 46~50일 전, 일반 60~180일 전).
+         * 그랬더니 모델이 PR-AUC 1.000 을 냈는데, 수법을 배운 게 아니라 <b>"계정이 어리면 사기"</b> 를
+         * 배운 것이었다 — 시뮬레이터가 만든 흔적이지 현실의 신호가 아니다.
+         * 합성 데이터로 학습할 때 가장 흔한 함정이고, 성능이 너무 좋으면 먼저 이걸 의심해야 한다.
+         */
+        private LocalDateTime randomSignupAt() {
+            return now.minusDays(30 + random.nextInt(150)).minusHours(random.nextInt(24));
+        }
+
+        private Actor newActor(Device device, String phone) {
+            LocalDateTime createdAt = randomSignupAt();
             String tag = tag();
             Long userId = jdbc.queryForObject("""
                             INSERT INTO users (email, name, phone, nickname, role, created_at, updated_at)
@@ -502,14 +532,18 @@ public class NftTradeRiskSimulator {
                     INSERT INTO wallets (owner_id, chain_id, type, address, status, deployed)
                     VALUES (?, ?, 'SMART_ACCOUNT', ?, 'ACTIVE', true) RETURNING id
                     """, Long.class, ownerId, CHAIN_ID, address(tag + "-wallet"));
-            // R5(신규 계정 급행)가 판단할 수 있도록 첫 충전을 가입 직후로 남긴다
+            // R5(신규 계정 급행)가 판단할 수 있도록 첫 충전을 남긴다.
+            // 🔴 가입 직후로 고정하면 minutesSinceFirstDeposit 이 계정 나이의 복사본이 된다 —
+            //    실제로 학습해 보니 두 피처의 계수가 완전히 같게 나왔다. 며칠 범위로 흩뿌린다
+            LocalDateTime depositAt = createdAt.plusMinutes(10 + random.nextInt(5 * 24 * 60));
             jdbc.update("""
                             INSERT INTO cat_transactions (user_id, wallet_id, direction, reason, amount,
                                                           operation_key, status, created_at, updated_at, settled_at)
                             VALUES (?, ?, 'MINT', 'DEPOSIT', 100000, ?, 'CONFIRMED', ?, ?, ?)
-                            """, userId, walletId, "sim-deposit-" + tag,
-                    createdAt.plusMinutes(5), createdAt.plusMinutes(5), createdAt.plusMinutes(5));
-            return new Actor(userId, phone, walletId, device);
+                            """, userId, walletId, "sim-deposit-" + tag, depositAt, depositAt, depositAt);
+            Actor actor = new Actor(userId, phone, walletId, device);
+            seedLogins(actor);
+            return actor;
         }
 
         /**
