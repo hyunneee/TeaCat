@@ -37,7 +37,14 @@ public enum CatTxReason {
     /** 관리자가 테스트용으로 뺀 돈. 원화를 돌려주지 않으므로 {@link #ADMIN_GRANT} 와 같이 대사에서 뺀다 */
     ADMIN_BURN(CatTxDirection.BURN),
     /** 같이 하는 게임에서 잃은 판돈. 티켓 결제가 아니므로 {@link #PAYMENT} 와 섞지 않는다 */
-    GAME_BET(CatTxDirection.BURN);
+    GAME_BET(CatTxDirection.BURN),
+    /**
+     * 하루 무료 몫을 넘겨 만든 AI 스티커 값.
+     *
+     * <p>{@link #PAYMENT} 와 섞지 않는다 — 재사용하면 원장에 <b>있지도 않은 티켓 매출</b>이 잡힌다.
+     * 실패한 생성은 {@link #REFUND} 로 돌려준다.
+     */
+    STICKER_CREATE(CatTxDirection.BURN);
 
     private final CatTxDirection direction;
 

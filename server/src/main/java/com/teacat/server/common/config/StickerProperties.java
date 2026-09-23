@@ -22,6 +22,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "sticker")
 public record StickerProperties(
         int dailyLimit,
+        /** 하루 무료 몫을 넘겨 만들 때 1장당 태우는 캣머니 (2026-09-23) */
+        int extraPriceCat,
         String internalApiKey,
         DataSize maxSketchSize,
         DataSize maxResultSize,
