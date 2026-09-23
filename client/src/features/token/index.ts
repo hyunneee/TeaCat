@@ -79,3 +79,9 @@ export {
   type DeckArt,
   type MemoryStatus,
 } from './model/memoryGame.model';
+
+/* ── 출석 달력 ── */
+export { useAttendanceCalendar } from './hooks/useAttendanceCalendar';
+export { useAttendanceStreak } from './hooks/useDailyRewards';
+export { AttendanceCalendarCard } from './components/AttendanceCalendarCard';
+export type { AttendanceCalendar, AttendanceDay } from './model/dailyReward.types';

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Button } from '@/shared/components/ui';
 import { seatColor } from '../model/yutBoard';
 import type { GameRoom, HalliGalliCard, HalliGalliState } from '../model/game.types';
@@ -33,6 +34,47 @@ const FRUIT_NAME: Record<HalliGalliCard['fruit'], string> = {
 export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
   const myTurn = state.turn === room.mySeatNo;
   const alive = !state.eliminated[room.mySeatNo];
+
+  /**
+   * 스페이스바로도 종을 칩니다. 데스크톱에서 손가락으로 화면을 짚는 것보다 훨씬 빠르고,
+   * 할리갈리는 **누가 먼저인가**가 곧 승부라 입력 수단이 느리면 규칙이 아니라 기기가
+   * 이깁니다. Enter 도 함께 받습니다 — 키보드로 노는 사람이 자연히 누르는 키입니다.
+   *
+   * 🔴 `keydown` 의 자동 반복을 막습니다(`event.repeat`). 누르고 있으면 초당 수십 번
+   * 발사되는데, 종은 틀리면 카드를 물어주는 행동이라 한 번 잘못 누른 것이 연타로
+   * 번역되면 손패가 통째로 날아갑니다.
+   *
+   * 🔴 글자를 입력하는 중에는 가로채지 않습니다. 이 화면에는 입력칸이 없지만, 나중에
+   * 채팅이라도 붙으면 스페이스를 칠 때마다 종이 울립니다.
+   */
+  /* onAction 은 매 렌더 새 함수라 의존성에 그대로 넣으면 렌더마다 구독을 다시 맺는다.
+     ref 에 담아 두고 구독은 살아 있는 동안 한 번만 건다 */
+  const actionRef = useRef(onAction);
+  actionRef.current = onAction;
+
+  useEffect(() => {
+    if (!alive || state.finished) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      if (event.repeat) return;
+
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '');
+      if (typing) return;
+
+      /* 🔴 preventDefault 가 두 가지를 동시에 막는다. 스페이스의 기본 동작인 **스크롤**
+         (종을 칠 때마다 화면이 뛰면 카드를 놓친다), 그리고 버튼에 포커스가 있을 때
+         브라우저가 만들어내는 **클릭**(그게 없으면 종이 두 번 울린다). */
+      event.preventDefault();
+      actionRef.current({ action: 'BELL' });
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [alive, state.finished]);
 
   return (
     <div className="space-y-4">
@@ -114,6 +156,8 @@ export function HalliGalliPanel({ room, state, onAction, pending }: Props) {
 
       <p className="text-muted text-center text-xs">
         보이는 카드 중 같은 과일이 <b>정확히 5개</b>일 때 종을 치세요. 틀리면 한 장씩 물어줍니다.
+        <br />
+        <span className="hidden sm:inline">키보드에서는 <b>스페이스바</b>로도 칠 수 있어요.</span>
       </p>
 
       {state.log.length > 0 && (

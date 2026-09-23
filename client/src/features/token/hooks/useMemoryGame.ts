@@ -89,7 +89,10 @@ export function useMemoryGame(art: DeckArt[] = []): MemoryGame {
     setMoves(0);
     setElapsedMs(null);
     setResultOpen(false);
-    setStartedAt(Date.now());
+    /* 🔴 여기서 시계를 켜지 않습니다. **첫 카드를 뒤집을 때** 시작합니다 —
+       판이 깔리고 그림을 훑어보는 시간까지 기록에 들어가면, 화면을 켜 두고 자리를
+       비운 사람이 불리해집니다. 시작 시각은 `flip` 이 정합니다. */
+    setStartedAt(null);
     setStatus('playing');
   }, [clearMissTimer]);
 
@@ -113,6 +116,13 @@ export function useMemoryGame(art: DeckArt[] = []): MemoryGame {
       const card = deck.find((c) => c.id === cardId);
       if (!card || matched.includes(card.pairId)) return;
 
+      /* 🔴 **여기가 시계가 켜지는 자리입니다.** 위 가드를 전부 지난 뒤여야 합니다 —
+         이미 맞춘 카드를 눌러도 시작되면 누르지도 않은 시간이 기록에 들어갑니다.
+         같은 호출 안에서 setState 한 값은 아직 읽을 수 없으므로, 아래 계산은 전부
+         이 지역 변수(`began`)를 씁니다. */
+      const began = startedAt ?? Date.now();
+      if (startedAt === null) setStartedAt(began);
+
       const next = [...flipped, cardId];
       setFlipped(next);
       if (next.length < 2) return;
@@ -130,7 +140,7 @@ export function useMemoryGame(art: DeckArt[] = []): MemoryGame {
         setFlipped([]);
         if (found.length === PAIR_COUNT) {
           setStatus('cleared');
-          setElapsedMs(startedAt === null ? 0 : Date.now() - startedAt);
+          setElapsedMs(Date.now() - began);
           setResultOpen(true);
         }
         return;

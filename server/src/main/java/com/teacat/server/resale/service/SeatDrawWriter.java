@@ -104,8 +104,24 @@ public class SeatDrawWriter {
         if (participants.isEmpty()) {
             return Optional.empty();
         }
+
+        /* 🔴 이 좌석에 이미 도는 추첨이 있으면 새로 만들지 않는다. 좌석마다 하나뿐이고
+           (uq_seat_draws_active_seat) 둘째를 넣으려 하면 취소가 통째로 실패한다.
+           정상 흐름에서는 생기지 않지만, 그 전제가 깨졌을 때 사용자에게 500 을 보여주는 것보다
+           돌고 있는 추첨을 그대로 쓰는 편이 낫다 */
+        Optional<SeatDraw> running = seatDrawRepository.findActiveBySeat(performanceDetailId, seatId);
+        if (running.isPresent()) {
+            log.warn("이미 도는 추첨이 있어 그대로 씁니다 drawId={} seatId={}", running.get().getId(), seatId);
+            return Optional.of(running.get().getId());
+        }
+
+        /* 🔴 회차는 **이어서** 센다. 늘 1 로 시작하면 한 번 추첨이 돌았던 좌석의 두 번째 취소가
+           draw_key UNIQUE 에 걸려 500 이 된다 — 당첨자가 산 좌석을 그 사람이 다시 취소하는,
+           아주 평범한 흐름이다 (2026-09-23 재현). 끝난 추첨도 키는 영구히 남는다 */
+        int drawNo = seatDrawRepository.maxDrawNo(performanceDetailId, seatId) + 1;
+
         SeatDraw draw = seatDrawRepository.save(SeatDraw.open(
-                performanceId, performanceDetailId, areaId, seatId, participants, ticketOrderId));
+                performanceId, performanceDetailId, areaId, seatId, drawNo, participants, ticketOrderId));
         log.info("취소표 추첨 생성 drawId={} key={} participants={}", draw.getId(), draw.getDrawKey(),
                 participants.size());
         return Optional.of(draw.getId());

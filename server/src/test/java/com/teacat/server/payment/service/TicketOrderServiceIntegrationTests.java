@@ -56,6 +56,11 @@ import static org.mockito.Mockito.verify;
         "blockchain.confirm-poll.interval=1h",
         "blockchain.confirm-poll.initial-delay=1h",
         "nft.auction.sweep-enabled=false",
+        /* 🔴 픽스처가 지갑을 31221 로 넣으므로 여기서 못 박습니다. 이 줄이 없으면
+           로컬 체인(31337)을 쓰려고 server/.env 에 BLOCKCHAIN_CHAIN_ID 를 넣어 둔 사람의
+           기계에서만 이 클래스가 통째로 "지갑이 없습니다" 로 무너집니다 — 실제로 겪었고,
+           원인이 테스트 바깥에 있어서 찾는 데 오래 걸립니다 */
+        "blockchain.chain-id=31221",
         // 10분(기본값)이 아닌 값으로 둔다 — 개봉 시각·취소 마감 테스트가 실제로 이 설정을
         // 읽어서 계산하는지, 10분을 하드코딩해 우연히 통과하는 게 아닌지를 가려낸다
         "booking.policy.cancel-deadline-lead=7m"
@@ -491,6 +496,75 @@ class TicketOrderServiceIntegrationTests {
         assertThat(ticketStatus(paid.ticketId())).isEqualTo("CANCELLED");
         assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
         assertThat(seatStatus()).isEqualTo("AVAILABLE");
+    }
+
+    /**
+     * 🔴 <b>대기자가 있을 때의 취소</b>. 위 테스트는 대기자가 없는 길만 지나가므로
+     * 추첨을 만드는 쪽(SeatDrawWriter)이 통째로 빠집니다 — 운영에서 취소가 500 으로
+     * 터진 것이 이 길이었습니다.
+     */
+    @Test
+    void 구역에_대기자가_있으면_좌석을_풀지_않고_추첨을_연다() {
+        TicketOrderResponse paid = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        insertWaitingResaleEntry();
+
+        ticketCancelService.cancel(userId, paid.ticketOrderId());
+
+        assertThat(ticketStatus(paid.ticketId())).isEqualTo("CANCELLED");
+        assertThat(orderStatus(paid.ticketOrderId())).isEqualTo("CANCELED");
+        // 좌석은 대기자 몫이다. 예매 화면에 다시 뜨면 안 된다
+        assertThat(seatStatus()).isEqualTo("SOLD");
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM seat_draws", Integer.class))
+                .isEqualTo(1);
+    }
+
+    /**
+     * 🔴 <b>한 번 추첨이 돌았던 좌석을 다시 취소</b>. 당첨자가 산 좌석을 그 사람이 다시
+     * 취소하는, 아주 평범한 흐름입니다.
+     *
+     * <p>추첨 회차를 늘 1 로 시작하던 때는 여기서 {@code uq_seat_draws_draw_key} 에 걸려
+     * <b>취소가 통째로 500</b> 이었습니다. 회차가 이어지는지를 봅니다.
+     */
+    @Test
+    void 추첨이_한_번_돌았던_좌석도_다시_취소할_수_있다() {
+        insertWaitingResaleEntry();
+
+        // 첫 번째 취소 — 추첨 n1 이 열린다
+        TicketOrderResponse first = payTicket();
+        givenTossCancels();
+        givenRefundAccepted();
+        ticketCancelService.cancel(userId, first.ticketOrderId());
+        markDrawFinished();
+
+        // 같은 좌석을 다시 사서 다시 취소한다
+        releaseSeat();
+        holdSeat(userId, detailId, seatId);
+        TicketOrderResponse second = payTicket();
+
+        ticketCancelService.cancel(userId, second.ticketOrderId());
+
+        assertThat(orderStatus(second.ticketOrderId())).isEqualTo("CANCELED");
+        assertThat(jdbcTemplate.queryForList("SELECT draw_key FROM seat_draws ORDER BY id", String.class))
+                .hasSize(2)
+                .satisfies(keys -> {
+                    assertThat(keys.get(0)).endsWith(":n1");
+                    assertThat(keys.get(1)).endsWith(":n2");
+                });
+    }
+
+    /** 첫 추첨을 끝난 상태로 만든다 — 좌석에 도는 추첨이 있으면 새로 열지 않기 때문 */
+    private void markDrawFinished() {
+        jdbcTemplate.update("UPDATE seat_draws SET status = 'SETTLED'::seat_draw_status");
+    }
+
+    private void releaseSeat() {
+        jdbcTemplate.update("""
+                UPDATE performance_seats SET status = 'AVAILABLE'::seat_booking_status,
+                       held_by = NULL, held_until = NULL
+                 WHERE performance_detail_id = ? AND seat_id = ?
+                """, detailId, seatId);
     }
 
     @Test
@@ -938,6 +1012,21 @@ class TicketOrderServiceIntegrationTests {
                 VALUES (?, ?, ?, ?, ?, 0, ?, 'PENDING'::ticket_order_status, ?)
                 RETURNING id
                 """, Long.class, ownerId, detailId, areaId, seatId, PRICE, PRICE, paymentId);
+    }
+
+    /** 이 회차·구역에 취소표를 기다리는 사람 하나. 취소하면 좌석 대신 추첨이 열려야 한다 */
+    private void insertWaitingResaleEntry() {
+        /* 구매자 픽스처를 재사용하지 않습니다 — 이메일이 고정이라 두 번 부르면 UNIQUE 에 걸립니다 */
+        Long waiterId = jdbcTemplate.queryForObject("""
+                INSERT INTO users (email, password, name, nickname, phone, role)
+                VALUES ('waiter@test.com', 'x', '대기자', '대기자', '010-0000-0001', 'USER'::user_role)
+                RETURNING id
+                """, Long.class);
+        Long areaId = jdbcTemplate.queryForObject("SELECT id FROM areas LIMIT 1", Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO resale_entries (user_id, performance_detail_id, area_id, status)
+                VALUES (?, ?, ?, 'WAITING'::resale_entry_status)
+                """, waiterId, detailId, areaId);
     }
 
     private void holdSeat(Long userId, Long detailId, Long seatId) {
