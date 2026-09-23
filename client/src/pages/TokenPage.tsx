@@ -54,7 +54,9 @@ export function TokenPage() {
           claimed={attendance.claimed}
           loading={attendance.loading}
           claiming={attendance.claiming}
+          streak={attendance.streak}
           onCheck={attendance.check}
+          onOpenCalendar={() => navigate(ROUTES.TOKEN_ATTENDANCE)}
         />
 
         {/* 게임은 누르는 줄(ListRow) 대신 **각자 카드**입니다. 줄로 두면 설정 목록처럼 읽혀서

@@ -38,6 +38,8 @@ export interface RewardState {
  */
 export interface DailyRewardStatus {
   date: string;
+  /** 연속 출석 일수. 마지막 출석이 어제보다 예전이면 0 입니다 */
+  streak: number;
   rewards: RewardState[];
 }
 
@@ -52,5 +54,35 @@ export interface RewardClaimResult {
   type: RewardType;
   amount: number;
   date: string;
+  /** 연속 출석 일수. 마지막 출석이 어제보다 예전이면 0 입니다 */
+  streak: number;
   status: 'PENDING' | 'CONFIRMED' | 'ALREADY_DONE' | 'FAILED';
+}
+
+/** 출석 달력의 하루 */
+export interface AttendanceDay {
+  /** 받은 날 (YYYY-MM-DD) */
+  date: string;
+  /** 연속 출석 일수. 마지막 출석이 어제보다 예전이면 0 입니다 */
+  streak: number;
+  /** 그날 받은 금액. 금액이 바뀌어도 예전 기록은 그때 값입니다 */
+  amount: number;
+}
+
+/**
+ * 한 달치 출석 기록.
+ *
+ * 🔴 `today` 와 `streak` 는 **서버가 정합니다.** 기기 시계로 오늘을 정하면 자정 근처에서
+ * 도장이 하루 어긋나 보이고, 연속 일수는 이 응답이 한 달만 담고 있어서 화면에서 세면
+ * 월초에 지난달에서 이어온 것이 빠집니다.
+ */
+export interface AttendanceCalendar {
+  /** 조회한 달의 1일 (YYYY-MM-DD) */
+  month: string;
+  days: AttendanceDay[];
+  totalDays: number;
+  totalAmount: number;
+  streak: number;
+  /** 서버(Asia/Seoul)가 보는 오늘 (YYYY-MM-DD) */
+  today: string;
 }

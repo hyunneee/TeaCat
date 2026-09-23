@@ -62,7 +62,10 @@ export function GamePage() {
 
   return (
     <>
-      <Header title="같이 하기" />
+      {/* 캣치에서 들어오는 자리라 나갈 길이 있어야 합니다. navigate(-1) 대신 목적지를
+          못박는 이유는 방을 만들고 들어왔다가 뒤로 누르면 기록 한 칸 앞이 대기실이라
+          자기 방으로 되돌아가기 때문입니다 */}
+      <Header title="같이 하기" showBack onBack={() => navigate(ROUTES.TOKEN)} />
 
       <div className="space-y-4 p-4">
         {myRoom && (
