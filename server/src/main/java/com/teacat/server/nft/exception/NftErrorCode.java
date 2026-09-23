@@ -149,7 +149,16 @@ public enum NftErrorCode implements ErrorCode {
      */
     DECORATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NFT_065", "꾸민 카드가 없습니다."),
     DECORATION_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "NFT_066", "꾸민 이미지를 읽을 수 없습니다."),
-    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다.");
+    DECORATION_IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "NFT_067", "꾸민 이미지가 너무 큽니다."),
+
+    /*
+     * 스티커 소모 (2026-09-23). 🔴 붙이면 못 뗀다.
+     * 프론트는 이 코드들로 갈라 안내 문구를 다르게 보여준다.
+     */
+    DECORATION_PLACEMENTS_INVALID(HttpStatus.BAD_REQUEST, "NFT_068", "스티커 배치 정보를 읽을 수 없습니다."),
+    DECORATION_STICKER_NOT_USABLE(HttpStatus.BAD_REQUEST, "NFT_069", "쓸 수 없는 스티커가 있습니다."),
+    DECORATION_STICKER_ALREADY_USED(HttpStatus.CONFLICT, "NFT_070", "이미 사용한 스티커입니다."),
+    DECORATION_STICKER_NOT_REMOVABLE(HttpStatus.CONFLICT, "NFT_071", "이미 붙인 스티커는 뗄 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -2,6 +2,11 @@ package com.teacat.server.sticker.service;
 
 import com.teacat.server.common.config.StickerProperties;
 import com.teacat.server.common.exception.BusinessException;
+import com.teacat.server.wallet.entity.CatTxReason;
+import com.teacat.server.wallet.service.CatMoneyHoldService;
+import com.teacat.server.wallet.service.CatMoneyService;
+
+import java.math.BigInteger;
 import com.teacat.server.common.storage.FileStorageService;
 import com.teacat.server.sticker.dto.request.StickerCreateRequest;
 import com.teacat.server.sticker.dto.response.StickerCreateResponse;
@@ -51,6 +56,8 @@ public class StickerService {
     private final StickerImageCodec codec;
     private final StickerImageResolver imageResolver;
     private final StickerProperties properties;
+    private final CatMoneyService catMoneyService;
+    private final CatMoneyHoldService holdService;
 
     /**
      * 낙서를 받아 일감을 세운다.
@@ -72,16 +79,17 @@ public class StickerService {
             return new StickerCreateResponse(existing.get().getId(), remainingToday(userId));
         }
 
-        if (usedToday(userId) >= properties.dailyLimit()) {
-            throw new BusinessException(StickerErrorCode.DAILY_LIMIT_EXCEEDED);
-        }
+        /* 하루 무료 몫을 넘기면 거절이 아니라 **유료**다 (2026-09-23).
+           🔴 태우는 것을 낙서 업로드보다 **먼저** 한다. 잔액이 모자라 거절될 것이면
+              MinIO 에 쓰레기를 안 남긴다. */
+        int paidCat = chargeIfOverDailyLimit(userId, idempotencyKey);
 
         byte[] sketch = codec.decodeSketch(request.sketchBase64());
         String sketchKey = fileStorageService.uploadBytes(sketch, SKETCH_DIRECTORY, StickerImageCodec.CONTENT_TYPE);
 
         try {
             StickerJob job = jobWriter.insert(userId, idempotencyKey, sketchKey,
-                    request.subject(), seedOf(request), request.inkColor());
+                    request.subject(), seedOf(request), request.inkColor(), paidCat);
             return new StickerCreateResponse(job.getId(), remainingToday(userId));
         } catch (DataIntegrityViolationException e) {
             // 같은 키가 동시에 두 번 들어왔다. 먼저 들어온 쪽이 이겼으므로 그 작업을 돌려주고,
@@ -92,6 +100,30 @@ public class StickerService {
                     .orElseThrow(() -> e);
             return new StickerCreateResponse(winner.getId(), remainingToday(userId));
         }
+    }
+
+    /**
+     * 하루 무료 몫을 넘겼으면 캣머니를 태운다.
+     *
+     * <p>🔴 <b>멱등키를 그대로 원장 키로 쓴다.</b> 같은 요청이 재시도로 두 번 들어와도
+     * {@code CatMoneyService.burn} 이 같은 키를 알아보고 <b>두 번 태우지 않는다.</b>
+     *
+     * <p>⚠️ 잔액을 먼저 보고 거절한다. 안 보면 체인이 거절하는데, 그때는 사용자에게
+     * "왜 안 되는지" 를 설명할 수 없는 에러가 나간다.
+     *
+     * @return 이번에 태운 금액. 무료 몫 안이면 0
+     */
+    private int chargeIfOverDailyLimit(Long userId, String idempotencyKey) {
+        if (usedToday(userId) < properties.dailyLimit()) {
+            return 0;
+        }
+        int price = properties.extraPriceCat();
+        if (holdService.availableBalance(userId) < price) {
+            throw new BusinessException(StickerErrorCode.NOT_ENOUGH_CAT);
+        }
+        catMoneyService.burn(userId, BigInteger.valueOf(price),
+                CatTxReason.STICKER_CREATE, "sticker:create:" + idempotencyKey);
+        return price;
     }
 
     @Transactional(readOnly = true)
@@ -115,10 +147,25 @@ public class StickerService {
         return StickerQuotaResponse.of(properties.dailyLimit(), usedToday(userId));
     }
 
+    /**
+     * 내 스티커 목록. 🔴 <b>소모한 것도 함께</b> 나온다 — 무엇을 만들었는지 기록이 남는다
+     * (응답의 {@code used} 로 갈라 보여준다).
+     */
     @Transactional(readOnly = true)
     public List<StickerResponse> mine(Long userId) {
         return imageResolver.toResponses(
                 stickerRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId));
+    }
+
+    /**
+     * 꾸미기 서랍용 — <b>아직 안 쓴 것만</b>.
+     *
+     * <p>소모한 것을 서랍에 띄우면 눌러도 거절당하는 칸이 된다. 애초에 안 보여준다.
+     */
+    @Transactional(readOnly = true)
+    public List<StickerResponse> unused(Long userId) {
+        return imageResolver.toResponses(
+                stickerRepository.findByUserIdAndUsedAtIsNullAndDeletedAtIsNullOrderByCreatedAtDesc(userId));
     }
 
     /**
