@@ -43,13 +43,17 @@ class StickerSweeperIntegrationTests extends PostgresIntegrationTest {
     @MockitoBean
     private FileStorageService fileStorageService;
 
+    /** 🔴 체인을 태우지 않는다. 이 시험은 "정리" 를 보는 것이고 환불은 다른 시험이 본다 */
+    @MockitoBean
+    private com.teacat.server.wallet.service.CatMoneyService catMoneyService;
+
     private StickerJobSweeper sweeper;
     private TransactionTemplate transactionTemplate;
     private Long userId;
 
     @BeforeEach
     void setUp() {
-        sweeper = new StickerJobSweeper(jobRepository, stickerProperties);
+        sweeper = new StickerJobSweeper(jobRepository, stickerProperties, catMoneyService);
         transactionTemplate = new TransactionTemplate(transactionManager);
         userId = insertUser("sweeper@test.com", "스위퍼");
     }
