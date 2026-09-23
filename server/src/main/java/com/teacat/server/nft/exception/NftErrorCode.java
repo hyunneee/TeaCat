@@ -119,7 +119,10 @@ public enum NftErrorCode implements ErrorCode {
     TRADE_REVIEW_ALREADY_DECIDED(HttpStatus.CONFLICT, "NFT_056", "이미 결정이 끝난 거래 심사입니다."),
     TRADE_NOT_UNDER_REVIEW(HttpStatus.CONFLICT, "NFT_057", "심사 대기 상태가 아닌 거래입니다."),
     TRADE_REVIEW_NOTE_REQUIRED(HttpStatus.BAD_REQUEST, "NFT_058", "거절 사유를 입력해 주세요."),
-    INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요.");
+    INVALID_BID_DATE_RANGE(HttpStatus.BAD_REQUEST, "NFT_059", "시작일과 종료일을 YYYY-MM-DD 형식으로 함께 입력하고 시작일을 종료일 이전으로 지정해 주세요."),
+
+    // 이상거래 시뮬레이터. 배포본에서는 설정이 꺼져 있어 항상 이 코드로 거절된다 (AUCTION_FRAUD_DESIGN.md 14-2)
+    SIMULATOR_DISABLED(HttpStatus.FORBIDDEN, "NFT_060", "이상거래 시뮬레이터가 꺼져 있습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

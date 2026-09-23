@@ -3,11 +3,14 @@ package com.teacat.server.nft.controller;
 import com.teacat.server.auth.security.AuthUser;
 import com.teacat.server.common.response.BaseResponse;
 import com.teacat.server.nft.dto.request.NftTradeReviewDecisionRequest;
+import com.teacat.server.nft.dto.request.TradeSimulationRequest;
 import com.teacat.server.nft.dto.response.NftAdminTradePageResponse;
 import com.teacat.server.nft.dto.response.NftTradeReviewDetailResponse;
 import com.teacat.server.nft.dto.response.NftTradeReviewPageResponse;
 import com.teacat.server.nft.dto.response.NftTradeReviewStatsResponse;
+import com.teacat.server.nft.dto.response.TradeSimulationResponse;
 import com.teacat.server.nft.service.NftTradeReviewService;
+import com.teacat.server.nft.service.NftTradeRiskSimulator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -38,6 +41,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class NftTradeReviewAdminController {
 
     private final NftTradeReviewService reviewService;
+    private final NftTradeRiskSimulator simulator;
+
+    @Operation(summary = "이상거래 시뮬레이션 (개발용)",
+            description = """
+                    학습용 데이터를 만듭니다. 가짜 사용자가 시장을 이루고 일부에게 사기 대본
+                    (자전 입찰·순환 거래·매집·계정 탈취)을 준 뒤, 운영과 같은 심사 경로에 태웁니다.
+                    응답은 대본(정답) 대비 규칙의 성적표입니다.
+
+                    🔴 로컬·개발 DB 전용입니다. 만들어진 거래는 COMPLETED 로 들어가 시세·거래량·인기 순위에
+                    그대로 섞입니다. nft.trade.simulator.enabled 가 기본 false 라 배포본에서는 NFT_060 으로 거절됩니다.
+                    """)
+    @PostMapping("/simulate")
+    public ResponseEntity<BaseResponse<TradeSimulationResponse>> simulate(
+            @Valid @RequestBody TradeSimulationRequest request) {
+        return ResponseEntity.ok(BaseResponse.success(simulator.simulate(request)));
+    }
 
     @Operation(summary = "거래 심사 목록",
             description = "OPEN 은 결정 대기(오래된 순), DECIDED 는 결정 완료(최근 결정 순)입니다. "
