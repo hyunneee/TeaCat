@@ -53,15 +53,29 @@ export function TokenGamePage() {
   /* 지금 판의 서버 세션. ref 인 이유는 이 값이 바뀌어도 판을 다시 그릴 이유가 없어서입니다 */
   const sessionRef = useRef<number | null>(null);
 
-  /* 판을 열되 **기다리지 않습니다.** 왕복을 기다리면 그만큼 시작이 늦어지고, 그 시간이
-     기록에 그대로 들어갑니다 — 네트워크가 느린 사람이 순위에서 손해를 봅니다. */
   const startGame = () => {
     sessionRef.current = null;
     game.start();
+  };
+
+  /**
+   * 서버 세션은 **첫 카드를 뒤집을 때** 엽니다 (`game.startedAt` 이 그때 정해집니다).
+   *
+   * 🔴 화면의 시계와 **같은 순간에** 시작해야 합니다. 순위에 올라가는 값은 서버가 잰
+   * 시간인데, 판을 깔 때 세션을 열어 두면 그림을 훑어보는 시간까지 서버 기록에 들어갑니다 —
+   * 사용자가 본 시계는 10초인데 순위에는 25초로 오르는 일이 생깁니다.
+   *
+   * 왕복을 기다리지 않습니다. 기다리면 그만큼 첫 뒤집기가 늦어집니다. 시작·종료 요청이
+   * 비슷한 지연을 겪으므로 서버가 재는 구간에서 네트워크 몫은 대체로 상쇄됩니다.
+   */
+  useEffect(() => {
+    if (game.startedAt === null) return;
     void record.startSession().then((sessionId) => {
       sessionRef.current = sessionId;
     });
-  };
+    // 판마다 한 번. startedAt 은 판을 새로 깔 때 null 로 돌아갑니다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.startedAt]);
 
   /* 다 맞추면 서버에 알립니다. `status` 를 보는 이유: `flip` 안에서 부르면 마지막 뒤집기의
      렌더 중에 mutation 이 돌고, 판 열기가 아직 안 끝났으면 세션이 null 입니다. */

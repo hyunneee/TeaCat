@@ -62,7 +62,7 @@ export function AttendanceCard({
           </p>
           <p className="text-muted text-xs">
             {claimed
-              ? '오늘 몫을 받았어요. 내일 또 만나요.'
+              ? '오늘의 캣머니 보상을 받았어요. 내일 또 만나요.'
               : amount === null
                 ? '하루 한 번 눌러서 캣머니를 받아요.'
                 : `하루 한 번 누르면 캣머니 ${amount.toLocaleString()}을 드려요.`}
