@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/shared/components/layout';
+import { ROUTES } from '@/shared/constants/routes';
 import { AttendanceCalendarCard, useAttendanceCalendar } from '@/features/token';
 
 /**
@@ -13,6 +15,7 @@ import { AttendanceCalendarCard, useAttendanceCalendar } from '@/features/token'
  * 지난달에서 이어온 것이 빠집니다.
  */
 export function AttendanceCalendarPage() {
+  const navigate = useNavigate();
   /** undefined 면 이번 달입니다. 서버가 어느 달인지 정해서 돌려줍니다 */
   const [month, setMonth] = useState<string | undefined>(undefined);
   const { data: calendar, isPending } = useAttendanceCalendar(month);
@@ -23,7 +26,13 @@ export function AttendanceCalendarPage() {
 
   return (
     <>
-      <Header title="출석 달력" />
+      {/* 🔴 이 화면은 PlainLayout 이라 하단 탭이 없습니다. 뒤로가기가 없으면 브라우저
+          제스처 말고는 나갈 길이 아예 없습니다.
+
+          navigate(-1) 대신 목적지를 못박는 이유는 들어오는 길이 캣치 화면의 "출석 달력
+          보기" 하나뿐인데, 새로고침하거나 주소로 바로 들어오면 기록 한 칸 앞이 앱 밖이기
+          때문입니다 — 그때 -1 은 티캣을 떠납니다. */}
+      <Header title="출석 달력" showBack onBack={() => navigate(ROUTES.TOKEN)} />
 
       <div className="space-y-4 p-4">
         <AttendanceCalendarCard
