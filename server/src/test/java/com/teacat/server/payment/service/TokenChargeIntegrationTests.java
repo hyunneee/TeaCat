@@ -58,7 +58,10 @@ import static org.mockito.Mockito.verify;
         "payment.recovery.interval=1h",
         "payment.recovery.initial-delay=1h",
         "blockchain.confirm-poll.interval=1h",
-        "blockchain.confirm-poll.initial-delay=1h"
+        "blockchain.confirm-poll.initial-delay=1h",
+        /* 🔴 픽스처가 지갑을 31221 로 넣으므로 여기서 못 박습니다. 이 줄이 없으면 로컬 체인(31337)을
+           쓰려고 server/.env 에 BLOCKCHAIN_CHAIN_ID 를 넣어 둔 사람의 기계에서만 무너집니다 */
+        "blockchain.chain-id=31221"
 })
 class TokenChargeIntegrationTests {
 
