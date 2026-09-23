@@ -107,10 +107,15 @@ public class NftService {
                 performanceId, normalizedKeyword, effectiveSort, decoded.value(), decoded.id(), size + 1);
         boolean hasNext = rows.size() > size;
         List<NftMarketQueryRepository.MarketRow> pageRows = takePage(rows, size);
+        /* 꾸민 그림을 한 번에 가져온다 (카드마다 부르면 N+1). 마켓에도 꾸민 모습이 보인다 —
+           사는 사람이 그대로 받으므로 속이는 것이 아니다 (2026-09-23). */
+        Map<Long, String> marketDecorated = decorationService.imageUrlsOf(
+                pageRows.stream().map(NftMarketQueryRepository.MarketRow::photocardId).toList());
         List<NftMarketPhotocardResponse> items = pageRows.stream()
                 .map(row -> new NftMarketPhotocardResponse(
                         row.photocardId(), row.listingId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(), row.viewCount()))
+                        row.performanceTitle(), row.eventName(), row.price(), row.sellerNickname(),
+                        row.viewCount(), marketDecorated.get(row.photocardId())))
                 .toList();
         String nextCursor = hasNext ? marketCursor(effectiveSort, pageRows.getLast()) : null;
         return new NftCursorPageResponse<>(items, nextCursor, hasNext);
@@ -161,9 +166,9 @@ public class NftService {
                         isOwner ? row.rowLabel() : null,
                         isOwner ? row.seatNumber() : null)
                 : null;
-        /* 🔴 **소유자에게만** 꾸민 그림을 준다. 이 DTO 는 마켓에서 들어온 남의 카드 상세에도
-           쓰이므로, 조건 없이 채우면 남의 꾸밈이 그대로 노출된다. */
-        String decoratedImageUrl = isOwner ? decorationService.imageUrlOf(viewerId, photocardId) : null;
+        /* 🔴 **누구에게나** 준다. 꾸밈은 카드의 일부라 사는 사람도 그대로 받는다 (2026-09-23).
+           ⚠️ 2026-09-22 에는 isOwner 일 때만 채웠다. 그때는 꾸밈이 만든 사람 것이었다. */
+        String decoratedImageUrl = decorationService.imageUrlOf(photocardId);
         return new NftPhotocardDetailResponse(
                 row.photocardId(), row.designId(), row.designName(), row.imageUrl(), row.performanceTitle(),
                 row.eventName(), row.ownerNickname(), row.issuedAt(), origin, row.status(), listing, auction,
@@ -475,7 +480,7 @@ public class NftService {
         /* 🔴 꾸민 그림은 **한 번에** 가져온다. 카드마다 따로 부르면 N+1 이고, 도감이 수십 장이라
            그대로 드러난다. 꾸미지 않은 카드는 맵에 없어 null 이 들어간다. */
         Map<Long, String> decorated = decorationService.imageUrlsOf(
-                userId, pageRows.stream().map(NftMarketQueryRepository.OwnedRow::photocardId).toList());
+                pageRows.stream().map(NftMarketQueryRepository.OwnedRow::photocardId).toList());
         List<MyNftPhotocardResponse> items = pageRows.stream()
                 .map(row -> new MyNftPhotocardResponse(
                         row.photocardId(), row.designId(), row.designName(), row.imageUrl(),
