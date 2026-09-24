@@ -27,7 +27,35 @@ export interface AdminTradeTableProps {
   onOpenReview: (reviewId: number) => void;
 }
 
-const HEADERS = ['상태', '카드', '경로', '판매자 → 구매자', '금액', '성립 시각', '완료 시각', '심사'] as const;
+const HEADERS = [
+  '상태',
+  '카드',
+  '경로',
+  '판매자 → 구매자',
+  '금액',
+  '성립 시각',
+  '완료 시각',
+  '심사',
+  '모델 점수',
+] as const;
+
+/**
+ * 섀도우 모델 점수를 흐릿하게 보여줍니다.
+ *
+ * 🔴 강조하지 않습니다. 이 값은 아무 결정도 하지 않고, 관리자 판단이 여기 끌려가면
+ * 나중에 모델을 채점할 정답지가 사라집니다. 눈에 띄되 먼저 보이지는 않는 정도로 둡니다.
+ */
+function ModelScore({ score }: { score: number | null }) {
+  if (score === null) {
+    return <span className="text-ink-subtle text-xs">—</span>;
+  }
+  const high = score >= 0.5;
+  return (
+    <span className={`text-xs tabular-nums ${high ? 'text-ink font-medium' : 'text-ink-muted'}`}>
+      {score.toFixed(2)}
+    </span>
+  );
+}
 
 export function AdminTradeTable({ trades, isLoading, isError, onOpenReview }: AdminTradeTableProps) {
   if (isError) {
@@ -127,6 +155,9 @@ export function AdminTradeTable({ trades, isLoading, isError, onOpenReview }: Ad
                       </Button>
                     </div>
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <ModelScore score={trade.modelScore} />
                 </td>
               </tr>
             );

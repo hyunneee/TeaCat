@@ -96,6 +96,51 @@ public class TradeRiskModelScorer {
     }
 
     /**
+     * 이 점수가 왜 나왔는지 — 피처별 기여도를 큰 것부터 돌려준다 (관리자 화면용).
+     *
+     * <p>🔴 <b>추측이 아니라 계산이다.</b> 로지스틱 회귀의 점수는 각 피처 기여의 단순 합이라
+     * 한 항씩 그대로 떼어낼 수 있다. 설명 가능한 모델을 기준선으로 고른 값이 여기서 나온다 —
+     * 같은 계산이 학습 과정에서 누수 4건을 찾아내기도 했다(14-2 누수 절).
+     *
+     * <p>⚠️ 지금 적재된 모델로 다시 계산한다. 채점 당시와 모델이 다르면 설명과 저장된 점수가
+     * 어긋나므로, 호출하는 쪽이 {@code model_version} 을 대조해서 같을 때만 보여줘야 한다.
+     *
+     * @param limit 상위 몇 개까지
+     */
+    public List<Contribution> explain(Map<String, Object> features, int limit) {
+        if (model == null || features == null || features.isEmpty()) {
+            return List.of();
+        }
+        try {
+            List<Contribution> all = new java.util.ArrayList<>();
+            for (Feature f : model.features()) {
+                double raw = numeric(features.get(f.name()), f.impute());
+                double capped = clamp(raw, f);
+                double std = f.std() == null || f.std() == 0 ? 1 : f.std();
+                double mean = f.mean() == null ? 0 : f.mean();
+                double contribution = f.coef() * ((capped - mean) / std);
+                if (Math.abs(contribution) < 0.01) {
+                    continue; // 0에 가까운 항은 설명이 되지 않는다
+                }
+                all.add(new Contribution(f.name(), TradeRiskFeatureLabels.of(f.name()),
+                        Math.round(contribution * 100) / 100.0));
+            }
+            all.sort((a, b) -> Double.compare(Math.abs(b.contribution()), Math.abs(a.contribution())));
+            return all.size() <= limit ? List.copyOf(all) : List.copyOf(all.subList(0, limit));
+        } catch (Exception e) {
+            log.warn("이상거래 섀도우 모델 기여도 계산 실패 version={}", model.version(), e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 피처 하나가 이 점수에 보탠 몫.
+     *
+     * @param contribution 양수면 부정 쪽으로, 음수면 정상 쪽으로 밀었다는 뜻
+     */
+    public record Contribution(String feature, String label, double contribution) {}
+
+    /**
      * 부정 확률 0~1. 모델이 없거나, 채점이 실패하거나, <b>학습 범위 밖이면</b> null.
      *
      * <p>피처가 비어 있으면(심사가 꺼져 있거나 맥락을 못 읽은 경우) 채점하지 않는다 —
