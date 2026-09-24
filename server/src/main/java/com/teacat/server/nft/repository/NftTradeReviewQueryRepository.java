@@ -109,13 +109,16 @@ public class NftTradeReviewQueryRepository {
                 SELECT t.id, t.auction_id, t.listing_id, t.photocard_id, d.name AS design_name, d.image_url,
                        t.seller_id, s.nickname AS seller_nickname, t.buyer_id, b.nickname AS buyer_nickname,
                        t.price, t.chain_status::text AS chain_status, t.failure_code, t.created_at, t.completed_at,
-                       r.id AS review_id, r.decision::text AS review_decision, r.max_severity::text AS review_severity, r.held AS review_held
+                       r.id AS review_id, r.decision::text AS review_decision, r.max_severity::text AS review_severity, r.held AS review_held,
+                       f.model_score, f.model_version
                   FROM nft_photocard_trades t
                   JOIN nft_photocards p ON p.id = t.photocard_id
                   JOIN nft_photocard_designs d ON d.id = p.design_id
                   JOIN users s ON s.id = t.seller_id
                   JOIN users b ON b.id = t.buyer_id
                   LEFT JOIN nft_trade_reviews r ON r.trade_id = t.id
+                  -- 섀도우 모델 점수. 규칙과 달리 모든 거래에 붙으므로 심사 행이 없어도 나온다
+                  LEFT JOIN nft_trade_risk_features f ON f.trade_id = t.id
                  WHERE %s
                  ORDER BY t.created_at DESC, t.id DESC
                  OFFSET :offset LIMIT :limit
@@ -127,7 +130,8 @@ public class NftTradeReviewQueryRepository {
                 rs.getLong("price"), rs.getString("chain_status"), rs.getString("failure_code"),
                 rs.getObject("created_at", LocalDateTime.class), rs.getObject("completed_at", LocalDateTime.class),
                 (Long) rs.getObject("review_id"), rs.getString("review_decision"), rs.getString("review_severity"),
-                rs.getObject("review_held") == null ? null : rs.getBoolean("review_held")));
+                rs.getObject("review_held") == null ? null : rs.getBoolean("review_held"),
+                (Double) rs.getObject("model_score"), rs.getString("model_version")));
     }
 
     public long countTrades(List<String> statuses) {
@@ -146,7 +150,7 @@ public class NftTradeReviewQueryRepository {
                            String imageUrl, Long sellerId, String sellerNickname, Long buyerId, String buyerNickname,
                            Long price, String chainStatus, String failureCode, LocalDateTime createdAt,
                            LocalDateTime completedAt, Long reviewId, String reviewDecision, String reviewSeverity,
-                           Boolean reviewHeld) {}
+                           Boolean reviewHeld, Double modelScore, String modelVersion) {}
 
     public record RecentTradeRow(Long tradeId, Long price, LocalDateTime completedAt, Long sellerId, Long buyerId) {}
 

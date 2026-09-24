@@ -29,6 +29,8 @@ import java.util.Objects;
  * @param buyerDeviceFirstLoginAt    요청 단말에서의 첫 로그인 시각. 그 단말 로그인 기록이 없으면 null
  * @param buyerMaxSpendInWindow      구매자의 최근 기간 최대 구매가. 구매 이력 없으면 null
  * @param graph                      거래 그래프에서 본 구조. 규칙 R1~R8 은 아직 쓰지 않고 피처로만 나간다
+ * @param decoration                 이 카드의 꾸밈 이력. R4 가 판단을 건너뛸지 정하고, 나머지는 피처로 나간다
+ * @param velocity                   최근 짧은 창의 거래 빈도. 금융권 FDS 의 기본 축이다
  */
 public record TradeRiskContext(
         Long tradeId,
@@ -57,6 +59,8 @@ public record TradeRiskContext(
         LocalDateTime buyerDeviceFirstLoginAt,
         Long buyerMaxSpendInWindow,
         Graph graph,
+        Decoration decoration,
+        Velocity velocity,
         LocalDateTime now
 ) {
 
@@ -82,6 +86,42 @@ public record TradeRiskContext(
                         int cardDistinctOwnersInWindow, Integer buyerToSellerHops) {
 
         public static final Graph EMPTY = new Graph(false, 0, 0, null);
+    }
+
+    /**
+     * 카드에 얹힌 꾸밈. 꾸밈은 <b>카드의 일부라 팔면 그대로 따라간다</b>(2026-09-23 dev 결정).
+     *
+     * <p>왜 필요한가: 잘 꾸민 카드는 시세보다 비싸게 팔리는 것이 <b>정상</b>이다. 그래서 R4(가격 이상)는
+     * 꾸민 카드를 판단하지 않는다 — 안 그러면 애써 꾸민 사람이 매번 심사에 걸린다.
+     *
+     * <p>🔴 그런데 같은 이유로 꾸밈은 <b>가격 조작의 알리바이</b>가 된다. 스티커는 하루 5장까지 공짜라
+     * 비용 부담도 없다. 공범에게 시세 10배로 팔아 놓고 "잘 꾸며서" 라고 하면 관리자가 반박하기 어렵다.
+     * 그래서 가격 대신 <b>행동</b>을 본다 — 꾸민 지 얼마 만에 파는가, 꾸민 사람이 파는 사람인가.
+     * 애정을 담아 꾸민 카드를 5분 만에 파는 사람은 드물다.
+     *
+     * @param present                꾸며진 카드인가
+     * @param stickerCount           붙은 스티커 수
+     * @param minutesSinceDecoration 마지막으로 꾸민 뒤 이 거래 요청까지 걸린 분. 꾸밈이 없으면 null
+     * @param decoratedBySeller      꾸민 사람이 지금 파는 사람인가. 남이 꾸민 걸 사서 바로 되파는 것은 다른 이야기다
+     */
+    public record Decoration(boolean present, int stickerCount, Long minutesSinceDecoration,
+                             boolean decoratedBySeller) {
+
+        public static final Decoration NONE = new Decoration(false, 0, null, false);
+    }
+
+    /**
+     * 짧은 창의 거래 빈도 (velocity). 카드사 FDS 의 가장 기본 축이고, <b>금액을 전혀 보지 않는다</b>.
+     *
+     * <p>매집은 지분이 30% 를 넘어야 R7 에 걸리는데, 그때는 이미 쓸어 간 뒤다. 빈도는 그보다 먼저 움직인다.
+     * 계정을 털린 뒤의 급처분, 순환 거래의 회전도 여기서 먼저 보인다.
+     *
+     * @param cardHandoffs24h 이 카드가 최근 24시간에 손바뀜한 횟수. 순환 거래의 회전 속도
+     */
+    public record Velocity(int buyerTrades10m, int buyerTrades1h,
+                           int sellerTrades10m, int sellerTrades1h, int cardHandoffs24h) {
+
+        public static final Velocity EMPTY = new Velocity(0, 0, 0, 0, 0);
     }
 
     /**

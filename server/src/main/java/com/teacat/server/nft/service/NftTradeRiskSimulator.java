@@ -58,6 +58,7 @@ public class NftTradeRiskSimulator {
     static final String CIRCULAR_RING = "CIRCULAR_RING";
     static final String HOARDING = "HOARDING";
     static final String TAKEOVER = "ACCOUNT_TAKEOVER";
+    static final String DECOR_LAUNDERING = "DECOR_LAUNDERING";
 
     /** 로컬 체인. 심사는 체인을 보지 않으므로 값 자체에 의미는 없고 지갑 유니크 제약만 맞추면 된다 */
     private static final int CHAIN_ID = 31337;
@@ -134,22 +135,30 @@ public class NftTradeRiskSimulator {
             this.now = jdbc.queryForObject("SELECT now()::timestamp", LocalDateTime.class);
         }
 
+        /**
+         * 🔴 대본을 <b>섞어서</b> 돌린다. 종류별로 몰아 돌리면 시장 거래량이 단조롭게 늘어나
+         * "거래량 = 몇 번째로 만들어졌나" 가 되고, 그게 곧 정답 표지가 된다.
+         *
+         * <p>실제로 그렇게 짰다가 baselineVolume·designTradesInWindow·recentVolume 이
+         * <b>모든 대본에서 단독 AUC 0.98 이상</b>으로 나왔다. 모델이 수법이 아니라 생성 순서를
+         * 배우고 있었던 것이다 (train.py 의 단독 분리력 검사가 잡았다).
+         *
+         * <p>섞으면 현실에도 가까워진다 — 사기는 정상 거래 사이에 끼어서 일어나지, 몰아서 일어나지 않는다.
+         */
         private void execute() {
             tx.executeWithoutResult(s -> buildMarket());
-            for (int i = 0; i < request.normalTradesOr(); i++) {
-                tx.executeWithoutResult(s -> normalSale());
-            }
-            for (int i = 0; i < request.shillCasesOr(); i++) {
-                tx.executeWithoutResult(s -> shillCase());
-            }
-            for (int i = 0; i < request.circularCasesOr(); i++) {
-                tx.executeWithoutResult(s -> circularCase());
-            }
-            for (int i = 0; i < request.hoardingCasesOr(); i++) {
-                tx.executeWithoutResult(s -> hoardingCase());
-            }
-            for (int i = 0; i < request.takeoverCasesOr(); i++) {
-                tx.executeWithoutResult(s -> takeoverCase());
+
+            List<Runnable> cases = new ArrayList<>();
+            for (int i = 0; i < request.normalTradesOr(); i++) cases.add(this::normalSale);
+            for (int i = 0; i < request.shillCasesOr(); i++) cases.add(this::shillCase);
+            for (int i = 0; i < request.circularCasesOr(); i++) cases.add(this::circularCase);
+            for (int i = 0; i < request.hoardingCasesOr(); i++) cases.add(this::hoardingCase);
+            for (int i = 0; i < request.takeoverCasesOr(); i++) cases.add(this::takeoverCase);
+            for (int i = 0; i < request.decorCasesOr(); i++) cases.add(this::decorLaunderingCase);
+            java.util.Collections.shuffle(cases, random);
+
+            for (Runnable one : cases) {
+                tx.executeWithoutResult(s -> one.run());
             }
         }
 
@@ -210,6 +219,16 @@ public class NftTradeRiskSimulator {
             };
             Actor runnerUp = kind == Kind.AUCTION_NATURAL ? pickCounterparty(seller, cardId) : null;
             LocalDateTime at = between(now.minusDays(6), now.minusHours(2));
+            // 🔴 정상 거래의 일부도 꾸며진 카드다. 안 그러면 "꾸밈 = 사기" 가 되어
+            //    모델이 꾸민 사람을 전부 의심한다. 다만 꾸민 지 한참 지난 뒤에 판다
+            if (random.nextInt(10) < 3) {
+                // 🔴 대부분은 한참 전에 꾸몄지만 일부는 판매 직전에 꾸민다. 정상에도 짧은 간격이 있어야
+                //    "꾸민 뒤 몇 분" 이 완벽한 구분선이 되지 않는다 — 완벽한 구분선은 언제나 대본의 흔적이다
+                LocalDateTime decoratedAt = random.nextInt(10) < 2
+                        ? at.minusMinutes(20 + random.nextInt(600))
+                        : between(now.minusDays(30), now.minusDays(7));
+                decorate(cardId, seller, 1 + random.nextInt(5), decoratedAt);
+            }
             long tradeId = sale(new Sale(kind, cardId, seller, buyer, runnerUp,
                     jitter(BASE_PRICE), at.minusHours(3), at));
             label(tradeId, NORMAL, false, List.of(), null);
@@ -224,14 +243,18 @@ public class NftTradeRiskSimulator {
             String phone = newPhone();
             Actor seller = newActor(shared, phone);
             Actor accomplice = newActor(shared, phone);
+            seedTradeHistory(seller);
+            seedTradeHistory(accomplice);
             long designId = pick(designs);
-            long cardId = pick(designCards.get(designId));
-            Actor victim = pickCounterparty(cardOwner.get(cardId), cardId);
+            // 판매자가 카드를 갖고 있어야 경매에 올릴 수 있다. 시장에서 사 온 것으로 둔다
+            Long cardId = giveCard(seller, designId, now.minusDays(20));
+            if (cardId == null) {
+                return;
+            }
+            Actor victim = pickCounterparty(seller, cardId);
             if (victim == null) {
                 return;
             }
-            // 판매자가 카드를 갖고 있어야 경매에 올릴 수 있다. 시장에서 사 온 것으로 둔다
-            pastTrade(cardId, cardOwner.get(cardId), seller, jitter(BASE_PRICE), now.minusDays(20));
 
             LocalDateTime closedAt = between(now.minusDays(5), now.minusHours(2));
             long tradeId = sale(new Sale(Kind.AUCTION_NATURAL, cardId, seller, victim, accomplice,
@@ -254,9 +277,14 @@ public class NftTradeRiskSimulator {
             Actor a = newActor();
             Actor b = newActor();
             Actor c = newActor();
+            seedTradeHistory(a);
+            seedTradeHistory(b);
+            seedTradeHistory(c);
 
-            long pairCard = pick(designCards.get(designId));
-            pastTrade(pairCard, cardOwner.get(pairCard), a, jitter(BASE_PRICE), now.minusDays(20));
+            Long pairCard = giveCard(a, designId, now.minusDays(20));
+            if (pairCard == null) {
+                return;
+            }
             long hop1 = sale(new Sale(Kind.LISTING, pairCard, a, b, null,
                     jitter(BASE_PRICE), now.minusDays(6), now.minusDays(6)));
             label(hop1, CIRCULAR_PAIR, true, List.of(), "순환의 첫 구간 — 되돌아오기 전이라 규칙이 볼 것이 없다");
@@ -264,11 +292,10 @@ public class NftTradeRiskSimulator {
                     jitter(BASE_PRICE), now.minusDays(2), now.minusDays(2)));
             label(hop2, CIRCULAR_PAIR, true, List.of(TradeRiskRepeatedPairRule.CODE), "카드가 원래 주인에게 되돌아옴");
 
-            long ringCard = pick(designCards.get(designId));
-            if (ringCard == pairCard) {
+            Long ringCard = giveCard(a, designId, now.minusDays(19));
+            if (ringCard == null || ringCard.equals(pairCard)) {
                 return;
             }
-            pastTrade(ringCard, cardOwner.get(ringCard), a, jitter(BASE_PRICE), now.minusDays(19));
             long r1 = sale(new Sale(Kind.LISTING, ringCard, a, b, null,
                     jitter(BASE_PRICE), now.minusDays(6), now.minusDays(6)));
             long r2 = sale(new Sale(Kind.LISTING, ringCard, b, c, null,
@@ -303,6 +330,7 @@ public class NftTradeRiskSimulator {
                 pastTrade(cardId, seller, buyer, jitter(BASE_PRICE), between(now.minusDays(29), now.minusDays(8)));
             }
             Actor hoarder = newActor();
+            seedTradeHistory(hoarder);
             for (int i = 0; i < HOARD_BUYS; i++) {
                 Long cardId = cards.stream()
                         .filter(id -> cardOwner.get(id).userId() != hoarder.userId())
@@ -310,7 +338,9 @@ public class NftTradeRiskSimulator {
                 if (cardId == null) {
                     return;
                 }
-                LocalDateTime at = now.minusDays(5).plusHours(i * 12L);
+                // 🔴 예전에는 12시간 간격이었다. 실제 매집은 몰아서 산다 — 간격을 분 단위로 좁혀야
+                //    속도 피처(buyerTrades10m·1h)가 지분이 차기 전에 먼저 움직인다
+                LocalDateTime at = now.minusDays(5).plusMinutes(i * 18L);
                 long tradeId = sale(new Sale(Kind.AUCTION_BUY_NOW, cardId, cardOwner.get(cardId), hoarder, null,
                         jitter(BASE_PRICE), at, at));
                 label(tradeId, HOARDING, true,
@@ -326,9 +356,10 @@ public class NftTradeRiskSimulator {
         private void takeoverCase() {
             Actor victim = newActor(); // 주 단말 로그인 이력은 newActor 가 이미 남긴다
             long designId = pick(designs);
-            long warmupCard = pick(designCards.get(designId));
             // 평소 지출. 이게 없으면 R8 은 "몇 배" 를 말할 수 없어 빠진다
-            pastTrade(warmupCard, cardOwner.get(warmupCard), victim, 100, now.minusDays(10));
+            if (giveCard(victim, designId, now.minusDays(10), 100) == null) {
+                return;
+            }
 
             long targetCard = pick(designCards.get(designId));
             Actor seller = cardOwner.get(targetCard);
@@ -342,6 +373,107 @@ public class NftTradeRiskSimulator {
                     BASE_PRICE * 2, now.minusMinutes(5), now.minusMinutes(5)));
             label(tradeId, TAKEOVER, true, List.of(TradeRiskAccountTakeoverRule.CODE),
                     "처음 보는 단말 로그인 5분 뒤 평소 최대 지출의 4배 결제");
+        }
+
+        /**
+         * 꾸밈을 알리바이로 쓴 가격 조작 (설계문서 14-2-3).
+         *
+         * <p><b>규칙이 하나도 걸지 못하도록</b> 짰다. 공범은 판매자와 다른 단말·다른 전화번호를 쓰고,
+         * 둘은 처음 거래하는 사이이며, 계정도 오래됐다. 값은 시세의 10배지만 R4 는 꾸민 카드를
+         * 판단하지 않으므로 빠진다 — 즉 <b>지금 규칙으로는 원리적으로 못 잡는다.</b>
+         *
+         * <p>남는 단서는 행동뿐이다. 꾸민 지 몇 분 만에 팔았고, 꾸민 사람이 곧 파는 사람이다.
+         * 애정을 담아 꾸민 카드를 5분 만에 파는 사람은 드물다 — 그 차이를 모델이 배워야 한다.
+         */
+        private void decorLaunderingCase() {
+            Actor seller = newActor();
+            seedTradeHistory(seller);
+            long designId = pick(designs);
+            Long cardId = giveCard(seller, designId, now.minusDays(12));
+            if (cardId == null) {
+                return;
+            }
+            // 공범은 기존 트레이더다 — 갓 만든 계정을 쓰면 "이력 없음" 이 곧 정답 표지가 된다
+            Actor accomplice = pickCounterparty(seller, cardId);
+            if (accomplice == null) {
+                return;
+            }
+
+            LocalDateTime decoratedAt = between(now.minusDays(4), now.minusHours(3));
+            decorate(cardId, seller, 2 + random.nextInt(6), decoratedAt);
+            // 꾸미자마자 판다 — 이 짧은 간격이 정상 꾸밈(며칠~몇 주)과 갈리는 지점이다
+            LocalDateTime soldAt = decoratedAt.plusMinutes(3 + random.nextInt(25));
+
+            long tradeId = sale(new Sale(Kind.LISTING, cardId, seller, accomplice, null,
+                    BASE_PRICE * 10, soldAt, soldAt));
+            label(tradeId, DECOR_LAUNDERING, true, List.of(),
+                    "꾸민 지 몇 분 만에 시세 10배로 판매 — R4 는 꾸민 카드를 판단하지 않는다");
+        }
+
+        /**
+         * 🔴 새로 만든 배우에게 <b>평범한 거래 이력</b>을 심는다.
+         *
+         * <p>세 번째로 같은 함정에 빠져서 넣었다. 사기 대본은 배우를 그 자리에서 만들고 정상 거래는
+         * 기존 트레이더를 쓰니, 모델이 수법이 아니라 <b>"이력 없으면 사기"</b> 를 배웠다
+         * (hasSpendHistory 가 꾸밈 세탁에서 0.00, 정상에서 0.79). 앞선 두 번은 가입 시각과
+         * 로그인 이력이었다 — 전부 "대본이 만든 배우는 정상과 다르게 생겼다" 는 한 가지 문제다.
+         *
+         * <p>현실의 사기꾼도 갓 만든 계정만 쓰지 않는다. 오히려 <b>묵혀 둔 계정</b>을 쓴다.
+         */
+        private void seedTradeHistory(Actor actor) {
+            if (designs.isEmpty()) {
+                return;
+            }
+            for (int i = 0; i < 1 + random.nextInt(3); i++) {
+                long cardId = pick(designCards.get(pick(designs)));
+                Actor owner = cardOwner.get(cardId);
+                if (owner == null || owner.userId() == actor.userId()) {
+                    continue;
+                }
+                pastTrade(cardId, owner, actor, jitter(BASE_PRICE),
+                        between(now.minusDays(33), now.minusDays(10)));
+            }
+        }
+
+        /**
+         * 배우에게 이 도안의 카드를 하나 쥐여 준다. 못 구하면 null.
+         *
+         * <p>🔴 <b>이미 그 배우가 가진 카드는 고르지 않는다.</b> 자기 자신에게 파는 거래가 되어
+         * {@code chk_nft_photocard_trades_parties} 에 걸린다 — seedTradeHistory 를 넣자마자
+         * 배우가 시장 카드를 이미 갖고 있는 경우가 생겨 실제로 터졌다.
+         */
+        private Long giveCard(Actor actor, long designId, LocalDateTime at) {
+            return giveCard(actor, designId, at, jitter(BASE_PRICE));
+        }
+
+        /** @param price 이 매입의 가격. 탈취 대본은 "평소 지출" 기준선을 만들어야 해서 값을 고정한다 */
+        private Long giveCard(Actor actor, long designId, LocalDateTime at, long price) {
+            List<Long> cards = designCards.get(designId);
+            int start = random.nextInt(cards.size());
+            for (int i = 0; i < cards.size(); i++) {
+                long cardId = cards.get((start + i) % cards.size());
+                Actor owner = cardOwner.get(cardId);
+                if (owner != null && owner.userId() != actor.userId()) {
+                    pastTrade(cardId, owner, actor, price, at);
+                    return cardId;
+                }
+            }
+            return null;
+        }
+
+        /** 카드에 꾸밈을 얹는다. 한 카드에 하나뿐이라 이미 있으면 갱신한다 */
+        private void decorate(long cardId, Actor owner, int stickers, LocalDateTime at) {
+            String placements = java.util.stream.IntStream.range(0, stickers)
+                    .mapToObj(i -> "{\"stickerId\":%d,\"x\":%d,\"y\":%d}".formatted(i, i * 10, i * 7))
+                    .collect(Collectors.joining(",", "[", "]"));
+            jdbc.update("""
+                    INSERT INTO photocard_decorations (photocard_id, user_id, image_key, placements,
+                                                       created_at, updated_at)
+                    VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                    ON CONFLICT (photocard_id) DO UPDATE
+                        SET user_id = EXCLUDED.user_id, placements = EXCLUDED.placements,
+                            updated_at = EXCLUDED.updated_at
+                    """, cardId, owner.userId(), "simulation/decor-" + cardId + ".png", placements, at, at);
         }
 
         // ---------------------------------------------------------------- 거래 만들기

@@ -24,7 +24,7 @@ class NftTradeRiskSimulatorDisabledTests extends PostgresIntegrationTest {
 
     @Test
     void 설정을_켜지_않으면_거절한다() {
-        assertThatThrownBy(() -> simulator.simulate(new TradeSimulationRequest(1, 1, 1, 0, 0, 0, 0, 1L)))
+        assertThatThrownBy(() -> simulator.simulate(new TradeSimulationRequest(1, 1, 1, 0, 0, 0, 0, 0, 1L)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(NftErrorCode.SIMULATOR_DISABLED);
@@ -34,7 +34,7 @@ class NftTradeRiskSimulatorDisabledTests extends PostgresIntegrationTest {
     void 거절되면_아무것도_만들지_않는다() {
         Integer before = jdbcTemplate.queryForObject("SELECT count(*) FROM simulation_labels", Integer.class);
 
-        assertThatThrownBy(() -> simulator.simulate(new TradeSimulationRequest(1, 1, 1, 0, 0, 0, 0, 1L)))
+        assertThatThrownBy(() -> simulator.simulate(new TradeSimulationRequest(1, 1, 1, 0, 0, 0, 0, 0, 1L)))
                 .isInstanceOf(BusinessException.class);
 
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM simulation_labels", Integer.class))

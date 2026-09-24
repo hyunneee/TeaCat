@@ -97,6 +97,8 @@ public class NftTradeRiskQueryRepository {
         LoginStats login = loginStats(base.buyerId, buyerIp, buyerUa, loginSince, requestAt);
         Long maxSpend = buyerMaxSpend(base.buyerId, tradeId, priceSince);
         TradeRiskContext.Graph graph = graphStats(base, tradeId, volumeSince);
+        TradeRiskContext.Decoration decoration = decorationOf(base, requestAt);
+        TradeRiskContext.Velocity velocity = velocityOf(base, tradeId, requestAt);
 
         return Optional.of(new TradeRiskContext(
                 tradeId,
@@ -109,7 +111,7 @@ public class NftTradeRiskQueryRepository {
                 base.issuedSupply, buyerOwned, price.samples, price.buyerBuys,
                 firstDeposit,
                 login.priorOtherDevices, login.deviceFirstLogin, maxSpend,
-                graph,
+                graph, decoration, velocity,
                 now));
     }
 
@@ -271,6 +273,66 @@ public class NftTradeRiskQueryRepository {
                 )
                 SELECT min(hops) FROM walk WHERE node = :seller
                 """, params, Integer.class);
+    }
+
+    /**
+     * 카드에 얹힌 꾸밈. 한 카드에 하나뿐이다({@code uq_photocard_decorations_card}).
+     *
+     * <p>{@code updated_at} 을 쓴다 — 다시 꾸미면 갱신되므로 "마지막으로 손본 시각" 이 맞다.
+     *
+     * <p>🔴 이 표만 {@code timestamptz} 다. 나머지 시각은 전부 {@code timestamp}(세션 시간대의 벽시계)라
+     * 그대로 빼면 어긋난다. {@code ::timestamp} 캐스트가 세션 시간대 벽시계로 맞춰 주므로
+     * {@code now()::timestamp} 를 쓰는 다른 조회와 같은 시계가 된다.
+     * ⚠️ {@code AT TIME ZONE 'UTC'} 로 바꾸면 KST 9시간이 통째로 더해진다 — 실제로 그렇게 짰다가
+     *    "꾸민 뒤 3분" 이 "562분" 으로 나왔고 테스트가 잡았다.
+     */
+    private TradeRiskContext.Decoration decorationOf(BaseRow base, LocalDateTime requestAt) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("pc", base.photocardId).addValue("seller", base.sellerId)
+                .addValue("requestAt", requestAt);
+        List<TradeRiskContext.Decoration> rows = jdbcTemplate.query("""
+                SELECT jsonb_array_length(placements) AS sticker_count,
+                       (user_id = :seller) AS by_seller,
+                       EXTRACT(EPOCH FROM (:requestAt - updated_at::timestamp)) / 60 AS minutes
+                  FROM photocard_decorations
+                 WHERE photocard_id = :pc
+                """, params, (rs, i) -> {
+            double minutes = rs.getDouble("minutes");
+            Long since = rs.wasNull() || minutes < 0 ? null : Math.round(minutes);
+            return new TradeRiskContext.Decoration(true, rs.getInt("sticker_count"), since,
+                    rs.getBoolean("by_seller"));
+        });
+        return rows.isEmpty() ? TradeRiskContext.Decoration.NONE : rows.getFirst();
+    }
+
+    /**
+     * 짧은 창의 거래 빈도. 금액을 보지 않으므로 시장 규모가 바뀌어도 뜻이 흔들리지 않는다.
+     *
+     * <p>기준 시각은 {@code now} 가 아니라 <b>요청 시각</b>이다 — 마감 대기가 길어져도
+     * "그 사람이 그때 얼마나 빨리 사고 있었나" 가 흐려지지 않는다.
+     */
+    private TradeRiskContext.Velocity velocityOf(BaseRow base, Long tradeId, LocalDateTime requestAt) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("b", base.buyerId).addValue("s", base.sellerId)
+                .addValue("pc", base.photocardId).addValue("tradeId", tradeId)
+                .addValue("requestAt", requestAt);
+        return jdbcTemplate.queryForObject("""
+                SELECT count(*) FILTER (WHERE buyer_id = :b AND completed_at >= :requestAt - interval '10 minutes')
+                           AS buyer_10m,
+                       count(*) FILTER (WHERE buyer_id = :b AND completed_at >= :requestAt - interval '1 hour')
+                           AS buyer_1h,
+                       count(*) FILTER (WHERE seller_id = :s AND completed_at >= :requestAt - interval '10 minutes')
+                           AS seller_10m,
+                       count(*) FILTER (WHERE seller_id = :s AND completed_at >= :requestAt - interval '1 hour')
+                           AS seller_1h,
+                       count(*) FILTER (WHERE photocard_id = :pc AND completed_at >= :requestAt - interval '24 hours')
+                           AS card_24h
+                  FROM nft_photocard_trades
+                 WHERE chain_status = 'COMPLETED' AND id <> :tradeId
+                   AND completed_at >= :requestAt - interval '24 hours' AND completed_at <= :requestAt
+                """, params, (rs, i) -> new TradeRiskContext.Velocity(
+                rs.getInt("buyer_10m"), rs.getInt("buyer_1h"),
+                rs.getInt("seller_10m"), rs.getInt("seller_1h"), rs.getInt("card_24h")));
     }
 
     private Long buyerMaxSpend(Long buyerId, Long tradeId, LocalDateTime since) {

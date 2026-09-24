@@ -18,6 +18,7 @@ import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
 import com.teacat.server.nft.repository.NftTradeReviewQueryRepository;
 import com.teacat.server.nft.repository.NftTradeReviewRepository;
+import com.teacat.server.nft.repository.NftTradeRiskFeatureRepository;
 import com.teacat.server.user.entity.User;
 import com.teacat.server.wallet.entity.CatMoneyHold;
 import com.teacat.server.wallet.entity.CatMoneyHoldRefType;
@@ -56,6 +57,8 @@ public class NftTradeReviewService {
 
     private static final int APPEARANCE_WINDOW_DAYS = 90;
     private static final int STATS_WINDOW_DAYS = 30;
+    /** 관리자 화면에 보여줄 기여 피처 수. 더 늘리면 읽히지 않는다 */
+    private static final int EXPLAIN_FACTORS = 5;
     private static final int RECENT_TRADES = 10;
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -65,6 +68,8 @@ public class NftTradeReviewService {
     private final CatMoneyHoldRepository holdRepository;
     private final CatMoneyHoldService holdService;
     private final NftTradeReviewProperties properties;
+    private final NftTradeRiskFeatureRepository featureRepository;
+    private final TradeRiskModelScorer modelScorer;
 
     public enum ListStatus { OPEN, DECIDED }
 
@@ -107,7 +112,7 @@ public class NftTradeReviewService {
                         r.createdAt(), r.completedAt(), r.reviewId(),
                         r.reviewDecision() == null ? null : NftReviewDecision.valueOf(r.reviewDecision()),
                         r.reviewSeverity() == null ? null : NftReviewSeverity.valueOf(r.reviewSeverity()),
-                        r.reviewHeld()))
+                        r.reviewHeld(), r.modelScore()))
                 .toList();
         return NftAdminTradePageResponse.of(trades, safePage, safeSize, queryRepository.countTrades(effective.statuses()));
     }
@@ -170,6 +175,7 @@ public class NftTradeReviewService {
                 review.getSignals(),
                 review.getAnalysis(),
                 review.getAnalysisModel(),
+                modelInsight(trade.getId()),
                 review.getDecidedBy(),
                 review.getDecisionNote(),
                 sameIp, sameUa,
@@ -177,6 +183,28 @@ public class NftTradeReviewService {
                 partyDetail(trade.getBuyer(), buyerIp, appearanceSince),
                 bids,
                 recent);
+    }
+
+    /**
+     * 섀도우 모델의 판단과 근거. 점수가 없으면 빈 값이다.
+     *
+     * <p>🔴 근거는 <b>지금 적재된 모델로 다시 계산</b>한다. 채점 당시와 모델이 다르면 설명이
+     * 저장된 점수와 어긋나므로, 그때는 근거를 비우고 {@code staleModel} 로 알린다 —
+     * 맞지 않는 설명을 보여주는 것보다 없는 편이 낫다.
+     */
+    private NftTradeReviewDetailResponse.ModelInsight modelInsight(Long tradeId) {
+        return featureRepository.findByTradeId(tradeId)
+                .filter(f -> f.getModelScore() != null)
+                .map(f -> {
+                    boolean stale = !Objects.equals(f.getModelVersion(), modelScorer.version());
+                    List<NftTradeReviewDetailResponse.Factor> factors = stale ? List.of()
+                            : modelScorer.explain(f.getFeatures(), EXPLAIN_FACTORS).stream()
+                            .map(c -> new NftTradeReviewDetailResponse.Factor(c.label(), c.contribution()))
+                            .toList();
+                    return new NftTradeReviewDetailResponse.ModelInsight(
+                            f.getModelScore(), f.getModelVersion(), stale, factors);
+                })
+                .orElse(NftTradeReviewDetailResponse.ModelInsight.NONE);
     }
 
     public NftTradeReviewStatsResponse stats() {

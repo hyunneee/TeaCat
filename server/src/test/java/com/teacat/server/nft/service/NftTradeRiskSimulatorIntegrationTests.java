@@ -23,7 +23,7 @@ class NftTradeRiskSimulatorIntegrationTests extends PostgresIntegrationTest {
 
     /** 씨앗을 고정해 같은 판이 나오게 한다. 규모는 대본이 다 돌아갈 만큼만 작게 잡는다 */
     private TradeSimulationResponse run() {
-        return simulator.simulate(new TradeSimulationRequest(2, 12, 20, 2, 1, 1, 2, 42L));
+        return simulator.simulate(new TradeSimulationRequest(2, 12, 20, 2, 1, 1, 2, 3, 42L));
     }
 
     @Test
@@ -116,5 +116,51 @@ class NftTradeRiskSimulatorIntegrationTests extends PostgresIntegrationTest {
                  WHERE l.batch_id = ? AND t.chain_status = 'PENDING'
                 """, Integer.class, report.batchId());
         assertThat(pending).isZero();
+    }
+
+    /**
+     * 🔴 꾸밈 세탁은 <b>규칙이 원리적으로 못 잡는다</b> — R4 가 꾸민 카드를 판단하지 않기 때문이다.
+     * 그래서 남는 단서는 행동뿐이고, 그게 피처에 들어 있어야 모델이 배울 수 있다 (설계문서 14-2-3).
+     */
+    @Test
+    void 꾸밈_세탁은_규칙이_못_잡고_행동_피처에만_드러난다() {
+        TradeSimulationResponse report = run();
+
+        // 규칙은 한 건도 못 잡는다
+        assertThat(report.misses())
+                .extracting(TradeSimulationResponse.Miss::scenario)
+                .contains(NftTradeRiskSimulator.DECOR_LAUNDERING);
+
+        // 꾸민 지 얼마 만에 팔았나 — 세탁은 분 단위, 정상은 날 단위여야 갈린다
+        Double launderingMinutes = jdbcTemplate.queryForObject("""
+                SELECT max((f.features->>'minutesSinceDecoration')::numeric)
+                  FROM simulation_labels l JOIN nft_trade_risk_features f ON f.trade_id = l.trade_id
+                 WHERE l.batch_id = ? AND l.scenario = ?
+                """, Double.class, report.batchId(), NftTradeRiskSimulator.DECOR_LAUNDERING);
+        Double normalMinutes = jdbcTemplate.queryForObject("""
+                SELECT min((f.features->>'minutesSinceDecoration')::numeric)
+                  FROM simulation_labels l JOIN nft_trade_risk_features f ON f.trade_id = l.trade_id
+                 WHERE l.batch_id = ? AND l.scenario = ?
+                   AND f.features->>'minutesSinceDecoration' IS NOT NULL
+                """, Double.class, report.batchId(), NftTradeRiskSimulator.NORMAL);
+
+        assertThat(launderingMinutes).isNotNull().isLessThan(60);
+        if (normalMinutes != null) {
+            assertThat(normalMinutes).isGreaterThan(launderingMinutes);
+        }
+    }
+
+    /** 꾸밈 자체가 사기 표지가 되면 안 된다 — 정상 거래에도 꾸민 카드가 섞여 있어야 한다 */
+    @Test
+    void 정상_거래에도_꾸민_카드가_섞인다() {
+        TradeSimulationResponse report = run();
+
+        Integer decorated = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM simulation_labels l
+                  JOIN nft_trade_risk_features f ON f.trade_id = l.trade_id
+                 WHERE l.batch_id = ? AND l.scenario = ?
+                   AND (f.features->>'hasDecoration')::boolean
+                """, Integer.class, report.batchId(), NftTradeRiskSimulator.NORMAL);
+        assertThat(decorated).isPositive();
     }
 }

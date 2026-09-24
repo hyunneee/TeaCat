@@ -60,6 +60,11 @@ def main() -> None:
                 raw = float(value)
             else:
                 raw = f["impute"]
+            # 자바와 같은 순서로: 대치 → 자르기 → 표준화. 한 단계라도 어긋나면 그게 skew 다
+            if f.get("lo") is not None:
+                raw = max(f["lo"], raw)
+            if f.get("hi") is not None:
+                raw = min(f["hi"], raw)
             std = f["std"] or 1.0
             z += f["coef"] * ((raw - f["mean"]) / std)
         python_score = 1.0 / (1.0 + np.exp(-z))
