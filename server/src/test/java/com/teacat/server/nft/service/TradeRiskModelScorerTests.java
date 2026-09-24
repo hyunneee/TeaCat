@@ -19,7 +19,11 @@ class TradeRiskModelScorerTests {
     private static final ObjectMapper MAPPER = tools.jackson.databind.json.JsonMapper.builder().build();
 
     private TradeRiskModelScorer scorer(String resource) {
-        TradeRiskModelScorer scorer = new TradeRiskModelScorer(MAPPER, true, resource);
+        return scorer(resource, 0.25);
+    }
+
+    private TradeRiskModelScorer scorer(String resource, double outOfRangeLimit) {
+        TradeRiskModelScorer scorer = new TradeRiskModelScorer(MAPPER, true, resource, outOfRangeLimit);
         scorer.load();
         return scorer;
     }
@@ -73,7 +77,7 @@ class TradeRiskModelScorerTests {
 
     @Test
     void 설정으로_끄면_파일이_있어도_채점하지_않는다() {
-        TradeRiskModelScorer scorer = new TradeRiskModelScorer(MAPPER, false, "fds/test-model.json");
+        TradeRiskModelScorer scorer = new TradeRiskModelScorer(MAPPER, false, "fds/test-model.json", 0.25);
         scorer.load();
 
         assertThat(scorer.score(features(1.0, true))).isNull();
@@ -96,5 +100,60 @@ class TradeRiskModelScorerTests {
         odd.put("priceRatio", "문자열");
         odd.put("buyerPreviouslyOwnedCard", Double.NaN);
         assertThat(scorer.score(odd)).isNotNull().isBetween(0.0, 1.0);
+    }
+
+    /**
+     * 🔴 2026-09-23 dev 회귀. 실거래 4건이 전부 1.000 이 나왔다 — 합성 시장에 없던 크기가 들어와
+     * 한 피처가 z 를 +1710 까지 밀었다. 이제는 학습 범위로 눌러 기여도가 제한된다.
+     */
+    @Test
+    void 학습_범위를_넘는_값은_눌러서_계산한다() {
+        // 피처가 2개뿐이라 하나만 잘려도 기본 한도(0.25)를 넘는다. 여기서는 자르기 자체를 보려고 한도를 푼다
+        TradeRiskModelScorer scorer = scorer("fds/test-model.json", 0.5);
+
+        // priceRatio 의 hi 는 3.0. 100 이 들어와도 3.0 으로 눌려 상한과 같은 점수가 나와야 한다
+        Double huge = scorer.score(features(100.0, false));
+        Double atCap = scorer.score(features(3.0, false));
+
+        assertThat(huge).isNotNull().isEqualTo(atCap);
+        assertThat(huge).isLessThan(1.0);
+    }
+
+    /** 잘린 피처가 너무 많으면 이 거래는 모델이 아는 세상 밖이다. 억지 점수보다 "판단 불가" 가 정직하다 */
+    @Test
+    void 범위_밖_피처가_많으면_채점하지_않는다() {
+        // 피처 2개 중 1개만 넘어도 한도(50%)를 "넘지는" 않으므로 점수가 나온다
+        assertThat(scorer("fds/test-model.json", 0.5).score(features(100.0, false))).isNotNull();
+
+        // 한도를 0 으로 두면 하나만 잘려도 판단하지 않는다
+        assertThat(scorer("fds/test-model.json", 0.0).score(features(100.0, false))).isNull();
+        // 범위 안이면 그대로 채점한다
+        assertThat(scorer("fds/test-model.json", 0.0).score(features(1.0, true))).isNotNull();
+    }
+
+    /**
+     * 🔴 모델 파일에 lo·hi 가 없는 예전 모델이 배포돼 있어도 터무니없는 점수는 내보내지 않는다.
+     * dev 회귀 당시 z 가 +1744 였다 — 그건 확신이 아니라 계산이 망가진 것이다.
+     */
+    @Test
+    void 범위_정보가_없는_모델이어도_폭주한_점수는_내지_않는다() {
+        // legacy-model.json 에는 lo·hi 가 없어 자르기가 동작하지 않는다
+        TradeRiskModelScorer scorer = scorer("fds/legacy-model.json");
+
+        assertThat(scorer.score(features(1.0, false))).isNotNull();   // 평범한 값은 그대로 채점
+        assertThat(scorer.score(features(100000.0, false))).isNull(); // z 가 폭주하면 판단 불가
+    }
+
+    /**
+     * 🔴 범위 정보가 있는 모델에는 로짓 상한을 걸지 않는다. 자르기가 이미 z 를 묶으므로,
+     * 상한을 걸면 <b>가장 확실한 탐지가 잘려 나간다</b> — 실제로 한도 15 에서 부정 거래
+     * 740건 중 상위 5건이 "판단 불가" 로 빠졌다.
+     */
+    @Test
+    void 범위_정보가_있으면_높은_점수도_그대로_낸다() {
+        // priceRatio 를 상한(3.0)까지 올리고 불리언도 켜면 z 가 꽤 커진다
+        Double high = scorer("fds/test-model.json", 1.0).score(features(3.0, true));
+
+        assertThat(high).isNotNull().isGreaterThan(0.99);
     }
 }

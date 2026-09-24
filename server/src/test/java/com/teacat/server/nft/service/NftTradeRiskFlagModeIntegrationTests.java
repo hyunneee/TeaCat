@@ -105,7 +105,12 @@ class NftTradeRiskFlagModeIntegrationTests extends PostgresIntegrationTest {
         Map<String, Object> f = feature.getFeatures();
         assertThat(f).containsEntry("isAuction", true)
                 .containsEntry("sellerBuyerSameIp", false)
-                .containsEntry("price", 2_000);
+                .containsEntry("hasDecoration", false);
+        // 🔴 거래가·시세 같은 절대 금액은 피처에 넣지 않는다. 시장 규모가 바뀌면 뜻이 흔들리기 때문이다
+        //    (2026-09-23 dev 회귀 — buyerMaxSpendInWindow 하나가 z 를 +1710 까지 밀었다).
+        //    필요한 정보는 배율(priceRatio·spendRatio)로 남아 있다. 설계문서 14-2-3
+        assertThat(f).doesNotContainKeys("price", "medianPrice", "buyerMaxSpendInWindow",
+                "buyerAccountAgeMinutes", "sellerAccountAgeMinutes", "buyerOwnedOfDesign");
         // 🔴 개인정보는 들어가지 않는다 — 이 표는 나중에 파이썬으로 그대로 빠져나간다
         assertThat(f).doesNotContainKeys("buyerIp", "sellerIp", "buyerPhone", "sellerPhone", "userAgentHash");
         assertThat(f.values()).noneMatch(v -> String.valueOf(v).contains(OTHER_DEVICE.ip()));

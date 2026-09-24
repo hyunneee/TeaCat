@@ -93,6 +93,50 @@ def warn_duplicates(z: np.ndarray, names: list[str], threshold: float = 0.999) -
     print("  둘 중 하나를 없애거나, 시뮬레이터가 같은 값을 두 번 심고 있지 않은지 보라.")
 
 
+def warn_single_separators(z: np.ndarray, y: np.ndarray, scenarios: np.ndarray,
+                           names: list[str], threshold: float = 0.98) -> None:
+    """피처 <b>하나만으로</b> 어떤 대본이 정상과 거의 갈리는지 본다.
+
+    🔴 이 검사가 이 파일에서 가장 값어치 있다. 합성 데이터에서 한 피처가 혼자 AUC 0.98 을 넘으면
+    대개 수법을 담은 게 아니라 **대본이 남긴 흔적**이다. 실제로 세 번 당했다.
+
+      1차: buyerAccountAgeMinutes — 사기 배우의 가입일을 대본마다 박아 둠
+      2차: buyerPriorDeviceLogins — 로그인 이력을 계정 탈취 피해자에게만 심음
+      3차: hasSpendHistory       — 사기 배우만 갓 만든 계정이라 거래 이력이 없음
+
+    ⚠️ **대본별로 봐야 한다.** 전체 부정 대 정상으로 재면 놓친다 — 3차 누수는 꾸밈 세탁
+       한 대본에서만 완벽하게 갈렸고(60/1630건), 전체로는 평범해 보였다. 실제로 그렇게 짰다가
+       검사가 아무것도 못 잡아서 고쳤다.
+
+    진짜 신호도 걸린다(자전 입찰의 단말 일치는 설계상 1.000 이다). 그때는 넘어가면 된다 —
+    이 검사는 "보고 판단하라" 는 알림이지 실패가 아니다.
+    """
+    normal = scenarios == "NORMAL"
+    if not normal.any():
+        return
+    findings = []
+    for scenario in sorted(set(scenarios[y == 1])):
+        mask = normal | (scenarios == scenario)
+        target = (scenarios[mask] == scenario).astype(int)
+        if target.sum() < 5 or target.sum() == len(target):
+            continue
+        for i, name in enumerate(names):
+            column = z[mask, i]
+            if np.all(column == column[0]):
+                continue
+            auc = roc_auc_score(target, column)
+            if max(auc, 1 - auc) >= threshold:
+                findings.append((scenario, name, auc))
+    if not findings:
+        return
+    print()
+    print("⚠️  혼자서 한 대본을 정상과 거의 가르는 피처 (단독 AUC >= %.2f)" % threshold)
+    for scenario, name, auc in findings:
+        print(f"  {scenario:<18} {name:<30} AUC {auc:.3f}")
+    print("  대본이 남긴 흔적인지 진짜 수법인지 반드시 확인하라.")
+    print("  확인법: 대본별로 그 피처의 평균을 뽑아 본다 (fds/README.md 참고)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="server/src/main/resources/fds/model.json")
@@ -100,6 +144,8 @@ def main() -> None:
     parser.add_argument("--user", default="teacat")
     parser.add_argument("--database", default="teacat")
     parser.add_argument("--C", type=float, default=0.5, help="L2 규제 역수. 표본이 적으니 세게 건다")
+    parser.add_argument("--clip-percentile", type=float, default=1.0,
+                        help="극단값을 자를 분위수. 1.0 이면 아래위 1%% 를 눌러 학습·서빙 모두에 적용한다")
     args = parser.parse_args()
 
     df = load(args.container, args.user, args.database)
@@ -122,15 +168,33 @@ def main() -> None:
     names = [n for n, k in zip(names, keep) if k]
     x, impute = x[:, keep], impute[keep]
 
+    # 🔴 극단값을 분위수로 자른 뒤에 표준화한다 (winsorize).
+    #    표준화는 "평균에서 몇 칸" 이라, 학습 때 본 적 없는 크기가 들어오면 기여도가 제한 없이 커진다.
+    #    실제로 dev 실거래 4건이 전부 1.000 이 나왔다 — 합성 시장의 최근 최대 지출 평균이 215 였는데
+    #    실거래에 98,900 이 있었고, 그 한 피처가 z 에 +1710 을 밀어 넣었다.
+    #    여기서 자른 범위를 모델 파일에 실어 보내 서빙에서도 같은 범위로 자른다. 안 그러면 그게 skew 다.
+    lo = np.percentile(x, args.clip_percentile, axis=0)
+    hi = np.percentile(x, 100 - args.clip_percentile, axis=0)
+    # 분위수가 겹치면(대부분이 같은 값) 실제 최소·최대로 넓힌다 — 안 그러면 모든 값이 범위 밖이 된다
+    degenerate = lo >= hi
+    lo = np.where(degenerate, x.min(axis=0), lo)
+    hi = np.where(degenerate, x.max(axis=0), hi)
+    clipped_cells = int(((x < lo) | (x > hi)).sum())
+    x = np.clip(x, lo, hi)
+
     mean, std = x.mean(axis=0), x.std(axis=0)
+    std = np.where(std < 1e-9, 1.0, std)
     z = (x - mean) / std
 
     # 🔴 같은 값을 두 이름으로 주면 가중치만 쪼개지고, 계수를 읽을 때 사람을 헷갈리게 한다.
     #    실제로 designTradesInWindow 와 priceSamples 가 그랬고, 학습해 보고서야 드러났다
     #    (계수가 완전히 같게 나왔다). 이제는 학습 전에 잡는다.
     warn_duplicates(z, names)
+    warn_single_separators(z, y, df["scenario"].to_numpy(), names)
 
     print(f"표본 {len(y)}건 (부정 {y.sum()} / 정상 {len(y) - y.sum()}), 피처 {len(names)}개")
+    print(f"극단값 자름: {clipped_cells}칸 (전체 {len(y) * len(names)}칸의 "
+          f"{clipped_cells / max(1, len(y) * len(names)):.1%})")
     if dropped:
         print(f"상수라 제외한 피처: {', '.join(dropped)}")
 
@@ -182,8 +246,9 @@ def main() -> None:
         "labelSource": "simulation_labels.fraud (합성 대본 — 실사용자 판정 아님)",
         "intercept": float(final.intercept_[0]),
         "features": [
-            {"name": n, "coef": float(c), "mean": float(m), "std": float(s), "impute": float(i)}
-            for n, c, m, s, i in zip(names, coefficients, mean, std, impute)
+            {"name": n, "coef": float(c), "mean": float(m), "std": float(s), "impute": float(i),
+             "lo": float(lo_), "hi": float(hi_)}
+            for n, c, m, s, i, lo_, hi_ in zip(names, coefficients, mean, std, impute, lo, hi)
         ],
         "metrics": {"prAuc": round(float(pr_auc), 4), "rocAuc": round(float(roc_auc), 4),
                     "samples": int(len(y)), "positives": int(y.sum())},

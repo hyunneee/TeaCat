@@ -35,6 +35,10 @@ public record TradeSimulationRequest(
         @Schema(description = "계정 탈취 사례 수. 처음 보는 단말에서 로그인한 직후 평소의 몇 배를 쓴다", defaultValue = "5")
         @Min(0) @Max(200) Integer takeoverCases,
 
+        @Schema(description = "꾸밈 세탁 사례 수. 꾸민 직후 시세 10배로 공범에게 판다 — 규칙은 못 잡는다",
+                defaultValue = "6")
+        @Min(0) @Max(200) Integer decorCases,
+
         @Schema(description = "난수 씨앗. 같은 값을 주면 같은 판이 나온다. 비우면 매번 다르다")
         Long seed
 ) {
@@ -46,4 +50,5 @@ public record TradeSimulationRequest(
     public int circularCasesOr() { return circularCases == null ? 5 : circularCases; }
     public int hoardingCasesOr() { return hoardingCases == null ? 4 : hoardingCases; }
     public int takeoverCasesOr() { return takeoverCases == null ? 5 : takeoverCases; }
+    public int decorCasesOr() { return decorCases == null ? 6 : decorCases; }
 }
