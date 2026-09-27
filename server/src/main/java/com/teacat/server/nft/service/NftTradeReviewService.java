@@ -14,6 +14,7 @@ import com.teacat.server.nft.entity.NftReviewDecision;
 import com.teacat.server.nft.entity.NftReviewSeverity;
 import com.teacat.server.nft.entity.NftTradeChainStatus;
 import com.teacat.server.nft.entity.NftTradeReview;
+import com.teacat.server.nft.entity.NftTradeRiskFeature;
 import com.teacat.server.nft.exception.NftErrorCode;
 import com.teacat.server.nft.repository.NftPhotocardTradeRepository;
 import com.teacat.server.nft.repository.NftTradeReviewQueryRepository;
@@ -36,6 +37,7 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 이상거래 심사의 관리자 결정 (AUCTION_FRAUD_DESIGN.md 8장) 과 화면 조회.
@@ -169,20 +171,34 @@ public class NftTradeReviewService {
                                 || Objects.equals(r.sellerId(), buyerId) || Objects.equals(r.buyerId(), buyerId)))
                 .toList();
 
+        Optional<NftTradeRiskFeature> riskFeature = featureRepository.findByTradeId(trade.getId());
         LocalDateTime appearanceSince = LocalDateTime.now().minusDays(APPEARANCE_WINDOW_DAYS);
         return new NftTradeReviewDetailResponse(
                 summary(review),
                 review.getSignals(),
                 review.getAnalysis(),
                 review.getAnalysisModel(),
-                modelInsight(trade.getId()),
+                modelInsight(riskFeature),
                 review.getDecidedBy(),
                 review.getDecisionNote(),
                 sameIp, sameUa,
                 partyDetail(trade.getSeller(), sellerIp, appearanceSince),
                 partyDetail(trade.getBuyer(), buyerIp, appearanceSince),
                 bids,
+                priceReferenceSamples(riskFeature), properties.priceMinSamples(),
                 recent);
+    }
+
+    /** 저장된 로그 피처에서 심사 당시 표본 수를 복원한다. 현재 최근 거래 목록은 이후 거래도 포함할 수 있다. */
+    private Integer priceReferenceSamples(Optional<NftTradeRiskFeature> riskFeature) {
+        return riskFeature
+                .map(f -> f.getFeatures().get("designTradesInWindowLog"))
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .map(Number::doubleValue)
+                .filter(value -> Double.isFinite(value) && value >= 0 && value < Math.log1p(Integer.MAX_VALUE))
+                .map(value -> (int) Math.round(Math.expm1(value)))
+                .orElse(null);
     }
 
     /**
@@ -192,8 +208,8 @@ public class NftTradeReviewService {
      * 저장된 점수와 어긋나므로, 그때는 근거를 비우고 {@code staleModel} 로 알린다 —
      * 맞지 않는 설명을 보여주는 것보다 없는 편이 낫다.
      */
-    private NftTradeReviewDetailResponse.ModelInsight modelInsight(Long tradeId) {
-        return featureRepository.findByTradeId(tradeId)
+    private NftTradeReviewDetailResponse.ModelInsight modelInsight(Optional<NftTradeRiskFeature> riskFeature) {
+        return riskFeature
                 .filter(f -> f.getModelScore() != null)
                 .map(f -> {
                     boolean stale = !Objects.equals(f.getModelVersion(), modelScorer.version());
