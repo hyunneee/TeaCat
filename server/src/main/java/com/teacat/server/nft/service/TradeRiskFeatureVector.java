@@ -19,6 +19,29 @@ import java.util.Map;
  */
 final class TradeRiskFeatureVector {
 
+    /*
+     * 🔴 표본 가드 — 규칙이 "판단 불가" 라고 한 것은 피처도 말하지 않는다.
+     *
+     * 비율은 분모가 충분할 때만 스케일 불변이다. 분모가 2면 비율이 아니라 잡음이다.
+     * 규칙에는 이 가드가 처음부터 있었는데(R4 표본 3건, R6 기준 3건, R7 발행량 10장) 피처에만 없었다.
+     * 그래서 R7 이 "발행량 2장은 판단하지 않는다" 고 넘긴 거래를 모델은 "지분 50%" 라는 강한 신호로 읽었다.
+     *
+     * 2026-09-25 dev 실거래에서 드러났다 — 발행량 2장·같은 도안 과거 거래 1건짜리 거래가
+     * priceRatio 200, ownedShareAfter 0.5, buyShareAfter 0.5 를 내며 점수 1.000 이 됐다.
+     * 자르기(winsorize)로는 못 막는다. 200배를 10배로 눌러도 "시세의 10배" 라는 틀린 말이 남는다.
+     * 비율을 말할 표본이 없다고 인정하는 것이 맞다.
+     *
+     * ⚠️ 운영 도안 280개가 전부 발행량 10장 미만이다(평균 1.6장). 티켓 한 장에 카드 한 장이
+     *    나오는 구조라 앞으로도 그렇다 — ownedShareAfter 는 이 서비스에서 사실상 늘 null 이고,
+     *    그것이 사실이다. 매집은 지분이 아니라 구매 비중·속도로 봐야 한다.
+     */
+    private static final int MIN_PRICE_SAMPLES = 3;           // R4 price-min-samples
+    private static final int MIN_VOLUME_SAMPLES = 3;          // R6 volume-min-baseline
+    private static final int MIN_SUPPLY_FOR_SHARE = 10;       // R7 hoard-min-supply
+    private static final int MIN_DESIGN_TRADES_FOR_BUY_SHARE = 3;  // R7 내부 상수와 같은 값
+    /** 구매 이력 1건은 "평소 최대 지출" 의 기준선이 못 된다 */
+    private static final int MIN_SPEND_SAMPLES = 2;
+
     private TradeRiskFeatureVector() {
     }
 
@@ -47,19 +70,23 @@ final class TradeRiskFeatureVector {
         f.put("photocardCycled", ctx.photocardCycled());
 
         // 시세 — 배율만 남긴다. price·medianPrice 원본은 넣지 않는다
-        f.put("priceRatio", ratio(ctx.price(), ctx.medianPrice()));
-        f.put("hasPriceReference", ctx.medianPrice() != null && ctx.medianPrice() > 0);
+        boolean priceComparable = ctx.designTradesInWindow() >= MIN_PRICE_SAMPLES;
+        f.put("priceRatio", priceComparable ? ratio(ctx.price(), ctx.medianPrice()) : null);
+        f.put("hasPriceReference", priceComparable && ctx.medianPrice() != null && ctx.medianPrice() > 0);
 
         // 거래량 — 개수는 로그로 눌러 넣는다. 시장이 커져도 뜻이 흔들리지 않게
         f.put("recentVolumeLog", log1p(ctx.recentVolume()));
         f.put("baselineVolumeLog", log1p(ctx.baselineVolume()));
-        f.put("partyVolumeShare", share(ctx.recentVolumeWithParties(), ctx.recentVolume()));
+        f.put("partyVolumeShare", ctx.recentVolume() < MIN_VOLUME_SAMPLES ? null
+                : share(ctx.recentVolumeWithParties(), ctx.recentVolume()));
 
         // 매집 — 지분(비율)이 본체다
         f.put("designIssuedSupplyLog", log1p(ctx.designIssuedSupply()));
-        f.put("ownedShareAfter", share(ctx.buyerOwnedOfDesignAfter(), ctx.designIssuedSupply()));
+        f.put("ownedShareAfter", ctx.designIssuedSupply() < MIN_SUPPLY_FOR_SHARE ? null
+                : share(ctx.buyerOwnedOfDesignAfter(), ctx.designIssuedSupply()));
         f.put("designTradesInWindowLog", log1p(ctx.designTradesInWindow()));
-        f.put("buyShareAfter", share(ctx.buyerBuysOfDesignInWindow() + 1, ctx.designTradesInWindow() + 1));
+        f.put("buyShareAfter", ctx.designTradesInWindow() < MIN_DESIGN_TRADES_FOR_BUY_SHARE ? null
+                : share(ctx.buyerBuysOfDesignInWindow() + 1, ctx.designTradesInWindow() + 1));
 
         // 계정 나이 — 분 단위 원본은 서비스가 오래될수록 커진다. 임계 판정만 남긴다
         f.put("buyerIsNewAccount", isNew(ctx.buyer().createdAt(), ctx.requestAt()));
@@ -71,8 +98,10 @@ final class TradeRiskFeatureVector {
         f.put("buyerPriorDeviceLoginsLog", log1p(ctx.buyerPriorDeviceLogins()));
         f.put("minutesSinceDeviceFirstLogin", minutesBetween(ctx.buyerDeviceFirstLoginAt(), ctx.requestAt()));
         f.put("buyerDeviceSeenBefore", ctx.buyerDeviceFirstLoginAt() != null);
-        f.put("spendRatio", ratio(ctx.price(), ctx.buyerMaxSpendInWindow()));
-        f.put("hasSpendHistory", ctx.buyerMaxSpendInWindow() != null && ctx.buyerMaxSpendInWindow() > 0);
+        boolean spendComparable = ctx.buyerPurchaseCountInWindow() >= MIN_SPEND_SAMPLES;
+        f.put("spendRatio", spendComparable ? ratio(ctx.price(), ctx.buyerMaxSpendInWindow()) : null);
+        f.put("hasSpendHistory", spendComparable
+                && ctx.buyerMaxSpendInWindow() != null && ctx.buyerMaxSpendInWindow() > 0);
 
         // 그래프 — 거래를 이어 놓아야 보이는 것 (14-2-2)
         TradeRiskContext.Graph g = ctx.graph();

@@ -95,7 +95,7 @@ public class NftTradeRiskQueryRepository {
         int buyerOwned = buyerOwnedOfDesign(base.designId, base.buyerId);
         LocalDateTime firstDeposit = firstDepositAt(base.buyerId);
         LoginStats login = loginStats(base.buyerId, buyerIp, buyerUa, loginSince, requestAt);
-        Long maxSpend = buyerMaxSpend(base.buyerId, tradeId, priceSince);
+        SpendStats spend = buyerSpend(base.buyerId, tradeId, priceSince);
         TradeRiskContext.Graph graph = graphStats(base, tradeId, volumeSince);
         TradeRiskContext.Decoration decoration = decorationOf(base, requestAt);
         TradeRiskContext.Velocity velocity = velocityOf(base, tradeId, requestAt);
@@ -110,7 +110,7 @@ public class NftTradeRiskQueryRepository {
                 volume.recent, volume.recentWithParties, volume.baseline,
                 base.issuedSupply, buyerOwned, price.samples, price.buyerBuys,
                 firstDeposit,
-                login.priorOtherDevices, login.deviceFirstLogin, maxSpend,
+                login.priorOtherDevices, login.deviceFirstLogin, spend.max, spend.count,
                 graph, decoration, velocity,
                 now));
     }
@@ -335,11 +335,19 @@ public class NftTradeRiskQueryRepository {
                 rs.getInt("seller_10m"), rs.getInt("seller_1h"), rs.getInt("card_24h")));
     }
 
-    private Long buyerMaxSpend(Long buyerId, Long tradeId, LocalDateTime since) {
+    /**
+     * 구매자의 최근 기간 최대 지출과 <b>그 표본 수</b>.
+     *
+     * <p>건수를 같이 세는 이유: 구매 이력이 1건뿐이면 "평소 최대 지출" 이 기준선이 못 된다.
+     * 그 1건이 1원이었다면 200원 거래가 200배가 되어 버린다 — 실제로 dev 에서 그런 값이 나왔다.
+     */
+    private SpendStats buyerSpend(Long buyerId, Long tradeId, LocalDateTime since) {
         return jdbcTemplate.queryForObject("""
-                SELECT max(price) FROM nft_photocard_trades
+                SELECT max(price) AS max_price, count(*) AS n FROM nft_photocard_trades
                  WHERE buyer_id = :b AND chain_status = 'COMPLETED' AND completed_at >= :since AND id <> :tradeId
-                """, Map.of("b", buyerId, "since", since, "tradeId", tradeId), Long.class);
+                """, new MapSqlParameterSource().addValue("b", buyerId).addValue("since", since)
+                        .addValue("tradeId", tradeId),
+                (rs, i) -> new SpendStats((Long) rs.getObject("max_price"), rs.getInt("n")));
     }
 
     private static BaseRow readBase(ResultSet rs) throws SQLException {
@@ -374,6 +382,7 @@ public class NftTradeRiskQueryRepository {
     }
 
     private record BidRow(String ip, String ua) {}
+    private record SpendStats(Long max, int count) {}
     private record CardStats(boolean buyerOwned, int trades, int owners) {}
     private record PairStats(int count, boolean cycled) {}
     private record PriceStats(Long median, int samples, int buyerBuys) {}
