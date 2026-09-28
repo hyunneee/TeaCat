@@ -31,6 +31,14 @@ export interface MarketPhotocard {
   price: number;
   sellerNickname: string;
   viewCount: number;
+  /**
+   * 꾸민 모습. 꾸미지 않았으면 null 입니다 (2026-09-23).
+   *
+   * 🔴 **마켓에서도 꾸민 모습으로 보여줍니다.** 꾸밈은 카드를 따라 사는 사람에게 그대로
+   *    넘어가므로, 사기 전에 보이지 않으면 **뭘 사는지 모르고** 사게 됩니다.
+   * 🔴 `imageUrl` 을 덮어쓰지 않고 따로 둡니다 — 도안 그림이 필요한 곳이 따로 있습니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /**
@@ -48,17 +56,17 @@ export interface PhotocardArt {
 
 /** 사용자별 도감 한 칸. 미보유이면 앞면 정보는 서버부터 null로 가립니다. */
 export interface DrawPoolCard {
-  designId: number;
+  templateId: number;
   owned: boolean;
   name: string | null;
   imageUrl: string | null;
   group: string | null;
   grade: PocaGrade | null;
-  acquisition: {
+  acquisitions: {
     type: 'PERFORMANCE' | 'EVENT';
     /** 공연명이거나, 전역 풀이라면 이벤트 포토카드 팩 이름입니다. */
     name: string;
-  };
+  }[];
   count: number;
   marketCount: number;
   marketState: 'LISTED' | 'AUCTION' | 'SETTLING' | null;
@@ -105,6 +113,13 @@ export interface MyPhotocard extends PocaDesignInfo {
   marketType?: PhotocardMarketType | null;
   /** ACTIVE 또는 온체인 정산 중. 판매 중이 아니면 null */
   marketStatus?: PhotocardMarketStatus | null;
+  /**
+   * 스티커를 얹어 꾸민 카드 그림. 꾸미지 않았으면 없습니다.
+   *
+   * 🔴 **내 카드 목록에만 있는 필드입니다.** 마켓(`MarketPhotocard`)에는 없고 있어서도
+   *    안 됩니다 — 마켓에 꾸민 그림이 뜨면 사는 사람이 원본을 오해합니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /**
@@ -144,6 +159,7 @@ export interface PhotocardOrigin {
 
 /** 포카 상세 */
 export interface PhotocardDetail extends PocaDesignInfo {
+  templateId?: number | null;
   isMine?: boolean;
   photocardId: number;
   /** 내가 가진 같은 도안 카드를 물을 때 쓰는 열쇠 (`nftApi.myCopies`) */
@@ -176,6 +192,13 @@ export interface PhotocardDetail extends PocaDesignInfo {
     bidCount: number;
     endsAt: string;
   } | null;
+  /**
+   * 스티커를 얹어 꾸민 카드 그림.
+   *
+   * 🔴 **서버가 본인 카드일 때만 채웁니다.** 남의 카드 상세에서는 늘 없습니다 —
+   *    남이 꾸민 그림을 보고 산 사람이 받는 것은 원본이라 속는 셈이 됩니다.
+   */
+  decoratedImageUrl?: string | null;
 }
 
 /** 판매 등록(P3) 응답 */

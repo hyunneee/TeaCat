@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Armchair, BadgeCheck, Coins, Hand, Layers, TriangleAlert } from 'lucide-react';
+import { Armchair, BadgeCheck, Coins, Hand, Layers, Sparkles, TriangleAlert } from 'lucide-react';
 import { BottomBar, DetailHeader as Header } from '@/shared/components/layout';
 import { Button, Card, Input, Segmented, Textarea } from '@/shared/components/ui';
 import {
@@ -13,7 +13,7 @@ import {
 import { EmptyState, PageLoader } from '@/shared/components/common';
 import { useModal } from '@/app/providers';
 import { ApiError, newIdempotencyKey } from '@/shared/api';
-import { ROUTES } from '@/shared/constants';
+import { FEATURE, ROUTES } from '@/shared/constants';
 import { formatDate } from '@/shared/lib';
 import { useAuth } from '@/features/auth';
 import {
@@ -69,7 +69,7 @@ export function NftDetailPage() {
   const trade = useAuctionTrade(card?.auction?.auctionId ?? 0);
   /* 같은 도안을 내가 몇 장 가졌나 — 도감이 한 칸으로 묶기 때문에 상세에서 펼쳐 줍니다.
      designId 는 상세 응답에서 오므로 상세보다 한 박자 늦게 채워집니다. */
-  const { data: copies } = useMyDesignCopies(user ? card?.designId : undefined);
+  const { data: copies } = useMyDesignCopies(user ? card?.designId : undefined, card?.templateId);
   const { data: token } = useTokenBalance();
   const purchase = usePurchasePhotocard();
   const list = useListPhotocard();
@@ -147,6 +147,21 @@ export function NftDetailPage() {
   /* 내 카드가 아니면 보유 목록을 그리지 않습니다 — 남의 카드 화면에서 내 보유 장수를
      꺼내 보일 자리가 아닙니다(목록 자체는 내 것만 옵니다) */
   const myCopies = mine ? allCopies : [];
+  /*
+   * 스티커로 꾸민 그림이 있으면 그걸 보여줍니다.
+   *
+   * 🔴 **남의 카드에도 보여줍니다.** 꾸밈은 카드를 따라 사는 사람에게 그대로 넘어가므로,
+   *    사기 전에 보이지 않으면 뭘 사는지 모르고 사게 됩니다.
+   * ⚠️ 2026-09-22 에는 `mine` 일 때만이었습니다. 그때는 팔릴 때 꾸밈을 지워서 보여준 것과
+   *    받는 것이 달랐습니다 — 그 규칙이 바뀌면서 이 제한도 같이 풀렸습니다. 마켓 목록의
+   *    `decoratedImageUrl` 과 **한 쌍**이라, 되돌린다면 양쪽을 같이 되돌려야 합니다.
+   *
+   * 🔴 **카드를 그리는 곳이 셋입니다** — 내 카드(`PocaLiveCard`) · 남의 카드
+   *    (`PocaShowcase`) · 확대 보기(`PocaFullscreen`). 셋 다 이 값을 써야 합니다.
+   *    ⚠️ 실제로 남의 카드 쪽만 `card.imageUrl` 로 남아 있어서, **마켓 목록에는 꾸민
+   *       모습이 보이는데 눌러 들어가면 맨 카드**였습니다 (2026-09-23).
+   */
+  const shownImageUrl = card.decoratedImageUrl || card.imageUrl;
   const listing = card.listing ?? null;
   const auction = card.auction ?? null;
   /* 모바일에 고정 버튼이 떠 있는가 — 아래 `BottomBar.Spacer` 주석 참고.
@@ -195,7 +210,7 @@ export function NftDetailPage() {
                 <PocaLiveCard
                   photocardId={card.photocardId}
                   designName={card.designName}
-                  imageUrl={card.imageUrl}
+                  imageUrl={shownImageUrl}
                   glow={card.grade === undefined || isSpecial(card.grade)}
                   motes
                   className="aspect-[2/3] w-full"
@@ -205,7 +220,7 @@ export function NftDetailPage() {
               <PocaShowcase
                 className="mx-auto w-48 lg:w-full lg:max-w-72"
                 seed={pocaSeed(card.photocardId)}
-                imageUrl={card.imageUrl}
+                imageUrl={shownImageUrl}
                 alt={`${card.designName} 포토카드`}
               />
             )}
@@ -217,6 +232,25 @@ export function NftDetailPage() {
                 <Hand size={14} />
                 카드를 눌러 자세히 봐요
               </p>
+            )}
+
+            {/* 🔴 **내 카드일 때만** 보입니다. 이 화면은 마켓에서 들어온 **남의 카드도**
+                그리기 때문에, 조건 없이 달면 남의 그림을 꾸며 가져가는 길이 열립니다.
+                하단 초록 버튼(사기/팔기)과 겹치지 않게 `soft` 로 둡니다 — 한 화면의
+                primary 는 하나입니다 (DESIGN.md 1장).
+
+                ⚠️ 2026-09-23 에 카드 오른쪽 위 모서리로 옮겨 봤다가 **되돌렸습니다.**
+                   카드 밖으로 걸친 알약 버튼이 어디에도 속하지 않아 보였습니다. */}
+            {FEATURE.sticker && mine && (
+              <div className="mt-3 flex justify-center">
+                <Button
+                  variant="soft"
+                  leftIcon={<Sparkles size={16} />}
+                  onClick={() => navigate(ROUTES.NFT_DECORATE(String(card.photocardId)))}
+                >
+                  스티커로 꾸미기
+                </Button>
+              </div>
             )}
           </>
         }
@@ -493,7 +527,7 @@ export function NftDetailPage() {
         onClose={() => setZoomed(false)}
         photocardId={card.photocardId}
         designName={card.designName}
-        imageUrl={card.imageUrl}
+        imageUrl={shownImageUrl}
         group={card.group}
         grade={card.grade}
       />

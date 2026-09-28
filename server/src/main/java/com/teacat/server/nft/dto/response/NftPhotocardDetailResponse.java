@@ -18,6 +18,9 @@ public record NftPhotocardDetailResponse(
         @Schema(description = "도안 ID. 내가 가진 같은 도안 카드를 물을 때 쓴다", example = "11")
         Long designId,
 
+        @Schema(description = "원본 템플릿 ID. 레거시 도안은 null", nullable = true)
+        Long templateId,
+
         @Schema(description = "도안명")
         String designName,
 
@@ -61,7 +64,18 @@ public record NftPhotocardDetailResponse(
         long viewCount,
 
         @Schema(description = "인증된 조회자가 현재 소유자인지")
-        boolean isMine
+        boolean isMine,
+
+        /* 🔴 위의 imageUrl 을 **바꿔치우지 않고 따로 둔다.** imageUrl 은 "이 카드의 도안"
+           이고 꾸밈은 그 위에 얹힌 것이라, 둘을 합쳐 버리면 되돌릴 수 없다.
+
+           🔴 **남의 카드에도 채운다.** 이 DTO 는 마켓에서 남의 카드를 열 때도 쓰이는데,
+              꾸밈은 카드를 따라 사는 사람에게 그대로 넘어가므로 **사기 전에 보여야** 한다.
+           ⚠️ 2026-09-22 에는 "isMine 일 때만" 이었다. 그때는 팔릴 때 꾸밈을 지워서 보여준
+              것과 받는 것이 달랐다 — 그 규칙이 바뀌면서 이 제한도 같이 풀렸다. 다시
+              "꾸미기 전 모습으로 판매" 로 돌아간다면 이 필드부터 막아야 한다. */
+        @Schema(description = "꾸민 카드 이미지 URL. 꾸미지 않았으면 null 입니다")
+        String decoratedImageUrl
 ) {
 
     public record Auction(

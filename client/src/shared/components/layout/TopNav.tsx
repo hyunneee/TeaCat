@@ -4,7 +4,7 @@ import { UserRound } from 'lucide-react';
 import { Logo } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants';
 import { cn } from '@/shared/lib';
-import { TABS, useActiveIndex } from './navTabs';
+import { DESKTOP_TABS, useActiveDesktopTo } from './navTabs';
 import { SearchEntryButton, TrendingSearchInput } from '@/shared/search';
 import { useScrollNavigation } from './useScrollNavigation';
 import { sectionNavigation } from './sectionNavigation.model';
@@ -12,11 +12,16 @@ import { sectionNavigation } from './sectionNavigation.model';
 /** 본문과 같은 폭으로 맞춥니다 — 로고가 본문 왼쪽 끝과 한 줄로 서야 기둥이 하나로 보입니다 */
 const ROW = 'mx-auto flex w-full max-w-5xl items-center px-6';
 
-/** 데스크톱에서는 오른쪽 위 계정 링크와 겹치는 MY만 둘째 줄에서 뺍니다. */
-const DESKTOP_TABS = TABS.filter((tab) => tab.to !== ROUTES.MY);
+
+
 
 /**
- * 데스크톱(lg 이상)의 상단 내비. 폰의 하단 탭과 **같은 목록**(navTabs)을 위로 올린 것입니다.
+ * 데스크톱(lg 이상)의 상단 내비.
+ *
+ * 🔴 **폰의 하단 탭과 목록이 다릅니다** (`navTabs` 의 `DESKTOP_TABS`). 가로로 늘어선 글자
+ * 탭은 칸이 훨씬 넓어서, 폰에서 한 칸으로 합쳐 둔 **마켓과 내 포카가 여기서는 둘로
+ * 나뉩니다.** 탭을 고칠 때 두 배열을 다 보세요 — 한쪽만 고치면 화면 크기에 따라 메뉴가
+ * 달라집니다.
  *
  * 배치는 티켓 예매 사이트(NOL)의 머리말을 따릅니다 — 두 줄입니다.
  *
@@ -56,8 +61,9 @@ export function TopNav({ action }: TopNavProps = {}) {
       replace: true,
     });
   };
-  const activeIndex = useActiveIndex();
-  const activeTo = activeIndex >= 0 ? TABS[activeIndex]!.to : null;
+  const activeTo = useActiveDesktopTo();
+  /* MY 는 탭 줄에 없으므로 따로 봅니다 — 마이페이지에서 머리말이 전부 회색이 되지 않게 */
+  const myActive = location.pathname.startsWith(ROUTES.MY) && activeTo === null;
 
   return (
     <header
@@ -104,10 +110,10 @@ export function TopNav({ action }: TopNavProps = {}) {
               어디에도 표시가 없으면 마이페이지에서 머리말이 전부 회색이 됩니다. */}
           <Link
             to={ROUTES.MY}
-            aria-current={activeTo === ROUTES.MY ? 'page' : undefined}
+            aria-current={myActive ? 'page' : undefined}
             className={cn(
               'flex shrink-0 items-center gap-1.5 text-sm font-semibold transition-colors',
-              activeTo === ROUTES.MY ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
+              myActive ? 'text-accent-800' : 'text-ink-subtle hover:text-ink-muted',
             )}
           >
             <UserRound size={18} />
@@ -127,7 +133,7 @@ export function TopNav({ action }: TopNavProps = {}) {
 
           return (
             /* NavLink 를 쓰지 않는 이유는 하단 탭과 같습니다 — 자체 접두사 매칭이
-               useActiveIndex 와 어긋납니다 (`/my/tickets` 에서 `/my` 도 켜짐) */
+               activeIndexOf 와 어긋납니다 (`/my/tickets` 에서 `/my` 도 켜짐) */
             <Link
               key={to}
               to={to}

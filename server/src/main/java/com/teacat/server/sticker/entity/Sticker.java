@@ -57,6 +57,19 @@ public class Sticker {
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
+    /**
+     * 꾸미기 "완료하기" 로 소모된 시각. null 이면 아직 안 썼다.
+     *
+     * <p>🔴 <b>되돌릴 수 없다.</b> 꾸미는 중에는 옮기고 빼고 자유지만, 완료를 누르는 순간
+     * 확정된다. 카드가 팔리면 스티커도 카드를 따라가고 판 사람에게 돌아오지 않는다.
+     */
+    @Column(name = "used_at")
+    private OffsetDateTime usedAt;
+
+    /** 어느 카드에 붙었는지. {@code usedAt} 과 항상 함께 채워진다 */
+    @Column(name = "used_photocard_id")
+    private Long usedPhotocardId;
+
     private Sticker(StickerJob job, User user, String imageKey) {
         this.job = job;
         this.user = user;
@@ -78,5 +91,28 @@ public class Sticker {
 
     public boolean isOwnedBy(Long userId) {
         return user.getId().equals(userId);
+    }
+
+    /**
+     * 꾸미기 완료로 소모한다. <b>되돌리는 메서드는 없다</b> — 일부러 두지 않았다.
+     *
+     * <p>이미 소모된 것을 다시 부르면 {@code IllegalStateException} 이다. 부르는 쪽이
+     * {@link #isUsed()} 로 먼저 걸러야 한다 — 조용히 덮어쓰면 "어느 카드에 붙었나" 가 틀어진다.
+     */
+    public void consume(Long photocardId) {
+        if (isUsed()) {
+            throw new IllegalStateException("이미 사용한 스티커입니다. stickerId=" + id);
+        }
+        this.usedAt = OffsetDateTime.now();
+        this.usedPhotocardId = photocardId;
+    }
+
+    public boolean isUsed() {
+        return usedAt != null;
+    }
+
+    /** 이 카드에 이미 붙어 있는가 — 다시 저장할 때 그대로 남아 있어야 하는 것들이다 */
+    public boolean isUsedOn(Long photocardId) {
+        return usedPhotocardId != null && usedPhotocardId.equals(photocardId);
     }
 }

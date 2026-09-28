@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Sparkles, Check } from 'lucide-react';
+import { Search, Sparkles, Book, BookOpen } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Input, Select } from '@/shared/components/ui';
 import { EmptyState, Loading } from '@/shared/components/common';
@@ -81,7 +81,16 @@ export function MyNftsPage() {
   return (
     <>
       {/* 포카 꾸미기(AI 스티커) 진입점은 이 버튼 하나입니다 (구현 계획 1-3).
-          `FEATURE.sticker` 가 꺼지면 버튼도 라우트도 없습니다. */}
+          `FEATURE.sticker` 가 꺼지면 버튼도 라우트도 없습니다.
+
+          🔴 라벨은 **"스티커 생성"** 입니다 (2026-09-23). "포카 꾸미기" 였는데, 누르면
+             꾸미기가 아니라 **스티커 목록**으로 가서 이름과 가는 곳이 어긋났습니다 —
+             꾸미기는 카드 상세의 "스티커로 꾸미기" 로 들어갑니다.
+
+          🔴 **목록(`MY_STICKERS`)으로 보냅니다. 그리기 화면이 아닙니다.**
+             예전엔 여기서 바로 `STICKER_CREATE` 로 갔는데, 그러면 목록으로 가는 길이
+             "방금 만든 결과 화면의 버튼" 하나뿐이었습니다 — 어제 만든 스티커를 다시 보려면
+             **하나 더 만들어야** 목록에 닿는 구조였습니다 (2026-09-22 수정). */}
       <Header
         title="내 포토카드"
         right={
@@ -90,9 +99,9 @@ export function MyNftsPage() {
               variant="soft"
               size="sm"
               leftIcon={<Sparkles size={15} />}
-              onClick={() => navigate(ROUTES.STICKER_CREATE)}
+              onClick={() => navigate(ROUTES.MY_STICKERS)}
             >
-              포카 꾸미기
+              스티커 생성
             </Button>
           ) : undefined
         }
@@ -151,12 +160,20 @@ export function MyNftsPage() {
                 className="peer sr-only"
               />
               <span className="text-ink-muted peer-checked:text-accent-800 peer-focus-visible:outline-brand-900 flex items-center gap-1.5 rounded-lg px-1 py-1 transition-colors peer-checked:font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
-                <Check
-                  size={15}
-                  aria-hidden="true"
-                  className={`shrink-0 transition-colors ${!ownedOnly ? 'text-accent-800' : 'text-ink-subtle'}`}
-                />
-                전체 보기
+                {!ownedOnly ? (
+                  <BookOpen
+                    size={15}
+                    aria-hidden="true"
+                    className="text-accent-800 shrink-0 transition-colors"
+                  />
+                ) : (
+                  <Book
+                    size={15}
+                    aria-hidden="true"
+                    className="text-ink-subtle shrink-0 transition-colors"
+                  />
+                )}
+                도감 보기
               </span>
             </label>
           </div>
@@ -211,7 +228,11 @@ export function MyNftsPage() {
                         <NftCard
                           photocardId={card.photocardId}
                           designName={card.designName}
-                          imageUrl={card.imageUrl}
+                          /* 꾸몄으면 꾸민 모습으로. 🔴 **여기가 내 카드 화면이라 되는 것입니다** —
+                             `NftCard` 는 마켓·홈·검색도 쓰므로 컴포넌트 안에서 이 판단을 하면
+                             마켓에 꾸민 그림이 새어 나가 사는 사람이 속습니다. 그래서 컴포넌트는
+                             그대로 두고 **부르는 쪽이 어느 그림을 줄지 정합니다.** */
+                          imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                           performanceTitle={card.performanceTitle}
                           eventName={card.eventName}
                           state={photocardMarketState(card)}
@@ -220,7 +241,7 @@ export function MyNftsPage() {
                       </li>
                     ))
                   : visible.map((entry) => (
-                      <li key={entry.designId}>
+                      <li key={entry.templateId}>
                         <PocaDexCard
                           entry={entry}
                           onOpen={(photocardId) => navigate(ROUTES.NFT_DETAIL(String(photocardId)))}
@@ -235,7 +256,7 @@ export function MyNftsPage() {
                   title="찾는 카드가 없어요"
                   description={
                     ownedOnly
-                      ? '전체 보기를 선택하거나 다른 이름·역할로 찾아보세요.'
+                      ? '도감 보기를 선택하거나 다른 이름·역할로 찾아보세요.'
                       : '다른 이름이나 역할로 찾아보세요.'
                   }
                 />

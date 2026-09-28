@@ -27,7 +27,16 @@ export function StickerGrid({ stickers, onDelete, deletingId, className }: Stick
               'repeating-conic-gradient(var(--color-surface-2) 0 25%, white 0 50%) 0 0 / 16px 16px',
           }}
         >
-          <img src={s.imageUrl} alt="내 스티커" className="h-full w-full object-contain" loading="lazy" />
+          <img
+            src={s.imageUrl}
+            alt="내 스티커"
+            className="h-full w-full object-contain"
+            loading="lazy"
+          />
+
+          {/* ⚠️ 쓴 스티커를 흐리게 + "사용됨" 배지로 남겨 뒀다가 **뺐습니다** (2026-09-23).
+              부르는 쪽이 안 쓴 것만 넘기므로 여기 올 일이 없고, 다시 쓸 수 없는 칸이
+              목록을 채우는 것보다 아예 사라지는 편이 낫다고 정했습니다. */}
           <IconButton
             label="스티커 지우기"
             variant="danger-ghost"

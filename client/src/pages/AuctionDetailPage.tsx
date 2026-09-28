@@ -20,10 +20,12 @@ export function AuctionDetailPage() {
         <PhotocardDetailLayout
           image={
             card && (
+              /* 꾸몄으면 꾸민 모습으로 — 입찰 전에 뭘 사는지 보여야 합니다.
+                 목록(`AuctionCard`)과 **같은 값**을 써야 목록·상세가 어긋나지 않습니다. */
               <PocaShowcase
                 className="mx-auto w-48 lg:w-full lg:max-w-72"
                 seed={pocaSeed(card.photocardId)}
-                imageUrl={card.imageUrl}
+                imageUrl={card.decoratedImageUrl ?? card.imageUrl}
                 alt={`${card.designName} 포토카드`}
               />
             )

@@ -89,6 +89,24 @@ public class StickerJob {
     @Column(name = "retry_count", nullable = false)
     private short retryCount;
 
+    /**
+     * 이 건을 만들며 태운 캣머니. 0 이면 하루 무료 몫으로 만든 것 (2026-09-23).
+     *
+     * <p>🔴 <b>실패하면 이 금액을 돌려줘야 한다.</b> 얼마를 받았는지 남기지 않으면
+     * 무엇을 돌려줄지 알 수 없다. 실패한 건이 하루 몫에서 안 깎이는 것과 같은 원칙이다.
+     */
+    @Column(name = "paid_cat", nullable = false)
+    private int paidCat;
+
+    /** 실패해서 돌려준 시각. {@code paidCat > 0} 인데 비어 있으면 아직 안 돌려줬다 */
+    @Column(name = "refunded_at")
+    private OffsetDateTime refundedAt;
+
+    /** 환불을 마쳤다고 표시한다. 🔴 표시가 없으면 스위퍼가 돌 때마다 또 돌려준다 */
+    public void markRefunded() {
+        this.refundedAt = OffsetDateTime.now();
+    }
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -112,8 +130,10 @@ public class StickerJob {
     }
 
     public static StickerJob pending(User user, String idempotencyKey, String sketchKey,
-                                     String subject, int seed, String inkColor) {
-        return new StickerJob(user, idempotencyKey, sketchKey, subject, seed, inkColor);
+                                     String subject, int seed, String inkColor, int paidCat) {
+        StickerJob job = new StickerJob(user, idempotencyKey, sketchKey, subject, seed, inkColor);
+        job.paidCat = paidCat;
+        return job;
     }
 
     /** 워커가 쓰는 색 이름. 색을 안 골랐으면 null 이라 모델이 주제에 맞게 고른다 */

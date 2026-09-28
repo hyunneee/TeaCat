@@ -110,6 +110,29 @@ export interface MyHold {
   number: number;
   grade: string | null;
   price: number | null;
+  /**
+   * 취소표 추첨에 당첨돼 받은 자리인가.
+   *
+   * 🔴 **true 면 자리를 놓지 마세요.** 놓는 순간 그 좌석이 일반 판매로 새어 나가고
+   * 되돌릴 길이 없습니다 — 기다리던 사람들이 그 자리를 영영 못 받습니다.
+   * 서버도 `ERR_BOOKING_014` 로 거절하지만, 화면이 먼저 버튼을 감춰야 합니다.
+   * 놓으려면 취소표 화면에서 당첨을 포기해야 다음 대기자에게 넘어갑니다.
+   */
+  resaleWin: boolean;
+}
+
+/**
+ * 취소표 당첨 자리를 쥔 채로 다른 자리를 잡으려 했다.
+ *
+ * 1인 1좌석이라 새 자리를 잡으려면 쥔 것을 놓아야 하는데, 당첨 자리는 놓을 수 없습니다
+ * ({@link MyHold.resaleWin}). `ApiError` 가 아니라 화면이 만드는 오류라 따로 둡니다 —
+ * 서버까지 가 봐야 거절당할 요청이라 보내지 않는 편이 빠르고 정직합니다.
+ */
+export class ResaleWinHeldError extends Error {
+  constructor() {
+    super('취소표에 당첨된 자리를 쥐고 있어요');
+    this.name = 'ResaleWinHeldError';
+  }
 }
 
 /** 서버 `GET /concerts/{id}/policy` */

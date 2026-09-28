@@ -31,7 +31,9 @@ class TradeRiskRulesTests {
     private final NftTradeRiskScreener screener = new NftTradeRiskScreener(null, List.of(
             new TradeRiskSameDeviceRule(), new TradeRiskSamePhoneRule(), new TradeRiskRepeatedPairRule(),
             new TradeRiskPriceOutlierRule(), new TradeRiskNewAccountRushRule(), new TradeRiskVolumeSpikeRule(),
-            new TradeRiskHoardingRule(), new TradeRiskAccountTakeoverRule()), PROPS);
+            new TradeRiskHoardingRule(), new TradeRiskAccountTakeoverRule()), PROPS,
+            // 모델 파일 없이 만든 채점기 — 점수를 내지 않는다. 이 테스트는 규칙만 본다
+            new TradeRiskModelScorer(tools.jackson.databind.json.JsonMapper.builder().build(), false, "fds/none.json", 0.25));
 
     @Test
     void 정상_거래는_아무_신호도_없다() {
@@ -103,13 +105,30 @@ class TradeRiskRulesTests {
 
     @Test
     void R4_시세_대비_4배_이상이면_MEDIUM_이고_표본이_적으면_판단하지_않는다() {
-        var outlier = screener.evaluate(normal().price(4_000).medianPrice(1_000L).priceSamples(3).build());
-        var fewSamples = screener.evaluate(normal().price(9_000).medianPrice(1_000L).priceSamples(2).build());
-        var fair = screener.evaluate(normal().price(3_999).medianPrice(1_000L).priceSamples(10).build());
+        var outlier = screener.evaluate(normal().price(4_000).medianPrice(1_000L).designTradesInWindow(3).build());
+        var fewSamples = screener.evaluate(normal().price(9_000).medianPrice(1_000L).designTradesInWindow(2).build());
+        var fair = screener.evaluate(normal().price(3_999).medianPrice(1_000L).designTradesInWindow(10).build());
 
         assertThat(only(outlier, TradeRiskPriceOutlierRule.CODE).evidence()).containsEntry("ratio", 4.0);
         assertThat(fewSamples.signals()).isEmpty();
         assertThat(fair.signals()).isEmpty();
+    }
+
+    /**
+     * 🔴 꾸민 카드는 R4 가 판단하지 않는다. 잘 꾸민 카드가 시세보다 비싼 것은 정상이고,
+     * 매번 걸면 애써 꾸민 사람이 심사에 올라온다 (설계문서 14-2-3).
+     *
+     * <p>⚠️ 대신 꾸밈은 가격 조작의 알리바이가 된다 — 그쪽은 가격이 아니라 행동으로 본다
+     * (꾸민 뒤 얼마 만에 파는가, 꾸민 사람이 파는 사람인가). 그 값들은 피처로만 나간다.
+     */
+    @Test
+    void R4_는_꾸민_카드를_판단하지_않는다() {
+        var plain = screener.evaluate(normal().price(9_000).medianPrice(1_000L).designTradesInWindow(10).build());
+        var decorated = screener.evaluate(normal().price(9_000).medianPrice(1_000L).designTradesInWindow(10)
+                .decoration(new TradeRiskContext.Decoration(true, 3, 90L, true)).build());
+
+        assertThat(plain.ruleCodes()).contains(TradeRiskPriceOutlierRule.CODE);
+        assertThat(decorated.ruleCodes()).doesNotContain(TradeRiskPriceOutlierRule.CODE);
     }
 
     @Test
@@ -187,7 +206,7 @@ class TradeRiskRulesTests {
     void MEDIUM_두_개면_보류하고_규칙_순서는_코드순으로_고정된다() {
         var result = screener.evaluate(normal()
                 .pairTradeCount(3)                                        // R3 MEDIUM
-                .price(4_000).medianPrice(1_000L).priceSamples(5)         // R4 MEDIUM
+                .price(4_000).medianPrice(1_000L).designTradesInWindow(5)         // R4 MEDIUM
                 .build());
 
         assertThat(result.flagged()).isTrue();
@@ -222,13 +241,14 @@ class TradeRiskRulesTests {
         private int pairTradeCount = 0;
         private boolean photocardCycled = false;
         private Long medianPrice = 1_000L;
-        private int priceSamples = 10;
         private int recentVolume = 2;
         private int recentVolumeWithParties = 1;
         private int baselineVolume = 8;
         private int designIssuedSupply = 100;
         private int buyerOwnedOfDesign = 1;
         private int designTradesInWindow = 10;
+        private TradeRiskContext.Decoration decoration = TradeRiskContext.Decoration.NONE;
+        private int buyerPurchaseCountInWindow = 5;
         private int buyerBuysOfDesignInWindow = 1;
         private LocalDateTime buyerFirstDepositAt = NOW.minusDays(50);
         private int buyerPriorDeviceLogins = 5;
@@ -242,13 +262,14 @@ class TradeRiskRulesTests {
         ContextBuilder pairTradeCount(int v) { pairTradeCount = v; return this; }
         ContextBuilder photocardCycled(boolean v) { photocardCycled = v; return this; }
         ContextBuilder medianPrice(Long v) { medianPrice = v; return this; }
-        ContextBuilder priceSamples(int v) { priceSamples = v; return this; }
         ContextBuilder recentVolume(int v) { recentVolume = v; return this; }
         ContextBuilder recentVolumeWithParties(int v) { recentVolumeWithParties = v; return this; }
         ContextBuilder baselineVolume(int v) { baselineVolume = v; return this; }
         ContextBuilder designIssuedSupply(int v) { designIssuedSupply = v; return this; }
         ContextBuilder buyerOwnedOfDesign(int v) { buyerOwnedOfDesign = v; return this; }
         ContextBuilder designTradesInWindow(int v) { designTradesInWindow = v; return this; }
+        ContextBuilder decoration(TradeRiskContext.Decoration v) { decoration = v; return this; }
+        ContextBuilder buyerPurchaseCountInWindow(int v) { buyerPurchaseCountInWindow = v; return this; }
         ContextBuilder buyerBuysOfDesignInWindow(int v) { buyerBuysOfDesignInWindow = v; return this; }
         ContextBuilder buyerFirstDepositAt(LocalDateTime v) { buyerFirstDepositAt = v; return this; }
         ContextBuilder buyerPriorDeviceLogins(int v) { buyerPriorDeviceLogins = v; return this; }
@@ -258,10 +279,13 @@ class TradeRiskRulesTests {
         TradeRiskContext build() {
             return new TradeRiskContext(7L, TradeRiskContext.Source.AUCTION, 11L, null, price, 501L, 31L,
                     seller, buyer, runnerUp, NOW.minusMinutes(1),
-                    pairTradeCount, photocardCycled, medianPrice, priceSamples,
+                    pairTradeCount, photocardCycled, medianPrice,
                     recentVolume, recentVolumeWithParties, baselineVolume,
                     designIssuedSupply, buyerOwnedOfDesign, designTradesInWindow, buyerBuysOfDesignInWindow,
-                    buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow, NOW);
+                    buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow,
+                    buyerPurchaseCountInWindow,
+                    // 규칙 R1~R8 은 그래프 값을 읽지 않는다 — 피처 전용이다 (AUCTION_FRAUD_DESIGN.md 14-2-2)
+                    TradeRiskContext.Graph.EMPTY, decoration, TradeRiskContext.Velocity.EMPTY, NOW);
         }
     }
 }

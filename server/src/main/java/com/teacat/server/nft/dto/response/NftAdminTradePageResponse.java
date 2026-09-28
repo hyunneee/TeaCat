@@ -47,7 +47,12 @@ public record NftAdminTradePageResponse(
             @Schema(description = "심사 ID. 심사에 걸린 적이 없으면 null") Long reviewId,
             @Schema(description = "심사 결정. 대기 중이거나 심사 없으면 null") NftReviewDecision reviewDecision,
             @Schema(description = "심사 최고 무게. 심사 없으면 null") NftReviewSeverity reviewSeverity,
-            @Schema(description = "심사가 정산을 실제로 멈췄나. 심사 없으면 null") Boolean reviewHeld
+            @Schema(description = "심사가 정산을 실제로 멈췄나. 심사 없으면 null") Boolean reviewHeld,
+            @Schema(description = """
+                    섀도우 모델의 부정 확률 0~1. 규칙과 달리 모든 거래에 붙습니다.
+                    🔴 이 값은 아무 결정도 하지 않습니다 — 관리자 참고용입니다.
+                    모델이 없던 시점의 거래이거나 학습 범위 밖이면 null 입니다.
+                    """, example = "0.84") Double modelScore
     ) {
     }
 

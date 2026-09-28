@@ -103,6 +103,8 @@ export interface TradeReviewDetail {
   /** AI 분석 보고서(설계 7-3). 아직 없으면 null */
   analysis: Record<string, unknown> | null;
   analysisModel: string | null;
+  /** 섀도우 모델의 판단과 근거 */
+  model: ModelInsight;
   decidedBy: number | null;
   decisionNote: string | null;
   sameIp: boolean | null;
@@ -110,6 +112,9 @@ export interface TradeReviewDetail {
   seller: TradeReviewPartyDetail;
   buyer: TradeReviewPartyDetail;
   bids: TradeReviewBid[];
+  /** 심사 당시 시세 비교 기간의 완료 거래 수. 예전 피처 기록이 없으면 null */
+  priceReferenceSamples: number | null;
+  priceMinSamples: number;
   recentDesignTrades: TradeReviewRecentTrade[];
 }
 
@@ -155,6 +160,31 @@ export interface AdminTrade {
   reviewSeverity: ReviewSeverity | null;
   /** 심사가 정산을 실제로 멈췄나. 심사 없으면 null */
   reviewHeld: boolean | null;
+  /**
+   * 섀도우 모델의 부정 확률 0~1. 규칙과 달리 모든 거래에 붙습니다.
+   * 🔴 아무 결정도 하지 않습니다 — 관리자 참고용입니다.
+   * 모델이 없던 시점의 거래이거나 학습 범위 밖이면 null 입니다.
+   */
+  modelScore: number | null;
+}
+
+/** 피처 하나가 이 점수에 보탠 몫. 양수면 부정 쪽, 음수면 정상 쪽으로 민 것 */
+export interface ModelFactor {
+  label: string;
+  contribution: number;
+}
+
+/**
+ * 섀도우 모델의 판단과 근거.
+ *
+ * 로지스틱 회귀라 점수가 각 피처 기여의 단순 합이라, "왜 이 점수인가" 를 계산으로 답할 수 있습니다.
+ * 채점 당시와 지금 모델이 다르면(staleModel) 근거를 보여주지 않습니다 — 맞지 않는 설명보다 없는 편이 낫습니다.
+ */
+export interface ModelInsight {
+  score: number | null;
+  version: string | null;
+  staleModel: boolean;
+  explanation: ModelFactor[];
 }
 
 export interface AdminTradePage {

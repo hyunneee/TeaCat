@@ -30,7 +30,11 @@ export function StickerCreatePage() {
   const { open } = useModal();
 
   const remaining = quota.data?.remaining;
-  const exhausted = remaining === 0;
+  /* 🔴 무료 몫을 다 써도 **막지 않습니다.** 1장당 캣머니를 내면 계속 만들 수 있습니다
+     (2026-09-23). 값은 서버가 알려줍니다 — 화면에 박으면 설정을 바꿨을 때 어긋납니다. */
+  const paid = remaining === 0;
+  const price = quota.data?.extraPriceCat;
+  const makeLabel = paid && price ? `스티커 만들기 (${price}캣)` : '스티커 만들기';
   const showingResult = maker.jobId !== null || maker.busy;
   const done = maker.job?.status === 'DONE';
 
@@ -94,7 +98,9 @@ export function StickerCreatePage() {
         {/* 오늘 몫 — 상한(5장)이 있으니 누르기 전에 알려줍니다 */}
         {remaining !== undefined && (
           <p className="text-muted mb-2 text-center text-xs tabular-nums">
-            {exhausted ? '오늘 만들 수 있는 스티커를 다 썼어요' : `오늘 ${remaining}장 더 만들 수 있어요`}
+            {paid
+              ? `오늘 무료로 만들 수 있는 몫을 다 썼어요. 이제 1장에 ${price ?? 0}캣이 들어요`
+              : `오늘 ${remaining}장 더 만들 수 있어요`}
           </p>
         )}
 
@@ -105,11 +111,11 @@ export function StickerCreatePage() {
             size="lg"
             fullWidth
             leftIcon={<Sparkles size={18} />}
-            disabled={!canvas.hasInk || exhausted}
+            disabled={!canvas.hasInk}
             loading={maker.busy}
             onClick={() => maker.start(canvas.strokes)}
           >
-            스티커 만들기
+            {makeLabel}
           </Button>
         ) : (
           <div className="space-y-2">
@@ -130,10 +136,9 @@ export function StickerCreatePage() {
                 className="flex-1"
                 leftIcon={<RefreshCw size={18} />}
                 loading={maker.busy}
-                disabled={exhausted}
                 onClick={() => maker.start(canvas.strokes)}
               >
-                다시 만들기
+                {paid && price ? `다시 만들기 (${price}캣)` : '다시 만들기'}
               </Button>
             </div>
             {done && (

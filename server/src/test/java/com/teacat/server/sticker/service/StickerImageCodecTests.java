@@ -32,6 +32,7 @@ class StickerImageCodecTests {
     private static StickerImageCodec codec(long maxBytes) {
         return new StickerImageCodec(new StickerProperties(
                 5,
+                100,   // extraPriceCat — 이 시험과 무관하다
                 "test-key",
                 DataSize.ofBytes(maxBytes),
                 DataSize.ofBytes(maxBytes),

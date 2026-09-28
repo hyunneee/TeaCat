@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -75,6 +76,8 @@ public class NftAuctionService {
     private final NftAuctionProperties properties;
     private final NftAuctionCloser closer;
     private final NftCursorCodec cursorCodec;
+    /** 목록에 꾸민 그림을 실어 준다 — 사는 사람이 그대로 받으므로 사기 전에 보여야 한다 */
+    private final NftDecorationService decorationService;
 
     /**
      * 경매 등록.
@@ -269,7 +272,9 @@ public class NftAuctionService {
         boolean hasNext = rows.size() > size;
         List<NftAuctionQueryRepository.AuctionRow> page = takePage(rows, size);
         String nextCursor = hasNext ? auctionCursor(effectiveSort, page.getLast()) : null;
-        return new NftCursorPageResponse<>(page.stream().map(NftAuctionSummaryResponse::from).toList(),
+        Map<Long, String> decorated = decoratedOf(page);
+        return new NftCursorPageResponse<>(
+                page.stream().map(row -> NftAuctionSummaryResponse.from(row, decorated)).toList(),
                 nextCursor, hasNext);
     }
 
@@ -296,7 +301,7 @@ public class NftAuctionService {
         return new NftAuctionDetailResponse(
                 row.auctionId(), row.status(),
                 new NftAuctionDetailResponse.Photocard(row.photocardId(), row.designName(), row.imageUrl(),
-                        row.performanceTitle()),
+                        row.performanceTitle(), decorationService.imageUrlOf(row.photocardId())),
                 row.sellerNickname(), row.startPrice(), row.currentPrice(), row.buyNowPrice(), row.bidCount(),
                 row.topBidderNickname(), row.createdAt(), row.endsAt(), row.closedAt(), row.winnerNickname(),
                 finalPrice, viewer);
@@ -334,8 +339,20 @@ public class NftAuctionService {
         String nextCursor = hasNext
                 ? cursorCodec.encode(MY_AUCTIONS_SCOPE, page.getLast().createdAt().toString(), page.getLast().auctionId())
                 : null;
-        return new NftCursorPageResponse<>(page.stream().map(NftAuctionSummaryResponse::from).toList(),
+        Map<Long, String> decorated = decoratedOf(page);
+        return new NftCursorPageResponse<>(
+                page.stream().map(row -> NftAuctionSummaryResponse.from(row, decorated)).toList(),
                 nextCursor, hasNext);
+    }
+
+    /**
+     * 목록에 실린 카드들의 꾸민 그림을 <b>한 번에</b> 가져온다.
+     *
+     * <p>🔴 행마다 부르면 N+1 이다 — 목록은 기본 20장이라 그대로 드러난다.
+     */
+    private Map<Long, String> decoratedOf(List<NftAuctionQueryRepository.AuctionRow> page) {
+        return decorationService.imageUrlsOf(
+                page.stream().map(NftAuctionQueryRepository.AuctionRow::photocardId).toList());
     }
 
     public NftCursorPageResponse<MyNftBidResponse> getMyBids(Long userId, String cursor, Integer requestedSize) {

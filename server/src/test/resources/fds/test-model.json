@@ -1,0 +1,9 @@
+{
+  "version": "test-fixture",
+  "type": "logistic_regression",
+  "intercept": -1.0,
+  "features": [
+    { "name": "priceRatio", "coef": 2.0, "mean": 1.0, "std": 1.0, "impute": 1.0, "lo": 0.0, "hi": 3.0 },
+    { "name": "buyerPreviouslyOwnedCard", "coef": 3.0, "mean": 0.0, "std": 1.0, "impute": 0.0, "lo": 0.0, "hi": 1.0 }
+  ]
+}

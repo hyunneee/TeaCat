@@ -45,6 +45,9 @@ public class NftTradeRiskQueryRepository {
              WHERE t.id = :tradeId
             """;
 
+    /** 경로 탐색 깊이 한계. 3이면 A→B→C→A 고리까지 본다. 늘리면 정산 트랜잭션이 느려진다 */
+    private static final int MAX_HOPS = 3;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public Optional<TradeRiskContext> loadContext(Long tradeId, NftTradeReviewProperties p) {
@@ -92,7 +95,10 @@ public class NftTradeRiskQueryRepository {
         int buyerOwned = buyerOwnedOfDesign(base.designId, base.buyerId);
         LocalDateTime firstDeposit = firstDepositAt(base.buyerId);
         LoginStats login = loginStats(base.buyerId, buyerIp, buyerUa, loginSince, requestAt);
-        Long maxSpend = buyerMaxSpend(base.buyerId, tradeId, priceSince);
+        SpendStats spend = buyerSpend(base.buyerId, tradeId, priceSince);
+        TradeRiskContext.Graph graph = graphStats(base, tradeId, volumeSince);
+        TradeRiskContext.Decoration decoration = decorationOf(base, requestAt);
+        TradeRiskContext.Velocity velocity = velocityOf(base, tradeId, requestAt);
 
         return Optional.of(new TradeRiskContext(
                 tradeId,
@@ -100,11 +106,12 @@ public class NftTradeRiskQueryRepository {
                 base.auctionId, base.listingId, base.price, base.photocardId, base.designId,
                 seller, buyer, runnerUp, requestAt,
                 pair.count, pair.cycled,
-                price.median, price.samples,
+                price.median,
                 volume.recent, volume.recentWithParties, volume.baseline,
                 base.issuedSupply, buyerOwned, price.samples, price.buyerBuys,
                 firstDeposit,
-                login.priorOtherDevices, login.deviceFirstLogin, maxSpend,
+                login.priorOtherDevices, login.deviceFirstLogin, spend.max, spend.count,
+                graph, decoration, velocity,
                 now));
     }
 
@@ -219,11 +226,128 @@ public class NftTradeRiskQueryRepository {
                 rs.getObject("device_first", LocalDateTime.class)));
     }
 
-    private Long buyerMaxSpend(Long buyerId, Long tradeId, LocalDateTime since) {
+    /**
+     * 거래를 이어 놓아야 보이는 값들 (AUCTION_FRAUD_DESIGN.md 14-2-2). 피처 전용이고 규칙은 쓰지 않는다.
+     *
+     * <p>🔴 정산 트랜잭션 안에서 도는 조회다. 경로 탐색을 {@link #MAX_HOPS} 로 끊고 기간도
+     * volume-window 로 좁혀 둔다 — 안 끊으면 거래가 늘수록 마감 직전에 정산이 느려진다.
+     */
+    private TradeRiskContext.Graph graphStats(BaseRow base, Long tradeId, LocalDateTime since) {
+        MapSqlParameterSource cardParams = new MapSqlParameterSource()
+                .addValue("pc", base.photocardId).addValue("b", base.buyerId)
+                .addValue("tradeId", tradeId).addValue("since", since);
+        CardStats card = jdbcTemplate.queryForObject("""
+                SELECT bool_or(buyer_id = :b OR seller_id = :b) AS buyer_owned,
+                       count(*) FILTER (WHERE completed_at >= :since) AS trades,
+                       count(DISTINCT buyer_id) FILTER (WHERE completed_at >= :since) AS owners
+                  FROM nft_photocard_trades
+                 WHERE photocard_id = :pc AND chain_status = 'COMPLETED' AND id <> :tradeId
+                """, cardParams, (rs, i) -> new CardStats(rs.getBoolean("buyer_owned"),
+                rs.getInt("trades"), rs.getInt("owners")));
+
+        return new TradeRiskContext.Graph(card.buyerOwned, card.trades, card.owners,
+                shortestHops(base.buyerId, base.sellerId, tradeId, since));
+    }
+
+    /**
+     * 거래 그래프(판매자 → 구매자)에서 구매자가 판매자에게 닿는 최단 경로. 닿지 않으면 null.
+     *
+     * <p>A→B→C→A 고리의 마지막 구간에서 2를 돌려준다 — 두 사람만 보는 R3 이 놓치는 바로 그 자리다.
+     * 깊이를 {@link #MAX_HOPS} 로 끊으므로 더 긴 고리는 여전히 null 이고, 그건 의도한 한계다.
+     */
+    private Integer shortestHops(Long buyerId, Long sellerId, Long tradeId, LocalDateTime since) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("buyer", buyerId).addValue("seller", sellerId)
+                .addValue("tradeId", tradeId).addValue("since", since).addValue("maxHops", MAX_HOPS);
         return jdbcTemplate.queryForObject("""
-                SELECT max(price) FROM nft_photocard_trades
+                WITH RECURSIVE edges AS (
+                    SELECT DISTINCT seller_id AS src, buyer_id AS dst
+                      FROM nft_photocard_trades
+                     WHERE chain_status = 'COMPLETED' AND completed_at >= :since AND id <> :tradeId
+                ), walk AS (
+                    SELECT dst AS node, 1 AS hops FROM edges WHERE src = :buyer
+                    UNION ALL
+                    SELECT e.dst, w.hops + 1
+                      FROM walk w JOIN edges e ON e.src = w.node
+                     WHERE w.hops < :maxHops
+                )
+                SELECT min(hops) FROM walk WHERE node = :seller
+                """, params, Integer.class);
+    }
+
+    /**
+     * 카드에 얹힌 꾸밈. 한 카드에 하나뿐이다({@code uq_photocard_decorations_card}).
+     *
+     * <p>{@code updated_at} 을 쓴다 — 다시 꾸미면 갱신되므로 "마지막으로 손본 시각" 이 맞다.
+     *
+     * <p>🔴 이 표만 {@code timestamptz} 다. 나머지 시각은 전부 {@code timestamp}(세션 시간대의 벽시계)라
+     * 그대로 빼면 어긋난다. {@code ::timestamp} 캐스트가 세션 시간대 벽시계로 맞춰 주므로
+     * {@code now()::timestamp} 를 쓰는 다른 조회와 같은 시계가 된다.
+     * ⚠️ {@code AT TIME ZONE 'UTC'} 로 바꾸면 KST 9시간이 통째로 더해진다 — 실제로 그렇게 짰다가
+     *    "꾸민 뒤 3분" 이 "562분" 으로 나왔고 테스트가 잡았다.
+     */
+    private TradeRiskContext.Decoration decorationOf(BaseRow base, LocalDateTime requestAt) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("pc", base.photocardId).addValue("seller", base.sellerId)
+                .addValue("requestAt", requestAt);
+        List<TradeRiskContext.Decoration> rows = jdbcTemplate.query("""
+                SELECT jsonb_array_length(placements) AS sticker_count,
+                       (user_id = :seller) AS by_seller,
+                       EXTRACT(EPOCH FROM (:requestAt - updated_at::timestamp)) / 60 AS minutes
+                  FROM photocard_decorations
+                 WHERE photocard_id = :pc
+                """, params, (rs, i) -> {
+            double minutes = rs.getDouble("minutes");
+            Long since = rs.wasNull() || minutes < 0 ? null : Math.round(minutes);
+            return new TradeRiskContext.Decoration(true, rs.getInt("sticker_count"), since,
+                    rs.getBoolean("by_seller"));
+        });
+        return rows.isEmpty() ? TradeRiskContext.Decoration.NONE : rows.getFirst();
+    }
+
+    /**
+     * 짧은 창의 거래 빈도. 금액을 보지 않으므로 시장 규모가 바뀌어도 뜻이 흔들리지 않는다.
+     *
+     * <p>기준 시각은 {@code now} 가 아니라 <b>요청 시각</b>이다 — 마감 대기가 길어져도
+     * "그 사람이 그때 얼마나 빨리 사고 있었나" 가 흐려지지 않는다.
+     */
+    private TradeRiskContext.Velocity velocityOf(BaseRow base, Long tradeId, LocalDateTime requestAt) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("b", base.buyerId).addValue("s", base.sellerId)
+                .addValue("pc", base.photocardId).addValue("tradeId", tradeId)
+                .addValue("requestAt", requestAt);
+        return jdbcTemplate.queryForObject("""
+                SELECT count(*) FILTER (WHERE buyer_id = :b AND completed_at >= :requestAt - interval '10 minutes')
+                           AS buyer_10m,
+                       count(*) FILTER (WHERE buyer_id = :b AND completed_at >= :requestAt - interval '1 hour')
+                           AS buyer_1h,
+                       count(*) FILTER (WHERE seller_id = :s AND completed_at >= :requestAt - interval '10 minutes')
+                           AS seller_10m,
+                       count(*) FILTER (WHERE seller_id = :s AND completed_at >= :requestAt - interval '1 hour')
+                           AS seller_1h,
+                       count(*) FILTER (WHERE photocard_id = :pc AND completed_at >= :requestAt - interval '24 hours')
+                           AS card_24h
+                  FROM nft_photocard_trades
+                 WHERE chain_status = 'COMPLETED' AND id <> :tradeId
+                   AND completed_at >= :requestAt - interval '24 hours' AND completed_at <= :requestAt
+                """, params, (rs, i) -> new TradeRiskContext.Velocity(
+                rs.getInt("buyer_10m"), rs.getInt("buyer_1h"),
+                rs.getInt("seller_10m"), rs.getInt("seller_1h"), rs.getInt("card_24h")));
+    }
+
+    /**
+     * 구매자의 최근 기간 최대 지출과 <b>그 표본 수</b>.
+     *
+     * <p>건수를 같이 세는 이유: 구매 이력이 1건뿐이면 "평소 최대 지출" 이 기준선이 못 된다.
+     * 그 1건이 1원이었다면 200원 거래가 200배가 되어 버린다 — 실제로 dev 에서 그런 값이 나왔다.
+     */
+    private SpendStats buyerSpend(Long buyerId, Long tradeId, LocalDateTime since) {
+        return jdbcTemplate.queryForObject("""
+                SELECT max(price) AS max_price, count(*) AS n FROM nft_photocard_trades
                  WHERE buyer_id = :b AND chain_status = 'COMPLETED' AND completed_at >= :since AND id <> :tradeId
-                """, Map.of("b", buyerId, "since", since, "tradeId", tradeId), Long.class);
+                """, new MapSqlParameterSource().addValue("b", buyerId).addValue("since", since)
+                        .addValue("tradeId", tradeId),
+                (rs, i) -> new SpendStats((Long) rs.getObject("max_price"), rs.getInt("n")));
     }
 
     private static BaseRow readBase(ResultSet rs) throws SQLException {
@@ -258,6 +382,8 @@ public class NftTradeRiskQueryRepository {
     }
 
     private record BidRow(String ip, String ua) {}
+    private record SpendStats(Long max, int count) {}
+    private record CardStats(boolean buyerOwned, int trades, int owners) {}
     private record PairStats(int count, boolean cycled) {}
     private record PriceStats(Long median, int samples, int buyerBuys) {}
     private record VolumeStats(int recent, int recentWithParties, int baseline) {}

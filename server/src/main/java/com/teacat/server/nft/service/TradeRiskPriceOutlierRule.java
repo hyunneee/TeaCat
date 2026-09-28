@@ -24,7 +24,14 @@ public class TradeRiskPriceOutlierRule implements TradeRiskRule {
 
     @Override
     public List<NftTradeRiskSignal> evaluate(TradeRiskContext ctx, NftTradeReviewProperties p) {
-        if (ctx.medianPrice() == null || ctx.medianPrice() <= 0 || ctx.priceSamples() < p.priceMinSamples()) {
+        // 🔴 꾸민 카드는 판단하지 않는다. 잘 꾸민 카드가 시세보다 비싼 것은 정상이고,
+        //    그걸 매번 걸면 애써 꾸민 사람이 심사에 올라온다. 표본 부족일 때 빠지는 것과 같은 이유다.
+        //    ⚠️ 대신 꾸밈은 가격 조작의 알리바이가 된다 — 그쪽은 가격이 아니라 행동으로 본다
+        //       (꾸민 뒤 얼마 만에 파는가, 꾸민 사람이 파는 사람인가). 설계문서 14-2-3.
+        if (ctx.decoration().present()) {
+            return List.of();
+        }
+        if (ctx.medianPrice() == null || ctx.medianPrice() <= 0 || ctx.designTradesInWindow() < p.priceMinSamples()) {
             return List.of();
         }
         double ratio = (double) ctx.price() / ctx.medianPrice();
@@ -32,7 +39,7 @@ public class TradeRiskPriceOutlierRule implements TradeRiskRule {
             return List.of();
         }
         return List.of(new NftTradeRiskSignal(CODE, NftReviewSeverity.MEDIUM,
-                Map.of("price", ctx.price(), "medianPrice", ctx.medianPrice(), "samples", ctx.priceSamples(),
+                Map.of("price", ctx.price(), "medianPrice", ctx.medianPrice(), "samples", ctx.designTradesInWindow(),
                         "ratio", Math.round(ratio * 100) / 100.0, "threshold", p.priceMultiplier(),
                         "windowDays", p.priceWindow().toDays())));
     }

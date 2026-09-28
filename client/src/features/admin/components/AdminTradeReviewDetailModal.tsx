@@ -17,7 +17,7 @@ import {
   remainingUntil,
   ruleLabel,
 } from '../model/adminTradeReview.model';
-import type { TradeReviewDetail, TradeReviewPartyDetail } from '../model/adminTradeReview.types';
+import type { ModelInsight, TradeReviewDetail, TradeReviewPartyDetail } from '../model/adminTradeReview.types';
 
 /**
  * 심사 상세 · 승인 · 거절.
@@ -217,8 +217,14 @@ export function AdminTradeReviewDetailModal({
           {/* 같은 도안 최근 거래 */}
           <section>
             <h3 className="text-ink mb-2 text-sm font-semibold">같은 도안 최근 거래</h3>
+            {detail.priceReferenceSamples !== null && detail.priceReferenceSamples < detail.priceMinSamples && (
+              <p className="text-ink-muted mb-2 text-xs">
+                시세 표본 부족: 심사 당시 비교 거래가 {detail.priceReferenceSamples}건으로, 최소 기준{' '}
+                {detail.priceMinSamples}건에 못 미쳐 가격 이상 규칙을 적용하지 않았어요.
+              </p>
+            )}
             {detail.recentDesignTrades.length === 0 ? (
-              <p className="text-ink-muted text-xs">완료된 거래가 아직 없어요. 시세 규칙은 표본이 모이면 동작해요.</p>
+              <p className="text-ink-muted text-xs">같은 도안의 완료 거래가 아직 없어요.</p>
             ) : (
               <ul className="flex flex-wrap gap-2 text-xs">
                 {detail.recentDesignTrades.map((trade) => (
@@ -238,10 +244,18 @@ export function AdminTradeReviewDetailModal({
             )}
           </section>
 
-          {/* AI 보고서 — 아직 없으면 그 사실만 */}
-          <section>
-            <h3 className="text-ink mb-2 text-sm font-semibold">AI 분석</h3>
-            {detail.analysis && typeof detail.analysis.headline === 'string' ? (
+          {/* 섀도우 모델 판단 — 점수와 그 근거. 로지스틱 회귀라 기여도를 그대로 떼어 보여줄 수 있어요 */}
+          <ModelInsightSection insight={detail.model} />
+
+          {/*
+            AI 보고서(M4 LLM 리포트) — 내용이 있을 때만 그립니다.
+            🔴 비어 있으면 칸 자체를 숨깁니다. 예전에는 "분석 대기 중" 을 띄웠는데,
+               실제로는 기다리는 것이 없어서 관리자가 곧 뜰 것으로 오해합니다.
+               판단 근거는 위의 모델 판단과 규칙 근거로 이미 충분합니다.
+          */}
+          {detail.analysis && typeof detail.analysis.headline === 'string' && (
+            <section>
+              <h3 className="text-ink mb-2 text-sm font-semibold">AI 분석</h3>
               <div className="surface-2 rounded-xl p-3 text-sm">
                 <p className="text-ink font-medium">{detail.analysis.headline}</p>
                 {Array.isArray(detail.analysis.findings) && (
@@ -265,14 +279,8 @@ export function AdminTradeReviewDetailModal({
                   <p className="text-ink-subtle mt-2 text-xs">{detail.analysisModel}</p>
                 )}
               </div>
-            ) : (
-              <p className="text-ink-muted text-xs">
-                {summary.analysisStatus === 'PENDING'
-                  ? '분석 대기 중이에요. 규칙 근거만으로도 결정할 수 있어요.'
-                  : '분석이 없어요. 규칙 근거만으로 결정해요.'}
-              </p>
-            )}
-          </section>
+            </section>
+          )}
 
           {/* 결정 사유 */}
           <Textarea
@@ -334,5 +342,58 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
       <dt className="text-ink-muted">{label}</dt>
       <dd className={strong ? 'text-ink font-semibold' : 'text-ink'}>{value}</dd>
     </div>
+  );
+}
+
+/**
+ * 섀도우 모델의 판단과 근거.
+ *
+ * 🔴 이 점수는 <b>아무 결정도 하지 않습니다.</b> 저장만 되고, 읽고 분기하는 코드가 없습니다.
+ * 관리자가 보고 참고하라고 띄우는 값입니다.
+ *
+ * 🔴 근거는 추측이 아니라 계산입니다. 로지스틱 회귀는 점수가 각 피처 기여의 단순 합이라
+ * 한 항씩 그대로 떼어낼 수 있습니다. 설명 가능한 모델을 고른 값이 여기서 나옵니다.
+ */
+function ModelInsightSection({ insight }: { insight: ModelInsight }) {
+  if (insight.score === null) {
+    return null;
+  }
+  const percent = Math.round(insight.score * 100);
+  return (
+    <section>
+      <h3 className="text-ink mb-2 text-sm font-semibold">모델 판단</h3>
+      <div className="surface-2 rounded-xl p-3">
+        <div className="flex items-baseline gap-2">
+          <span className="text-ink text-xl font-semibold tabular-nums">{insight.score.toFixed(2)}</span>
+          <span className="text-ink-muted text-xs">부정 가능성 {percent}%</span>
+        </div>
+
+        {insight.staleModel ? (
+          <p className="text-ink-muted mt-2 text-xs">
+            채점 당시와 모델이 달라 근거를 보여주지 않아요. 점수는 {insight.version} 이 매긴 값이에요.
+          </p>
+        ) : (
+          insight.explanation.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {insight.explanation.map((factor) => (
+                <li key={factor.label} className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-ink-muted">{factor.label}</span>
+                  <span
+                    className={`tabular-nums ${factor.contribution > 0 ? 'text-ink font-medium' : 'text-ink-subtle'}`}
+                  >
+                    {factor.contribution > 0 ? '+' : ''}
+                    {factor.contribution.toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+
+        <p className="text-ink-subtle mt-3 text-xs">
+          이 점수는 거래를 막지 않아요. 관리자 판정을 모아 맞춰 본 뒤에 쓰임을 넓힐 예정이에요.
+        </p>
+      </div>
+    </section>
   );
 }

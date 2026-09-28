@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface StickerJobRepository extends JpaRepository<StickerJob, Long>, StickerJobClaimRepository {
@@ -96,4 +97,15 @@ public interface StickerJobRepository extends JpaRepository<StickerJob, Long>, S
                AND created_at < :deadline
             """, nativeQuery = true)
     int failAbandoned(@Param("deadline") OffsetDateTime deadline);
+
+    /**
+     * 돈을 받았는데 실패한 건 — 아직 안 돌려준 것만.
+     *
+     * <p>🔴 <b>실패 경로가 셋이라 상태로 찾는다</b>(재시도 소진 · 워커 없음 · 워커 신고).
+     * 경로마다 환불 코드를 심으면 한 곳을 빠뜨리고, 그건 돈이 안 돌아가는 사고다.
+     *
+     * <p>한 번에 많이 집지 않는다 — 환불은 체인 호출이라 한 판에 몰아 돌리면 스위퍼가 길어진다.
+     */
+    List<StickerJob> findTop50ByStatusAndPaidCatGreaterThanAndRefundedAtIsNull(
+            StickerJobStatus status, int minPaidCat);
 }

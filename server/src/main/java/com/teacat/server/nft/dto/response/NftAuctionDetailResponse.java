@@ -27,7 +27,13 @@ public record NftAuctionDetailResponse(
             @Schema(description = "포토카드 ID", example = "501") Long photocardId,
             @Schema(description = "도안명") String designName,
             @Schema(description = "이미지 URL") String imageUrl,
-            @Schema(description = "공연명") String performanceTitle
+            @Schema(description = "공연명") String performanceTitle,
+
+            /* 🔴 목록(`NftAuctionSummaryResponse`)에만 넣고 여기를 빠뜨리면 **목록에는 꾸민
+               모습이 보이는데 눌러 들어가면 맨 카드**가 됩니다. 목록·상세는 한 쌍입니다
+               (고정가 쪽에서 실제로 그렇게 됐습니다 — 2026-09-23). */
+            @Schema(description = "꾸민 카드 이미지 URL. 꾸미지 않았으면 null 입니다")
+            String decoratedImageUrl
     ) {
     }
 

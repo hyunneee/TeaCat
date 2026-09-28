@@ -8,6 +8,7 @@ import { ROUTES } from '@/shared/constants';
 import { trackGaEvent } from '@/shared/lib';
 import { bookingApi, bookingKeys } from '../api/bookingApi';
 import { useBookingStore } from '../store/bookingStore';
+import { ResaleWinHeldError } from '../model/booking.types';
 import type { MyHold } from '../model/booking.types';
 
 /**
@@ -121,10 +122,21 @@ export function useSeatHold(scheduleId: string) {
     const mine = holds.filter((h) => h.scheduleId === scheduleId);
     if (mine.length === 0) return false;
 
+    /* 🔴 **취소표 당첨 자리는 놓지 않습니다.** 예전에는 여기서 싹 놓았는데, 당첨자가
+       예매 화면에 들어온 것만으로 당첨 좌석이 일반 판매로 새어 나갔습니다 — 매진이 풀려
+       아무나 예약했고, 기다리던 사람들은 그 자리를 영영 못 받았습니다 (2026-09-23 운영).
+       서버도 ERR_BOOKING_014 로 거절하지만 여기서 거르는 편이 정직합니다. 놓으려면
+       취소표 화면에서 당첨을 포기해야 다음 대기자에게 넘어갑니다. */
+    const releasable = mine.filter((h) => !h.resaleWin);
+    if (releasable.length === 0) {
+      if (mine.some((h) => h.resaleWin)) throw new ResaleWinHeldError();
+      return false;
+    }
+
     await Promise.all(
-      mine.map((h) => bookingApi.releaseHold(scheduleId, h.seatId).catch(() => undefined)),
+      releasable.map((h) => bookingApi.releaseHold(scheduleId, h.seatId).catch(() => undefined)),
     );
-    dropFromMyHolds(...mine.map((h) => h.seatId));
+    dropFromMyHolds(...releasable.map((h) => h.seatId));
     return true;
   };
 
@@ -170,6 +182,14 @@ export function useSeatHold(scheduleId: string) {
       /* 쥐고 있던 자리를 놓은 뒤에 실패했다면 그 사실을 반드시 말해야 합니다.
          안 그러면 "왜 아까 그 자리도 없어졌지" 가 됩니다 */
       const lostPrevious = gaveUpPrevious.current ? ' 이전에 잡아둔 자리도 풀렸어요.' : '';
+
+      /* 🔴 당첨 자리를 쥐고 있어서 새 자리를 못 잡는 경우. "이미 선점 중" 으로 뭉뜽그리면
+         왜 막혔는지 알 수 없고, 사용자는 당첨을 포기해야 한다는 것도 모릅니다 */
+      if (error instanceof ResaleWinHeldError) {
+        toast.error('취소표에 당첨된 자리가 있어요. 그 자리를 결제하거나 취소표 화면에서 포기해 주세요.');
+        void queryClient.invalidateQueries({ queryKey: bookingKeys.myHolds() });
+        return;
+      }
 
       /* 🔴 이 서비스에서 **가장 중요한 지표**입니다. 좌석 선점 실패는 요청이 실패한 것이라
          클릭 지도에 남지 않고(그래서 Clarity 로는 횟수를 셀 수 없고), 서버 로그에는

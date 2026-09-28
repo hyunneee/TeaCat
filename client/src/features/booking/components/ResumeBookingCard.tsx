@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Ticket } from 'lucide-react';
 import { Button, Card, PosterImage } from '@/shared/components/ui';
 import { cn, formatDateTime } from '@/shared/lib';
 import { HoldTimer } from './HoldTimer';
@@ -37,7 +37,12 @@ export function ResumeBookingCard({
   return (
     <Card interactive onClick={onContinue} className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold">결제를 마치지 않은 자리가 있어요</p>
+        <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold">
+          {hold.resaleWin && <Ticket size={14} className="text-accent-700 shrink-0" aria-hidden />}
+          <span className="truncate">
+            {hold.resaleWin ? '취소표에 당첨된 자리가 있어요' : '결제를 마치지 않은 자리가 있어요'}
+          </span>
+        </p>
         <HoldTimer remainSeconds={remainSeconds} />
       </div>
 
@@ -58,20 +63,30 @@ export function ResumeBookingCard({
         <ChevronRight size={18} className="text-subtle shrink-0" aria-hidden />
       </div>
 
-      {/* 🔴 카드 전체가 눌리는 자리라 전파를 끊습니다 — 안 끊으면 놓으려다 예매로 들어갑니다.
-          자리를 놓는 건 되돌릴 수 없어 붉게 둡니다 (CLAUDE.md 4-7) */}
-      <Button
-        variant="danger-ghost"
-        size="md"
-        fullWidth
-        loading={isReleasing}
-        onClick={(e) => {
-          e.stopPropagation();
-          onRelease();
-        }}
-      >
-        자리 놓기
-      </Button>
+      {/* 🔴 취소표 당첨 자리에는 "놓기" 를 두지 않습니다. 놓는 순간 그 좌석이 일반 판매로
+          새어 나가고 되돌릴 길이 없어서(서버도 ERR_BOOKING_014 로 거절합니다), 포기는
+          다음 대기자에게 제대로 넘기는 취소표 화면에서만 할 수 있어야 합니다 */}
+      {hold.resaleWin ? (
+        <p className="text-muted text-xs">
+          기다리던 자리예요. 기한 안에 결제하지 않으면 다음 대기자에게 넘어가요. 포기하려면
+          취소표 화면에서 해주세요.
+        </p>
+      ) : (
+        /* 🔴 카드 전체가 눌리는 자리라 전파를 끊습니다 — 안 끊으면 놓으려다 예매로 들어갑니다.
+            자리를 놓는 건 되돌릴 수 없어 붉게 둡니다 (CLAUDE.md 4-7) */
+        <Button
+          variant="danger-ghost"
+          size="md"
+          fullWidth
+          loading={isReleasing}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRelease();
+          }}
+        >
+          자리 놓기
+        </Button>
+      )}
     </Card>
   );
 }

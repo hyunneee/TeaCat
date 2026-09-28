@@ -20,10 +20,19 @@ public record StickerResponse(
         String imageUrl,
 
         @Schema(description = "만들어진 시각")
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+
+        /* 🔴 소모는 **되돌릴 수 없다.** 꾸미기 "완료하기" 를 누르면 그 스티커는 카드에 붙어
+           다시 쓸 수 없고, 카드가 팔리면 카드를 따라간다. 화면은 이 값으로 "사용됨" 을 보여준다. */
+        @Schema(description = "꾸미기에 이미 썼는지. true 면 다시 쓸 수 없습니다")
+        boolean used,
+
+        @Schema(description = "붙어 있는 카드 id. 안 썼으면 null")
+        Long usedPhotocardId
 ) {
 
     public static StickerResponse of(Sticker sticker, String imageUrl) {
-        return new StickerResponse(sticker.getId(), imageUrl, sticker.getCreatedAt());
+        return new StickerResponse(sticker.getId(), imageUrl, sticker.getCreatedAt(),
+                sticker.isUsed(), sticker.getUsedPhotocardId());
     }
 }

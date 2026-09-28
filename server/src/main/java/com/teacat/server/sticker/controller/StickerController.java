@@ -84,11 +84,22 @@ public class StickerController {
     }
 
     @Operation(summary = "내 스티커 목록",
-            description = "최근 것이 먼저 옵니다. 지운 것은 나오지 않습니다. imageUrl 은 만료되므로 저장하지 마세요.")
+            description = "최근 것이 먼저 옵니다. 지운 것은 나오지 않습니다. "
+                    + "꾸미기에 이미 쓴 것도 함께 오며 used=true 로 구분합니다. "
+                    + "imageUrl 은 만료되므로 저장하지 마세요.")
     @GetMapping("/users/me/stickers")
     public ResponseEntity<BaseResponse<List<StickerResponse>>> mine(
             @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
         return ResponseEntity.ok(BaseResponse.success(stickerService.mine(authUser.id())));
+    }
+
+    @Operation(summary = "안 쓴 스티커 목록",
+            description = "포카 꾸미기 서랍에서 씁니다. 🔴 스티커는 한 번 붙이면 뗄 수 없어서, "
+                    + "이미 쓴 것은 여기 나오지 않습니다.")
+    @GetMapping("/users/me/stickers/unused")
+    public ResponseEntity<BaseResponse<List<StickerResponse>>> unused(
+            @Parameter(hidden = true) @AuthenticationPrincipal AuthUser authUser) {
+        return ResponseEntity.ok(BaseResponse.success(stickerService.unused(authUser.id())));
     }
 
     @Operation(summary = "스티커 삭제",

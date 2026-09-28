@@ -68,11 +68,11 @@ public class NftPhotocardTemplateService {
     }
 
     @Transactional(readOnly = true)
-    public List<NftPhotocardTemplateResponse> findAll() {
+    public List<NftPhotocardTemplateResponse> findAll(boolean hidden) {
         // 템플릿마다 세지 않고 한 번에 집계한다 (N+1 방지)
         Map<Long, Long> used = usedCounts();
 
-        return templateRepository.findAllByHiddenFalseOrderByIdDesc().stream()
+        return templateRepository.findAllByHiddenOrderByIdDesc(hidden).stream()
                 .map(template -> NftPhotocardTemplateResponse.of(
                         template, used.getOrDefault(template.getId(), 0L)))
                 .toList();

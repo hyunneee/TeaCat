@@ -2,6 +2,13 @@ package com.teacat.server.sticker.service;
 
 import com.teacat.server.common.config.StickerProperties;
 import com.teacat.server.sticker.repository.StickerJobRepository;
+import com.teacat.server.sticker.entity.StickerJob;
+import com.teacat.server.sticker.entity.StickerJobStatus;
+import com.teacat.server.wallet.entity.CatTxReason;
+import com.teacat.server.wallet.service.CatMoneyService;
+
+import java.math.BigInteger;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -41,6 +48,7 @@ public class StickerJobSweeper {
 
     private final StickerJobRepository jobRepository;
     private final StickerProperties properties;
+    private final CatMoneyService catMoneyService;
 
     @Scheduled(fixedDelayString = "${sticker.sweep-interval}")
     @Transactional
@@ -56,9 +64,40 @@ public class StickerJobSweeper {
         int requeued = jobRepository.requeueStalled(claimDeadline, properties.maxRetry());
         int abandoned = jobRepository.failAbandoned(pendingDeadline);
 
+        int refunded = refundFailedPaidJobs();
+
         // 한 건이라도 있을 때만 남긴다. 매분 "0건" 을 찍으면 진짜 신호가 묻힌다
-        if (exhausted + requeued + abandoned > 0) {
-            log.info("스티커 작업 정리: 복귀 {}, 재시도 소진 {}, 워커 없음 {}", requeued, exhausted, abandoned);
+        if (exhausted + requeued + abandoned + refunded > 0) {
+            log.info("스티커 작업 정리: 복귀 {}, 재시도 소진 {}, 워커 없음 {}, 환불 {}",
+                    requeued, exhausted, abandoned, refunded);
         }
+    }
+
+    /**
+     * 돈을 받았는데 실패한 건을 돌려준다.
+     *
+     * <p>🔴 <b>실패 경로마다 심지 않고 여기 한 곳에서 한다.</b> 재시도 소진·워커 없음·워커 신고
+     * 셋 중 하나를 빠뜨리면 <b>돈이 안 돌아간다</b> — 사용자는 알 수 없고 우리도 모른다.
+     * 상태로 찾으면 어느 길로 실패했든 걸린다.
+     *
+     * <p>⚠️ 한 건이 터져도 나머지는 돌려준다. 체인 호출이라 한 건의 실패가 전부를 막으면
+     * 안 된다. 실패는 {@code ERROR} 로 남겨 Sentry 로 올린다 — 사람이 봐야 하는 종류다.
+     */
+    private int refundFailedPaidJobs() {
+        List<StickerJob> targets = jobRepository
+                .findTop50ByStatusAndPaidCatGreaterThanAndRefundedAtIsNull(StickerJobStatus.FAILED, 0);
+        int done = 0;
+        for (StickerJob job : targets) {
+            try {
+                catMoneyService.mint(job.getUser().getId(), BigInteger.valueOf(job.getPaidCat()),
+                        CatTxReason.REFUND, "sticker:refund:" + job.getId());
+                job.markRefunded();
+                done++;
+            } catch (RuntimeException e) {
+                log.error("스티커 실패 건 환불에 실패했습니다. jobId={}, paidCat={}",
+                        job.getId(), job.getPaidCat(), e);
+            }
+        }
+        return done;
     }
 }
