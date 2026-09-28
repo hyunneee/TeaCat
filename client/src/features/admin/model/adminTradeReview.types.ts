@@ -112,6 +112,9 @@ export interface TradeReviewDetail {
   seller: TradeReviewPartyDetail;
   buyer: TradeReviewPartyDetail;
   bids: TradeReviewBid[];
+  /** 심사 당시 시세 비교 기간의 완료 거래 수. 예전 피처 기록이 없으면 null */
+  priceReferenceSamples: number | null;
+  priceMinSamples: number;
   recentDesignTrades: TradeReviewRecentTrade[];
 }
 
