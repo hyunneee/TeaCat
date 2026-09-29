@@ -96,7 +96,8 @@ public class FileStorageService {
     /**
      * 공개로 읽히는 이미지를 올리고 <b>만료 없는 고정 조회 주소</b>를 돌려준다.
      *
-     * <p><b>포토카드 도안 그림 전용이다.</b> 포스터·티켓·좌석배치도는 그대로 presigned 를 쓴다.
+     * <p><b>포토카드 그림 전용이다</b>(도안 — 이 메서드, 꾸민 카드 — {@link #uploadPublicBytes}).
+     * 포스터·티켓·좌석배치도는 그대로 presigned 를 쓴다.
      * 이쪽만 고정 주소인 이유는 두 가지다.
      * <ol>
      *   <li>도안 그림은 이미 IPFS 로 전세계 공개된 자산이라 서명이 지킬 것이 없다</li>
@@ -116,13 +117,44 @@ public class FileStorageService {
      *            중복이 자동으로 정리되고, 어느 원본인지 추적된다
      */
     public String uploadPublic(byte[] bytes, String key, String contentType) {
+        putPublic(bytes, key, contentType);
+        return publicObjectUrl(key);
+    }
+
+    /**
+     * 공개로 읽히는 이미지를 <b>새 key 로</b> 올리고 그 key 를 돌려준다.
+     *
+     * <p>{@link #uploadPublic} 과 달리 key 를 여기서 만든다(UUID). 내용 주소(CID)가 없는
+     * 그림 — 꾸민 카드처럼 다시 만들 때마다 새 key 를 받고 예전 것은 지우는 경우 — 를 위한 것이다.
+     * key 가 매번 새로우므로 {@code immutable} 캐시를 걸어도 낡은 그림이 남지 않는다.
+     *
+     * <p>조회 주소는 {@link #publicObjectUrl} 로 만든다. key 를 저장하고 주소를 저장하지 않는 이유는
+     * 공개 주소의 앞부분(환경마다 다르다)이 바뀌어도 DB 를 고치지 않기 위해서다.
+     *
+     * <p>🔴 {@code directory} 는 익명 읽기 정책이 걸린 접두사 아래여야 한다. 아니면 업로드는 되고
+     * <b>조회만 403</b> 이 난다 ({@link #uploadPublic} 과 같은 함정).
+     */
+    public String uploadPublicBytes(byte[] bytes, String directory, String contentType) {
+        String extension = ImageFiles.extensionOf(contentType);
+
+        if (extension == null) {
+            throw new BusinessException(StorageErrorCode.UNSUPPORTED_IMAGE_TYPE);
+        }
+
+        String key = generateKey(directory, extension);
+        putPublic(bytes, key, contentType);
+        return key;
+    }
+
+    private void putPublic(byte[] bytes, String key, String contentType) {
         try (InputStream stream = new ByteArrayInputStream(bytes)) {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(properties.bucket())
                     .object(key)
                     .stream(stream, bytes.length, -1)
                     .contentType(contentType)
-                    // 키가 CID 라 바이트가 바뀌면 키도 바뀐다. 길게 잡아도 낡은 그림이 남지 않는다.
+                    // 같은 key 에 다른 바이트가 오지 않는다(CID 이거나 매번 새 UUID).
+                    // 길게 잡아도 낡은 그림이 남지 않는다.
                     // (다만 현재 nginx 가 /storage/ 응답에 max-age=600 을 덮어쓰고 있다)
                     .headers(Map.of("Cache-Control", "public, max-age=31536000, immutable"))
                     .build());
@@ -130,8 +162,6 @@ public class FileStorageService {
             log.error("MinIO 공개 업로드 실패. key={}", key, e);
             throw new BusinessException(StorageErrorCode.UPLOAD_FAILED);
         }
-
-        return publicObjectUrl(key);
     }
 
     /** 공개 객체의 고정 조회 주소. presigned 와 달리 만료되지 않는다. */
