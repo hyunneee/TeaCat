@@ -21,10 +21,13 @@ interface Props {
  * 결과 문구 — 가운데 큰 글씨만 글자 단위로 움직입니다.
  *
  * ```
- *   으악...            작고 흐리게        (개발자 카드에만)
+ *   으악...            작고 흐리게        (감탄사 — 개발자·파트장님 카드에만)
  *   최재성 개발자        크게 · 글자마다 움직임
  *   카드네요...         작고 흐리게
  * ```
+ *
+ * 🔴 감탄사의 밝기는 **등급이 정합니다.** "으악..."(꽝)은 흐리게 물러나 있어야 하지만
+ *    "우와!"(파트장님)까지 같은 회색으로 두면 좋은 카드인데 김이 새 보입니다.
  *
  * 등급에 따라 움직임이 다릅니다 — **좋은 카드는 통통 뛰고, 꽝은 부르르 떱니다.**
  * 어디서 끊을지는 화면이 정하지 않습니다(`drawLine`).
@@ -55,8 +58,12 @@ export function PocaResultLine({ card, className }: Props) {
       <span className="sr-only">{drawMessage(card)}</span>
 
       <span aria-hidden>
-        {/* 감탄사 — 큰 글씨 위에 작게 */}
-        {prefix && <span className="block text-[0.72em] text-white/55">{prefix}</span>}
+        {/* 감탄사 — 큰 글씨 위에 작게. 금색 카드("우와!")만 또렷하게 (위 주석) */}
+        {prefix && (
+          <span className={cn('block text-[0.72em]', special ? 'text-white' : 'text-white/55')}>
+            {prefix}
+          </span>
+        )}
 
         <PocaJumpText
           text={lead}
