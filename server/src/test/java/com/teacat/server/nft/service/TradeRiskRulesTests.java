@@ -248,6 +248,7 @@ class TradeRiskRulesTests {
         private int buyerOwnedOfDesign = 1;
         private int designTradesInWindow = 10;
         private TradeRiskContext.Decoration decoration = TradeRiskContext.Decoration.NONE;
+        private int buyerPurchaseCountInWindow = 5;
         private int buyerBuysOfDesignInWindow = 1;
         private LocalDateTime buyerFirstDepositAt = NOW.minusDays(50);
         private int buyerPriorDeviceLogins = 5;
@@ -268,6 +269,7 @@ class TradeRiskRulesTests {
         ContextBuilder buyerOwnedOfDesign(int v) { buyerOwnedOfDesign = v; return this; }
         ContextBuilder designTradesInWindow(int v) { designTradesInWindow = v; return this; }
         ContextBuilder decoration(TradeRiskContext.Decoration v) { decoration = v; return this; }
+        ContextBuilder buyerPurchaseCountInWindow(int v) { buyerPurchaseCountInWindow = v; return this; }
         ContextBuilder buyerBuysOfDesignInWindow(int v) { buyerBuysOfDesignInWindow = v; return this; }
         ContextBuilder buyerFirstDepositAt(LocalDateTime v) { buyerFirstDepositAt = v; return this; }
         ContextBuilder buyerPriorDeviceLogins(int v) { buyerPriorDeviceLogins = v; return this; }
@@ -281,6 +283,7 @@ class TradeRiskRulesTests {
                     recentVolume, recentVolumeWithParties, baselineVolume,
                     designIssuedSupply, buyerOwnedOfDesign, designTradesInWindow, buyerBuysOfDesignInWindow,
                     buyerFirstDepositAt, buyerPriorDeviceLogins, buyerDeviceFirstLoginAt, buyerMaxSpendInWindow,
+                    buyerPurchaseCountInWindow,
                     // 규칙 R1~R8 은 그래프 값을 읽지 않는다 — 피처 전용이다 (AUCTION_FRAUD_DESIGN.md 14-2-2)
                     TradeRiskContext.Graph.EMPTY, decoration, TradeRiskContext.Velocity.EMPTY, NOW);
         }

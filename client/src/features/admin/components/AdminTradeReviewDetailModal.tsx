@@ -217,8 +217,14 @@ export function AdminTradeReviewDetailModal({
           {/* 같은 도안 최근 거래 */}
           <section>
             <h3 className="text-ink mb-2 text-sm font-semibold">같은 도안 최근 거래</h3>
+            {detail.priceReferenceSamples !== null && detail.priceReferenceSamples < detail.priceMinSamples && (
+              <p className="text-ink-muted mb-2 text-xs">
+                시세 표본 부족: 심사 당시 비교 거래가 {detail.priceReferenceSamples}건으로, 최소 기준{' '}
+                {detail.priceMinSamples}건에 못 미쳐 가격 이상 규칙을 적용하지 않았어요.
+              </p>
+            )}
             {detail.recentDesignTrades.length === 0 ? (
-              <p className="text-ink-muted text-xs">완료된 거래가 아직 없어요. 시세 규칙은 표본이 모이면 동작해요.</p>
+              <p className="text-ink-muted text-xs">같은 도안의 완료 거래가 아직 없어요.</p>
             ) : (
               <ul className="flex flex-wrap gap-2 text-xs">
                 {detail.recentDesignTrades.map((trade) => (

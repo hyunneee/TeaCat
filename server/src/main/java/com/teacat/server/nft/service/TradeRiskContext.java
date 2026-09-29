@@ -28,6 +28,7 @@ import java.util.Objects;
  * @param buyerPriorDeviceLogins     요청 전 기간 안, 요청 단말과 <b>다른</b> 단말에서의 로그인 수
  * @param buyerDeviceFirstLoginAt    요청 단말에서의 첫 로그인 시각. 그 단말 로그인 기록이 없으면 null
  * @param buyerMaxSpendInWindow      구매자의 최근 기간 최대 구매가. 구매 이력 없으면 null
+ * @param buyerPurchaseCountInWindow 그 기간의 구매 건수. 1건짜리 기준선은 기준선이 아니다
  * @param graph                      거래 그래프에서 본 구조. 규칙 R1~R8 은 아직 쓰지 않고 피처로만 나간다
  * @param decoration                 이 카드의 꾸밈 이력. R4 가 판단을 건너뛸지 정하고, 나머지는 피처로 나간다
  * @param velocity                   최근 짧은 창의 거래 빈도. 금융권 FDS 의 기본 축이다
@@ -58,6 +59,7 @@ public record TradeRiskContext(
         int buyerPriorDeviceLogins,
         LocalDateTime buyerDeviceFirstLoginAt,
         Long buyerMaxSpendInWindow,
+        int buyerPurchaseCountInWindow,
         Graph graph,
         Decoration decoration,
         Velocity velocity,

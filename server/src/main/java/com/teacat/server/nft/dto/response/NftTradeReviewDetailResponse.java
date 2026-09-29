@@ -47,6 +47,12 @@ public record NftTradeReviewDetailResponse(
         @Schema(description = "경매면 입찰 이력(시간순). 고정가면 빈 목록")
         List<Bid> bids,
 
+        @Schema(description = "심사 당시 같은 도안의 시세 비교 기간 내 완료 거래 수. 피처 기록이 없으면 null")
+        Integer priceReferenceSamples,
+
+        @Schema(description = "가격 이상 규칙이 판단에 필요한 최소 완료 거래 수")
+        int priceMinSamples,
+
         @Schema(description = "같은 도안의 최근 완료 거래(최신순, 최대 10건)")
         List<RecentTrade> recentDesignTrades
 ) {
