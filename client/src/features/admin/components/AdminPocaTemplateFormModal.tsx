@@ -125,7 +125,7 @@ export function AdminPocaTemplateFormModal({ open, onClose, isPending, onSubmit 
         <div className="space-y-1.5">
           <p className="text-ink-muted text-sm font-medium">역할</p>
           <Segmented options={ROLES} value={role} onChange={setRole} />
-          <p className="text-ink-subtle text-xs">코치·교육생은 금색, 개발자는 보라로 나옵니다.</p>
+          <p className="text-ink-subtle text-xs">파트장님·코치·교육생은 금색, 개발자는 보라로 나옵니다.</p>
         </div>
 
         {/* 등록하기 전에 무슨 말이 나올지 그대로 보여줍니다 — 호칭이 틀린 채로 뿌리면 되돌릴 수 없습니다 */}

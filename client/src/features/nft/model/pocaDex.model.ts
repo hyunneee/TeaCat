@@ -1,6 +1,6 @@
 import type { DrawPoolCard, MyPhotocard, PocaGrade } from './nft.types';
 import { type photocardMarketState } from './nft.model';
-import { pocaRole, type PocaRole } from './pocaDraw.model';
+import { pocaRole, POCA_ROLES, type PocaRole } from './pocaDraw.model';
 
 /**
  * 도감 한 칸.
@@ -16,7 +16,7 @@ export interface PocaDexEntry {
   group: string | null;
   grade: PocaGrade | null;
   acquisitions: DrawPoolCard['acquisitions'];
-  /** 코치·교육생·개발자. 소속 꼬리표가 없는 옛 도안은 null */
+  /** 파트장님·코치·교육생·개발자. 소속 꼬리표가 없는 옛 도안은 null */
   role: PocaRole | null;
   /** 몇 장 가졌는가. 0 이면 아직 없는 칸 */
   count: number;
@@ -55,11 +55,10 @@ export type PocaDexMarketState = Exclude<ReturnType<typeof photocardMarketState>
 export const DEX_ROLE_ALL = 'ALL' as const;
 export type DexRoleFilter = typeof DEX_ROLE_ALL | PocaRole;
 
+/* 역할 순서는 `POCA_ROLES` 한 곳에서 옵니다 — 어드민 선택과 도감 필터가 어긋나지 않게 */
 export const DEX_ROLE_OPTIONS: { value: DexRoleFilter; label: string }[] = [
   { value: DEX_ROLE_ALL, label: '전체' },
-  { value: '코치', label: '코치' },
-  { value: '교육생', label: '교육생' },
-  { value: '개발자', label: '개발자' },
+  ...POCA_ROLES.map((role) => ({ value: role, label: role })),
 ];
 
 /**
