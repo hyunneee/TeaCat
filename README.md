@@ -7,6 +7,14 @@
 | 운영 | https://teacat.site |
 | 개발 | https://dev.teacat.site |
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/readme/home.jpg" width="220" alt="홈"/><br/>홈</td>
+    <td align="center"><img src="docs/images/readme/concerts.jpg" width="220" alt="공연 목록"/><br/>공연 목록</td>
+    <td align="center"><img src="docs/images/readme/concert-detail.jpg" width="220" alt="공연 상세"/><br/>공연 상세</td>
+  </tr>
+</table>
+
 ## 아키텍처
 
 ```mermaid
@@ -67,10 +75,14 @@ flowchart LR
 - 128차원 임베딩을 pgvector 컬럼에 저장하고, 코사인 유사도 **0.65 이상**이면 본인으로 판정합니다.
 - 얼굴을 등록해야 좌석을 선점하고 결제할 수 있으며, 티켓이 발급될 때 얼굴이 티켓에 복사됩니다.
 
+<img src="docs/images/readme/face-register.jpg" width="220" alt="얼굴 등록"/>
+
 ### 예매
 - 대기실 → 좌석 선택 → 선점 → 결제 순서의 선착순 예매입니다.
 - 선점은 DB 조건부 UPDATE로 처리하며, 기본 10분 유지됩니다. 부분 유니크 인덱스로 **회차당 1인 1매**를 강제합니다.
 - 중복 요청은 Idempotency-Key로 막습니다.
+
+<img src="docs/images/readme/booking-verify.jpg" width="220" alt="예매 1단계 봇 확인"/>
 
 ### 가상 대기실
 - 회차별 대기열을 Redis Sorted Set으로 관리하며, 부하테스트로 측정한 정원(기본 5,000명)만 좌석 페이지에 입장시킵니다.
@@ -86,9 +98,13 @@ flowchart LR
 - VerifiableDraw는 커밋-리빌 방식입니다. 시드 해시를 먼저 체인에 올리고, 시드와 다음 블록 해시로 난수를 확정하므로 누구나 결과를 검증할 수 있습니다.
 - 당첨자에게는 12시간의 결제 기한이 주어집니다.
 
+<img src="docs/images/readme/resale.jpg" width="220" alt="취소표 추첨 대기"/>
+
 ### 결제 · 캣머니
 - 토스페이먼츠로 결제하며, 캣머니와 카드를 섞어 낼 수 있습니다. 캣머니 사용분은 즉시 홀드됩니다.
 - 캣머니(TCAT)는 ERC-20 토큰으로, 충전·보상 시 mint되고 결제 시 burn됩니다. operationKey로 멱등성을 보장합니다.
+
+<img src="docs/images/readme/token.jpg" width="220" alt="캣머니"/>
 
 ### 지갑
 - 커스터디 HD 지갑입니다. 마스터 니모닉에서 사용자별 주소를 파생하며, 개인키는 저장하지 않습니다.
@@ -101,11 +117,27 @@ flowchart LR
 - 경매(입찰·즉시구매)와 고정가 거래를 지원합니다. 캔버스로 꾸민 카드는 꾸밈이 함께 이전됩니다.
 - 정산은 캣머니 이전 → 카드 이전의 2단계로 진행하며, 실패하면 보상 처리합니다.
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/readme/nft-market.jpg" width="200" alt="포토카드 마켓"/><br/>마켓</td>
+    <td align="center"><img src="docs/images/readme/my-nfts.jpg" width="200" alt="내 포토카드"/><br/>내 포토카드</td>
+    <td align="center"><img src="docs/images/readme/nft-detail.jpg" width="200" alt="포토카드 상세"/><br/>카드 상세</td>
+    <td align="center"><img src="docs/images/readme/auction-detail.jpg" width="200" alt="경매 상세"/><br/>경매</td>
+  </tr>
+</table>
+
 ### 이상거래 탐지 (FDS)
 - 정산 전에 규칙 8종으로 심사합니다: 동일 단말·전화번호, 반복 거래쌍, 가격 이상, 신규 계정 급행, 거래량 급증, 매집, 계정 탈취 의심.
 - `FLAG` 모드(기본)는 심사 기록만 남깁니다. `HOLD` 모드는 관리자 결정까지 정산을 보류하며, 72시간이 지나면 자동 승인합니다.
 - 섀도우 모델: `fds/`에서 로지스틱 회귀를 학습하고 서버가 채점합니다. 점수는 기록만 하고 판정에는 쓰지 않습니다.
 - 관리자 콘솔에서 규칙 근거와 입찰 타임라인을 확인하고 승인하거나 거절합니다.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/readme/admin-fds.jpg" width="400" alt="거래 심사 목록"/><br/>거래 심사 목록</td>
+    <td align="center"><img src="docs/images/readme/admin-fds-detail.jpg" width="400" alt="거래 심사 상세"/><br/>심사 상세 (걸린 규칙 · 판매자/구매자)</td>
+  </tr>
+</table>
 
 ### 기타
 | 기능 | 설명 |
@@ -117,6 +149,26 @@ flowchart LR
 | 공연장 | 엑셀 레이아웃으로 좌석 일괄 생성 |
 | 운영 | 알림, 1:1 문의, 배너, 어드민 대시보드(DAU·배포 마커) |
 | 인증 | 이메일 가입(JWT + 리프레시 토큰), SSAFY OAuth |
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/readme/game-lobby.jpg" width="200" alt="미니게임"/><br/>미니게임 (윷놀이 · 할리갈리)</td>
+    <td align="center"><img src="docs/images/readme/sticker-create.jpg" width="200" alt="스티커 만들기"/><br/>낙서로 스티커 만들기</td>
+    <td align="center"><img src="docs/images/readme/attendance.jpg" width="200" alt="출석 달력"/><br/>출석 체크</td>
+  </tr>
+</table>
+
+#### 운영 콘솔
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/readme/admin-dashboard.jpg" width="400" alt="어드민 대시보드"/><br/>대시보드</td>
+    <td align="center"><img src="docs/images/readme/admin-analytics.jpg" width="400" alt="운영 통계"/><br/>운영 통계 (DAU)</td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/images/readme/admin-stadium.jpg" width="400" alt="공연장 좌석 배치"/><br/>공연장 좌석 배치</td>
+  </tr>
+</table>
 
 ## 기술 스택
 
