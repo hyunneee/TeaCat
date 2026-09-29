@@ -105,6 +105,38 @@ class FileStorageServicePublicUploadTests {
     }
 
     @Test
+    void 키를_만들어_공개로_올리면_조회마다_같은_주소가_나온다() throws Exception {
+        String key = service.uploadPublicBytes(PNG, "public/photocards/__uploadPublicBytes-test", "image/png");
+        try {
+            // key 는 받은 경로 아래에 생긴다 — 익명 읽기 정책이 걸린 접두사를 벗어나면 조회가 403 이다
+            assertThat(key).startsWith("public/photocards/__uploadPublicBytes-test/").endsWith(".png");
+
+            StatObjectResponse stat = client.statObject(
+                    StatObjectArgs.builder().bucket(BUCKET).object(key).build());
+            assertThat(stat.contentType()).isEqualTo("image/png");
+            assertThat(stat.headers().get("Cache-Control")).contains("immutable");
+
+            // 🔴 캐시가 맞으려면 조회 주소가 매번 같아야 한다. presigned 는 X-Amz-Date 가 초 단위로
+            //    바뀌어 1초만 지나도 다른 주소가 된다 — 꾸민 카드가 캐시되지 않던 원인(2026-09-29)
+            String first = service.publicObjectUrl(key);
+            Thread.sleep(1_100);
+            assertThat(service.publicObjectUrl(key)).isEqualTo(first).doesNotContain("X-Amz-Signature");
+        } finally {
+            client.removeObject(RemoveObjectArgs.builder().bucket(BUCKET).object(key).build());
+        }
+    }
+
+    @Test
+    void presigned_주소는_발급할_때마다_달라진다() throws Exception {
+        service.uploadPublic(PNG, KEY, "image/png");
+
+        // 공개 고정 주소가 왜 필요한지의 근거. 이 테스트가 깨지면(=presigned 가 안정되면) 위의 설계를 다시 볼 수 있다
+        String first = service.presignedUrl(KEY);
+        Thread.sleep(1_100);
+        assertThat(service.presignedUrl(KEY)).isNotEqualTo(first);
+    }
+
+    @Test
     void 같은_키로_다시_올리면_덮어쓴다() throws Exception {
         service.uploadPublic(PNG, KEY, "image/png");
         String url = service.uploadPublic(PNG, KEY, "image/png");

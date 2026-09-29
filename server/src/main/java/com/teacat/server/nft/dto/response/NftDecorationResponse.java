@@ -8,13 +8,14 @@ import java.util.Map;
 /**
  * 꾸민 카드 한 장.
  *
- * <p>{@code imageUrl} 은 presigned 라 <b>만료된다.</b> DB 에 담아 두지 않고 조회할 때마다
- * 새로 만든다 ({@code NftDecorationImageResolver}).
+ * <p>{@code imageUrl} 은 공개 고정 주소다(2026-09-29 이전에 저장된 것만 presigned).
+ * {@code stickerImageUrls} 는 presigned 라 <b>만료된다</b> — 둘 다 조회할 때마다 만든다
+ * ({@code NftDecorationImageResolver}).
  */
 @Schema(description = "꾸민 카드")
 public record NftDecorationResponse(
 
-        @Schema(description = "꾸민 카드 이미지 URL (presigned)")
+        @Schema(description = "꾸민 카드 이미지 URL (공개 고정 주소, 예전 꾸밈은 presigned)")
         String imageUrl,
 
         @Schema(description = "스티커 배치 정보(JSON 배열 문자열). 다시 꾸밀 때 그대로 복원합니다")

@@ -48,9 +48,11 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
 
     @BeforeEach
     void stubStorage() {
-        when(fileStorageService.uploadBytes(any(), anyString(), anyString()))
-                .thenReturn("photocard/decoration/" + UUID.randomUUID() + ".png");
+        when(fileStorageService.uploadPublicBytes(any(), anyString(), anyString()))
+                .thenAnswer(inv -> inv.getArgument(1) + "/" + UUID.randomUUID() + ".png");
         when(fileStorageService.presignedUrl(anyString())).thenReturn("https://example.test/signed.png");
+        when(fileStorageService.publicObjectUrl(anyString()))
+                .thenAnswer(inv -> "https://example.test/public/" + inv.getArgument(0));
     }
 
     // ───────────────────────── 픽스처
@@ -278,7 +280,7 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
 
         // 🔴 거절이 업로드보다 **먼저** 돌아야 MinIO 에 쓰레기가 안 남는다
         org.mockito.Mockito.verify(fileStorageService, org.mockito.Mockito.never())
-                .uploadBytes(any(), anyString(), anyString());
+                .uploadPublicBytes(any(), anyString(), anyString());
     }
 
     // ───────────────────────── 소유·입력 검사
@@ -331,5 +333,35 @@ class PhotocardDecorationIntegrationTests extends PostgresIntegrationTest {
         decorationService.save(userId, first, request(insertSticker(userId)));
 
         assertThat(decorationService.imageUrlsOf(List.of(first, second))).hasSize(1);
+    }
+
+    // ───────────────────────── 꾸민 그림 주소 (2026-09-29 공개 고정 주소로)
+
+    @Test
+    @DisplayName("꾸민 그림은 공개 경로에 올라가고 고정 주소로 내려간다")
+    void decorationImageIsPublic() {
+        Long userId = insertUser("public-deco@test.com", "나");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+
+        String url = decorationService.save(userId, photocardId, request(insertSticker(userId))).imageUrl();
+
+        // 🔴 익명 읽기 정책이 걸린 접두사 밖으로 나가면 업로드는 되고 조회만 403 이 난다
+        org.mockito.Mockito.verify(fileStorageService)
+                .uploadPublicBytes(any(), org.mockito.ArgumentMatchers.eq("public/photocards/decorations"), anyString());
+        assertThat(url).startsWith("https://example.test/public/public/photocards/decorations/");
+        // 조회마다 같은 주소여야 브라우저·서비스워커 캐시가 맞는다
+        assertThat(decorationService.imageUrlOf(photocardId)).isEqualTo(url);
+    }
+
+    @Test
+    @DisplayName("예전(비공개 경로)에 저장된 꾸밈은 presigned 로 계속 보인다")
+    void legacyDecorationStaysPresigned() {
+        Long userId = insertUser("legacy-deco@test.com", "나");
+        Long photocardId = insertPhotocardOwnedBy(userId);
+        decorationService.save(userId, photocardId, request(insertSticker(userId)));
+        jdbcTemplate.update("UPDATE photocard_decorations SET image_key = ? WHERE photocard_id = ?",
+                "photocard/decoration/2026/09/old.png", photocardId);
+
+        assertThat(decorationService.imageUrlOf(photocardId)).isEqualTo("https://example.test/signed.png");
     }
 }

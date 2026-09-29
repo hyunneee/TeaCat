@@ -42,7 +42,16 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class NftDecorationService {
 
-    private static final String DIRECTORY = "photocard/decoration";
+    /**
+     * 🔴 도안 그림과 같은 공개 접두사({@link NftPhotocardImageStore#KEY_PREFIX}) 아래에 둔다.
+     * 그 접두사에 걸린 익명 읽기 정책을 그대로 쓰려는 것이다 — 밖으로 빼면 조회가 403 이 난다.
+     *
+     * <p>공개로 두는 이유: 꾸민 모습은 마켓에서 누구에게나 보이는 그림이라 서명이 지킬 것이 없고,
+     * presigned 는 조회마다 주소가 바뀌어 <b>브라우저·서비스워커 캐시가 한 번도 맞지 않았다</b>
+     * (2026-09-29). 예전 key({@code photocard/decoration/...})는 {@link NftDecorationImageResolver}
+     * 가 계속 presigned 로 내려준다.
+     */
+    static final String DIRECTORY = NftPhotocardImageStore.KEY_PREFIX + "decorations";
     private static final String CONTENT_TYPE = "image/png";
     /** 카드 한 장 합성본. 스티커 결과물(8MB)과 같은 자리에 둔다 */
     private static final int MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -69,7 +78,7 @@ public class NftDecorationService {
            안 남는다. 순서를 바꾸면 "스티커가 안 쓰였는데 이미지만 올라간" 파일이 쌓인다. */
         stickerBinder.bind(userId, photocardId, request.placements());
 
-        String newKey = fileStorageService.uploadBytes(image, DIRECTORY, CONTENT_TYPE);
+        String newKey = fileStorageService.uploadPublicBytes(image, DIRECTORY, CONTENT_TYPE);
 
         Optional<NftPhotocardDecoration> existing =
                 decorationRepository.findByPhotocardId(photocardId);
