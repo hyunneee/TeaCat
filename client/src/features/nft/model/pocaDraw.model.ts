@@ -167,10 +167,24 @@ export const REVEAL_BUTTON_GAP = 103;
 
 /* ── 호칭 ───────────────────────────────────────────────────── */
 
-/** 카드 주인공이 누구인가. 호칭과 연출을 함께 정합니다 */
-export type PocaRole = '코치' | '교육생' | '개발자';
+/**
+ * 카드 주인공이 누구인가. 호칭과 연출을 함께 정합니다.
+ *
+ * 🔴 값이 **그대로 화면에 뜨는 호칭**입니다 — 그래서 '파트장님' 은 님까지 포함합니다.
+ *    ('코치' 만 예외로 `pocaTitle`·`drawLineOf` 가 님을 붙입니다 — 도감 필터에서
+ *     "코치님" 보다 "코치" 가 자연스러워서 남겨 둔 것입니다)
+ *
+ * 🔴 이 값은 **데이터가 됩니다.** 어드민이 등록할 때 `withPocaRole` 이 소속 뒤에 붙여
+ *    서버의 `group_name` 에 저장하고, `pocaRole` 이 그걸 도로 읽습니다. 글자를 바꾸면
+ *    이미 등록된 도안의 호칭이 오늘 달라집니다 — 바꿔야 한다면 옛 값도 계속 읽어 주세요.
+ */
+export type PocaRole = '파트장님' | '코치' | '교육생' | '개발자';
 
-export const POCA_ROLES: PocaRole[] = ['코치', '교육생', '개발자'];
+/**
+ * 어드민 역할 선택과 도감 필터가 **이 순서 그대로** 그립니다.
+ * 위에서부터 파트장님 · 코치 · 교육생 — 꽝인 개발자가 마지막입니다.
+ */
+export const POCA_ROLES: PocaRole[] = ['파트장님', '코치', '교육생', '개발자'];
 
 /** 소속 뒤에 역할을 적어 넣을 때 쓰는 구분자 */
 const ROLE_MARK = ' · ';
@@ -194,8 +208,11 @@ export function withPocaRole(group: string, role: PocaRole): string {
  */
 export function pocaRole(group: string, grade?: PocaGrade): PocaRole {
   const tail = group.split(ROLE_MARK).pop()?.trim();
-  if (tail === '코치' || tail === '교육생' || tail === '개발자') return tail;
+  /* 역할을 늘릴 때 여기를 같이 고치지 않아도 되도록 `POCA_ROLES` 를 그대로 봅니다 */
+  if (tail && (POCA_ROLES as string[]).includes(tail)) return tail as PocaRole;
 
+  /* 🔴 옛 카드의 추측 규칙입니다. **새 역할을 여기 넣지 마세요** — 꼬리표가 없는 예전
+     도안이 오늘 갑자기 파트장님이 되어 버립니다. 새 역할은 어드민이 직접 고른 것만 됩니다. */
   if (group.startsWith('서울')) return '코치';
   return grade && !isSpecial(grade) ? '개발자' : '교육생';
 }
@@ -224,10 +241,14 @@ export function drawLine(result: PocaDrawResult): DrawLine {
 export function drawLineOf(fullName: string, group: string, grade: PocaGrade): DrawLine {
   const designName = pocaName(fullName);
 
-  /* 코치·교육생이 같이 쓰는 뒷말 */
+  /* 뽑아서 좋은 카드들이 같이 쓰는 뒷말 */
   const picked = { prefix: '', josa: '을', tail: '뽑았어요!' };
 
   switch (pocaRole(group, grade)) {
+    /* 가장 반가운 카드라 감탄사가 붙습니다. 개발자의 "으악..." 과 같은 자리지만
+       `PocaResultLine` 이 금색 카드에서는 흐림을 걷어 또렷하게 띄웁니다 */
+    case '파트장님':
+      return { ...picked, prefix: '우와!', lead: `${designName} 파트장님` };
     case '코치':
       return { ...picked, lead: `${designName} 코치님` };
     case '교육생':
@@ -238,7 +259,10 @@ export function drawLineOf(fullName: string, group: string, grade: PocaGrade): D
 }
 
 /**
- * 크게 보기의 이름 줄 — "박유신 코치님" · "정재원 교육생" · "최재성 개발자".
+ * 크게 보기의 이름 줄 — "김민수 파트장님" · "박유신 코치님" · "정재원 교육생" · "최재성 개발자".
+ *
+ * 역할 값이 곧 호칭이라 그대로 이어 붙입니다. '코치' 만 님을 더합니다
+ * (`PocaRole` 주석 — 도감 필터에서 "코치" 로 보이는 쪽이 자연스러워서).
  *
  * 소속을 모르면(서버가 아직 안 줍니다) **이름만** 돌려줍니다 — 호칭을 추측하면
  * 코치를 교육생이라 부르는 일이 생깁니다.

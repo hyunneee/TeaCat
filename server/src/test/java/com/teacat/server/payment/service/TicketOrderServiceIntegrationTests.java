@@ -61,8 +61,8 @@ import static org.mockito.Mockito.verify;
            기계에서만 이 클래스가 통째로 "지갑이 없습니다" 로 무너집니다 — 실제로 겪었고,
            원인이 테스트 바깥에 있어서 찾는 데 오래 걸립니다 */
         "blockchain.chain-id=31221",
-        // 10분(기본값)이 아닌 값으로 둔다 — 개봉 시각·취소 마감 테스트가 실제로 이 설정을
-        // 읽어서 계산하는지, 10분을 하드코딩해 우연히 통과하는 게 아닌지를 가려낸다
+        // 기본값과 다른 값으로 둔다 — 개봉 시각·취소 마감 테스트가 실제로 이 설정을
+        // 읽어서 계산하는지, 기본값을 하드코딩해 우연히 통과하는 게 아닌지를 가려낸다
         "booking.policy.cancel-deadline-lead=7m"
 })
 class TicketOrderServiceIntegrationTests {

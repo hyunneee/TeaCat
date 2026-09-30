@@ -51,8 +51,13 @@ export function notYetDrawable(designs: AdminPocaDesign[]): AdminPocaDesign[] {
  * 마지막 한 사람이 카드를 못 받습니다. 남는 것은 괜찮지만 모자란 것은 사고입니다.
  */
 /**
- * 역할이 정해지면 연출 색도 정해집니다 — 개발자만 보라, 코치·교육생은 금색.
+ * 역할이 정해지면 연출 색도 정해집니다 — **개발자만 보라, 나머지는 금색**.
  * 등록하는 사람이 "이 사람이 누구인지" 말고 "무슨 색인지" 까지 알 이유가 없습니다.
+ *
+ * 🔴 서버 등급은 `SPECIAL`·`COMMON` **둘뿐**이라 색도 둘뿐입니다. 파트장님은 코치·교육생과
+ *    같은 금색이고, 구분은 **문구**가 합니다("우와! … 파트장님을 뽑았어요!", `drawLineOf`).
+ *    색을 하나 더 만들려면 서버 enum·마이그레이션과 `--color-poca-*` 토큰이 함께 필요합니다
+ *    (client/CLAUDE.md 0번 절차).
  */
 export function gradeForRole(role: PocaRole): PocaDesignGrade {
   return role === '개발자' ? 'COMMON' : 'SPECIAL';
