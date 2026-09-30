@@ -12,7 +12,7 @@
 /** 도안이 온체인에 올라갔는가 */
 export type PocaDesignChainStatus = 'PENDING' | 'REGISTERING' | 'REGISTERED' | 'FAILED';
 
-/** 뽑기 연출 등급 — 금색(코치·교육생) / 보라(개발자) */
+/** 뽑기 연출 등급 — 금색(파트장님·코치·교육생) / 보라(개발자) */
 export type PocaDesignGrade = 'SPECIAL' | 'COMMON';
 
 /** 카드 그림 한 장. 수량은 여기 없습니다 */
