@@ -142,7 +142,7 @@ booking:
     # 예매 취소 마감 = 공연 시작 - 이 값.
     #   🔴 카드팩 개봉 시각도 같은 값을 읽는다. 둘이 어긋나면 그 차이만큼
     #      "카드 뽑고 예매 취소" 가 가능해진다. 한쪽만 바꾸지 말 것.
-    cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:10m}
+    cancel-deadline-lead: ${BOOKING_CANCEL_DEADLINE_LEAD:30m}
   # 취소표 추첨 (resale). 결제 완료된 예매가 취소될 때 그 구역에 대기자가 있으면 좌석을 풀지 않고
   # 온체인 추첨(VerifiableDraw)을 연다. 당첨자는 결제 기한이 있는 선점(HELD)을 받는다.
   resale:
@@ -288,7 +288,7 @@ nft:
       lead-time: ${NFT_PHOTOCARD_ISSUE_LEAD_TIME:1h}
       # 한 주기에 처리할 최대 회차 수. 나머지는 다음 주기에 다시 잡힌다.
       batch-size: 20
-      # 2026-09-11: 껐다. 티켓 1장 = 카드 1장으로 정했고, 카드는 이제 카드팩(공연 시작 10분 전 개봉)에서
+      # 2026-09-11: 껐다. 티켓 1장 = 카드 1장으로 정했고, 카드는 이제 카드팩(예매 취소 마감부터 개봉)에서
       #   나온다. 이게 켜져 있으면 T-1h 에 공연 도안 카드가 한 장 더 꽂혀 두 장이 된다.
       #   코드는 그대로 두었다 — 어드민 수동 발급
       #   (POST /admin/performances/{id}/schedules/{scheduleId}/photocards/issue)은 계속 동작한다.
