@@ -12,8 +12,10 @@ interface Props {
 /**
  * QR 카메라 미리보기 — 순수 View 입니다. 디코드는 `useQrScanner` 가 합니다.
  *
- * ⚠️ 얼굴 카메라(`CameraStage`)와 달리 **좌우를 뒤집지 않습니다.** 자기 얼굴을 맞추는
- * 화면이 아니라 상대의 폰을 찍는 화면이라, 거울처럼 뒤집으면 오히려 맞추기 어렵습니다.
+ * ⚠️ 얼굴 카메라(`CameraStage`)와 같이 미리보기를 좌우로 뒤집습니다(`scale-x-[-1]`).
+ *    입장 확인 화면에서 QR → 얼굴로 넘어갈 때 화면 방향이 바뀌면 헷갈립니다.
+ *    **디코드는 뒤집지 않은 원본**(`useQrScanner` 가 video 를 캔버스에 직접 그림)으로 하므로
+ *    CSS 반전은 인식에 영향을 주지 않습니다.
  */
 export function QrScanStage({ videoRef, scanning, placeholder }: Props) {
   return (
@@ -23,7 +25,7 @@ export function QrScanStage({ videoRef, scanning, placeholder }: Props) {
         playsInline
         muted
         autoPlay
-        className={cn('size-full object-cover', !scanning && 'opacity-0')}
+        className={cn('size-full scale-x-[-1] object-cover', !scanning && 'opacity-0')}
       />
 
       {!scanning && (
