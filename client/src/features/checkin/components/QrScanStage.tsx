@@ -19,7 +19,14 @@ interface Props {
  */
 export function QrScanStage({ videoRef, scanning, placeholder }: Props) {
   return (
-    <div className="surface-2 relative mx-auto aspect-video w-full overflow-hidden rounded-2xl">
+    /* 켜져 있을 때는 회색 면·둥근 모서리를 뺍니다 — 네모 바깥이 흰 면이라 어차피 안 보이고,
+       남겨 두면 모서리의 안티앨리어싱으로 회색 호가 비칩니다 */
+    <div
+      className={cn(
+        'relative mx-auto aspect-video w-full overflow-hidden',
+        !scanning && 'surface-2 rounded-2xl',
+      )}
+    >
       <video
         ref={videoRef}
         playsInline
@@ -36,10 +43,11 @@ export function QrScanStage({ videoRef, scanning, placeholder }: Props) {
       )}
 
       {scanning && (
-        /* 가운데 네모 — 어디에 대야 하는지 알려줍니다. 인식은 화면 전체에서 합니다 */
+        /* 가운데 네모 — 어디에 대야 하는지 알려줍니다. 바깥은 흰 면으로 가리지만
+           인식은 여전히 화면 전체에서 합니다 (디코드는 가리기 전 원본 프레임) */
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-1/4 inset-y-[12%] rounded-xl border-2 border-dashed border-white/70"
+          className="border-line-strong pointer-events-none absolute inset-x-1/4 inset-y-[12%] rounded-xl border-2 border-dashed shadow-[0_0_0_100vmax_var(--color-surface-1)]"
         />
       )}
     </div>
