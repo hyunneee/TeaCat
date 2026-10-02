@@ -167,8 +167,12 @@ export function YutPanel({ room, state, onAction, pending, chat }: Props) {
           그대로 두면 차례가 바뀔 때마다 아래가 **80px 쯤 뛰어**, 채팅을 누르려던 손가락이
           그 아래 나가기 버튼에 닿습니다. 실제로 그렇게 나가집니다.
 
-          그래서 가장 큰 경우에 맞춰 자리를 잡아 두고 안쪽에서 가운데 정렬합니다. */}
-      <div className="flex min-h-[4.5rem] flex-col justify-center gap-2">
+          그래서 **가장 큰 경우**에 맞춰 자리를 잡아 두고 안쪽에서 가운데 정렬합니다.
+          `min-h-24`(96px) 는 눈대중이 아니라 가장 큰 조합을 더한 값입니다 —
+          안내문 20 + 간격 8 + 버튼 md 44 + 간격 8 + 남은시간 16.
+          🔴 **버튼 크기나 줄 수를 바꾸면 이 값도 같이 고치세요.** 안 고치면 그 경우만
+             상자를 밀어내서, 고정해 둔 의미가 그대로 사라집니다. */}
+      <div className="flex min-h-24 flex-col justify-center gap-2">
         {myTurn ? (
           state.canThrow ? (
             <Button
