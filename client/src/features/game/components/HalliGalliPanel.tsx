@@ -50,8 +50,16 @@ export function HalliGalliPanel({ room, state, onAction, pending, chat }: Props)
 
   return (
     <div className="space-y-4">
-      {/* ── 탁자 ── 3×3 격자. 가운데가 종, 나머지 네 칸이 자리 */}
-      <div className="surface-2 relative grid aspect-square w-full grid-cols-3 grid-rows-3 gap-2 rounded-2xl p-2">
+      {/* ── 탁자 ── 3×3 격자. 가운데가 종, 나머지 네 칸이 자리.
+
+          🔴 **정사각형을 쓰지 않습니다.** `aspect-square w-full` 이면 앱 폭(480px) 가까이
+             정사각형이 되는데, 안에 든 것은 72px 짜리 카드 넷과 56px 종 하나가 전부라
+             탁자의 절반이 빈 칸이었습니다. 그만큼 아래의 버튼·채팅이 화면 밖으로 밀려서
+             종을 치려면 스크롤부터 해야 했습니다.
+
+             대신 **내용이 요구하는 만큼만** 높이를 잡고(`aspect-[5/4]` + 상한), 폭도
+             묶어서 가운데 둡니다 — 윷판이 `max-w-[22rem]` 로 하는 것과 같은 방식입니다. */}
+      <div className="surface-2 relative mx-auto grid aspect-[5/4] w-full max-w-[20rem] grid-cols-3 grid-rows-3 gap-2 rounded-2xl p-2">
         {room.participants.map((participant) => (
           <PlayerSeat
             key={participant.seatNo}
