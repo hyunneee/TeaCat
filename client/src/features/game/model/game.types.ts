@@ -7,7 +7,15 @@ export type GameRoomStatus = 'WAITING' | 'PLAYING' | 'FINISHED' | 'ABORTED';
 export type GameParticipantStatus = 'JOINED' | 'PLAYING' | 'RETIRED' | 'FINISHED';
 
 /** 말 모양. 한 방에서 겹치지 않습니다 */
-export type GamePieceStyle = 'CAT' | 'DOG' | 'RABBIT' | 'BIRD' | 'FISH' | 'TURTLE';
+export type GamePieceStyle =
+  | 'CAT'
+  | 'DOG'
+  | 'RABBIT'
+  | 'BIRD'
+  | 'FISH'
+  | 'TURTLE'
+  | 'MONKEY'
+  | 'SHEEP';
 
 export interface GameParticipant {
   seatNo: number;
@@ -35,6 +43,14 @@ export interface YutState {
   /** 이 판에서 한 사람이 쓰는 말 수. 방을 만들 때 정합니다 */
   piecesPerPlayer: number;
   pieces: number[][];
+  /**
+   * [자리][말] = **직전에 있던 칸**. 백도가 되돌아갈 곳입니다.
+   *
+   * 판 모양만으로는 "뒤" 를 정할 수 없습니다 — 지름길이 있어 같은 칸에 서로 다른 길로
+   * 닿을 수 있어서, 서버가 지나온 칸을 그대로 기억합니다 (`YutState.prev` 주석).
+   * 백도를 넣기 전에 시작된 판에는 이 칸이 없을 수 있습니다.
+   */
+  prev?: number[][];
   /**
    * 방금 던져 나온 값.
    *

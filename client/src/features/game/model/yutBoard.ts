@@ -77,8 +77,21 @@ export function yutCellOf(position: number): YutCell | null {
   return YUT_CELLS[position] ?? null;
 }
 
+/**
+ * 백도 — 지나온 칸으로 한 칸 되돌아갑니다.
+ *
+ * 칸 수를 그대로 값으로 쓰는 규칙이라 **음수 하나**를 따로 둡니다. 서버 `YutEngine.BACKDO`
+ * 와 같은 값이어야 합니다 — 0 을 쓰면 "안 움직임" 과 구분되지 않습니다.
+ */
+export const YUT_BACKDO = -1;
+
 /** 던지기 결과 이름. 인덱스가 곧 칸 수라 0번은 비어 있습니다 */
 export const YUT_THROW_NAMES = ['', '도', '개', '걸', '윷', '모'] as const;
+
+/** 던지기 이름. 백도는 음수라 배열로 찾을 수 없습니다 */
+export function yutThrowName(result: number): string {
+  return result === YUT_BACKDO ? '백도' : (YUT_THROW_NAMES[result] ?? '');
+}
 
 /* ── 길 ───────────────────────────────────────────────────
  *

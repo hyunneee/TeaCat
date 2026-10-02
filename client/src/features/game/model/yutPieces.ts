@@ -1,6 +1,8 @@
 import { Bird, Cat, Dog, Fish, Rabbit, Turtle } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import type { LucideProps } from 'lucide-react';
+import type { ComponentType } from 'react';
 import type { GamePieceStyle } from './game.types';
+import { Monkey, Sheep } from '../components/AnimalIcons';
 
 /**
  * 말 모양. 서버 `GamePieceStyle` 과 1:1 입니다.
@@ -13,7 +15,9 @@ import type { GamePieceStyle } from './game.types';
 interface PieceStyle {
   key: GamePieceStyle;
   label: string;
-  icon: LucideIcon;
+  /* lucide 아이콘(ForwardRef)과 직접 그린 아이콘(평범한 함수)을 **같이** 담습니다.
+     `LucideIcon` 으로 좁히면 직접 그린 쪽이 안 들어갑니다 (`components/AnimalIcons`) */
+  icon: ComponentType<LucideProps>;
 }
 
 /** 아직 못 고른 사람을 그릴 때 쓰는 기본값 */
@@ -26,6 +30,10 @@ export const PIECE_STYLES: PieceStyle[] = [
   { key: 'BIRD', label: '새', icon: Bird },
   { key: 'FISH', label: '물고기', icon: Fish },
   { key: 'TURTLE', label: '거북이', icon: Turtle },
+  /* 🔴 lucide 에 원숭이·양이 없어서 같은 규격으로 직접 그렸습니다 (`components/AnimalIcons`).
+     이모지를 박으면 기기마다 다른 그림이 나오고 선 굵기도 안 맞습니다 */
+  { key: 'MONKEY', label: '원숭이', icon: Monkey },
+  { key: 'SHEEP', label: '양', icon: Sheep },
 ];
 
 const BY_KEY = new Map(PIECE_STYLES.map((style) => [style.key, style]));

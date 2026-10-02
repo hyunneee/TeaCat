@@ -166,7 +166,8 @@ public class GameRoomWriter {
 
         GameEngine engine = engines.of(room.getGameType());
         seated.forEach(p -> p.startPlaying(room.getBetAmount()));
-        room.start(engine.start(seated.size(), new GameOptions(room.getPiecesPerPlayer())), engine.turnLimit());
+        Map<String, Object> initial = engine.start(seated.size(), new GameOptions(room.getPiecesPerPlayer()));
+        room.start(initial, engine.turnLimit(initial));
         return Outcome.of(room.getId());
     }
 
@@ -181,7 +182,7 @@ public class GameRoomWriter {
 
         GameEngine engine = engines.of(room.getGameType());
         Map<String, Object> next = engine.apply(room.getState(), me.getSeatNo(), action);
-        room.updateState(next, engine.turnLimit());
+        room.updateState(next, engine.turnLimit(next));
 
         return finishIfOver(room, engine);
     }
@@ -195,7 +196,8 @@ public class GameRoomWriter {
             return Outcome.of(roomId);
         }
         GameEngine engine = engines.of(room.getGameType());
-        room.updateState(engine.autoAdvance(room.getState()), engine.turnLimit());
+        Map<String, Object> advanced = engine.autoAdvance(room.getState());
+        room.updateState(advanced, engine.turnLimit(advanced));
         return finishIfOver(room, engine);
     }
 
@@ -229,7 +231,8 @@ public class GameRoomWriter {
 
         me.retire();
         GameEngine engine = engines.of(room.getGameType());
-        room.updateState(engine.retire(room.getState(), me.getSeatNo()), engine.turnLimit());
+        Map<String, Object> afterRetire = engine.retire(room.getState(), me.getSeatNo());
+        room.updateState(afterRetire, engine.turnLimit(afterRetire));
         return finishIfOver(room, engine);
     }
 

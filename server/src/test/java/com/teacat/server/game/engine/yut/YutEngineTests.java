@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -190,13 +191,143 @@ class YutEngineTests {
     }
 
     @Test
-    void 시간을_넘기면_서버가_대신_둔다() {
+    void 시간을_넘기면_서버가_그_차례를_끝까지_둔다() {
         Map<String, Object> state = engine.start(2, OPTIONS);
 
         YutState after = codec.read(engine.autoAdvance(state), YutState.class);
 
-        // 아직 아무도 안 던졌으니 서버가 대신 던진다
-        assertThat(after.pending).isNotEmpty();
+        /* 🔴 던지기만 대신 해 주고 나오지 않는다. 끊긴 사람을 대신하는 게 목적인데
+           말을 안 옮기고 나오면 그 사람의 차례가 "옮기기" 단계로 넘어가 1분을 더 잡아먹는다.
+           그래서 쓸 결과가 남지 않고 차례가 다음 사람에게 넘어가 있어야 한다. */
+        assertThat(after.pending).isEmpty();
+        assertThat(after.turn).isEqualTo(1);
+    }
+
+    /**
+     * 던지는 단계와 옮기는 단계의 제한 시간이 다르다.
+     *
+     * <p>하나로 묶으면 둘 중 하나가 틀어진다 — 던지기에 60초를 주면 끊긴 사람 때문에 판이
+     * 1분씩 서고, 옮기기를 10초로 조이면 판을 들여다보는 사람의 말을 서버가 가로챈다.
+     */
+    @Test
+    void 던질_차례는_짧고_옮길_차례는_길다() {
+        Map<String, Object> throwPhase = engine.start(2, OPTIONS);
+        YutState movePhase = handMade(2);
+        movePhase.pending.add(3);
+
+        assertThat(engine.turnLimit(throwPhase)).isEqualTo(Duration.ofSeconds(10));
+        assertThat(engine.turnLimit(codec.write(movePhase))).isEqualTo(Duration.ofSeconds(60));
+    }
+
+    /* ── 잡기와 추가 던지기 ─────────────────────────────────── */
+
+    @Test
+    void 도로_잡으면_한_번_더_던진다() {
+        YutState state = handMade(2);
+        state.pieces.get(0).set(0, 2);
+        state.prev.get(0).set(0, 1);
+        state.pieces.get(1).set(0, 3);
+        state.pending.add(1);
+
+        YutState after = applyMove(state, 0, 1);
+
+        assertThat(after.pieces.get(1).get(0)).isEqualTo(-1);
+        /* 추가 던지기 여부는 canThrow 가 아니라 <b>차례가 넘어갔는가</b>로 본다 —
+           차례가 넘어가면 다음 사람을 위해 canThrow 가 어차피 true 로 돌아온다 */
+        assertThat(after.turn).isZero();
+        assertThat(after.canThrow).isTrue();
+    }
+
+    /**
+     * 🔴 윷·모로 잡으면 한 번 더 던지지 않는다.
+     *
+     * <p>윷·모는 그 자체로 이미 한 번 더 던지게 해 줬다. 거기에 잡기까지 얹으면 한 번의
+     * 운으로 두 번을 더 던지게 되어, 한 사람이 턴을 길게 끌고 나머지는 구경만 한다.
+     */
+    @Test
+    void 윷이나_모로_잡으면_한_번_더_던지지_않는다() {
+        for (int steps : new int[] {4, 5}) {
+            YutState state = handMade(2);
+            state.pieces.get(0).set(0, 2);
+            state.prev.get(0).set(0, 1);
+            state.pieces.get(1).set(0, 2 + steps);
+            state.pending.add(steps);
+
+            YutState after = applyMove(state, 0, steps);
+
+            assertThat(after.pieces.get(1).get(0)).as("%d 로 잡혔어야 한다", steps).isEqualTo(-1);
+            // 차례가 넘어갔다 = 잡은 사람에게 추가 던지기가 돌아오지 않았다
+            assertThat(after.turn).as("%d 로 잡으면 차례가 넘어간다", steps).isEqualTo(1);
+        }
+    }
+
+    /* ── 백도 ──────────────────────────────────────────────── */
+
+    @Test
+    void 백도는_지나온_칸으로_되돌아간다() {
+        YutState state = handMade(2);
+        state.pieces.get(0).set(0, 7);
+        // 지름길로 7번에 닿았다고 치면, 되돌아갈 곳은 판 모양이 아니라 이 값이다
+        state.prev.get(0).set(0, 22);
+        state.pending.add(YutEngine.BACKDO);
+
+        YutState after = applyMove(state, 0, YutEngine.BACKDO);
+
+        assertThat(after.pieces.get(0).get(0)).isEqualTo(22);
+        // 되돌아간 말의 "지나온 칸" 은 방금 떠난 자리다
+        assertThat(after.prev.get(0).get(0)).isEqualTo(7);
+    }
+
+    @Test
+    void 판에_나온_말이_없으면_백도는_쓸_수_없다() {
+        YutState state = handMade(2);
+        state.pending.add(YutEngine.BACKDO);
+
+        assertThatThrownBy(() -> engine.apply(codec.write(state), 0,
+                new GameAction("MOVE", 0, YutEngine.BACKDO)))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    /**
+     * 🔴 쓸 수 없는 백도는 버려야 차례가 끝난다.
+     *
+     * <p>차례는 {@code pending} 이 비어야 넘어간다. 되돌릴 말이 없는 백도를 들고 있으면
+     * 아무리 눌러도 쓸 수가 없어 판이 선다 — 할리갈리에서 똑같은 모양으로 멈췄던 적이 있다.
+     */
+    @Test
+    void 쓸_말이_없는_백도는_버리고_차례가_넘어간다() {
+        YutState state = handMade(2);
+        state.canThrow = false;
+        state.pending.add(YutEngine.BACKDO);
+        // 막 나온 말 — 되돌아갈 곳이 없다
+        state.pieces.get(0).set(0, 0);
+        state.prev.get(0).set(0, -1);
+
+        YutState after = codec.read(engine.autoAdvance(codec.write(state)), YutState.class);
+
+        assertThat(after.pending).isEmpty();
+        assertThat(after.turn).isEqualTo(1);
+    }
+
+    @Test
+    void 잡힌_말은_지나온_길도_지운다() {
+        YutState state = handMade(2);
+        state.pieces.get(0).set(0, 2);
+        state.prev.get(0).set(0, 1);
+        state.pieces.get(1).set(0, 3);
+        state.prev.get(1).set(0, 2);
+        state.pending.add(1);
+
+        YutState after = applyMove(state, 0, 1);
+
+        // 안 지우면 다시 나온 뒤 백도로 잡히기 전 칸으로 순간이동한다
+        assertThat(after.prev.get(1).get(0)).isEqualTo(-1);
+    }
+
+    private YutState applyMove(YutState state, int piece, int steps) {
+        return codec.read(
+                engine.apply(codec.write(state), state.turn, new GameAction("MOVE", piece, steps)),
+                YutState.class);
     }
 
     /** 말을 마음대로 놓기 위해 던지기 전 상태로 되돌린 판 */

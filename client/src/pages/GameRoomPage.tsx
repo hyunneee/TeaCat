@@ -3,6 +3,7 @@ import { WifiOff } from 'lucide-react';
 import { Header } from '@/shared/components/layout';
 import { Button, Card, Spinner } from '@/shared/components/ui';
 import { ROUTES } from '@/shared/constants/routes';
+import { useModal } from '@/app/providers';
 import {
   GameLobbyPanel,
   GameChatPanel,
@@ -41,6 +42,7 @@ export function GameRoomPage() {
   const start = useStartGame(roomId);
   const action = useGameAction(roomId);
   const leave = useLeaveGameRoom(roomId);
+  const { open } = useModal();
   const chat = useGameChat(roomId, connected);
 
   /* 채팅 창은 대기실과 두 게임판이 똑같이 씁니다. 여기서 한 번 만들어 내려주면 판
@@ -113,12 +115,25 @@ export function GameRoomPage() {
               />
             )}
 
+            {/* 🔴 **되돌릴 수 없는 동작입니다** — 걸어 둔 캣머니를 잃고 판에도 못 돌아옵니다.
+                CLAUDE.md 4-7 에 따라 붉은 버튼 + 확인 모달입니다.
+                예전에는 `ghost` 버튼 하나뿐이라, 채팅을 누르려다 손가락이 닿으면 그대로
+                판에서 나가졌습니다 (그 위 패널이 차례마다 높이가 달라 버튼이 올라왔습니다). */}
             <Button
-              variant="ghost"
-              size="sm"
+              variant="danger-ghost"
+              size="md"
               fullWidth
               loading={leave.isPending}
-              onClick={() => leave.mutate()}
+              onClick={() =>
+                open('common/confirm', {
+                  title: '게임을 포기할까요?',
+                  message:
+                    '지금 나가면 걸어 둔 캣머니를 잃고 이 판으로 돌아올 수 없어요. 남은 사람들끼리 계속 진행됩니다.',
+                  confirmText: '포기하고 나가기',
+                  danger: true,
+                  onConfirm: () => leave.mutate(),
+                })
+              }
             >
               게임 포기하고 나가기
             </Button>
