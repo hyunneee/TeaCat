@@ -238,6 +238,32 @@ public class HalliGalliEngine implements GameEngine {
 
     /** 혼자 남으면 끝. 연습 판(1인)은 카드를 다 뒤집어 빠질 때까지 돈다 */
     private void checkGameOver(HalliGalliState s) {
+        /* 🔴 카드가 0 이 된 사람을 <b>여기서</b> 뺀다.
+
+           예전에는 자기 차례에 {@link #flip} 이 돌 때만 뺐다. 그런데 카드를 잃는 가장
+           흔한 길은 자기 차례가 아니라 <b>남이 종을 맞게 쳐서 더미까지 쓸어 가는</b> 것이고
+           ({@link #collectAllPiles}), 그 순간에는 아무도 빼 주지 않았다.
+
+           그래서 카드가 0 인데 살아 있는 것으로 세어지는 자리가 생겼다. 그 사람은
+           종도 못 치고(canRing) 뒤집지도 못하는데(canFlip) 차례는 돌아온다 — 화면에는
+           누를 수 있는 버튼이 하나도 없고, 혼자 남았는데도 판이 끝나지 않는다.
+           스위퍼가 15초 뒤에 대신 뒤집어 줘야 겨우 풀렸고, 스위퍼가 꺼져 있으면
+           영영 안 끝나고 판돈이 묶였다.
+
+           기준은 {@link #flip} 과 같다 — 손패가 비어도 펼쳐 둔 카드가 남아 있으면 아직
+           판 위에 있는 것이라 빼지 않는다. 둘 다 없을 때가 진짜 끝이다. */
+        for (int seat = 0; seat < s.players; seat++) {
+            if (s.isAlive(seat) && s.totalCards(seat) == 0) {
+                eliminate(s, seat, "카드가 다 떨어졌습니다");
+            }
+        }
+
+        /* 방금 빠진 사람에게 차례가 가 있으면 넘긴다. 안 넘기면 아무것도 못 하는 자리에
+           차례가 멈춰 서서, 위에서 고친 것과 똑같은 모양으로 판이 선다 */
+        if (!s.isAlive(s.turn)) {
+            passTurn(s);
+        }
+
         long alive = 0;
         boolean anyoneCanFlip = false;
         for (int seat = 0; seat < s.players; seat++) {

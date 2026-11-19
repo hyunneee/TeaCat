@@ -95,7 +95,9 @@ export function GameLobbyPanel({ room, onReady, onPickPieceStyle, onStart, busy,
           <p className="text-muted text-xs">
             1인당 말 {room.piecesPerPlayer}개로 해요. 같은 말은 한 사람만 쓸 수 있어요.
           </p>
-          <div className="grid grid-cols-6 gap-2">
+          {/* 말 모양이 8가지라 6칸 한 줄은 하나하나가 너무 좁습니다 — 4칸 두 줄로 두면
+              터치 타겟이 넉넉해집니다 (CLAUDE.md 4-4) */}
+          <div className="grid grid-cols-4 gap-2">
             {PIECE_STYLES.map(({ key, label, icon: Icon }) => {
               const owner = room.participants.find((p) => p.pieceStyle === key);
               const mine = owner?.me === true;

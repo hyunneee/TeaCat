@@ -37,6 +37,18 @@ public class YutState {
     /** [자리][말] = 칸 번호. -1 대기, 29 완주 */
     public List<List<Integer>> pieces = new ArrayList<>();
 
+    /**
+     * [자리][말] = <b>직전에 있던 칸</b>. 백도가 되돌아갈 곳이다.
+     *
+     * <p>🔴 판 모양만으로는 "뒤" 를 정할 수 없다. 지름길이 있어서 같은 칸에 **서로 다른
+     * 길로** 닿을 수 있고(예: 중앙), 그때 뒤로 한 칸이 어디인지는 어느 길로 왔는지에
+     * 달려 있다. 그래서 되돌릴 길을 계산하지 않고 <b>지나온 칸을 그대로 기억</b>한다.
+     *
+     * <p>{@link YutBoard#HOME} 이면 되돌아갈 곳이 없다 — 아직 안 나왔거나 막 나온 말이라
+     * 백도를 쓸 수 없다. 잡혀서 처음으로 돌아간 말도 HOME 으로 되돌린다.
+     */
+    public List<List<Integer>> prev = new ArrayList<>();
+
     /** 이번 턴에 아직 던질 수 있나. 윷·모가 나오거나 말을 잡으면 다시 true 가 된다 */
     public boolean canThrow = true;
 
@@ -67,7 +79,28 @@ public class YutState {
             state.pieces.add(mine);
             state.retired.add(false);
         }
+        state.ensurePrev();
         return state;
+    }
+
+    /**
+     * {@link #prev} 를 말 수에 맞춰 채운다.
+     *
+     * <p>🔴 <b>이미 진행 중인 판을 위해 있다.</b> 백도를 넣기 전에 시작된 판의 JSON 에는
+     * 이 칸이 아예 없어서, 그대로 읽으면 {@code prev.get(seat)} 에서 터진다. 비어 있으면
+     * 전부 HOME 으로 채운다 — 그 말들은 "되돌아갈 곳을 모르는" 상태라 백도를 못 쓰고,
+     * 한 번 움직이고 나면 그때부터 정상이다. 판 하나가 조금 손해 보는 쪽이
+     * 진행 중인 판이 전부 터지는 쪽보다 낫다.
+     */
+    public void ensurePrev() {
+        while (prev.size() < players) {
+            prev.add(new ArrayList<>());
+        }
+        for (List<Integer> mine : prev) {
+            while (mine.size() < piecesPerPlayer) {
+                mine.add(YutBoard.HOME);
+            }
+        }
     }
 
     /** 이 자리가 아직 꺼내지 않은 말 수 */

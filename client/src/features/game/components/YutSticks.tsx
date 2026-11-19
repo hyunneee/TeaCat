@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'motion/react';
+import { YUT_BACKDO } from '../model/yutBoard';
 
 interface Props {
-  /** 던지기 결과 1~5 (도·개·걸·윷·모) */
+  /** 던지기 결과. 1~5 는 도·개·걸·윷·모, -1 은 백도입니다 */
   result: number;
   /** 떨어지는 연출을 다시 트는 값. 던질 때마다 달라야 합니다 */
   seq: number;
@@ -28,7 +29,10 @@ interface Props {
  */
 export function YutSticks({ result, seq }: Props) {
   const reduce = useReducedMotion();
-  const flats = result === 5 ? 0 : result;
+  /* 백도는 "도" 와 같은 모양으로 떨어집니다 — 배가 하나. 다른 점은 그 하나가
+     **표시된 가락**이라는 것뿐이라, 그 가락에만 표시를 그립니다 (서버 BACKDO_STICK 과 같은 0번) */
+  const backdo = result === YUT_BACKDO;
+  const flats = result === 5 ? 0 : backdo ? 1 : result;
 
   return (
     <div className="flex items-end justify-center gap-1.5" aria-hidden>
@@ -46,15 +50,21 @@ export function YutSticks({ result, seq }: Props) {
             delay: reduce ? 0 : index * 0.07,
           }}
         >
-          <Stick flat={index < flats} />
+          <Stick flat={index < flats} marked={backdo && index === 0} />
         </motion.div>
       ))}
     </div>
   );
 }
 
-/** 가락 하나 — 배(평평)면 밝은 속살에 금 하나, 등(둥근 면)이면 나무 껍질 */
-function Stick({ flat }: { flat: boolean }) {
+/**
+ * 가락 하나 — 배(평평)면 밝은 속살에 금 하나, 등(둥근 면)이면 나무 껍질.
+ *
+ * `marked` 는 백도 가락입니다. 실제 윷처럼 **하나에만** 표시가 있고, 그 하나만 배로
+ * 떨어졌을 때가 백도입니다. 표시가 없으면 화면에서는 그냥 '도' 와 똑같이 보여서
+ * 왜 뒤로 가는지 알 수 없습니다.
+ */
+function Stick({ flat, marked = false }: { flat: boolean; marked?: boolean }) {
   return (
     <svg width="18" height="56" viewBox="0 0 18 56" className="drop-shadow-sm">
       <rect
@@ -71,6 +81,14 @@ function Stick({ flat }: { flat: boolean }) {
       ) : (
         /* 등 쪽의 나뭇결. 둥근 면이라는 걸 알려주는 하이라이트입니다 */
         <line x1="6" y1="10" x2="6" y2="46" className="stroke-amber-500" strokeWidth="1.5" strokeLinecap="round" />
+      )}
+      {/* 백도 가락의 표시 — 실제 윷에 새기는 X 자국입니다. 이게 없으면 화면에서는
+          그냥 '도' 와 똑같이 보여서 왜 말이 뒤로 가는지 알 수 없습니다 */}
+      {marked && (
+        <g className="stroke-amber-900" strokeWidth="2" strokeLinecap="round">
+          <line x1="5" y1="24" x2="13" y2="32" />
+          <line x1="13" y1="24" x2="5" y2="32" />
+        </g>
       )}
     </svg>
   );

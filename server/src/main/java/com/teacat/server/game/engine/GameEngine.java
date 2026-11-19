@@ -34,6 +34,16 @@ public interface GameEngine {
     /** 한 턴에 허용하는 시간. 이 시간을 넘기면 스위퍼가 {@link #autoAdvance} 를 부른다 */
     Duration turnLimit();
 
+    /**
+     * 지금 상태에서 허용하는 시간. 한 턴이 여러 단계인 게임은 단계마다 다를 수 있다
+     * (윷놀이의 던지기 10초 · 옮기기 60초).
+     *
+     * <p>기본은 {@link #turnLimit()} 그대로다 — 단계가 하나인 게임은 덮어쓸 필요가 없다.
+     */
+    default Duration turnLimit(Map<String, Object> state) {
+        return turnLimit();
+    }
+
     /** 아무도 진행시키지 않는 판을 대신 진행시킨다. 판이 영원히 멈춰 판돈이 묶이는 것을 막는다 */
     Map<String, Object> autoAdvance(Map<String, Object> state);
 

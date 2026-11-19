@@ -19,5 +19,7 @@ public enum GamePieceStyle {
     RABBIT,
     BIRD,
     FISH,
-    TURTLE
+    TURTLE,
+    MONKEY,
+    SHEEP
 }

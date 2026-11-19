@@ -487,7 +487,9 @@ game:
     - [45, 28, 17, 10]
   # 차례인 사람이 앱을 꺼버리면 아무도 진행시키지 않습니다. 그동안 모두의 판돈이
   # 묶여 있으므로 서버가 대신 둡니다
-  turn-sweep-interval: ${GAME_TURN_SWEEP_INTERVAL:PT3S}
+  # 🔴 윷놀이 던지기 제한이 10초라 3초 간격이면 실제로는 10~13초가 된다. 1초로 좁혀
+  #    "10초" 가 체감과 맞게 한다 (훑는 질의는 turn_expires_at 인덱스를 탄다)
+  turn-sweep-interval: ${GAME_TURN_SWEEP_INTERVAL:PT1S}
   # 만들어 놓고 아무도 안 온 방을 닫기까지
   abandon-after: ${GAME_ABANDON_AFTER:PT2H}
   sweep-enabled: ${GAME_SWEEP_ENABLED:true}
