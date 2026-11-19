@@ -193,6 +193,33 @@ class HalliGalliEngineTests {
         assertThat(engine.ranking(next).getLast()).isZero();
     }
 
+    /**
+     * 🔴 남의 종에 더미까지 쓸려 가면 <b>그 순간</b> 끝난다.
+     *
+     * <p>예전에는 자기 차례에 뒤집을 때만 탈락을 봤다. 그런데 카드를 잃는 가장 흔한 길은
+     * 자기 차례가 아니라 남이 종을 맞게 쳐서 모든 더미를 가져가는 것이고, 그 순간에는
+     * 아무도 빼 주지 않았다 — 카드가 0 인데 살아 있는 자리가 남아 <b>혼자 남았는데도 판이
+     * 끝나지 않았다.</b> 그 사람은 종도 못 치고 뒤집지도 못하는데 차례는 돌아와서,
+     * 화면에 누를 수 있는 버튼이 하나도 없는 채로 멈췄다.
+     */
+    @Test
+    void 남의_종에_카드를_다_뺏기면_그_자리에서_끝난다() {
+        HalliGalliState state = handMade();
+        // 0번은 펼쳐 둔 카드 한 장이 전부 — 손패는 비었다
+        state.hands.get(0).clear();
+        state.piles.get(0).addFirst(new HalliGalliCard("LIME", 2));
+        // 1번이 칠 수 있게 합이 5가 되도록 맞춘다
+        state.piles.get(1).addFirst(new HalliGalliCard("LIME", 3));
+
+        Map<String, Object> next = engine.apply(codec.write(state), 1, new GameAction("BELL", null, null));
+
+        HalliGalliState after = codec.read(next, HalliGalliState.class);
+        assertThat(after.lastBellCorrect).isTrue();
+        assertThat(after.isAlive(0)).as("카드를 다 뺏겼으면 그 자리에서 탈락이다").isFalse();
+        assertThat(after.finished).as("혼자 남았으면 판이 끝난다").isTrue();
+        assertThat(engine.ranking(next)).containsExactly(1, 0);
+    }
+
     /** 카드를 마음대로 놓기 위한 2인 판 */
     private HalliGalliState handMade() {
         HalliGalliState state = codec.read(engine.start(2, OPTIONS), HalliGalliState.class);
